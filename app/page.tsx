@@ -191,30 +191,37 @@ export default function ActingAsYouPage() {
                     ))}
                   </div>
 
-                  <div className="text-xs text-zinc-400">
-                    {passport.lastAction ? (
-                      <p>
-                        Last:{" "}
-                        <span
-                          className={
-                            passport.lastActionOk
-                              ? "text-emerald-300"
-                              : "text-rose-300"
-                          }
-                        >
-                          {passport.lastAction}
-                        </span>
-                        {passport.lastActionAt
-                          ? ` · ${formatRelativeTime(passport.lastActionAt, now)}`
-                          : null}
-                        {passport.lastError ? (
-                          <span className="block text-rose-300/90">
-                            {passport.lastError}
-                          </span>
-                        ) : null}
-                      </p>
+                  <div className="flex min-w-0 flex-col gap-1.5 text-xs text-zinc-400">
+                    {passport.logs.length === 0 ? (
+                      <p>No transactions yet</p>
                     ) : (
-                      <p>No actions yet</p>
+                      <ul className="flex flex-col gap-1.5">
+                        {passport.logs.map((log) => (
+                          <li key={log._id} className="min-w-0">
+                            <p className="truncate">
+                              <span
+                                className={
+                                  log.ok ? "text-emerald-300" : "text-rose-300"
+                                }
+                              >
+                                {log.action}
+                              </span>
+                              <span>
+                                {` · ${formatRelativeTime(log._creationTime, now)}`}
+                              </span>
+                            </p>
+                            {log.error ? (
+                              <p className="truncate text-rose-300/90">
+                                {log.error}
+                              </p>
+                            ) : log.argsPreview !== "{}" ? (
+                              <p className="truncate font-mono text-[11px] text-zinc-500">
+                                {log.argsPreview}
+                              </p>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
                     )}
                   </div>
 

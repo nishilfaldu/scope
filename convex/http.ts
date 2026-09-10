@@ -1,7 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { lookupAction, runAction } from "./invoke";
+import { lookupAction, runAction, type InvokeResult } from "./invoke";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -9,6 +9,8 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type",
   "Content-Type": "application/json",
 };
+
+const ARGS_PREVIEW_MAX = 400;
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -19,6 +21,18 @@ function jsonResponse(status: number, body: unknown): Response {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function previewArgs(args: Record<string, unknown>): string {
+  const raw = JSON.stringify(args);
+  if (raw.length <= ARGS_PREVIEW_MAX) {
+    return raw;
+  }
+  return `${raw.slice(0, ARGS_PREVIEW_MAX)}…`;
+}
+
+function denied(status: number, error: string): InvokeResult {
+  return { ok: false, status, body: { error }, error };
 }
 
 const http = httpRouter();
@@ -71,29 +85,28 @@ http.route({
     if (!passport) {
       return jsonResponse(401, { error: "Unknown passport" });
     }
-    if (passport.status === "revoked") {
-      return jsonResponse(403, { error: "Passport revoked" });
-    }
-    if (passport.expiresAt <= Date.now()) {
-      return jsonResponse(403, { error: "Passport expired" });
-    }
 
     const spec = lookupAction(action);
-    if (!spec) {
-      return jsonResponse(400, { error: `Unknown action: ${action}` });
-    }
-    if (!passport.apps.includes(spec.app)) {
-      return jsonResponse(403, { error: "Action not permitted" });
+    let result: InvokeResult;
+    if (passport.status === "revoked") {
+      result = denied(403, "Passport revoked");
+    } else if (passport.expiresAt <= Date.now()) {
+      result = denied(403, "Passport expired");
+    } else if (!spec) {
+      result = denied(400, `Unknown action: ${action}`);
+    } else if (!passport.apps.includes(spec.app)) {
+      result = denied(403, "Action not permitted");
+    } else {
+      result = await runAction(spec, args, { passportName: passport.name });
     }
 
-    const result = await runAction(spec, args, {
-      passportName: passport.name,
-    });
-    await ctx.runMutation(internal.passports.recordLastAction, {
-      passportId,
-      lastAction: action,
-      lastActionOk: result.ok,
-      lastError: result.error,
+    await ctx.runMutation(internal.passports.appendLog, {
+      passportId: passport._id,
+      action,
+      status: result.status,
+      ok: result.ok,
+      error: result.error,
+      argsPreview: previewArgs(args),
     });
     return jsonResponse(result.status, result.body);
   }),

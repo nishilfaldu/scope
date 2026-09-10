@@ -9,6 +9,12 @@ import { appValidator } from "./permissions";
 import schema from "./schema";
 
 const passportDoc = schema.doc("passports");
+const logDoc = schema.doc("passportLogs");
+const boardPassport = passportDoc.extend({
+  logs: v.array(logDoc),
+});
+
+const RECENT_LOGS = 8;
 
 function randomPassportToken(): string {
   const bytes = new Uint8Array(24);
@@ -22,13 +28,23 @@ function randomPassportToken(): string {
 
 export const listActive = query({
   args: { now: v.number() },
-  returns: v.array(passportDoc),
+  returns: v.array(boardPassport),
   handler: async (ctx, args) => {
     const rows = await ctx.db
       .query("passports")
       .withIndex("by_status", (q) => q.eq("status", "active"))
       .take(100);
-    return rows.filter((row) => row.expiresAt > args.now);
+    const active = rows.filter((row) => row.expiresAt > args.now);
+    const result = [];
+    for (const passport of active) {
+      const logs = await ctx.db
+        .query("passportLogs")
+        .withIndex("by_passport", (q) => q.eq("passportId", passport._id))
+        .order("desc")
+        .take(RECENT_LOGS);
+      result.push({ ...passport, logs });
+    }
+    return result;
   },
 });
 
@@ -65,7 +81,6 @@ export const mint = mutation({
       status: "active",
       expiresAt,
       apps: uniqueApps,
-      lastError: null,
     });
 
     return {
@@ -104,28 +119,18 @@ export const getByToken = internalQuery({
   },
 });
 
-export const recordLastAction = internalMutation({
+export const appendLog = internalMutation({
   args: {
-    passportId: v.string(),
-    lastAction: v.string(),
-    lastActionOk: v.boolean(),
-    lastError: v.union(v.string(), v.null()),
+    passportId: v.id("passports"),
+    action: v.string(),
+    status: v.number(),
+    ok: v.boolean(),
+    error: v.union(v.string(), v.null()),
+    argsPreview: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const passport = await ctx.db
-      .query("passports")
-      .withIndex("by_token", (q) => q.eq("token", args.passportId))
-      .unique();
-    if (!passport) {
-      throw new Error("Passport not found");
-    }
-    await ctx.db.patch("passports", passport._id, {
-      lastAction: args.lastAction,
-      lastActionAt: Date.now(),
-      lastActionOk: args.lastActionOk,
-      lastError: args.lastError,
-    });
+    await ctx.db.insert("passportLogs", args);
     return null;
   },
 });
