@@ -1,10 +1,13 @@
+import type { InvokeResult } from "./invoke";
+
 const GITHUB_API = "https://api.github.com";
 const API_VERSION = "2022-11-28";
 
-function requireString(
-  args: Record<string, unknown>,
-  key: string,
-): string {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function requireString(args: Record<string, unknown>, key: string): string {
   const value = args[key];
   if (typeof value !== "string" || value.length === 0) {
     throw new Error(`Missing or invalid string arg: ${key}`);
@@ -26,12 +29,38 @@ function optionalString(
   return value;
 }
 
+function errorFromGitHubBody(body: unknown, status: number): string {
+  if (isPlainObject(body) && typeof body.message === "string") {
+    return body.message;
+  }
+  if (isPlainObject(body) && typeof body.error === "string") {
+    return body.error;
+  }
+  return `GitHub request failed (${status})`;
+}
+
+function shaFromGitRef(body: unknown): string | null {
+  if (!isPlainObject(body) || !isPlainObject(body.object)) {
+    return null;
+  }
+  return typeof body.object.sha === "string" ? body.object.sha : null;
+}
+
 async function githubFetch(
-  token: string,
   method: string,
   path: string,
   body?: unknown,
-): Promise<{ ok: boolean; status: number; body: unknown }> {
+): Promise<InvokeResult> {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) {
+    return {
+      ok: false,
+      status: 503,
+      body: { error: "GITHUB_TOKEN not configured" },
+      error: "GITHUB_TOKEN not configured",
+    };
+  }
+
   const response = await fetch(`${GITHUB_API}${path}`, {
     method,
     headers: {
@@ -53,133 +82,104 @@ async function githubFetch(
     }
   }
 
-  if (!response.ok) {
-    return { ok: false, status: response.status, body: parsed };
-  }
-  return { ok: true, status: response.status, body: parsed };
+  return {
+    ok: response.ok,
+    status: response.status,
+    body: parsed,
+    error: response.ok ? null : errorFromGitHubBody(parsed, response.status),
+  };
 }
 
-export async function runGitHubAction(
-  action: string,
-  args: Record<string, unknown>,
-): Promise<{ ok: boolean; status: number; body: unknown }> {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) {
-    return {
-      ok: false,
-      status: 503,
-      body: { error: "GITHUB_TOKEN not configured" },
-    };
-  }
+export async function githubReposList(
+  _args: Record<string, unknown>,
+): Promise<InvokeResult> {
+  return await githubFetch("GET", "/user/repos?per_page=30");
+}
 
-  try {
-    switch (action) {
-      case "github.repos.list": {
-        return await githubFetch(token, "GET", "/user/repos?per_page=30");
-      }
-      case "github.repos.get": {
-        const owner = requireString(args, "owner");
-        const repo = requireString(args, "repo");
-        return await githubFetch(
-          token,
-          "GET",
-          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
-        );
-      }
-      case "github.issues.list": {
-        const owner = requireString(args, "owner");
-        const repo = requireString(args, "repo");
-        return await githubFetch(
-          token,
-          "GET",
-          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues`,
-        );
-      }
-      case "github.issues.comment": {
-        const owner = requireString(args, "owner");
-        const repo = requireString(args, "repo");
-        const issueNumber = requireString(args, "issue_number");
-        const body = requireString(args, "body");
-        return await githubFetch(
-          token,
-          "POST",
-          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodeURIComponent(issueNumber)}/comments`,
-          { body },
-        );
-      }
-      case "github.git.createBranch": {
-        const owner = requireString(args, "owner");
-        const repo = requireString(args, "repo");
-        const branch = requireString(args, "branch");
-        const fromRef = optionalString(args, "fromRef") ?? "main";
-        const ownerEnc = encodeURIComponent(owner);
-        const repoEnc = encodeURIComponent(repo);
-        const refPath = `/repos/${ownerEnc}/${repoEnc}/git/ref/heads/${encodeURIComponent(fromRef)}`;
-        const refResult = await githubFetch(token, "GET", refPath);
-        if (!refResult.ok) {
-          return refResult;
-        }
-        const refBody = refResult.body;
-        if (
-          typeof refBody !== "object" ||
-          refBody === null ||
-          !("object" in refBody) ||
-          typeof (refBody as { object: unknown }).object !== "object" ||
-          (refBody as { object: unknown }).object === null ||
-          !("sha" in ((refBody as { object: Record<string, unknown> }).object)) ||
-          typeof (refBody as { object: { sha: unknown } }).object.sha !==
-            "string"
-        ) {
-          return {
-            ok: false,
-            status: 502,
-            body: { error: "Unexpected GitHub ref response" },
-          };
-        }
-        const sha = (refBody as { object: { sha: string } }).object.sha;
-        return await githubFetch(
-          token,
-          "POST",
-          `/repos/${ownerEnc}/${repoEnc}/git/refs`,
-          {
-            ref: `refs/heads/${branch}`,
-            sha,
-          },
-        );
-      }
-      case "github.pulls.create": {
-        const owner = requireString(args, "owner");
-        const repo = requireString(args, "repo");
-        const title = requireString(args, "title");
-        const head = requireString(args, "head");
-        const base = requireString(args, "base");
-        const body = optionalString(args, "body");
-        return await githubFetch(
-          token,
-          "POST",
-          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,
-          {
-            title,
-            head,
-            base,
-            ...(body !== undefined ? { body } : {}),
-          },
-        );
-      }
-      default:
-        return {
-          ok: false,
-          status: 400,
-          body: { error: `Unknown GitHub action: ${action}` },
-        };
-    }
-  } catch (error) {
+export async function githubReposGet(
+  args: Record<string, unknown>,
+): Promise<InvokeResult> {
+  const owner = requireString(args, "owner");
+  const repo = requireString(args, "repo");
+  return await githubFetch(
+    "GET",
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+  );
+}
+
+export async function githubIssuesList(
+  args: Record<string, unknown>,
+): Promise<InvokeResult> {
+  const owner = requireString(args, "owner");
+  const repo = requireString(args, "repo");
+  return await githubFetch(
+    "GET",
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues`,
+  );
+}
+
+export async function githubIssuesComment(
+  args: Record<string, unknown>,
+): Promise<InvokeResult> {
+  const owner = requireString(args, "owner");
+  const repo = requireString(args, "repo");
+  const issueNumber = requireString(args, "issue_number");
+  const body = requireString(args, "body");
+  return await githubFetch(
+    "POST",
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodeURIComponent(issueNumber)}/comments`,
+    { body },
+  );
+}
+
+export async function githubCreateBranch(
+  args: Record<string, unknown>,
+): Promise<InvokeResult> {
+  const owner = requireString(args, "owner");
+  const repo = requireString(args, "repo");
+  const branch = requireString(args, "branch");
+  const fromRef = optionalString(args, "fromRef") ?? "main";
+  const ownerEnc = encodeURIComponent(owner);
+  const repoEnc = encodeURIComponent(repo);
+  const refResult = await githubFetch(
+    "GET",
+    `/repos/${ownerEnc}/${repoEnc}/git/ref/heads/${encodeURIComponent(fromRef)}`,
+  );
+  if (!refResult.ok) {
+    return refResult;
+  }
+  const sha = shaFromGitRef(refResult.body);
+  if (sha === null) {
     return {
       ok: false,
-      status: 400,
-      body: {
-        error: error instanceof Error ? error.message : "Invalid GitHub args",
-      },
+      status: 502,
+      body: { error: "Unexpected GitHub ref response" },
+      error: "Unexpected GitHub ref response",
     };
   }
+  return await githubFetch("POST", `/repos/${ownerEnc}/${repoEnc}/git/refs`, {
+    ref: `refs/heads/${branch}`,
+    sha,
+  });
+}
+
+export async function githubPullsCreate(
+  args: Record<string, unknown>,
+): Promise<InvokeResult> {
+  const owner = requireString(args, "owner");
+  const repo = requireString(args, "repo");
+  const title = requireString(args, "title");
+  const head = requireString(args, "head");
+  const base = requireString(args, "base");
+  const body = optionalString(args, "body");
+  return await githubFetch(
+    "POST",
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,
+    {
+      title,
+      head,
+      base,
+      ...(body !== undefined ? { body } : {}),
+    },
+  );
 }

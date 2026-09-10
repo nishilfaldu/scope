@@ -12,7 +12,7 @@ export default defineSchema({
     lastAction: v.optional(v.string()),
     lastActionAt: v.optional(v.number()),
     lastActionOk: v.optional(v.boolean()),
-    lastError: v.optional(v.string()),
+    lastError: v.union(v.string(), v.null()),
   })
     .index("by_token", ["token"])
     .index("by_status", ["status"]),

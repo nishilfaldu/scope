@@ -1,6 +1,6 @@
-export const ALL_APPS = ["demo", "github"] as const;
+import { ALL_APPS, type AppId } from "../convex/permissions";
 
-export type AppId = (typeof ALL_APPS)[number];
+export { ALL_APPS, type AppId };
 
 export const APP_LABELS: Record<AppId, string> = {
   demo: "Demo",

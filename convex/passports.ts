@@ -6,20 +6,9 @@ import {
   query,
 } from "./_generated/server";
 import { appValidator } from "./permissions";
+import schema from "./schema";
 
-const passportBoardValidator = v.object({
-  _id: v.id("passports"),
-  _creationTime: v.number(),
-  name: v.string(),
-  token: v.string(),
-  status: v.union(v.literal("active"), v.literal("revoked")),
-  expiresAt: v.number(),
-  apps: v.array(appValidator),
-  lastAction: v.optional(v.string()),
-  lastActionAt: v.optional(v.number()),
-  lastActionOk: v.optional(v.boolean()),
-  lastError: v.optional(v.string()),
-});
+const passportDoc = schema.doc("passports");
 
 function randomPassportToken(): string {
   const bytes = new Uint8Array(24);
@@ -33,7 +22,7 @@ function randomPassportToken(): string {
 
 export const listActive = query({
   args: { now: v.number() },
-  returns: v.array(passportBoardValidator),
+  returns: v.array(passportDoc),
   handler: async (ctx, args) => {
     const rows = await ctx.db
       .query("passports")
@@ -76,6 +65,7 @@ export const mint = mutation({
       status: "active",
       expiresAt,
       apps: uniqueApps,
+      lastError: null,
     });
 
     return {
@@ -105,7 +95,7 @@ export const revoke = mutation({
 
 export const getByToken = internalQuery({
   args: { token: v.string() },
-  returns: v.union(passportBoardValidator, v.null()),
+  returns: v.union(passportDoc, v.null()),
   handler: async (ctx, args) => {
     return await ctx.db
       .query("passports")
@@ -130,16 +120,11 @@ export const recordLastAction = internalMutation({
     if (!passport) {
       throw new Error("Passport not found");
     }
-    await ctx.db.replace("passports", passport._id, {
-      name: passport.name,
-      token: passport.token,
-      status: passport.status,
-      expiresAt: passport.expiresAt,
-      apps: passport.apps,
+    await ctx.db.patch("passports", passport._id, {
       lastAction: args.lastAction,
       lastActionAt: Date.now(),
       lastActionOk: args.lastActionOk,
-      ...(args.lastError !== null ? { lastError: args.lastError } : {}),
+      lastError: args.lastError,
     });
     return null;
   },

@@ -1,7 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { runGitHubAction } from "./github";
+import { lookupAction, runAction } from "./invoke";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -77,45 +77,25 @@ http.route({
     if (passport.expiresAt <= Date.now()) {
       return jsonResponse(403, { error: "Passport expired" });
     }
-    if (action === "demo.echo") {
-      if (!passport.apps.includes("demo")) {
-        return jsonResponse(403, { error: "Action not permitted" });
-      }
-      const result = { echo: args, passport: passport.name };
-      await ctx.runMutation(internal.passports.recordLastAction, {
-        passportId,
-        lastAction: action,
-        lastActionOk: true,
-        lastError: null,
-      });
-      return jsonResponse(200, result);
+
+    const spec = lookupAction(action);
+    if (!spec) {
+      return jsonResponse(400, { error: `Unknown action: ${action}` });
+    }
+    if (!passport.apps.includes(spec.app)) {
+      return jsonResponse(403, { error: "Action not permitted" });
     }
 
-    if (action.startsWith("github.")) {
-      if (!passport.apps.includes("github")) {
-        return jsonResponse(403, { error: "Action not permitted" });
-      }
-      const result = await runGitHubAction(action, args);
-      const errorMessage =
-        !result.ok &&
-        typeof result.body === "object" &&
-        result.body !== null &&
-        "error" in result.body &&
-        typeof (result.body as { error: unknown }).error === "string"
-          ? (result.body as { error: string }).error
-          : !result.ok
-            ? `GitHub request failed (${result.status})`
-            : null;
-      await ctx.runMutation(internal.passports.recordLastAction, {
-        passportId,
-        lastAction: action,
-        lastActionOk: result.ok,
-        lastError: errorMessage,
-      });
-      return jsonResponse(result.status, result.body);
-    }
-
-    return jsonResponse(400, { error: `Unknown action: ${action}` });
+    const result = await runAction(spec, args, {
+      passportName: passport.name,
+    });
+    await ctx.runMutation(internal.passports.recordLastAction, {
+      passportId,
+      lastAction: action,
+      lastActionOk: result.ok,
+      lastError: result.error,
+    });
+    return jsonResponse(result.status, result.body);
   }),
 });
 
