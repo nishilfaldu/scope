@@ -1,69 +1,328 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useMutation, useQuery } from "convex/react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { api } from "../convex/_generated/api";
+import {
+  ALL_APPS,
+  APP_HINTS,
+  APP_LABELS,
+  TTL_OPTIONS,
+  type AppId,
+  formatRelativeTime,
+  formatRemaining,
+} from "../lib/capabilities";
+
+const INVOKE_URL = `${process.env.NEXT_PUBLIC_CONVEX_SITE_URL}/api/invoke`;
+const DEFAULT_TTL_MS = TTL_OPTIONS[1]?.ttlMs ?? 60 * 60 * 1000;
+
+export default function ActingAsYouPage() {
+  const [now, setNow] = useState(() => Date.now());
+  const passports = useQuery(api.passports.listActive, { now });
+  const mint = useMutation(api.passports.mint);
+  const revoke = useMutation(api.passports.revoke);
+
+  const [name, setName] = useState("");
+  const [ttlMs, setTtlMs] = useState<number>(DEFAULT_TTL_MS);
+  const [apps, setApps] = useState<AppId[]>(["demo"]);
+  const [minting, setMinting] = useState(false);
+  const [mintError, setMintError] = useState<string | null>(null);
+  const [lastMinted, setLastMinted] = useState<{
+    passportId: string;
+    name: string;
+  } | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const curlSnippet = useMemo(() => {
+    if (!lastMinted) return null;
+    return `curl -sS -X POST '${INVOKE_URL}' \\
+  -H 'Content-Type: application/json' \\
+  -d '{"passportId":"${lastMinted.passportId}","action":"demo.echo","args":{"message":"hello"}}'`;
+  }, [lastMinted]);
+
+  function toggleApp(app: AppId) {
+    setApps((prev) =>
+      prev.includes(app) ? prev.filter((item) => item !== app) : [...prev, app],
+    );
+  }
+
+  async function handleMint(e: FormEvent) {
+    e.preventDefault();
+    setMintError(null);
+    if (apps.length === 0) {
+      setMintError("Turn on at least one app.");
+      return;
+    }
+    setMinting(true);
+    try {
+      const result = await mint({
+        name: name.trim() || "Untitled agent",
+        ttlMs,
+        apps,
+      });
+      setLastMinted({ passportId: result.passportId, name: result.name });
+      setName("");
+      setApps(["demo"]);
+      setNow(Date.now());
+    } catch (err) {
+      setMintError(err instanceof Error ? err.message : "Mint failed");
+    } finally {
+      setMinting(false);
+    }
+  }
+
+  async function handleRevoke(passportId: string) {
+    setRevokingId(passportId);
+    try {
+      await revoke({ passportId });
+      setNow(Date.now());
+      if (lastMinted?.passportId === passportId) {
+        setLastMinted(null);
+      }
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
+  async function copyText(text: string, id: string) {
+    await navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    window.setTimeout(() => setCopiedId(null), 1500);
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-10 px-4 py-10 sm:px-8">
+      <header className="flex flex-col gap-3">
+        <p className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
+          Agent passport
+        </p>
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+          Acting as you
+        </h1>
+        <p className="max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
+          Mint a virtual passport for a job. Agents send passportId + action —
+          your real GitHub token never leaves the server. Revoke anytime without
+          logging out of GitHub.
+        </p>
+        <div className="flex min-w-0 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <span className="shrink-0 text-zinc-500">Invoke</span>
+          <code className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-800 dark:text-zinc-200">
+            {INVOKE_URL}
+          </code>
+          <button
+            type="button"
+            onClick={() => void copyText(INVOKE_URL, "invoke")}
+            className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            {copiedId === "invoke" ? "Copied" : "Copy"}
+          </button>
         </div>
-      </main>
+      </header>
+
+      <section className="grid min-w-0 grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-lg font-semibold">Active passports</h2>
+            <span className="shrink-0 text-sm text-zinc-500">
+              {passports === undefined
+                ? "Loading…"
+                : `${passports.length} acting as you`}
+            </span>
+          </div>
+
+          {passports === undefined ? (
+            <div className="rounded-2xl border border-dashed border-zinc-300 p-8 text-sm text-zinc-500 dark:border-zinc-700">
+              Loading passports…
+            </div>
+          ) : passports.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-zinc-300 p-8 text-sm text-zinc-500 dark:border-zinc-700">
+              No active passports. Mint one to give an agent a time-boxed card.
+            </div>
+          ) : (
+            <ul className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+              {passports.map((passport) => (
+                <li
+                  key={passport._id}
+                  className="flex min-w-0 flex-col gap-4 rounded-2xl border border-zinc-200 bg-gradient-to-br from-zinc-900 to-zinc-800 p-5 text-zinc-50 shadow-sm dark:border-zinc-700"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs uppercase tracking-wide text-zinc-400">
+                        Virtual passport
+                      </p>
+                      <h3 className="mt-1 truncate text-lg font-semibold">
+                        {passport.name}
+                      </h3>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-emerald-500/20 px-2.5 py-1 text-xs font-medium text-emerald-300">
+                      {formatRemaining(passport.expiresAt, now)}
+                    </span>
+                  </div>
+
+                  <div className="flex min-w-0 items-center gap-2 rounded-lg bg-black/30 px-2.5 py-2 font-mono text-[11px] leading-4">
+                    <span className="min-w-0 flex-1 truncate">
+                      {passport.token}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void copyText(passport.token, passport.token)
+                      }
+                      className="shrink-0 rounded px-1.5 py-0.5 font-sans text-[10px] font-medium uppercase tracking-wide text-zinc-300 hover:bg-white/10"
+                    >
+                      {copiedId === passport.token ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {passport.apps.map((app) => (
+                      <span
+                        key={app}
+                        className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-zinc-200"
+                      >
+                        {APP_LABELS[app]}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="text-xs text-zinc-400">
+                    {passport.lastAction ? (
+                      <p>
+                        Last:{" "}
+                        <span
+                          className={
+                            passport.lastActionOk
+                              ? "text-emerald-300"
+                              : "text-rose-300"
+                          }
+                        >
+                          {passport.lastAction}
+                        </span>
+                        {passport.lastActionAt
+                          ? ` · ${formatRelativeTime(passport.lastActionAt, now)}`
+                          : null}
+                        {passport.lastError ? (
+                          <span className="block text-rose-300/90">
+                            {passport.lastError}
+                          </span>
+                        ) : null}
+                      </p>
+                    ) : (
+                      <p>No actions yet</p>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={revokingId === passport.token}
+                    onClick={() => void handleRevoke(passport.token)}
+                    className="mt-auto rounded-lg bg-rose-500/90 px-3 py-2 text-sm font-medium text-white hover:bg-rose-500 disabled:opacity-60"
+                  >
+                    {revokingId === passport.token ? "Revoking…" : "Revoke"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <aside className="flex h-fit min-w-0 w-full flex-col gap-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm lg:max-w-none dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-lg font-semibold">Mint a passport</h2>
+          <form onSubmit={(e) => void handleMint(e)} className="flex flex-col gap-4">
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                Name
+              </span>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. PR agent"
+                className="rounded-lg border border-zinc-300 bg-transparent px-3 py-2 outline-none focus:border-zinc-500 dark:border-zinc-700"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                Time to live
+              </span>
+              <select
+                value={ttlMs}
+                onChange={(e) => setTtlMs(Number(e.target.value))}
+                className="rounded-lg border border-zinc-300 bg-transparent px-3 py-2 outline-none focus:border-zinc-500 dark:border-zinc-700"
+              >
+                {TTL_OPTIONS.map((opt) => (
+                  <option key={opt.ttlMs} value={opt.ttlMs}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Apps
+              </legend>
+              {ALL_APPS.map((app) => (
+                <label
+                  key={app}
+                  className="flex min-w-0 items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300"
+                >
+                  <input
+                    type="checkbox"
+                    checked={apps.includes(app)}
+                    onChange={() => toggleApp(app)}
+                    className="mt-0.5 size-4 shrink-0 rounded border-zinc-400"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="font-medium">{APP_LABELS[app]}</span>
+                    <span className="mt-0.5 block text-xs text-zinc-500">
+                      {APP_HINTS[app]}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+
+            {mintError ? (
+              <p className="text-sm text-rose-600 dark:text-rose-400">
+                {mintError}
+              </p>
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={minting}
+              className="rounded-lg bg-zinc-900 px-3 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            >
+              {minting ? "Minting…" : "Mint passport"}
+            </button>
+          </form>
+
+          {curlSnippet ? (
+            <div className="flex flex-col gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">Try demo.echo</p>
+                <button
+                  type="button"
+                  onClick={() => void copyText(curlSnippet, "curl")}
+                  className="text-xs font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+                >
+                  {copiedId === "curl" ? "Copied" : "Copy curl"}
+                </button>
+              </div>
+              <pre className="max-w-full min-w-0 overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-3 font-mono text-[11px] leading-5 text-zinc-200">
+                {curlSnippet}
+              </pre>
+            </div>
+          ) : null}
+        </aside>
+      </section>
     </div>
   );
 }

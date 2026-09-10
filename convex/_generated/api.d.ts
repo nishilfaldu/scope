@@ -8,13 +8,23 @@
  * @module
  */
 
+import type * as github from "../github.js";
+import type * as http from "../http.js";
+import type * as passports from "../passports.js";
+import type * as permissions from "../permissions.js";
+
 import type {
   ApiFromModules,
   FilterApi,
   FunctionReference,
 } from "convex/server";
 
-declare const fullApi: ApiFromModules<{}>;
+declare const fullApi: ApiFromModules<{
+  github: typeof github;
+  http: typeof http;
+  passports: typeof passports;
+  permissions: typeof permissions;
+}>;
 
 /**
  * A utility for referencing Convex functions in your app's public API.
