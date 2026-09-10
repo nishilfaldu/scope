@@ -46,18 +46,22 @@ function shaFromGitRef(body: unknown): string | null {
   return typeof body.object.sha === "string" ? body.object.sha : null;
 }
 
+type GitHubCtx = {
+  githubToken: string | null;
+};
+
 async function githubFetch(
+  token: string | null,
   method: string,
   path: string,
   body?: unknown,
 ): Promise<InvokeResult> {
-  const token = process.env.GITHUB_TOKEN;
   if (!token) {
     return {
       ok: false,
       status: 503,
-      body: { error: "GITHUB_TOKEN not configured" },
-      error: "GITHUB_TOKEN not configured",
+      body: { error: "GitHub not connected" },
+      error: "GitHub not connected",
     };
   }
 
@@ -92,16 +96,19 @@ async function githubFetch(
 
 export async function githubReposList(
   _args: Record<string, unknown>,
+  ctx: GitHubCtx,
 ): Promise<InvokeResult> {
-  return await githubFetch("GET", "/user/repos?per_page=30");
+  return await githubFetch(ctx.githubToken, "GET", "/user/repos?per_page=30");
 }
 
 export async function githubReposGet(
   args: Record<string, unknown>,
+  ctx: GitHubCtx,
 ): Promise<InvokeResult> {
   const owner = requireString(args, "owner");
   const repo = requireString(args, "repo");
   return await githubFetch(
+    ctx.githubToken,
     "GET",
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
   );
@@ -109,10 +116,12 @@ export async function githubReposGet(
 
 export async function githubIssuesList(
   args: Record<string, unknown>,
+  ctx: GitHubCtx,
 ): Promise<InvokeResult> {
   const owner = requireString(args, "owner");
   const repo = requireString(args, "repo");
   return await githubFetch(
+    ctx.githubToken,
     "GET",
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues`,
   );
@@ -120,12 +129,14 @@ export async function githubIssuesList(
 
 export async function githubIssuesComment(
   args: Record<string, unknown>,
+  ctx: GitHubCtx,
 ): Promise<InvokeResult> {
   const owner = requireString(args, "owner");
   const repo = requireString(args, "repo");
   const issueNumber = requireString(args, "issue_number");
   const body = requireString(args, "body");
   return await githubFetch(
+    ctx.githubToken,
     "POST",
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodeURIComponent(issueNumber)}/comments`,
     { body },
@@ -134,6 +145,7 @@ export async function githubIssuesComment(
 
 export async function githubCreateBranch(
   args: Record<string, unknown>,
+  ctx: GitHubCtx,
 ): Promise<InvokeResult> {
   const owner = requireString(args, "owner");
   const repo = requireString(args, "repo");
@@ -142,6 +154,7 @@ export async function githubCreateBranch(
   const ownerEnc = encodeURIComponent(owner);
   const repoEnc = encodeURIComponent(repo);
   const refResult = await githubFetch(
+    ctx.githubToken,
     "GET",
     `/repos/${ownerEnc}/${repoEnc}/git/ref/heads/${encodeURIComponent(fromRef)}`,
   );
@@ -157,14 +170,20 @@ export async function githubCreateBranch(
       error: "Unexpected GitHub ref response",
     };
   }
-  return await githubFetch("POST", `/repos/${ownerEnc}/${repoEnc}/git/refs`, {
-    ref: `refs/heads/${branch}`,
-    sha,
-  });
+  return await githubFetch(
+    ctx.githubToken,
+    "POST",
+    `/repos/${ownerEnc}/${repoEnc}/git/refs`,
+    {
+      ref: `refs/heads/${branch}`,
+      sha,
+    },
+  );
 }
 
 export async function githubPullsCreate(
   args: Record<string, unknown>,
+  ctx: GitHubCtx,
 ): Promise<InvokeResult> {
   const owner = requireString(args, "owner");
   const repo = requireString(args, "repo");
@@ -173,6 +192,7 @@ export async function githubPullsCreate(
   const base = requireString(args, "base");
   const body = optionalString(args, "body");
   return await githubFetch(
+    ctx.githubToken,
     "POST",
     `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,
     {

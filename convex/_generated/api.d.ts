@@ -9,6 +9,7 @@
  */
 
 import type * as github from "../github.js";
+import type * as githubAuth from "../githubAuth.js";
 import type * as http from "../http.js";
 import type * as invoke from "../invoke.js";
 import type * as passports from "../passports.js";
@@ -22,6 +23,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   github: typeof github;
+  githubAuth: typeof githubAuth;
   http: typeof http;
   invoke: typeof invoke;
   passports: typeof passports;

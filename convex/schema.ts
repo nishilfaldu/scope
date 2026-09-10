@@ -21,4 +21,27 @@ export default defineSchema({
     error: v.union(v.string(), v.null()),
     argsPreview: v.string(),
   }).index("by_passport", ["passportId"]),
+
+  githubConnections: defineTable({
+    key: v.literal("singleton"),
+    accessToken: v.string(),
+    login: v.string(),
+    githubUserId: v.number(),
+    refreshToken: v.optional(v.string()),
+    tokenExpiresAt: v.optional(v.number()),
+  }).index("by_key", ["key"]),
+
+  githubAppCredentials: defineTable({
+    key: v.literal("singleton"),
+    clientId: v.string(),
+    clientSecret: v.string(),
+    slug: v.string(),
+    pendingReturnTo: v.optional(v.string()),
+  }).index("by_key", ["key"]),
+
+  githubOauthStates: defineTable({
+    state: v.string(),
+    returnTo: v.string(),
+    expiresAt: v.number(),
+  }).index("by_state", ["state"]),
 });

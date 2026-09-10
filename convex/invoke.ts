@@ -19,13 +19,13 @@ type ActionSpec = {
   app: AppId;
   run: (
     args: Record<string, unknown>,
-    ctx: { passportName: string },
+    ctx: { passportName: string; githubToken: string | null },
   ) => Promise<InvokeResult>;
 };
 
 async function demoEcho(
   args: Record<string, unknown>,
-  ctx: { passportName: string },
+  ctx: { passportName: string; githubToken: string | null },
 ): Promise<InvokeResult> {
   return {
     ok: true,
@@ -55,7 +55,7 @@ export function lookupAction(action: string): ActionSpec | null {
 export async function runAction(
   spec: ActionSpec,
   args: Record<string, unknown>,
-  ctx: { passportName: string },
+  ctx: { passportName: string; githubToken: string | null },
 ): Promise<InvokeResult> {
   try {
     return await spec.run(args, ctx);

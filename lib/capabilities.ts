@@ -9,7 +9,7 @@ export const APP_LABELS: Record<AppId, string> = {
 
 export const APP_HINTS: Record<AppId, string> = {
   demo: "Echo test calls. No GitHub.",
-  github: "All GitHub actions this server supports.",
+  github: "All GitHub actions as you.",
 };
 
 export const TTL_OPTIONS = [

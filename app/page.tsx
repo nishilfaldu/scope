@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { api } from "../convex/_generated/api";
 import {
@@ -14,13 +14,16 @@ import {
 } from "../lib/capabilities";
 
 const INVOKE_URL = `${process.env.NEXT_PUBLIC_CONVEX_SITE_URL}/api/invoke`;
+const GITHUB_CONNECT_URL = `${process.env.NEXT_PUBLIC_CONVEX_SITE_URL}/api/github/connect`;
 const DEFAULT_TTL_MS = TTL_OPTIONS[1]?.ttlMs ?? 60 * 60 * 1000;
 
 export default function ActingAsYouPage() {
   const [now, setNow] = useState(() => Date.now());
   const passports = useQuery(api.passports.listActive, { now });
+  const github = useQuery(api.githubAuth.status);
   const mint = useMutation(api.passports.mint);
   const revoke = useMutation(api.passports.revoke);
+  const disconnectGithub = useAction(api.githubAuth.disconnect);
 
   const [name, setName] = useState("");
   const [ttlMs, setTtlMs] = useState<number>(DEFAULT_TTL_MS);
@@ -33,10 +36,25 @@ export default function ActingAsYouPage() {
   } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("github")) {
+      return;
+    }
+    url.searchParams.delete("github");
+    const search = url.searchParams.toString();
+    window.history.replaceState(
+      {},
+      "",
+      search.length > 0 ? `${url.pathname}?${search}` : url.pathname,
+    );
   }, []);
 
   const curlSnippet = useMemo(() => {
@@ -45,6 +63,24 @@ export default function ActingAsYouPage() {
   -H 'Content-Type: application/json' \\
   -d '{"passportId":"${lastMinted.passportId}","action":"demo.echo","args":{"message":"hello"}}'`;
   }, [lastMinted]);
+
+  async function handleGithubToggle() {
+    if (github === undefined || disconnecting) {
+      return;
+    }
+    if (github.connected) {
+      setDisconnecting(true);
+      try {
+        await disconnectGithub({});
+      } finally {
+        setDisconnecting(false);
+      }
+      return;
+    }
+    const connect = new URL(GITHUB_CONNECT_URL);
+    connect.searchParams.set("returnTo", window.location.origin);
+    window.location.assign(connect.toString());
+  }
 
   function toggleApp(app: AppId) {
     setApps((prev) =>
@@ -110,6 +146,37 @@ export default function ActingAsYouPage() {
           your real GitHub token never leaves the server. Revoke anytime without
           logging out of GitHub.
         </p>
+        <div className="flex min-w-0 items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white px-3 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">GitHub</p>
+            <p className="mt-0.5 text-xs text-zinc-500">
+              {github === undefined
+                ? "Checking…"
+                : github.connected
+                  ? `Connected as ${github.login}`
+                  : "One click. Full access. Token stays on the server."}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-label="GitHub connection"
+            aria-checked={github?.connected === true}
+            disabled={github === undefined || disconnecting}
+            onClick={() => void handleGithubToggle()}
+            className={`relative h-7 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+              github?.connected
+                ? "bg-emerald-500"
+                : "bg-zinc-300 dark:bg-zinc-700"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-transform ${
+                github?.connected ? "translate-x-[18px]" : "translate-x-0.5"
+              }`}
+            />
+          </button>
+        </div>
         <div className="flex min-w-0 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900">
           <span className="shrink-0 text-zinc-500">Invoke</span>
           <code className="min-w-0 flex-1 truncate font-mono text-xs text-zinc-800 dark:text-zinc-200">
