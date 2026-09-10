@@ -20,9 +20,7 @@ const GITHUB_APP_PERMISSIONS: Record<string, "read" | "write"> = {
   actions: "write",
   administration: "write",
   checks: "write",
-  codespaces: "write",
   contents: "write",
-  dependabot_secrets: "write",
   deployments: "write",
   discussions: "write",
   environments: "write",
@@ -35,12 +33,6 @@ const GITHUB_APP_PERMISSIONS: Record<string, "read" | "write"> = {
   secrets: "write",
   statuses: "write",
   workflows: "write",
-  email_addresses: "read",
-  followers: "write",
-  git_ssh_keys: "write",
-  gpg_keys: "write",
-  profile: "write",
-  starring: "write",
 };
 
 type GithubClient = {

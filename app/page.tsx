@@ -157,25 +157,26 @@ export default function ActingAsYouPage() {
                   : "One click. Full access. Token stays on the server."}
             </p>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-label="GitHub connection"
-            aria-checked={github?.connected === true}
-            disabled={github === undefined || disconnecting}
-            onClick={() => void handleGithubToggle()}
-            className={`relative h-7 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-              github?.connected
-                ? "bg-emerald-500"
-                : "bg-zinc-300 dark:bg-zinc-700"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 size-6 rounded-full bg-white shadow transition-transform ${
-                github?.connected ? "translate-x-[18px]" : "translate-x-0.5"
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-xs text-zinc-500">
+              {github?.connected === true ? "On" : "Off"}
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-label="GitHub connection"
+              aria-checked={github?.connected === true}
+              disabled={github === undefined || disconnecting}
+              onClick={() => void handleGithubToggle()}
+              className={`flex h-7 w-12 shrink-0 items-center rounded-full p-0.5 transition-colors disabled:opacity-50 ${
+                github?.connected === true
+                  ? "justify-end bg-emerald-500"
+                  : "justify-start bg-zinc-800 ring-1 ring-white/20"
               }`}
-            />
-          </button>
+            >
+              <span className="size-6 rounded-full bg-white shadow" />
+            </button>
+          </div>
         </div>
         <div className="flex min-w-0 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900">
           <span className="shrink-0 text-zinc-500">Invoke</span>
