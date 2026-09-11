@@ -190,8 +190,7 @@ export function PassportDetail({ passportId }: { passportId: string }) {
               <div className="border-t px-6 py-3 text-sm">
                 {chain.eventCount === 0 ? (
                   <p className="text-muted-foreground">
-                    No chained events yet. Older invoke rows appear below until
-                    the next write.
+                    No chained events yet.
                   </p>
                 ) : chain.intact ? (
                   <p>

@@ -27,15 +27,6 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_status_and_expiresAt", ["status", "expiresAt"]),
 
-  passportLogs: defineTable({
-    passportId: v.id("passports"),
-    action: v.string(),
-    status: v.number(),
-    ok: v.boolean(),
-    error: v.union(v.string(), v.null()),
-    argsPreview: v.string(),
-  }).index("by_passport", ["passportId"]),
-
   auditEvents: defineTable({
     passportId: v.id("passports"),
     kind: auditKindValidator,
