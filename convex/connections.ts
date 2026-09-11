@@ -19,26 +19,6 @@ const connectionValidator = v.object({
   tokenExpiresAt: v.union(v.number(), v.null()),
 });
 
-const statusValidator = v.union(
-  v.object({ connected: v.literal(false) }),
-  v.object({ connected: v.literal(true), login: v.string() }),
-);
-
-export const status = query({
-  args: { provider: providerValidator },
-  returns: statusValidator,
-  handler: async (ctx, args) => {
-    const row = await ctx.db
-      .query("connections")
-      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
-      .unique();
-    if (!row) {
-      return { connected: false as const };
-    }
-    return { connected: true as const, login: row.login };
-  },
-});
-
 export const listStatuses = query({
   args: {},
   returns: v.array(

@@ -17,7 +17,14 @@ export function BoardShell({
   crumbs?: HeaderCrumb[];
   children: ReactNode;
 }) {
-  const github = useQuery(api.connections.status, { provider: "github" });
+  const statuses = useQuery(api.connections.listStatuses);
+  const githubRow = statuses?.find((row) => row.provider === "github");
+  const github =
+    statuses === undefined
+      ? undefined
+      : githubRow?.connected === true && githubRow.login
+        ? { connected: true as const, login: githubRow.login }
+        : { connected: false as const };
 
   return (
     <SidebarProvider
