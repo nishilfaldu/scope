@@ -91,12 +91,51 @@ function asFiniteNumber(value: unknown): number | null {
 }
 
 function oauthCallbackUrl(): string {
-  return `${env.CONVEX_SITE_URL}/api/github/callback`;
+  return `${env.CONVEX_SITE_URL.replace(/\/$/, "")}/api/github/callback`;
+}
+
+function githubErrorReason(raw: unknown): string {
+  if (isPlainObject(raw) && typeof raw.error === "string") {
+    const error = raw.error.slice(0, 80);
+    if (/^[a-z0-9_]+$/i.test(error)) {
+      return error;
+    }
+  }
+  return "token";
+}
+
+const GITHUB_FETCH_HEADERS = {
+  Accept: "application/json",
+  "User-Agent": "agent-passport",
+};
+
+async function requestAccessToken(
+  params: Record<string, string>,
+  mode: "body" | "query",
+): Promise<Response> {
+  if (mode === "query") {
+    const url = new URL("https://github.com/login/oauth/access_token");
+    for (const [key, value] of Object.entries(params)) {
+      url.searchParams.set(key, value);
+    }
+    return await fetch(url.toString(), {
+      method: "POST",
+      headers: GITHUB_FETCH_HEADERS,
+    });
+  }
+  return await fetch("https://github.com/login/oauth/access_token", {
+    method: "POST",
+    headers: {
+      ...GITHUB_FETCH_HEADERS,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams(params).toString(),
+  });
 }
 
 function githubClient(): GithubClient | null {
-  const clientId = env.GITHUB_CLIENT_ID;
-  const clientSecret = env.GITHUB_CLIENT_SECRET;
+  const clientId = env.GITHUB_CLIENT_ID?.trim();
+  const clientSecret = env.GITHUB_CLIENT_SECRET?.trim();
   if (!clientId || !clientSecret) {
     return null;
   }
@@ -110,48 +149,59 @@ function usesClassicOauthScopes(client: GithubClient): boolean {
 async function exchangeOauthCode(
   client: GithubClient,
   code: string,
-): Promise<{
-  accessToken: string;
-  refreshToken?: string;
-  tokenExpiresAt?: number;
-} | null> {
-  const tokenResponse = await fetch(
-    "https://github.com/login/oauth/access_token",
+): Promise<
+  | {
+      accessToken: string;
+      refreshToken?: string;
+      tokenExpiresAt?: number;
+    }
+  | { error: string }
+> {
+  const redirectUri = oauthCallbackUrl();
+  const attempts: Array<Record<string, string>> = [
     {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({
-        client_id: client.clientId,
-        client_secret: client.clientSecret,
-        code,
-        redirect_uri: oauthCallbackUrl(),
-      }).toString(),
+      client_id: client.clientId,
+      client_secret: client.clientSecret,
+      code,
+      redirect_uri: redirectUri,
     },
-  );
-  const tokenRaw: unknown = await tokenResponse.json();
-  if (!isPlainObject(tokenRaw) || typeof tokenRaw.access_token !== "string") {
+    {
+      client_id: client.clientId,
+      client_secret: client.clientSecret,
+      code,
+    },
+  ];
+
+  let lastError = "token";
+  for (const [index, params] of attempts.entries()) {
+    const tokenResponse = await requestAccessToken(
+      params,
+      index === 0 ? "body" : "query",
+    );
+    const tokenRaw: unknown = await tokenResponse.json();
+    if (isPlainObject(tokenRaw) && typeof tokenRaw.access_token === "string") {
+      const expiresIn = asFiniteNumber(tokenRaw.expires_in);
+      return {
+        accessToken: tokenRaw.access_token,
+        refreshToken:
+          typeof tokenRaw.refresh_token === "string"
+            ? tokenRaw.refresh_token
+            : undefined,
+        tokenExpiresAt:
+          expiresIn === null ? undefined : Date.now() + expiresIn * 1000,
+      };
+    }
+    lastError = githubErrorReason(tokenRaw);
     console.error("GitHub token exchange failed", {
       status: tokenResponse.status,
-      error: isPlainObject(tokenRaw) ? tokenRaw.error : null,
+      error: lastError,
       error_description: isPlainObject(tokenRaw)
         ? tokenRaw.error_description
         : null,
+      usedRedirectUri: params.redirect_uri !== undefined,
     });
-    return null;
   }
-  const expiresIn = asFiniteNumber(tokenRaw.expires_in);
-  return {
-    accessToken: tokenRaw.access_token,
-    refreshToken:
-      typeof tokenRaw.refresh_token === "string"
-        ? tokenRaw.refresh_token
-        : undefined,
-    tokenExpiresAt:
-      expiresIn === null ? undefined : Date.now() + expiresIn * 1000,
-  };
+  return { error: lastError };
 }
 
 async function githubIdentity(
@@ -160,6 +210,7 @@ async function githubIdentity(
   const headers = {
     Accept: "application/vnd.github+json",
     Authorization: `Bearer ${accessToken}`,
+    "User-Agent": "agent-passport",
     "X-GitHub-Api-Version": "2022-11-28",
   };
 
@@ -368,6 +419,7 @@ http.route({
     authorize.searchParams.set("client_id", client.clientId);
     authorize.searchParams.set("redirect_uri", redirectUri);
     authorize.searchParams.set("state", state);
+    authorize.searchParams.set("prompt", "consent");
     if (usesClassicOauthScopes(client)) {
       authorize.searchParams.set("scope", GITHUB_OAUTH_SCOPES);
     }
@@ -409,8 +461,8 @@ http.route({
     }
 
     const tokens = await exchangeOauthCode(client, code);
-    if (!tokens) {
-      return redirectTo(origin, "error", "token");
+    if ("error" in tokens) {
+      return redirectTo(origin, "error", tokens.error);
     }
     const user = await githubIdentity(tokens.accessToken);
 
