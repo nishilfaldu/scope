@@ -37,12 +37,4 @@ export default defineSchema({
     returnTo: v.string(),
     expiresAt: v.number(),
   }).index("by_state", ["state"]),
-
-  providerCredentials: defineTable({
-    provider: v.string(),
-    clientId: v.string(),
-    clientSecret: v.string(),
-    slug: v.optional(v.string()),
-    pendingReturnTo: v.optional(v.string()),
-  }).index("by_provider", ["provider"]),
 });

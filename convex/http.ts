@@ -17,43 +17,15 @@ const GITHUB_PROVIDER = "github";
 const GITHUB_OAUTH_SCOPES =
   "repo workflow user gist notifications delete_repo write:packages codespace project admin:public_key admin:repo_hook";
 
-const GITHUB_APP_PERMISSIONS: Record<string, "read" | "write"> = {
-  actions: "write",
-  administration: "write",
-  checks: "write",
-  contents: "write",
-  deployments: "write",
-  discussions: "write",
-  environments: "write",
-  issues: "write",
-  metadata: "read",
-  packages: "write",
-  pages: "write",
-  pull_requests: "write",
-  repository_hooks: "write",
-  secrets: "write",
-  statuses: "write",
-  workflows: "write",
-};
-
 type GithubClient = {
   clientId: string;
   clientSecret: string;
-  slug: string | null;
-  pendingReturnTo: string | null;
 };
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: CORS_HEADERS,
-  });
-}
-
-function htmlResponse(html: string): Response {
-  return new Response(html, {
-    status: 200,
-    headers: { "Content-Type": "text/html; charset=utf-8" },
   });
 }
 
@@ -102,61 +74,17 @@ function oauthCallbackUrl(): string {
   return `${env.CONVEX_SITE_URL}/api/github/callback`;
 }
 
-async function loadClient(
-  ctx: GenericActionCtx<DataModel>,
-): Promise<GithubClient | null> {
-  const envId = env.GITHUB_CLIENT_ID;
-  const envSecret = env.GITHUB_CLIENT_SECRET;
-  if (envId && envSecret) {
-    return {
-      clientId: envId,
-      clientSecret: envSecret,
-      slug: null,
-      pendingReturnTo: null,
-    };
+function githubClient(): GithubClient | null {
+  const clientId = env.GITHUB_CLIENT_ID;
+  const clientSecret = env.GITHUB_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return null;
   }
-  return await ctx.runQuery(internal.connections.getCredentials, {
-    provider: GITHUB_PROVIDER,
-  });
+  return { clientId, clientSecret };
 }
 
 function usesClassicOauthScopes(client: GithubClient): boolean {
-  if (client.slug !== null) {
-    return false;
-  }
   return !client.clientId.startsWith("Iv");
-}
-
-function manifestForm(returnTo: string): string {
-  const site = env.CONVEX_SITE_URL;
-  const manifest = {
-    name: `Agent Passport ${crypto.randomUUID().slice(0, 8)}`,
-    url: returnTo,
-    description: "Agents act on GitHub as you. The token never leaves this server.",
-    public: false,
-    redirect_url: `${site}/api/github/manifest`,
-    setup_url: `${site}/api/github/connect?returnTo=${encodeURIComponent(returnTo)}`,
-    callback_urls: [oauthCallbackUrl()],
-    request_oauth_on_install: true,
-    hook_attributes: {
-      url: `${site}/api/github/webhook`,
-      active: false,
-    },
-    default_permissions: GITHUB_APP_PERMISSIONS,
-    default_events: [] as string[],
-  };
-  const payload = JSON.stringify(manifest).replace(/</g, "\\u003c");
-  return `<!doctype html>
-<html lang="en">
-  <head><meta charset="utf-8" /><title>Connect GitHub</title></head>
-  <body>
-    <p>Redirecting to GitHub…</p>
-    <form id="manifest" action="https://github.com/settings/apps/new?state=${encodeURIComponent(returnTo)}" method="post">
-      <input type="hidden" name="manifest" value="${payload.replaceAll('"', "&quot;")}" />
-    </form>
-    <script>document.getElementById("manifest").submit()</script>
-  </body>
-</html>`;
 }
 
 async function exchangeOauthCode(
@@ -236,7 +164,7 @@ async function resolveGithubToken(
   if (stillFresh || row.refreshToken === null) {
     return row.accessToken;
   }
-  const client = await loadClient(ctx);
+  const client = githubClient();
   if (!client) {
     return row.accessToken;
   }
@@ -366,9 +294,12 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     const requestUrl = new URL(request.url);
     const returnTo = allowedReturnTo(requestUrl.searchParams.get("returnTo"));
-    const client = await loadClient(ctx);
+    const client = githubClient();
     if (!client) {
-      return htmlResponse(manifestForm(returnTo));
+      return new Response("GitHub App is not configured.", {
+        status: 503,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
     }
 
     const redirectUri = oauthCallbackUrl();
@@ -391,52 +322,6 @@ http.route({
 });
 
 http.route({
-  path: "/api/github/manifest",
-  method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    const requestUrl = new URL(request.url);
-    const returnFallback = allowedReturnTo(null);
-    const code = requestUrl.searchParams.get("code");
-    if (typeof code !== "string") {
-      return redirectTo(returnFallback, "error");
-    }
-
-    const converted = await fetch(
-      `https://api.github.com/app-manifests/${encodeURIComponent(code)}/conversions`,
-      {
-        method: "POST",
-        headers: {
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2022-11-28",
-        },
-      },
-    );
-    const raw: unknown = await converted.json();
-    if (
-      !isPlainObject(raw) ||
-      typeof raw.client_id !== "string" ||
-      typeof raw.client_secret !== "string" ||
-      typeof raw.slug !== "string"
-    ) {
-      return redirectTo(returnFallback, "error");
-    }
-
-    const returnTo = allowedReturnTo(requestUrl.searchParams.get("state"));
-    await ctx.runMutation(internal.connections.saveCredentials, {
-      provider: GITHUB_PROVIDER,
-      clientId: raw.client_id,
-      clientSecret: raw.client_secret,
-      slug: raw.slug,
-      pendingReturnTo: returnTo,
-    });
-    return Response.redirect(
-      `https://github.com/apps/${encodeURIComponent(raw.slug)}/installations/new`,
-      302,
-    );
-  }),
-});
-
-http.route({
   path: "/api/github/callback",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
@@ -453,21 +338,18 @@ http.route({
       return redirectTo(returnFallback, "error");
     }
 
-    let origin: string | null = null;
-    if (typeof state === "string") {
-      origin = await ctx.runMutation(internal.connections.consumeOauthState, {
-        state,
-      });
+    if (typeof state !== "string") {
+      return redirectTo(returnFallback, "error");
     }
+    const origin = await ctx.runMutation(
+      internal.connections.consumeOauthState,
+      { state },
+    );
     if (!origin) {
-      origin = await ctx.runMutation(
-        internal.connections.consumePendingReturnTo,
-        { provider: GITHUB_PROVIDER },
-      );
+      return redirectTo(returnFallback, "error");
     }
-    origin = origin ?? returnFallback;
 
-    const client = await loadClient(ctx);
+    const client = githubClient();
     if (!client) {
       return redirectTo(origin, "error");
     }
