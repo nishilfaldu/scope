@@ -45,8 +45,10 @@ function denied(status: number, error: string): InvokeResult {
   return { ok: false, status, body: { error }, error };
 }
 
+const ALLOWED_RETURN_PATHS = new Set(["/", "/connections"]);
+
 function allowedReturnTo(value: string | null): string {
-  const fallback = "http://localhost:3000";
+  const fallback = "http://localhost:3000/connections";
   if (!value) {
     return fallback;
   }
@@ -58,18 +60,21 @@ function allowedReturnTo(value: string | null): string {
     if (url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
       return fallback;
     }
-    return url.origin;
+    const path = ALLOWED_RETURN_PATHS.has(url.pathname)
+      ? url.pathname
+      : "/connections";
+    return `${url.origin}${path}`;
   } catch {
     return fallback;
   }
 }
 
 function redirectTo(
-  origin: string,
+  returnTo: string,
   github: string,
   reason?: string,
 ): Response {
-  const url = new URL("/", origin);
+  const url = new URL(returnTo);
   url.searchParams.set("github", github);
   if (reason) {
     url.searchParams.set("reason", reason);
