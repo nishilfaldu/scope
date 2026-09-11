@@ -22,8 +22,8 @@ export function BoardShell({
   const github =
     statuses === undefined
       ? undefined
-      : githubRow?.connected === true && githubRow.login
-        ? { connected: true as const, login: githubRow.login }
+      : githubRow?.connected === true
+        ? { connected: true as const, login: githubRow.login ?? "" }
         : { connected: false as const };
 
   return (
