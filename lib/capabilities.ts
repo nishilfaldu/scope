@@ -1,15 +1,32 @@
-import { ALL_APPS, type AppId } from "../convex/permissions";
+import {
+  ALL_APPS,
+  ACCOUNT_APPS,
+  type AppId,
+  type AccountAppId,
+} from "../convex/permissions";
 
-export { ALL_APPS, type AppId };
+export { ALL_APPS, ACCOUNT_APPS, type AppId, type AccountAppId };
 
 export const APP_LABELS: Record<AppId, string> = {
   demo: "Demo",
   github: "GitHub",
+  gmail: "Gmail",
+  calendar: "Calendar",
+  drive: "Drive",
+  docs: "Docs",
+  sheets: "Sheets",
+  slack: "Slack",
 };
 
 export const APP_HINTS: Record<AppId, string> = {
-  demo: "Echo test calls. No GitHub.",
-  github: "All GitHub actions as you.",
+  demo: "Echo test calls. No account needed.",
+  github: "Talk to GitHub as you.",
+  gmail: "Gmail via the Google login.",
+  calendar: "Calendar via the Google login.",
+  drive: "Drive via the Google login.",
+  docs: "Docs via the Google login.",
+  sheets: "Sheets via the Google login.",
+  slack: "Talk to Slack as you.",
 };
 
 export const TTL_OPTIONS = [
@@ -19,6 +36,12 @@ export const TTL_OPTIONS = [
   { label: "24 hours", ttlMs: 24 * 60 * 60 * 1000 },
   { label: "7 days", ttlMs: 7 * 24 * 60 * 60 * 1000 },
 ] as const;
+
+export function appLabel(id: string): string {
+  return (ALL_APPS as readonly string[]).includes(id)
+    ? APP_LABELS[id as AppId]
+    : id;
+}
 
 export function formatRemaining(expiresAt: number, now: number): string {
   const ms = expiresAt - now;

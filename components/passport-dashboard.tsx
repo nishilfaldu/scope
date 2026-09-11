@@ -85,6 +85,7 @@ export function PassportDashboard() {
   const [mintOpen, setMintOpen] = useState(false);
   const [lastMinted, setLastMinted] = useState<{
     passportId: string;
+    invokeKey: string;
     name: string;
   } | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -115,7 +116,11 @@ export function PassportDashboard() {
         ttlMs,
         apps,
       });
-      setLastMinted({ passportId: result.passportId, name: result.name });
+      setLastMinted({
+        passportId: result.passportId,
+        invokeKey: result.invokeKey,
+        name: result.name,
+      });
       setName("");
       setApps(["demo"]);
       setNow(Date.now());
@@ -155,32 +160,58 @@ export function PassportDashboard() {
               <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />
               <AlertTitle>Minted {lastMinted.name}</AlertTitle>
               <AlertDescription>
-                Give this passport to an agent. Revoke it anytime from the
-                table.
+                Give the agent this passport id and invoke key. The invoke key
+                is shown once. Never standing account tokens.
               </AlertDescription>
-              <div className="col-start-2 mt-3 flex min-w-0 items-center gap-2">
-                <code className="min-w-0 flex-1 truncate rounded-xl bg-muted px-3 py-2 font-mono text-xs">
-                  {lastMinted.passportId}
-                </code>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    void copyText(lastMinted.passportId, lastMinted.passportId)
-                  }
-                >
-                  <HugeiconsIcon
-                    icon={
-                      copiedId === lastMinted.passportId
-                        ? Tick02Icon
-                        : Copy01Icon
+              <div className="col-start-2 mt-3 flex min-w-0 flex-col gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate rounded-xl bg-muted px-3 py-2 font-mono text-xs">
+                    {lastMinted.passportId}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      void copyText(lastMinted.passportId, lastMinted.passportId)
                     }
-                    strokeWidth={2}
-                    data-icon="inline-start"
-                  />
-                  {copiedId === lastMinted.passportId ? "Copied" : "Copy"}
-                </Button>
+                  >
+                    <HugeiconsIcon
+                      icon={
+                        copiedId === lastMinted.passportId
+                          ? Tick02Icon
+                          : Copy01Icon
+                      }
+                      strokeWidth={2}
+                      data-icon="inline-start"
+                    />
+                    {copiedId === lastMinted.passportId ? "Copied" : "Id"}
+                  </Button>
+                </div>
+                <div className="flex min-w-0 items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate rounded-xl bg-muted px-3 py-2 font-mono text-xs">
+                    {lastMinted.invokeKey}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      void copyText(lastMinted.invokeKey, lastMinted.invokeKey)
+                    }
+                  >
+                    <HugeiconsIcon
+                      icon={
+                        copiedId === lastMinted.invokeKey
+                          ? Tick02Icon
+                          : Copy01Icon
+                      }
+                      strokeWidth={2}
+                      data-icon="inline-start"
+                    />
+                    {copiedId === lastMinted.invokeKey ? "Copied" : "Key"}
+                  </Button>
+                </div>
               </div>
             </Alert>
           </div>
@@ -209,7 +240,7 @@ export function PassportDashboard() {
                   ? "Loading cards…"
                   : passports.length === 0
                     ? "Mint a card to give an agent time-boxed access."
-                    : `${passports.filter((row) => row.lifetimeStatus === "active").length} active · ${passports.length} total`}
+                    : `${passports.filter((row) => row.lifetimeStatus === "active").length} acting as you · ${passports.length} total`}
               </CardDescription>
               <CardAction>
                 <Button size="sm" onClick={() => setMintOpen(true)}>
@@ -236,8 +267,8 @@ export function PassportDashboard() {
                   </EmptyMedia>
                   <EmptyTitle>No passports</EmptyTitle>
                   <EmptyDescription>
-                    Mint a virtual card for a job. Agents send passportId +
-                    action — never your GitHub token.
+                    Mint a virtual card for a job. Agents get a passport id and
+                    invoke key — never standing account tokens.
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
@@ -255,7 +286,7 @@ export function PassportDashboard() {
                     <TableHead>Apps</TableHead>
                     <TableHead>Expires</TableHead>
                     <TableHead>Last event</TableHead>
-                    <TableHead>Passport</TableHead>
+                    <TableHead>Passport id</TableHead>
                     <TableHead className="w-12">
                       <span className="sr-only">Actions</span>
                     </TableHead>
@@ -420,8 +451,9 @@ export function PassportDashboard() {
           <SheetHeader>
             <SheetTitle>Mint a passport</SheetTitle>
             <SheetDescription>
-              A time-boxed card for one job. Revoke anytime without logging out
-              of GitHub.
+              A time-boxed card for one job. Attach any mix of GitHub, Gmail,
+              Calendar, Drive, Docs, Sheets, and Slack. Revoke anytime without
+              disconnecting accounts.
             </SheetDescription>
           </SheetHeader>
           <div className="px-6 pb-6">

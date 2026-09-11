@@ -1,30 +1,50 @@
+import type { ProviderId } from "../convex/permissions";
+
+export type { ProviderId };
+
 export type ConnectionStatus =
   | { connected: false }
   | { connected: true; login: string };
 
-export const GITHUB_CONNECT_URL = `${process.env.NEXT_PUBLIC_CONVEX_SITE_URL}/api/github/connect`;
+const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
+
+export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
+  github: `${siteUrl}/api/github/connect`,
+  google: `${siteUrl}/api/google/connect`,
+  slack: `${siteUrl}/api/slack/connect`,
+};
+
+export const GITHUB_CONNECT_URL = PROVIDER_CONNECT_URL.github;
 
 export const CONNECT_ERRORS: Record<string, string> = {
   token:
-    "GitHub did not issue a token. The App callback URL must be this Convex site’s /api/github/callback.",
+    "The provider did not issue a token. Check the OAuth callback URL on the app.",
   incorrect_client_credentials:
-    "GitHub rejected the client secret. Generate a new client secret on the App and set GITHUB_CLIENT_SECRET.",
+    "The provider rejected the client secret. Set a new secret on Convex.",
   redirect_uri_mismatch:
-    "GitHub rejected the callback URL. Set the App’s User authorization callback URL to this Convex site’s /api/github/callback.",
+    "The provider rejected the callback URL. Set it to this Convex site’s /api/<provider>/callback.",
   bad_verification_code:
-    "The GitHub authorization code expired or was reused. Flip the toggle again.",
+    "The authorization code expired or was reused. Flip the toggle again.",
   state: "Connect session expired. Flip the toggle again.",
-  code: "GitHub did not return an authorization code.",
-  config: "GitHub App client id/secret are missing on Convex.",
+  code: "The provider did not return an authorization code.",
+  config: "OAuth client id/secret are missing on Convex.",
 };
 
 export const CONNECTION_PROVIDERS = [
   {
-    id: "github",
+    id: "github" as const,
     name: "GitHub",
-    description: "Act on GitHub as you. Token stays on the server.",
-    connectUrl: GITHUB_CONNECT_URL,
+    description: "One login. Passports can attach GitHub after you connect.",
+  },
+  {
+    id: "google" as const,
+    name: "Google",
+    description:
+      "One login for Gmail, Calendar, Drive, Docs, and Sheets. Connecting does not grant any agent access.",
+  },
+  {
+    id: "slack" as const,
+    name: "Slack",
+    description: "One login. Passports can attach Slack after you connect.",
   },
 ] as const;
-
-export type ProviderId = (typeof CONNECTION_PROVIDERS)[number]["id"];

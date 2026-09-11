@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ComputerIcon,
@@ -48,12 +47,6 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar();
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const name =
     github === undefined
       ? "GitHub"
@@ -138,7 +131,7 @@ export function NavUser({
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuRadioGroup
-              value={mounted ? theme : undefined}
+              value={theme}
               onValueChange={(value) => {
                 if (typeof value === "string" && isThemeOption(value)) {
                   setTheme(value);

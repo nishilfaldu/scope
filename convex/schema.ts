@@ -1,16 +1,18 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { appValidator } from "./permissions";
+import { accountAppValidator, appValidator, providerValidator } from "./permissions";
 import {
   actorTypeValidator,
   auditKindValidator,
   outcomeValidator,
+  tokenLogKindValidator,
 } from "./auditFields";
 
 export default defineSchema({
   passports: defineTable({
     name: v.string(),
     token: v.string(),
+    invokeKeyHash: v.optional(v.string()),
     status: v.union(
       v.literal("active"),
       v.literal("revoked"),
@@ -56,8 +58,32 @@ export default defineSchema({
     .index("by_passport_and_outcome", ["passportId", "outcome"])
     .index("by_passport_and_actorType", ["passportId", "actorType"]),
 
+  platformTokens: defineTable({
+    passportId: v.id("passports"),
+    platform: accountAppValidator,
+    accessToken: v.string(),
+    status: v.union(v.literal("live"), v.literal("revoked")),
+    expiresAt: v.number(),
+    revokedAt: v.optional(v.number()),
+    revokeReason: v.optional(v.string()),
+  })
+    .index("by_passport", ["passportId"])
+    .index("by_passport_and_platform", ["passportId", "platform"])
+    .index("by_passport_and_status", ["passportId", "status"])
+    .index("by_status_and_expiresAt", ["status", "expiresAt"]),
+
+  tokenLogs: defineTable({
+    passportId: v.id("passports"),
+    platform: v.string(),
+    kind: tokenLogKindValidator,
+    reason: v.string(),
+    occurredAt: v.number(),
+  })
+    .index("by_passport", ["passportId"])
+    .index("by_passport_and_kind", ["passportId", "kind"]),
+
   connections: defineTable({
-    provider: v.string(),
+    provider: providerValidator,
     accessToken: v.string(),
     login: v.string(),
     providerUserId: v.string(),
@@ -66,7 +92,7 @@ export default defineSchema({
   }).index("by_provider", ["provider"]),
 
   oauthStates: defineTable({
-    provider: v.string(),
+    provider: providerValidator,
     state: v.string(),
     returnTo: v.string(),
     expiresAt: v.number(),

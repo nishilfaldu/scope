@@ -9,6 +9,7 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { lookupAction } from "./invoke";
 import schema from "./schema";
@@ -92,11 +93,16 @@ export function lifetimeStatus(
 }
 
 export async function boardActorId(ctx: MutationCtx): Promise<string> {
-  const github = await ctx.db
-    .query("connections")
-    .withIndex("by_provider", (q) => q.eq("provider", "github"))
-    .unique();
-  return github?.login ?? "board";
+  for (const provider of ["github", "google", "slack"] as const) {
+    const row = await ctx.db
+      .query("connections")
+      .withIndex("by_provider", (q) => q.eq("provider", provider))
+      .unique();
+    if (row?.login) {
+      return row.login;
+    }
+  }
+  return "board";
 }
 
 export async function appendAuditEvent(
@@ -169,6 +175,11 @@ export async function markExpired(
   }
   await importLegacyLogs(ctx, passport._id);
   await ctx.db.patch("passports", passport._id, { status: "expired" });
+  await ctx.runMutation(internal.tokens.revokeForPassport, {
+    passportId: passport._id,
+    platform: null,
+    reason: "Passport expired",
+  });
   await appendAuditEvent(ctx, {
     passportId: passport._id,
     kind: "expired",

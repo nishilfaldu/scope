@@ -90,7 +90,7 @@ export function MintPassportForm({
           </Select>
         </Field>
         <FieldSet>
-          <FieldLegend variant="label">Apps</FieldLegend>
+          <FieldLegend variant="label">Platforms</FieldLegend>
           {ALL_APPS.map((app) => (
             <Field key={app} orientation="horizontal">
               <Checkbox

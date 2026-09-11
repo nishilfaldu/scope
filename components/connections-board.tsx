@@ -2,7 +2,12 @@
 
 import { useAction, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
-import { Alert02Icon, GithubIcon } from "@hugeicons/core-free-icons";
+import {
+  Alert02Icon,
+  GithubIcon,
+  GoogleIcon,
+  SlackIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { api } from "../convex/_generated/api";
@@ -28,14 +33,46 @@ import {
 import {
   CONNECTION_PROVIDERS,
   CONNECT_ERRORS,
-  GITHUB_CONNECT_URL,
+  PROVIDER_CONNECT_URL,
   type ProviderId,
 } from "@/lib/connections";
+
+function readOauthReturn(): { provider: ProviderId; message: string } | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const url = new URL(window.location.href);
+  const providers: ProviderId[] = ["github", "google", "slack"];
+  for (const id of providers) {
+    const value = url.searchParams.get(id);
+    if (!value) {
+      continue;
+    }
+    if (value === "connected") {
+      return null;
+    }
+    if (value === "denied") {
+      return { provider: id, message: "Access was denied." };
+    }
+    const reason = url.searchParams.get("reason");
+    return {
+      provider: id,
+      message:
+        (reason && CONNECT_ERRORS[reason]) ||
+        "Connect failed. Flip the toggle again.",
+    };
+  }
+  return null;
+}
 
 function providerIcon(id: ProviderId) {
   switch (id) {
     case "github":
       return GithubIcon;
+    case "google":
+      return GoogleIcon;
+    case "slack":
+      return SlackIcon;
     default: {
       const _exhaustive: never = id;
       return _exhaustive;
@@ -44,28 +81,28 @@ function providerIcon(id: ProviderId) {
 }
 
 export function ConnectionsBoard() {
-  const github = useQuery(api.connections.status, { provider: "github" });
+  const statuses = useQuery(api.connections.listStatuses);
   const disconnect = useAction(api.connections.disconnect);
   const [disconnecting, setDisconnecting] = useState<ProviderId | null>(null);
-  const [connectError, setConnectError] = useState<string | null>(null);
+  const [connectBanner] = useState(readOauthReturn);
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    const githubParam = url.searchParams.get("github");
-    if (!githubParam) {
+    const providers: ProviderId[] = ["github", "google", "slack"];
+    let dirty = false;
+    for (const id of providers) {
+      if (url.searchParams.has(id)) {
+        url.searchParams.delete(id);
+        dirty = true;
+      }
+    }
+    if (url.searchParams.has("reason")) {
+      url.searchParams.delete("reason");
+      dirty = true;
+    }
+    if (!dirty) {
       return;
     }
-    if (githubParam === "denied") {
-      setConnectError("GitHub access was denied.");
-    } else if (githubParam !== "connected") {
-      const reason = url.searchParams.get("reason");
-      setConnectError(
-        (reason && CONNECT_ERRORS[reason]) ||
-          "GitHub connect failed. Flip the toggle again.",
-      );
-    }
-    url.searchParams.delete("github");
-    url.searchParams.delete("reason");
     const search = url.searchParams.toString();
     window.history.replaceState(
       {},
@@ -75,14 +112,14 @@ export function ConnectionsBoard() {
   }, []);
 
   function statusFor(id: ProviderId) {
-    switch (id) {
-      case "github":
-        return github;
-      default: {
-        const _exhaustive: never = id;
-        return _exhaustive;
-      }
+    const row = statuses?.find((item) => item.provider === id);
+    if (!statuses) {
+      return undefined;
     }
+    if (!row || !row.connected) {
+      return { connected: false as const };
+    }
+    return { connected: true as const, login: row.login ?? id };
   }
 
   async function toggle(id: ProviderId) {
@@ -99,33 +136,23 @@ export function ConnectionsBoard() {
       }
       return;
     }
-    switch (id) {
-      case "github": {
-        setConnectError(null);
-        const connect = new URL(GITHUB_CONNECT_URL);
-        connect.searchParams.set(
-          "returnTo",
-          `${window.location.origin}/connections`,
-        );
-        window.location.assign(connect.toString());
-        return;
-      }
-      default: {
-        const _exhaustive: never = id;
-        return _exhaustive;
-      }
-    }
+    const connect = new URL(PROVIDER_CONNECT_URL[id]);
+    connect.searchParams.set(
+      "returnTo",
+      `${window.location.origin}/connections`,
+    );
+    window.location.assign(connect.toString());
   }
 
   return (
     <BoardShell title="Connections">
       <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
-        {connectError && github?.connected !== true ? (
+        {connectBanner ? (
           <div className="px-4 lg:px-6">
             <Alert variant="destructive">
               <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
-              <AlertTitle>GitHub connect failed</AlertTitle>
-              <AlertDescription>{connectError}</AlertDescription>
+              <AlertTitle>Connect failed</AlertTitle>
+              <AlertDescription>{connectBanner.message}</AlertDescription>
             </Alert>
           </div>
         ) : null}
@@ -135,15 +162,16 @@ export function ConnectionsBoard() {
             <CardHeader className="border-b">
               <CardTitle>Connections</CardTitle>
               <CardDescription>
-                Apps the board can act through as you. Tokens stay on the
-                server.
+                Three logins: GitHub, Google, and Slack. Google covers Gmail,
+                Calendar, Drive, Docs, and Sheets. Connecting an account does
+                not give any agent access by itself.
               </CardDescription>
             </CardHeader>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>App</TableHead>
                   <TableHead>Account</TableHead>
+                  <TableHead>Login</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-24">
                     <span className="sr-only">Connect</span>
