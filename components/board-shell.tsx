@@ -5,14 +5,16 @@ import { useQuery } from "convex/react";
 
 import { api } from "../convex/_generated/api";
 import { AppSidebar } from "@/components/app-sidebar";
-import { SiteHeader } from "@/components/site-header";
+import { SiteHeader, type HeaderCrumb } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 export function BoardShell({
   title,
+  crumbs,
   children,
 }: {
   title: string;
+  crumbs?: HeaderCrumb[];
   children: ReactNode;
 }) {
   const github = useQuery(api.connections.status, { provider: "github" });
@@ -28,7 +30,7 @@ export function BoardShell({
     >
       <AppSidebar variant="inset" github={github} />
       <SidebarInset>
-        <SiteHeader title={title} />
+        <SiteHeader title={title} crumbs={crumbs} />
         <div className="flex flex-1 flex-col">{children}</div>
       </SidebarInset>
     </SidebarProvider>
