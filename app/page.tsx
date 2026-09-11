@@ -37,6 +37,7 @@ export default function ActingAsYouPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -45,10 +46,28 @@ export default function ActingAsYouPage() {
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    if (!url.searchParams.has("github")) {
+    const githubParam = url.searchParams.get("github");
+    if (!githubParam) {
       return;
     }
+    if (githubParam === "denied") {
+      setConnectError("GitHub access was denied.");
+    } else if (githubParam !== "connected") {
+      const reason = url.searchParams.get("reason");
+      const messages: Record<string, string> = {
+        token:
+          "GitHub did not issue a token. The App callback URL must be this Convex site’s /api/github/callback.",
+        state: "Connect session expired. Flip the toggle again.",
+        code: "GitHub did not return an authorization code.",
+        config: "GitHub App client id/secret are missing on Convex.",
+      };
+      setConnectError(
+        (reason && messages[reason]) ||
+          "GitHub connect failed. Flip the toggle again.",
+      );
+    }
     url.searchParams.delete("github");
+    url.searchParams.delete("reason");
     const search = url.searchParams.toString();
     window.history.replaceState(
       {},
@@ -77,6 +96,7 @@ export default function ActingAsYouPage() {
       }
       return;
     }
+    setConnectError(null);
     const connect = new URL(GITHUB_CONNECT_URL);
     connect.searchParams.set("returnTo", window.location.origin);
     window.location.assign(connect.toString());
@@ -156,6 +176,9 @@ export default function ActingAsYouPage() {
                   ? `Connected as ${github.login}`
                   : "One click. Full access. Token stays on the server."}
             </p>
+            {connectError && github?.connected !== true ? (
+              <p className="mt-1 text-xs text-rose-500">{connectError}</p>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <span className="text-xs text-zinc-500">

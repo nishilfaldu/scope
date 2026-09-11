@@ -64,10 +64,30 @@ function allowedReturnTo(value: string | null): string {
   }
 }
 
-function redirectTo(origin: string, github: string): Response {
+function redirectTo(
+  origin: string,
+  github: string,
+  reason?: string,
+): Response {
   const url = new URL("/", origin);
   url.searchParams.set("github", github);
+  if (reason) {
+    url.searchParams.set("reason", reason);
+  }
   return Response.redirect(url.toString(), 302);
+}
+
+function asFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
 }
 
 function oauthCallbackUrl(): string {
@@ -101,22 +121,28 @@ async function exchangeOauthCode(
       method: "POST",
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: JSON.stringify({
+      body: new URLSearchParams({
         client_id: client.clientId,
         client_secret: client.clientSecret,
         code,
         redirect_uri: oauthCallbackUrl(),
-      }),
+      }).toString(),
     },
   );
   const tokenRaw: unknown = await tokenResponse.json();
   if (!isPlainObject(tokenRaw) || typeof tokenRaw.access_token !== "string") {
+    console.error("GitHub token exchange failed", {
+      status: tokenResponse.status,
+      error: isPlainObject(tokenRaw) ? tokenRaw.error : null,
+      error_description: isPlainObject(tokenRaw)
+        ? tokenRaw.error_description
+        : null,
+    });
     return null;
   }
-  const expiresIn =
-    typeof tokenRaw.expires_in === "number" ? tokenRaw.expires_in : null;
+  const expiresIn = asFiniteNumber(tokenRaw.expires_in);
   return {
     accessToken: tokenRaw.access_token,
     refreshToken:
@@ -128,25 +154,53 @@ async function exchangeOauthCode(
   };
 }
 
-async function githubLogin(
+async function githubIdentity(
   accessToken: string,
-): Promise<{ login: string; githubUserId: number } | null> {
-  const userResponse = await fetch("https://api.github.com/user", {
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${accessToken}`,
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-  });
+): Promise<{ login: string; providerUserId: string }> {
+  const headers = {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${accessToken}`,
+    "X-GitHub-Api-Version": "2022-11-28",
+  };
+
+  const userResponse = await fetch("https://api.github.com/user", { headers });
   const userRaw: unknown = await userResponse.json();
-  if (
-    !isPlainObject(userRaw) ||
-    typeof userRaw.login !== "string" ||
-    typeof userRaw.id !== "number"
-  ) {
-    return null;
+  if (isPlainObject(userRaw) && typeof userRaw.login === "string") {
+    return {
+      login: userRaw.login,
+      providerUserId: String(asFiniteNumber(userRaw.id) ?? userRaw.login),
+    };
   }
-  return { login: userRaw.login, githubUserId: userRaw.id };
+
+  const instResponse = await fetch("https://api.github.com/user/installations", {
+    headers,
+  });
+  const instRaw: unknown = await instResponse.json();
+  if (
+    isPlainObject(instRaw) &&
+    Array.isArray(instRaw.installations) &&
+    instRaw.installations.length > 0
+  ) {
+    const first = instRaw.installations[0];
+    if (
+      isPlainObject(first) &&
+      isPlainObject(first.account) &&
+      typeof first.account.login === "string"
+    ) {
+      return {
+        login: first.account.login,
+        providerUserId: String(
+          asFiniteNumber(first.account.id) ?? first.account.login,
+        ),
+      };
+    }
+  }
+
+  console.error("GitHub identity lookup failed", {
+    userStatus: userResponse.status,
+    instStatus: instResponse.status,
+  });
+  return { login: "github", providerUserId: "unknown" };
 }
 
 async function resolveGithubToken(
@@ -335,39 +389,36 @@ http.route({
       return redirectTo(returnFallback, "denied");
     }
     if (typeof code !== "string") {
-      return redirectTo(returnFallback, "error");
+      return redirectTo(returnFallback, "error", "code");
     }
 
     if (typeof state !== "string") {
-      return redirectTo(returnFallback, "error");
+      return redirectTo(returnFallback, "error", "state");
     }
     const origin = await ctx.runMutation(
       internal.connections.consumeOauthState,
       { state },
     );
     if (!origin) {
-      return redirectTo(returnFallback, "error");
+      return redirectTo(returnFallback, "error", "state");
     }
 
     const client = githubClient();
     if (!client) {
-      return redirectTo(origin, "error");
+      return redirectTo(origin, "error", "config");
     }
 
     const tokens = await exchangeOauthCode(client, code);
     if (!tokens) {
-      return redirectTo(origin, "error");
+      return redirectTo(origin, "error", "token");
     }
-    const user = await githubLogin(tokens.accessToken);
-    if (!user) {
-      return redirectTo(origin, "error");
-    }
+    const user = await githubIdentity(tokens.accessToken);
 
     await ctx.runMutation(internal.connections.saveConnection, {
       provider: GITHUB_PROVIDER,
       accessToken: tokens.accessToken,
       login: user.login,
-      providerUserId: String(user.githubUserId),
+      providerUserId: user.providerUserId,
       refreshToken: tokens.refreshToken,
       tokenExpiresAt: tokens.tokenExpiresAt,
     });
