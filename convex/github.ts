@@ -1,11 +1,8 @@
 import type { InvokeResult } from "./invoke";
+import { isPlainObject } from "./json";
 
 const GITHUB_API = "https://api.github.com";
 const API_VERSION = "2022-11-28";
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function requireString(args: Record<string, unknown>, key: string): string {
   const value = args[key];

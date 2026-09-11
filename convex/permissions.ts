@@ -56,16 +56,8 @@ export const providerValidator = v.union(
   v.literal("slack"),
 );
 
-export function isAppId(value: string): value is AppId {
-  return (ALL_APPS as readonly string[]).includes(value);
-}
-
 export function isAccountAppId(value: string): value is AccountAppId {
   return (ACCOUNT_APPS as readonly string[]).includes(value);
-}
-
-export function isProviderId(value: string): value is ProviderId {
-  return (PROVIDERS as readonly string[]).includes(value);
 }
 
 export function providerForApp(app: AccountAppId): ProviderId;

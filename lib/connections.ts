@@ -14,8 +14,6 @@ export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
   slack: `${siteUrl}/api/slack/connect`,
 };
 
-export const GITHUB_CONNECT_URL = PROVIDER_CONNECT_URL.github;
-
 export const CONNECT_ERRORS: Record<string, string> = {
   token:
     "The provider did not issue a token. Check the OAuth callback URL on the app.",
