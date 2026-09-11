@@ -30,7 +30,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import type { ConnectionStatus } from "@/lib/connections";
+import type { ConnectionRow } from "@/lib/connections";
 
 const THEMES = ["light", "dark", "system"] as const;
 
@@ -43,14 +43,11 @@ function isThemeOption(value: string): value is ThemeOption {
 function GitHubIdentity({
   github,
 }: {
-  github: ConnectionStatus | undefined;
+  github: ConnectionRow | undefined;
 }) {
-  const name =
-    github === undefined
-      ? "GitHub"
-      : github.connected
-        ? github.login
-        : "GitHub";
+  const login =
+    github?.connected === true && github.login ? github.login : null;
+  const name = login ?? "GitHub";
   const status =
     github === undefined
       ? "Checking…"
@@ -61,10 +58,10 @@ function GitHubIdentity({
   return (
     <>
       <Avatar className="size-8 rounded-lg">
-        {github?.connected === true ? (
+        {login ? (
           <AvatarImage
-            src={`https://github.com/${github.login}.png?size=64`}
-            alt={github.login}
+            src={`https://github.com/${login}.png?size=64`}
+            alt={login}
           />
         ) : null}
         <AvatarFallback className="rounded-lg">
@@ -82,7 +79,7 @@ function GitHubIdentity({
 export function NavUser({
   github,
 }: {
-  github: ConnectionStatus | undefined;
+  github: ConnectionRow | undefined;
 }) {
   const { isMobile } = useSidebar();
   const { theme, setTheme } = useTheme();

@@ -18,13 +18,7 @@ export function BoardShell({
   children: ReactNode;
 }) {
   const statuses = useQuery(api.connections.listStatuses);
-  const githubRow = statuses?.find((row) => row.provider === "github");
-  const github =
-    statuses === undefined
-      ? undefined
-      : githubRow?.connected === true
-        ? { connected: true as const, login: githubRow.login ?? "" }
-        : { connected: false as const };
+  const github = statuses?.find((row) => row.provider === "github");
 
   return (
     <SidebarProvider

@@ -91,7 +91,7 @@ function FilterSelect({
 }) {
   return (
     <Select
-      items={[...items]}
+      items={items}
       value={value}
       onValueChange={(next) => {
         if (next != null) onChange(next);

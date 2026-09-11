@@ -2,9 +2,10 @@ import { PROVIDERS, type ProviderId } from "../convex/permissions";
 
 export { PROVIDERS, type ProviderId };
 
-export type ConnectionStatus =
-  | { connected: false }
-  | { connected: true; login: string };
+export type ConnectionRow = {
+  connected: boolean;
+  login: string | null;
+};
 
 const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
 

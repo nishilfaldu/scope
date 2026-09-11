@@ -23,7 +23,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import type { ConnectionStatus } from "@/lib/connections";
+import type { ConnectionRow } from "@/lib/connections";
 
 const NAV = [
   { title: "Passports", href: "/", icon: CreditCardIcon },
@@ -34,7 +34,7 @@ export function AppSidebar({
   github,
   ...props
 }: ComponentProps<typeof Sidebar> & {
-  github: ConnectionStatus | undefined;
+  github: ConnectionRow | undefined;
 }) {
   const pathname = usePathname();
 
