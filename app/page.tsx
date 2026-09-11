@@ -20,10 +20,10 @@ const DEFAULT_TTL_MS = TTL_OPTIONS[1]?.ttlMs ?? 60 * 60 * 1000;
 export default function ActingAsYouPage() {
   const [now, setNow] = useState(() => Date.now());
   const passports = useQuery(api.passports.listActive, { now });
-  const github = useQuery(api.githubAuth.status);
+  const github = useQuery(api.connections.status, { provider: "github" });
   const mint = useMutation(api.passports.mint);
   const revoke = useMutation(api.passports.revoke);
-  const disconnectGithub = useAction(api.githubAuth.disconnect);
+  const disconnectGithub = useAction(api.connections.disconnect);
 
   const [name, setName] = useState("");
   const [ttlMs, setTtlMs] = useState<number>(DEFAULT_TTL_MS);
@@ -71,7 +71,7 @@ export default function ActingAsYouPage() {
     if (github.connected) {
       setDisconnecting(true);
       try {
-        await disconnectGithub({});
+        await disconnectGithub({ provider: "github" });
       } finally {
         setDisconnecting(false);
       }

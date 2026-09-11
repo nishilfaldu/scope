@@ -13,6 +13,7 @@ const CORS_HEADERS = {
 
 const ARGS_PREVIEW_MAX = 400;
 const REFRESH_SKEW_MS = 2 * 60 * 1000;
+const GITHUB_PROVIDER = "github";
 const GITHUB_OAUTH_SCOPES =
   "repo workflow user gist notifications delete_repo write:packages codespace project admin:public_key admin:repo_hook";
 
@@ -114,7 +115,16 @@ async function loadClient(
       pendingReturnTo: null,
     };
   }
-  return await ctx.runQuery(internal.githubAuth.getClient, {});
+  return await ctx.runQuery(internal.connections.getCredentials, {
+    provider: GITHUB_PROVIDER,
+  });
+}
+
+function usesClassicOauthScopes(client: GithubClient): boolean {
+  if (client.slug !== null) {
+    return false;
+  }
+  return !client.clientId.startsWith("Iv");
 }
 
 function manifestForm(returnTo: string): string {
@@ -214,7 +224,9 @@ async function githubLogin(
 async function resolveGithubToken(
   ctx: GenericActionCtx<DataModel>,
 ): Promise<string | null> {
-  const row = await ctx.runQuery(internal.githubAuth.getConnection, {});
+  const row = await ctx.runQuery(internal.connections.getConnection, {
+    provider: GITHUB_PROVIDER,
+  });
   if (!row) {
     return null;
   }
@@ -255,10 +267,11 @@ async function resolveGithubToken(
     typeof tokenRaw.refresh_token === "string"
       ? tokenRaw.refresh_token
       : row.refreshToken;
-  await ctx.runMutation(internal.githubAuth.saveConnection, {
+  await ctx.runMutation(internal.connections.saveConnection, {
+    provider: GITHUB_PROVIDER,
     accessToken,
     login: row.login,
-    githubUserId: row.githubUserId,
+    providerUserId: row.providerUserId,
     refreshToken,
     tokenExpiresAt:
       expiresIn === null ? undefined : Date.now() + expiresIn * 1000,
@@ -360,7 +373,8 @@ http.route({
 
     const redirectUri = oauthCallbackUrl();
     const state = crypto.randomUUID();
-    await ctx.runMutation(internal.githubAuth.putOauthState, {
+    await ctx.runMutation(internal.connections.putOauthState, {
+      provider: GITHUB_PROVIDER,
       state,
       returnTo,
     });
@@ -369,7 +383,7 @@ http.route({
     authorize.searchParams.set("client_id", client.clientId);
     authorize.searchParams.set("redirect_uri", redirectUri);
     authorize.searchParams.set("state", state);
-    if (client.slug === null) {
+    if (usesClassicOauthScopes(client)) {
       authorize.searchParams.set("scope", GITHUB_OAUTH_SCOPES);
     }
     return Response.redirect(authorize.toString(), 302);
@@ -408,7 +422,8 @@ http.route({
     }
 
     const returnTo = allowedReturnTo(requestUrl.searchParams.get("state"));
-    await ctx.runMutation(internal.githubAuth.saveAppCredentials, {
+    await ctx.runMutation(internal.connections.saveCredentials, {
+      provider: GITHUB_PROVIDER,
       clientId: raw.client_id,
       clientSecret: raw.client_secret,
       slug: raw.slug,
@@ -440,14 +455,14 @@ http.route({
 
     let origin: string | null = null;
     if (typeof state === "string") {
-      origin = await ctx.runMutation(internal.githubAuth.consumeOauthState, {
+      origin = await ctx.runMutation(internal.connections.consumeOauthState, {
         state,
       });
     }
     if (!origin) {
       origin = await ctx.runMutation(
-        internal.githubAuth.consumePendingReturnTo,
-        {},
+        internal.connections.consumePendingReturnTo,
+        { provider: GITHUB_PROVIDER },
       );
     }
     origin = origin ?? returnFallback;
@@ -466,10 +481,11 @@ http.route({
       return redirectTo(origin, "error");
     }
 
-    await ctx.runMutation(internal.githubAuth.saveConnection, {
+    await ctx.runMutation(internal.connections.saveConnection, {
+      provider: GITHUB_PROVIDER,
       accessToken: tokens.accessToken,
       login: user.login,
-      githubUserId: user.githubUserId,
+      providerUserId: String(user.githubUserId),
       refreshToken: tokens.refreshToken,
       tokenExpiresAt: tokens.tokenExpiresAt,
     });

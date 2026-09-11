@@ -8,8 +8,8 @@
  * @module
  */
 
+import type * as connections from "../connections.js";
 import type * as github from "../github.js";
-import type * as githubAuth from "../githubAuth.js";
 import type * as http from "../http.js";
 import type * as invoke from "../invoke.js";
 import type * as passports from "../passports.js";
@@ -22,8 +22,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  connections: typeof connections;
   github: typeof github;
-  githubAuth: typeof githubAuth;
   http: typeof http;
   invoke: typeof invoke;
   passports: typeof passports;

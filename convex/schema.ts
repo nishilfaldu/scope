@@ -22,26 +22,27 @@ export default defineSchema({
     argsPreview: v.string(),
   }).index("by_passport", ["passportId"]),
 
-  githubConnections: defineTable({
-    key: v.literal("singleton"),
+  connections: defineTable({
+    provider: v.string(),
     accessToken: v.string(),
     login: v.string(),
-    githubUserId: v.number(),
+    providerUserId: v.string(),
     refreshToken: v.optional(v.string()),
     tokenExpiresAt: v.optional(v.number()),
-  }).index("by_key", ["key"]),
+  }).index("by_provider", ["provider"]),
 
-  githubAppCredentials: defineTable({
-    key: v.literal("singleton"),
-    clientId: v.string(),
-    clientSecret: v.string(),
-    slug: v.string(),
-    pendingReturnTo: v.optional(v.string()),
-  }).index("by_key", ["key"]),
-
-  githubOauthStates: defineTable({
+  oauthStates: defineTable({
+    provider: v.string(),
     state: v.string(),
     returnTo: v.string(),
     expiresAt: v.number(),
   }).index("by_state", ["state"]),
+
+  providerCredentials: defineTable({
+    provider: v.string(),
+    clientId: v.string(),
+    clientSecret: v.string(),
+    slug: v.optional(v.string()),
+    pendingReturnTo: v.optional(v.string()),
+  }).index("by_provider", ["provider"]),
 });

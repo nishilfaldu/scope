@@ -10,7 +10,7 @@ import {
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
-const clientValidator = v.object({
+const credentialsValidator = v.object({
   clientId: v.string(),
   clientSecret: v.string(),
   slug: v.union(v.string(), v.null()),
@@ -20,21 +20,21 @@ const clientValidator = v.object({
 const connectionValidator = v.object({
   accessToken: v.string(),
   login: v.string(),
-  githubUserId: v.number(),
+  providerUserId: v.string(),
   refreshToken: v.union(v.string(), v.null()),
   tokenExpiresAt: v.union(v.number(), v.null()),
 });
 
 export const status = query({
-  args: {},
+  args: { provider: v.string() },
   returns: v.union(
     v.object({ connected: v.literal(false) }),
     v.object({ connected: v.literal(true), login: v.string() }),
   ),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const row = await ctx.db
-      .query("githubConnections")
-      .withIndex("by_key", (q) => q.eq("key", "singleton"))
+      .query("connections")
+      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
       .unique();
     if (!row) {
       return { connected: false as const };
@@ -44,71 +44,79 @@ export const status = query({
 });
 
 export const disconnect = action({
-  args: {},
+  args: { provider: v.string() },
   returns: v.null(),
-  handler: async (ctx) => {
-    const token = await ctx.runQuery(internal.githubAuth.getAccessToken, {});
-    const dbClient = await ctx.runQuery(internal.githubAuth.getClient, {});
-    const envId = env.GITHUB_CLIENT_ID;
-    const envSecret = env.GITHUB_CLIENT_SECRET;
-    const client =
-      envId && envSecret
-        ? { clientId: envId, clientSecret: envSecret }
-        : dbClient;
-    if (token && client) {
-      const basic = btoa(`${client.clientId}:${client.clientSecret}`);
-      await fetch(
-        `https://api.github.com/applications/${client.clientId}/grant`,
-        {
-          method: "DELETE",
-          headers: {
-            Accept: "application/vnd.github+json",
-            Authorization: `Basic ${basic}`,
-            "X-GitHub-Api-Version": "2022-11-28",
+  handler: async (ctx, args) => {
+    if (args.provider === "github") {
+      const token = await ctx.runQuery(internal.connections.getAccessToken, {
+        provider: args.provider,
+      });
+      const dbClient = await ctx.runQuery(internal.connections.getCredentials, {
+        provider: args.provider,
+      });
+      const envId = env.GITHUB_CLIENT_ID;
+      const envSecret = env.GITHUB_CLIENT_SECRET;
+      const client =
+        envId && envSecret
+          ? { clientId: envId, clientSecret: envSecret }
+          : dbClient;
+      if (token && client) {
+        const basic = btoa(`${client.clientId}:${client.clientSecret}`);
+        await fetch(
+          `https://api.github.com/applications/${client.clientId}/grant`,
+          {
+            method: "DELETE",
+            headers: {
+              Accept: "application/vnd.github+json",
+              Authorization: `Basic ${basic}`,
+              "X-GitHub-Api-Version": "2022-11-28",
+            },
+            body: JSON.stringify({ access_token: token }),
           },
-          body: JSON.stringify({ access_token: token }),
-        },
-      );
+        );
+      }
     }
-    await ctx.runMutation(internal.githubAuth.clearConnection, {});
+    await ctx.runMutation(internal.connections.clearConnection, {
+      provider: args.provider,
+    });
     return null;
   },
 });
 
 export const clearConnection = internalMutation({
-  args: {},
+  args: { provider: v.string() },
   returns: v.null(),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const row = await ctx.db
-      .query("githubConnections")
-      .withIndex("by_key", (q) => q.eq("key", "singleton"))
+      .query("connections")
+      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
       .unique();
     if (row) {
-      await ctx.db.delete("githubConnections", row._id);
+      await ctx.db.delete("connections", row._id);
     }
     return null;
   },
 });
 
 export const getAccessToken = internalQuery({
-  args: {},
+  args: { provider: v.string() },
   returns: v.union(v.string(), v.null()),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const row = await ctx.db
-      .query("githubConnections")
-      .withIndex("by_key", (q) => q.eq("key", "singleton"))
+      .query("connections")
+      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
       .unique();
     return row?.accessToken ?? null;
   },
 });
 
 export const getConnection = internalQuery({
-  args: {},
+  args: { provider: v.string() },
   returns: v.union(connectionValidator, v.null()),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const row = await ctx.db
-      .query("githubConnections")
-      .withIndex("by_key", (q) => q.eq("key", "singleton"))
+      .query("connections")
+      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
       .unique();
     if (!row) {
       return null;
@@ -116,20 +124,20 @@ export const getConnection = internalQuery({
     return {
       accessToken: row.accessToken,
       login: row.login,
-      githubUserId: row.githubUserId,
+      providerUserId: row.providerUserId,
       refreshToken: row.refreshToken ?? null,
       tokenExpiresAt: row.tokenExpiresAt ?? null,
     };
   },
 });
 
-export const getClient = internalQuery({
-  args: {},
-  returns: v.union(clientValidator, v.null()),
-  handler: async (ctx) => {
+export const getCredentials = internalQuery({
+  args: { provider: v.string() },
+  returns: v.union(credentialsValidator, v.null()),
+  handler: async (ctx, args) => {
     const row = await ctx.db
-      .query("githubAppCredentials")
-      .withIndex("by_key", (q) => q.eq("key", "singleton"))
+      .query("providerCredentials")
+      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
       .unique();
     if (!row) {
       return null;
@@ -137,54 +145,55 @@ export const getClient = internalQuery({
     return {
       clientId: row.clientId,
       clientSecret: row.clientSecret,
-      slug: row.slug,
+      slug: row.slug ?? null,
       pendingReturnTo: row.pendingReturnTo ?? null,
     };
   },
 });
 
-export const saveAppCredentials = internalMutation({
+export const saveCredentials = internalMutation({
   args: {
+    provider: v.string(),
     clientId: v.string(),
     clientSecret: v.string(),
-    slug: v.string(),
-    pendingReturnTo: v.string(),
+    slug: v.optional(v.string()),
+    pendingReturnTo: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const existing = await ctx.db
-      .query("githubAppCredentials")
-      .withIndex("by_key", (q) => q.eq("key", "singleton"))
+      .query("providerCredentials")
+      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
       .unique();
     const doc = {
-      key: "singleton" as const,
+      provider: args.provider,
       clientId: args.clientId,
       clientSecret: args.clientSecret,
       slug: args.slug,
       pendingReturnTo: args.pendingReturnTo,
     };
     if (existing) {
-      await ctx.db.replace("githubAppCredentials", existing._id, doc);
+      await ctx.db.replace("providerCredentials", existing._id, doc);
     } else {
-      await ctx.db.insert("githubAppCredentials", doc);
+      await ctx.db.insert("providerCredentials", doc);
     }
     return null;
   },
 });
 
 export const consumePendingReturnTo = internalMutation({
-  args: {},
+  args: { provider: v.string() },
   returns: v.union(v.string(), v.null()),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const row = await ctx.db
-      .query("githubAppCredentials")
-      .withIndex("by_key", (q) => q.eq("key", "singleton"))
+      .query("providerCredentials")
+      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
       .unique();
     if (!row?.pendingReturnTo) {
       return null;
     }
-    await ctx.db.replace("githubAppCredentials", row._id, {
-      key: "singleton",
+    await ctx.db.replace("providerCredentials", row._id, {
+      provider: row.provider,
       clientId: row.clientId,
       clientSecret: row.clientSecret,
       slug: row.slug,
@@ -195,12 +204,14 @@ export const consumePendingReturnTo = internalMutation({
 
 export const putOauthState = internalMutation({
   args: {
+    provider: v.string(),
     state: v.string(),
     returnTo: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.insert("githubOauthStates", {
+    await ctx.db.insert("oauthStates", {
+      provider: args.provider,
       state: args.state,
       returnTo: args.returnTo,
       expiresAt: Date.now() + STATE_TTL_MS,
@@ -214,13 +225,13 @@ export const consumeOauthState = internalMutation({
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
     const row = await ctx.db
-      .query("githubOauthStates")
+      .query("oauthStates")
       .withIndex("by_state", (q) => q.eq("state", args.state))
       .unique();
     if (!row) {
       return null;
     }
-    await ctx.db.delete("githubOauthStates", row._id);
+    await ctx.db.delete("oauthStates", row._id);
     if (row.expiresAt <= Date.now()) {
       return null;
     }
@@ -230,30 +241,31 @@ export const consumeOauthState = internalMutation({
 
 export const saveConnection = internalMutation({
   args: {
+    provider: v.string(),
     accessToken: v.string(),
     login: v.string(),
-    githubUserId: v.number(),
+    providerUserId: v.string(),
     refreshToken: v.optional(v.string()),
     tokenExpiresAt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const existing = await ctx.db
-      .query("githubConnections")
-      .withIndex("by_key", (q) => q.eq("key", "singleton"))
+      .query("connections")
+      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
       .unique();
     const doc = {
-      key: "singleton" as const,
+      provider: args.provider,
       accessToken: args.accessToken,
       login: args.login,
-      githubUserId: args.githubUserId,
+      providerUserId: args.providerUserId,
       refreshToken: args.refreshToken,
       tokenExpiresAt: args.tokenExpiresAt,
     };
     if (existing) {
-      await ctx.db.replace("githubConnections", existing._id, doc);
+      await ctx.db.replace("connections", existing._id, doc);
     } else {
-      await ctx.db.insert("githubConnections", doc);
+      await ctx.db.insert("connections", doc);
     }
     return null;
   },
