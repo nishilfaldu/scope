@@ -15,8 +15,11 @@ import type * as crons from "../crons.js";
 import type * as github from "../github.js";
 import type * as http from "../http.js";
 import type * as invoke from "../invoke.js";
+import type * as oauth from "../oauth.js";
 import type * as passports from "../passports.js";
 import type * as permissions from "../permissions.js";
+import type * as secrets from "../secrets.js";
+import type * as tokens from "../tokens.js";
 
 import type {
   ApiFromModules,
@@ -32,8 +35,11 @@ declare const fullApi: ApiFromModules<{
   github: typeof github;
   http: typeof http;
   invoke: typeof invoke;
+  oauth: typeof oauth;
   passports: typeof passports;
   permissions: typeof permissions;
+  secrets: typeof secrets;
+  tokens: typeof tokens;
 }>;
 
 /**

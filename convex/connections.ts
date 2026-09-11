@@ -2,11 +2,12 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import {
   action,
-  env,
   internalMutation,
   internalQuery,
   query,
 } from "./_generated/server";
+import { revokeProviderGrant } from "./oauth";
+import { PROVIDERS, providerValidator } from "./permissions";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -18,12 +19,14 @@ const connectionValidator = v.object({
   tokenExpiresAt: v.union(v.number(), v.null()),
 });
 
+const statusValidator = v.union(
+  v.object({ connected: v.literal(false) }),
+  v.object({ connected: v.literal(true), login: v.string() }),
+);
+
 export const status = query({
-  args: { provider: v.string() },
-  returns: v.union(
-    v.object({ connected: v.literal(false) }),
-    v.object({ connected: v.literal(true), login: v.string() }),
-  ),
+  args: { provider: providerValidator },
+  returns: statusValidator,
   handler: async (ctx, args) => {
     const row = await ctx.db
       .query("connections")
@@ -36,31 +39,41 @@ export const status = query({
   },
 });
 
+export const listStatuses = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      provider: providerValidator,
+      connected: v.boolean(),
+      login: v.union(v.string(), v.null()),
+    }),
+  ),
+  handler: async (ctx) => {
+    const rows = [];
+    for (const provider of PROVIDERS) {
+      const row = await ctx.db
+        .query("connections")
+        .withIndex("by_provider", (q) => q.eq("provider", provider))
+        .unique();
+      rows.push({
+        provider,
+        connected: row !== null,
+        login: row?.login ?? null,
+      });
+    }
+    return rows;
+  },
+});
+
 export const disconnect = action({
-  args: { provider: v.string() },
+  args: { provider: providerValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (args.provider === "github") {
-      const token = await ctx.runQuery(internal.connections.getAccessToken, {
-        provider: args.provider,
-      });
-      const clientId = env.GITHUB_CLIENT_ID;
-      const clientSecret = env.GITHUB_CLIENT_SECRET;
-      if (token && clientId && clientSecret) {
-        const basic = btoa(`${clientId}:${clientSecret}`);
-        await fetch(
-          `https://api.github.com/applications/${clientId}/grant`,
-          {
-            method: "DELETE",
-            headers: {
-              Accept: "application/vnd.github+json",
-              Authorization: `Basic ${basic}`,
-              "X-GitHub-Api-Version": "2022-11-28",
-            },
-            body: JSON.stringify({ access_token: token }),
-          },
-        );
-      }
+    const token = await ctx.runQuery(internal.connections.getAccessToken, {
+      provider: args.provider,
+    });
+    if (token) {
+      await revokeProviderGrant(args.provider, token);
     }
     await ctx.runMutation(internal.connections.clearConnection, {
       provider: args.provider,
@@ -70,7 +83,7 @@ export const disconnect = action({
 });
 
 export const clearConnection = internalMutation({
-  args: { provider: v.string() },
+  args: { provider: providerValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
     const row = await ctx.db
@@ -85,7 +98,7 @@ export const clearConnection = internalMutation({
 });
 
 export const getAccessToken = internalQuery({
-  args: { provider: v.string() },
+  args: { provider: providerValidator },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
     const row = await ctx.db
@@ -97,7 +110,7 @@ export const getAccessToken = internalQuery({
 });
 
 export const getConnection = internalQuery({
-  args: { provider: v.string() },
+  args: { provider: providerValidator },
   returns: v.union(connectionValidator, v.null()),
   handler: async (ctx, args) => {
     const row = await ctx.db
@@ -119,7 +132,7 @@ export const getConnection = internalQuery({
 
 export const putOauthState = internalMutation({
   args: {
-    provider: v.string(),
+    provider: providerValidator,
     state: v.string(),
     returnTo: v.string(),
   },
@@ -137,7 +150,10 @@ export const putOauthState = internalMutation({
 
 export const consumeOauthState = internalMutation({
   args: { state: v.string() },
-  returns: v.union(v.string(), v.null()),
+  returns: v.union(
+    v.object({ provider: providerValidator, returnTo: v.string() }),
+    v.null(),
+  ),
   handler: async (ctx, args) => {
     const row = await ctx.db
       .query("oauthStates")
@@ -150,13 +166,13 @@ export const consumeOauthState = internalMutation({
     if (row.expiresAt <= Date.now()) {
       return null;
     }
-    return row.returnTo;
+    return { provider: row.provider, returnTo: row.returnTo };
   },
 });
 
 export const saveConnection = internalMutation({
   args: {
-    provider: v.string(),
+    provider: providerValidator,
     accessToken: v.string(),
     login: v.string(),
     providerUserId: v.string(),

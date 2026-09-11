@@ -5,9 +5,17 @@ export const KIND_LABELS: Record<AuditKind, string> = {
   presented: "Presented",
   verified: "Verified",
   used: "Used",
+  platform_toggled: "Platform toggled",
   revoked: "Revoked",
   expired: "Expired",
 };
+
+export const TOKEN_LOG_LABELS = {
+  issued: "Token issued",
+  refreshed: "Token refreshed",
+  revoked: "Token revoked",
+  mint_denied: "Mint denied",
+} as const;
 
 export const ACTOR_TYPE_LABELS: Record<ActorType, string> = {
   board: "Board",

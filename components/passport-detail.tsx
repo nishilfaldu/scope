@@ -44,6 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -58,10 +59,11 @@ import {
   KIND_LABELS,
   OUTCOME_LABELS,
   STATUS_LABELS,
+  TOKEN_LOG_LABELS,
   formatActor,
   formatWhen,
 } from "@/lib/audit";
-import { APP_LABELS, formatRemaining } from "@/lib/capabilities";
+import { ALL_APPS, APP_LABELS, formatRemaining, type AppId } from "@/lib/capabilities";
 
 const KIND_ITEMS = [
   { value: "all", label: "All events" },
@@ -94,9 +96,11 @@ export function PassportDetail({ passportId }: { passportId: string }) {
   const [actorType, setActorType] = useState("all");
   const [copied, setCopied] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  const [toggling, setToggling] = useState<string | null>(null);
 
   const passport = useQuery(api.passports.get, { passportId, now });
   const chain = useQuery(api.audit.chainStatus, { passportId });
+  const liveTokens = useQuery(api.tokens.listLive, { passportId, now });
   const history = usePaginatedQuery(
     api.audit.listHistory,
     {
@@ -107,7 +111,13 @@ export function PassportDetail({ passportId }: { passportId: string }) {
     },
     { initialNumItems: 50 },
   );
+  const tokenLogs = usePaginatedQuery(
+    api.tokens.listLogs,
+    { passportId },
+    { initialNumItems: 50 },
+  );
   const revoke = useMutation(api.passports.revoke);
+  const setPlatform = useMutation(api.passports.setPlatform);
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -127,6 +137,23 @@ export function PassportDetail({ passportId }: { passportId: string }) {
       setNow(Date.now());
     } finally {
       setRevoking(false);
+    }
+  }
+
+  async function handleToggle(platform: AppId, enabled: boolean) {
+    if (!passport) {
+      return;
+    }
+    setToggling(platform);
+    try {
+      await setPlatform({
+        passportId: passport.token,
+        platform,
+        enabled,
+      });
+      setNow(Date.now());
+    } finally {
+      setToggling(null);
     }
   }
 
@@ -231,7 +258,7 @@ export function PassportDetail({ passportId }: { passportId: string }) {
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Passport</p>
+                <p className="text-xs text-muted-foreground">Passport id</p>
                 <div className="mt-1 flex min-w-0 items-center gap-1">
                   <code className="max-w-36 truncate font-mono text-xs">
                     {passport.token}
@@ -271,6 +298,126 @@ export function PassportDetail({ passportId }: { passportId: string }) {
                 )}
               </div>
             ) : null}
+            <div className="border-t px-6 py-4">
+              <p className="text-xs text-muted-foreground">Platforms</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {ALL_APPS.map((app) => {
+                  const on = passport.apps.includes(app);
+                  return (
+                    <label
+                      key={app}
+                      className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
+                    >
+                      <span className="text-sm">{APP_LABELS[app]}</span>
+                      <Switch
+                        checked={on}
+                        disabled={
+                          passport.lifetimeStatus !== "active" ||
+                          toggling === app
+                        }
+                        onCheckedChange={(checked) =>
+                          void handleToggle(app, checked)
+                        }
+                        aria-label={`${APP_LABELS[app]} on this passport`}
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+              {liveTokens && liveTokens.length > 0 ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Live tokens:{" "}
+                  {liveTokens
+                    .map(
+                      (token) =>
+                        `${APP_LABELS[token.platform]} (${formatRemaining(token.expiresAt, now)})`,
+                    )
+                    .join(" · ")}
+                </p>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  No live platform tokens. Connecting an account does not grant
+                  access until a platform is on and the agent mints a token.
+                </p>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        <div className="px-4 lg:px-6">
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>Token log</CardTitle>
+              <CardDescription>
+                Issued, refreshed, revoked, and mint denied — passport,
+                platform, reason, time. Raw tokens are never stored here.
+              </CardDescription>
+            </CardHeader>
+            {tokenLogs.status === "LoadingFirstPage" ? (
+              <div className="flex flex-col gap-3 p-6">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-2/3" />
+              </div>
+            ) : tokenLogs.results.length === 0 ? (
+              <Empty>
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <HugeiconsIcon icon={UnavailableIcon} strokeWidth={2} />
+                  </EmptyMedia>
+                  <EmptyTitle>No token events</EmptyTitle>
+                  <EmptyDescription>
+                    When an agent requests credentials, every issue, refresh,
+                    revoke, and denial lands here.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>When</TableHead>
+                      <TableHead>Event</TableHead>
+                      <TableHead>Platform</TableHead>
+                      <TableHead>Why</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tokenLogs.results.map((event) => (
+                      <TableRow key={event._id}>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {formatWhen(event.occurredAt)}
+                        </TableCell>
+                        <TableCell>{TOKEN_LOG_LABELS[event.kind]}</TableCell>
+                        <TableCell>
+                          {event.platform in APP_LABELS
+                            ? APP_LABELS[event.platform as keyof typeof APP_LABELS]
+                            : event.platform}
+                        </TableCell>
+                        <TableCell className="max-w-72 text-sm">
+                          {event.reason}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {tokenLogs.status === "CanLoadMore" ||
+                tokenLogs.status === "LoadingMore" ? (
+                  <div className="flex justify-center border-t p-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={tokenLogs.status === "LoadingMore"}
+                      onClick={() => tokenLogs.loadMore(50)}
+                    >
+                      {tokenLogs.status === "LoadingMore"
+                        ? "Loading…"
+                        : "Load more"}
+                    </Button>
+                  </div>
+                ) : null}
+              </>
+            )}
           </Card>
         </div>
 
@@ -279,8 +426,8 @@ export function PassportDetail({ passportId }: { passportId: string }) {
             <CardHeader className="border-b">
               <CardTitle>History</CardTitle>
               <CardDescription>
-                Issued, presented, verified, used, revoked, and expired — with
-                who, scopes, outcome, and why.
+                Issued, platform toggled, revoked, and expired — plus invoke
+                presented / verified / used. Who, scopes, outcome, and why.
               </CardDescription>
               <CardAction className="flex flex-wrap gap-2">
                 <Select

@@ -5,8 +5,16 @@ export const AUDIT_KINDS = [
   "presented",
   "verified",
   "used",
+  "platform_toggled",
   "revoked",
   "expired",
+] as const;
+
+export const TOKEN_LOG_KINDS = [
+  "issued",
+  "refreshed",
+  "revoked",
+  "mint_denied",
 ] as const;
 
 export const ACTOR_TYPES = ["board", "agent", "system"] as const;
@@ -14,6 +22,7 @@ export const ACTOR_TYPES = ["board", "agent", "system"] as const;
 export const OUTCOMES = ["allowed", "denied"] as const;
 
 export type AuditKind = (typeof AUDIT_KINDS)[number];
+export type TokenLogKind = (typeof TOKEN_LOG_KINDS)[number];
 export type ActorType = (typeof ACTOR_TYPES)[number];
 export type Outcome = (typeof OUTCOMES)[number];
 
@@ -22,8 +31,16 @@ export const auditKindValidator = v.union(
   v.literal("presented"),
   v.literal("verified"),
   v.literal("used"),
+  v.literal("platform_toggled"),
   v.literal("revoked"),
   v.literal("expired"),
+);
+
+export const tokenLogKindValidator = v.union(
+  v.literal("issued"),
+  v.literal("refreshed"),
+  v.literal("revoked"),
+  v.literal("mint_denied"),
 );
 
 export const actorTypeValidator = v.union(

@@ -32,6 +32,10 @@ type Env = {
   readonly CONVEX_SITE_URL: string;
   readonly GITHUB_CLIENT_ID: string | undefined;
   readonly GITHUB_CLIENT_SECRET: string | undefined;
+  readonly GOOGLE_CLIENT_ID: string | undefined;
+  readonly GOOGLE_CLIENT_SECRET: string | undefined;
+  readonly SLACK_CLIENT_ID: string | undefined;
+  readonly SLACK_CLIENT_SECRET: string | undefined;
 };
 
 /**
