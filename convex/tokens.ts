@@ -6,16 +6,13 @@ import {
   query,
   type MutationCtx,
 } from "./_generated/server";
-import { markExpired } from "./audit";
 import { type TokenLogKind } from "./auditFields";
 import {
   accountAppValidator,
   isAccountAppId,
-  isAppId,
   providerForApp,
   providerValidator,
   type AccountAppId,
-  type ProviderId,
 } from "./permissions";
 import schema from "./schema";
 import { hashesEqual, sha256Hex } from "./secrets";
@@ -129,15 +126,10 @@ export const authorizeMint = internalMutation({
       return { ok: false as const, status: 401, reason: "Unknown passport" };
     }
 
-    let current = passport;
-    if (current.status === "active" && current.expiresAt <= now) {
-      current = await markExpired(ctx, current, now);
-    }
-
-    if (!current.invokeKeyHash) {
+    if (!passport.invokeKeyHash) {
       return await denyMint(
         ctx,
-        current._id,
+        passport._id,
         args.platform,
         401,
         "Passport has no invoke key; mint a new passport",
@@ -145,10 +137,10 @@ export const authorizeMint = internalMutation({
       );
     }
     const invokeHash = await sha256Hex(args.invokeKey);
-    if (!hashesEqual(invokeHash, current.invokeKeyHash)) {
+    if (!hashesEqual(invokeHash, passport.invokeKeyHash)) {
       return await denyMint(
         ctx,
-        current._id,
+        passport._id,
         args.platform,
         401,
         "Invalid invoke key",
@@ -156,10 +148,20 @@ export const authorizeMint = internalMutation({
       );
     }
 
-    if (!isAppId(args.platform) || !isAccountAppId(args.platform)) {
+    if (args.platform === "demo") {
       return await denyMint(
         ctx,
-        current._id,
+        passport._id,
+        args.platform,
+        400,
+        "Demo has no platform token; use /api/invoke",
+        now,
+      );
+    }
+    if (!isAccountAppId(args.platform)) {
+      return await denyMint(
+        ctx,
+        passport._id,
         args.platform,
         400,
         "Unknown platform",
@@ -167,42 +169,32 @@ export const authorizeMint = internalMutation({
       );
     }
     const platform = args.platform;
-    const provider: ProviderId | null = providerForApp(platform);
-    if (provider === null) {
-      return await denyMint(
-        ctx,
-        current._id,
-        platform,
-        400,
-        "Demo has no platform token; use /api/invoke",
-        now,
-      );
-    }
+    const provider = providerForApp(platform);
 
-    if (current.status === "revoked") {
+    if (passport.status === "revoked") {
       return await denyMint(
         ctx,
-        current._id,
+        passport._id,
         platform,
         403,
         "Passport revoked",
         now,
       );
     }
-    if (current.status === "expired" || current.expiresAt <= now) {
+    if (passport.status === "expired" || passport.expiresAt <= now) {
       return await denyMint(
         ctx,
-        current._id,
+        passport._id,
         platform,
         403,
         "Passport expired",
         now,
       );
     }
-    if (!current.apps.includes(platform)) {
+    if (!passport.apps.includes(platform)) {
       return await denyMint(
         ctx,
-        current._id,
+        passport._id,
         platform,
         403,
         "Platform is off",
@@ -217,7 +209,7 @@ export const authorizeMint = internalMutation({
     if (!connection) {
       return await denyMint(
         ctx,
-        current._id,
+        passport._id,
         platform,
         403,
         `${provider} is not connected`,
@@ -227,7 +219,7 @@ export const authorizeMint = internalMutation({
 
     return {
       ok: true as const,
-      passportId: current._id,
+      passportId: passport._id,
       platform,
       provider,
       refresh: args.refresh,

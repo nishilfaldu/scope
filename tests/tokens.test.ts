@@ -240,6 +240,37 @@ describe("platform tokens", () => {
     expect(expired).toMatchObject({ ok: false, reason: "Passport expired" });
   });
 
+  test("demo has no platform token and unknown platforms are rejected", async () => {
+    const test = t();
+    const minted = await test.mutation(api.passports.mint, {
+      name: "Demo",
+      ttlMs: 60_000,
+      apps: ["demo"],
+    });
+    const demo = await test.mutation(internal.tokens.authorizeMint, {
+      passportToken: minted.passportId,
+      invokeKey: minted.invokeKey,
+      platform: "demo",
+      refresh: false,
+    });
+    expect(demo).toMatchObject({
+      ok: false,
+      status: 400,
+      reason: "Demo has no platform token; use /api/invoke",
+    });
+    const unknown = await test.mutation(internal.tokens.authorizeMint, {
+      passportToken: minted.passportId,
+      invokeKey: minted.invokeKey,
+      platform: "dropbox",
+      refresh: false,
+    });
+    expect(unknown).toMatchObject({
+      ok: false,
+      status: 400,
+      reason: "Unknown platform",
+    });
+  });
+
   test("turning one platform off revokes only that platform’s token", async () => {
     const test = t();
     await seedGithub(test);

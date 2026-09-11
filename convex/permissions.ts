@@ -68,6 +68,8 @@ export function isProviderId(value: string): value is ProviderId {
   return (PROVIDERS as readonly string[]).includes(value);
 }
 
+export function providerForApp(app: AccountAppId): ProviderId;
+export function providerForApp(app: AppId): ProviderId | null;
 export function providerForApp(app: AppId): ProviderId | null {
   switch (app) {
     case "demo":

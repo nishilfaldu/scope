@@ -37,6 +37,12 @@ export const TTL_OPTIONS = [
   { label: "7 days", ttlMs: 7 * 24 * 60 * 60 * 1000 },
 ] as const;
 
+export function appLabel(id: string): string {
+  return (ALL_APPS as readonly string[]).includes(id)
+    ? APP_LABELS[id as AppId]
+    : id;
+}
+
 export function formatRemaining(expiresAt: number, now: number): string {
   const ms = expiresAt - now;
   if (ms <= 0) return "expired";
