@@ -4,6 +4,17 @@ import { isPlainObject } from "./json";
 const GITHUB_API = "https://api.github.com";
 const API_VERSION = "2022-11-28";
 
+function requireIssueNumber(args: Record<string, unknown>): string {
+  const value = args.issue_number;
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return String(value);
+  }
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+  throw new Error("Missing or invalid issue_number");
+}
+
 function requireString(args: Record<string, unknown>, key: string): string {
   const value = args[key];
   if (typeof value !== "string" || value.length === 0) {
@@ -130,7 +141,7 @@ export async function githubIssuesComment(
 ): Promise<InvokeResult> {
   const owner = requireString(args, "owner");
   const repo = requireString(args, "repo");
-  const issueNumber = requireString(args, "issue_number");
+  const issueNumber = requireIssueNumber(args);
   const body = requireString(args, "body");
   return await githubFetch(
     ctx.githubToken,
