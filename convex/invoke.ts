@@ -35,7 +35,7 @@ async function demoEcho(
   };
 }
 
-export const ACTIONS = {
+const ACTIONS = {
   "demo.echo": { app: "demo", run: demoEcho },
   "github.repos.list": { app: "github", run: githubReposList },
   "github.repos.get": { app: "github", run: githubReposGet },

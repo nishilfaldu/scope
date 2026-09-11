@@ -82,18 +82,3 @@ export function providerForApp(app: AppId): ProviderId | null {
     }
   }
 }
-
-export function appsForProvider(provider: ProviderId): AccountAppId[] {
-  switch (provider) {
-    case "github":
-      return ["github"];
-    case "google":
-      return ["gmail", "calendar", "drive", "docs", "sheets"];
-    case "slack":
-      return ["slack"];
-    default: {
-      const _exhaustive: never = provider;
-      return _exhaustive;
-    }
-  }
-}

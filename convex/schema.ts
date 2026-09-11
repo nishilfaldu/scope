@@ -2,9 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { accountAppValidator, appValidator, providerValidator } from "./permissions";
 import {
-  actorTypeValidator,
-  auditKindValidator,
-  outcomeValidator,
+  auditEventValidator,
   tokenLogKindValidator,
 } from "./auditFields";
 
@@ -27,23 +25,7 @@ export default defineSchema({
     .index("by_status", ["status"])
     .index("by_status_and_expiresAt", ["status", "expiresAt"]),
 
-  auditEvents: defineTable({
-    passportId: v.id("passports"),
-    kind: auditKindValidator,
-    actorType: actorTypeValidator,
-    actorId: v.string(),
-    scopes: v.array(v.string()),
-    outcome: outcomeValidator,
-    reason: v.string(),
-    service: v.union(v.string(), v.null()),
-    action: v.union(v.string(), v.null()),
-    argsPreview: v.union(v.string(), v.null()),
-    httpStatus: v.union(v.number(), v.null()),
-    occurredAt: v.number(),
-    seq: v.number(),
-    prevHash: v.union(v.string(), v.null()),
-    hash: v.string(),
-  })
+  auditEvents: defineTable(auditEventValidator)
     .index("by_passport", ["passportId"])
     .index("by_passport_and_kind", ["passportId", "kind"])
     .index("by_passport_and_outcome", ["passportId", "outcome"])

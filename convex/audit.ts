@@ -35,7 +35,7 @@ export const lastEventValidator = v.object({
   occurredAt: v.number(),
 });
 
-export type LastEvent = Infer<typeof lastEventValidator>;
+type LastEvent = Infer<typeof lastEventValidator>;
 
 type AppendInput = {
   passportId: Id<"passports">;

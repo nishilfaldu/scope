@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { sha256Hex } from "./secrets";
 
 export const AUDIT_KINDS = [
   "issued",
@@ -88,7 +89,7 @@ export type HashInput = {
   occurredAt: number;
 };
 
-export function canonicalAuditPayload(input: HashInput): string {
+function canonicalAuditPayload(input: HashInput): string {
   return JSON.stringify([
     input.seq,
     input.prevHash,
@@ -107,9 +108,5 @@ export function canonicalAuditPayload(input: HashInput): string {
 }
 
 export async function hashAuditEvent(input: HashInput): Promise<string> {
-  const bytes = new TextEncoder().encode(canonicalAuditPayload(input));
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
+  return await sha256Hex(canonicalAuditPayload(input));
 }
