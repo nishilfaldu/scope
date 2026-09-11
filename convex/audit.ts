@@ -110,9 +110,11 @@ export async function appendAuditEvent(
   const prevSeq = passport.auditSeq ?? 0;
   const prevHash = passport.auditHeadHash ?? null;
   const seq = prevSeq + 1;
-  const hash = await hashAuditEvent(asHashInput(input, seq, prevHash));
+  const scopes = [...new Set(input.scopes)];
+  const normalized = { ...input, scopes };
+  const hash = await hashAuditEvent(asHashInput(normalized, seq, prevHash));
   await ctx.db.insert("auditEvents", {
-    ...input,
+    ...normalized,
     seq,
     prevHash,
     hash,
