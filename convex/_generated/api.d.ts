@@ -8,7 +8,10 @@
  * @module
  */
 
+import type * as audit from "../audit.js";
+import type * as auditFields from "../auditFields.js";
 import type * as connections from "../connections.js";
+import type * as crons from "../crons.js";
 import type * as github from "../github.js";
 import type * as http from "../http.js";
 import type * as invoke from "../invoke.js";
@@ -22,7 +25,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  audit: typeof audit;
+  auditFields: typeof auditFields;
   connections: typeof connections;
+  crons: typeof crons;
   github: typeof github;
   http: typeof http;
   invoke: typeof invoke;

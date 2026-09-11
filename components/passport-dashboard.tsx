@@ -1,10 +1,13 @@
 "use client";
 
 import { useMutation, useQuery } from "convex/react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   Copy01Icon,
   Delete02Icon,
+  File01Icon,
   MoreHorizontalIcon,
   PassportIcon,
   PlusSignIcon,
@@ -63,12 +66,14 @@ import {
   formatRemaining,
   type AppId,
 } from "@/lib/capabilities";
+import { STATUS_LABELS, lastEventLabel } from "@/lib/audit";
 
 const DEFAULT_TTL_MS = TTL_OPTIONS[1]?.ttlMs ?? 60 * 60 * 1000;
 
 export function PassportDashboard() {
+  const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
-  const passports = useQuery(api.passports.listActive, { now });
+  const passports = useQuery(api.passports.list, { now });
   const mint = useMutation(api.passports.mint);
   const revoke = useMutation(api.passports.revoke);
 
@@ -186,7 +191,10 @@ export function PassportDashboard() {
             <CardHeader>
               <CardDescription>Active passports</CardDescription>
               <CardTitle className="text-2xl font-semibold tabular-nums">
-                {passports === undefined ? "…" : passports.length}
+                {passports === undefined
+                  ? "…"
+                  : passports.filter((row) => row.lifetimeStatus === "active")
+                      .length}
               </CardTitle>
             </CardHeader>
           </Card>
@@ -198,10 +206,10 @@ export function PassportDashboard() {
               <CardTitle>Passports</CardTitle>
               <CardDescription>
                 {passports === undefined
-                  ? "Loading active cards…"
+                  ? "Loading cards…"
                   : passports.length === 0
                     ? "Mint a card to give an agent time-boxed access."
-                    : `${passports.length} active`}
+                    : `${passports.filter((row) => row.lifetimeStatus === "active").length} active · ${passports.length} total`}
               </CardDescription>
               <CardAction>
                 <Button size="sm" onClick={() => setMintOpen(true)}>
@@ -226,7 +234,7 @@ export function PassportDashboard() {
                   <EmptyMedia variant="icon">
                     <HugeiconsIcon icon={PassportIcon} strokeWidth={2} />
                   </EmptyMedia>
-                  <EmptyTitle>No active passports</EmptyTitle>
+                  <EmptyTitle>No passports</EmptyTitle>
                   <EmptyDescription>
                     Mint a virtual card for a job. Agents send passportId +
                     action — never your GitHub token.
@@ -243,9 +251,10 @@ export function PassportDashboard() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Apps</TableHead>
                     <TableHead>Expires</TableHead>
-                    <TableHead>Last action</TableHead>
+                    <TableHead>Last event</TableHead>
                     <TableHead>Passport</TableHead>
                     <TableHead className="w-12">
                       <span className="sr-only">Actions</span>
@@ -254,11 +263,29 @@ export function PassportDashboard() {
                 </TableHeader>
                 <TableBody>
                   {passports.map((passport) => {
-                    const last = passport.logs[0];
+                    const last = passport.lastEvent;
                     return (
                       <TableRow key={passport._id}>
                         <TableCell className="font-medium">
-                          {passport.name}
+                          <Link
+                            href={`/passports/${passport._id}`}
+                            className="hover:underline"
+                          >
+                            {passport.name}
+                          </Link>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              passport.lifetimeStatus === "active"
+                                ? "secondary"
+                                : passport.lifetimeStatus === "revoked"
+                                  ? "destructive"
+                                  : "outline"
+                            }
+                          >
+                            {STATUS_LABELS[passport.lifetimeStatus]}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
@@ -279,15 +306,15 @@ export function PassportDashboard() {
                             <div className="min-w-0">
                               <p
                                 className={
-                                  last.ok
+                                  last.outcome === "allowed"
                                     ? "truncate"
                                     : "truncate text-destructive"
                                 }
                               >
-                                {last.action}
+                                {lastEventLabel(last)}
                               </p>
                               <p className="truncate text-xs text-muted-foreground">
-                                {formatRelativeTime(last._creationTime, now)}
+                                {formatRelativeTime(last.occurredAt, now)}
                               </p>
                             </div>
                           ) : (
@@ -335,6 +362,17 @@ export function PassportDashboard() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem
                                 onClick={() =>
+                                  router.push(`/passports/${passport._id}`)
+                                }
+                              >
+                                <HugeiconsIcon
+                                  icon={File01Icon}
+                                  strokeWidth={2}
+                                />
+                                View history
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() =>
                                   void copyText(passport.token, passport.token)
                                 }
                               >
@@ -344,20 +382,26 @@ export function PassportDashboard() {
                                 />
                                 Copy token
                               </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                variant="destructive"
-                                disabled={revokingId === passport.token}
-                                onClick={() => void handleRevoke(passport.token)}
-                              >
-                                <HugeiconsIcon
-                                  icon={Delete02Icon}
-                                  strokeWidth={2}
-                                />
-                                {revokingId === passport.token
-                                  ? "Revoking…"
-                                  : "Revoke"}
-                              </DropdownMenuItem>
+                              {passport.lifetimeStatus === "active" ? (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    disabled={revokingId === passport.token}
+                                    onClick={() =>
+                                      void handleRevoke(passport.token)
+                                    }
+                                  >
+                                    <HugeiconsIcon
+                                      icon={Delete02Icon}
+                                      strokeWidth={2}
+                                    />
+                                    {revokingId === passport.token
+                                      ? "Revoking…"
+                                      : "Revoke"}
+                                  </DropdownMenuItem>
+                                </>
+                              ) : null}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>

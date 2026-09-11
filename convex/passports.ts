@@ -1,20 +1,29 @@
 import { v } from "convex/values";
 import {
-  internalMutation,
   internalQuery,
   mutation,
   query,
 } from "./_generated/server";
 import { appValidator } from "./permissions";
 import schema from "./schema";
+import {
+  appendAuditEvent,
+  boardActorId,
+  lastEventValidator,
+  latestEvent,
+  lifetimeStatus,
+  markExpired,
+} from "./audit";
 
 const passportDoc = schema.doc("passports");
-const logDoc = schema.doc("passportLogs");
 const boardPassport = passportDoc.extend({
-  logs: v.array(logDoc),
+  lifetimeStatus: v.union(
+    v.literal("active"),
+    v.literal("revoked"),
+    v.literal("expired"),
+  ),
+  lastEvent: v.union(lastEventValidator, v.null()),
 });
-
-const RECENT_LOGS = 8;
 
 function randomPassportToken(): string {
   const bytes = new Uint8Array(24);
@@ -26,25 +35,60 @@ function randomPassportToken(): string {
   return `pp_${hex}`;
 }
 
-export const listActive = query({
+export const list = query({
   args: { now: v.number() },
   returns: v.array(boardPassport),
   handler: async (ctx, args) => {
-    const rows = await ctx.db
-      .query("passports")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .take(100);
-    const active = rows.filter((row) => row.expiresAt > args.now);
+    const [active, revoked, expired] = await Promise.all([
+      ctx.db
+        .query("passports")
+        .withIndex("by_status", (q) => q.eq("status", "active"))
+        .take(100),
+      ctx.db
+        .query("passports")
+        .withIndex("by_status", (q) => q.eq("status", "revoked"))
+        .take(100),
+      ctx.db
+        .query("passports")
+        .withIndex("by_status", (q) => q.eq("status", "expired"))
+        .take(100),
+    ]);
+    const rows = [...active, ...revoked, ...expired];
     const result = [];
-    for (const passport of active) {
-      const logs = await ctx.db
-        .query("passportLogs")
-        .withIndex("by_passport", (q) => q.eq("passportId", passport._id))
-        .order("desc")
-        .take(RECENT_LOGS);
-      result.push({ ...passport, logs });
+    for (const passport of rows) {
+      result.push({
+        ...passport,
+        lifetimeStatus: lifetimeStatus(passport, args.now),
+        lastEvent: await latestEvent(ctx, passport._id),
+      });
     }
+    const rank = { active: 0, expired: 1, revoked: 2 } as const;
+    result.sort(
+      (a, b) =>
+        rank[a.lifetimeStatus] - rank[b.lifetimeStatus] ||
+        b._creationTime - a._creationTime,
+    );
     return result;
+  },
+});
+
+export const get = query({
+  args: { passportId: v.string(), now: v.number() },
+  returns: v.union(boardPassport, v.null()),
+  handler: async (ctx, args) => {
+    const id = ctx.db.normalizeId("passports", args.passportId);
+    if (!id) {
+      return null;
+    }
+    const passport = await ctx.db.get("passports", id);
+    if (!passport) {
+      return null;
+    }
+    return {
+      ...passport,
+      lifetimeStatus: lifetimeStatus(passport, args.now),
+      lastEvent: await latestEvent(ctx, passport._id),
+    };
   },
 });
 
@@ -55,6 +99,7 @@ export const mint = mutation({
     apps: v.array(appValidator),
   },
   returns: v.object({
+    id: v.id("passports"),
     passportId: v.string(),
     expiresAt: v.number(),
     name: v.string(),
@@ -75,15 +120,32 @@ export const mint = mutation({
 
     const token = randomPassportToken();
     const expiresAt = Date.now() + args.ttlMs;
-    await ctx.db.insert("passports", {
+    const id = await ctx.db.insert("passports", {
       name,
       token,
       status: "active",
       expiresAt,
       apps: uniqueApps,
+      auditSeq: 0,
+    });
+    const actorId = await boardActorId(ctx);
+    await appendAuditEvent(ctx, {
+      passportId: id,
+      kind: "issued",
+      actorType: "board",
+      actorId,
+      scopes: uniqueApps,
+      outcome: "allowed",
+      reason: "Passport minted",
+      service: "board",
+      action: null,
+      argsPreview: null,
+      httpStatus: null,
+      occurredAt: Date.now(),
     });
 
     return {
+      id,
       passportId: token,
       expiresAt,
       name,
@@ -103,7 +165,29 @@ export const revoke = mutation({
     if (!passport) {
       throw new Error("Passport not found");
     }
+    if (passport.status === "revoked") {
+      return null;
+    }
+    const now = Date.now();
+    if (passport.status === "active" && passport.expiresAt <= now) {
+      await markExpired(ctx, passport, now);
+    }
+    const actorId = await boardActorId(ctx);
     await ctx.db.patch("passports", passport._id, { status: "revoked" });
+    await appendAuditEvent(ctx, {
+      passportId: passport._id,
+      kind: "revoked",
+      actorType: "board",
+      actorId,
+      scopes: [...passport.apps],
+      outcome: "allowed",
+      reason: "Revoked by board",
+      service: "board",
+      action: null,
+      argsPreview: null,
+      httpStatus: null,
+      occurredAt: Date.now(),
+    });
     return null;
   },
 });
@@ -116,21 +200,5 @@ export const getByToken = internalQuery({
       .query("passports")
       .withIndex("by_token", (q) => q.eq("token", args.token))
       .unique();
-  },
-});
-
-export const appendLog = internalMutation({
-  args: {
-    passportId: v.id("passports"),
-    action: v.string(),
-    status: v.number(),
-    ok: v.boolean(),
-    error: v.union(v.string(), v.null()),
-    argsPreview: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await ctx.db.insert("passportLogs", args);
-    return null;
   },
 });

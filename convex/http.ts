@@ -41,10 +41,6 @@ function previewArgs(args: Record<string, unknown>): string {
   return `${raw.slice(0, ARGS_PREVIEW_MAX)}…`;
 }
 
-function denied(status: number, error: string): InvokeResult {
-  return { ok: false, status, body: { error }, error };
-}
-
 const ALLOWED_RETURN_PATHS = new Set(["/", "/connections"]);
 
 function allowedReturnTo(value: string | null): string {
@@ -368,31 +364,33 @@ http.route({
       return jsonResponse(401, { error: "Unknown passport" });
     }
 
-    const spec = lookupAction(action);
-    const githubToken = await resolveGithubToken(ctx);
-    let result: InvokeResult;
-    if (passport.status === "revoked") {
-      result = denied(403, "Passport revoked");
-    } else if (passport.expiresAt <= Date.now()) {
-      result = denied(403, "Passport expired");
-    } else if (!spec) {
-      result = denied(400, `Unknown action: ${action}`);
-    } else if (!passport.apps.includes(spec.app)) {
-      result = denied(403, "Action not permitted");
-    } else {
-      result = await runAction(spec, args, {
-        passportName: passport.name,
-        githubToken,
-      });
-    }
-
-    await ctx.runMutation(internal.passports.appendLog, {
+    const preview = previewArgs(args);
+    const decision = await ctx.runMutation(internal.audit.recordPresentation, {
       passportId: passport._id,
       action,
-      status: result.status,
+      argsPreview: preview,
+    });
+    if (!decision.allowRun) {
+      return jsonResponse(decision.status, { error: decision.reason });
+    }
+
+    const spec = lookupAction(action);
+    if (!spec) {
+      return jsonResponse(400, { error: `Unknown action: ${action}` });
+    }
+
+    const githubToken = await resolveGithubToken(ctx);
+    const result: InvokeResult = await runAction(spec, args, {
+      passportName: passport.name,
+      githubToken,
+    });
+    await ctx.runMutation(internal.audit.recordUse, {
+      passportId: passport._id,
+      action,
+      argsPreview: preview,
       ok: result.ok,
+      status: result.status,
       error: result.error,
-      argsPreview: previewArgs(args),
     });
     return jsonResponse(result.status, result.body);
   }),
