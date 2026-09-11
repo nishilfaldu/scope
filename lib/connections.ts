@@ -1,10 +1,11 @@
-import type { ProviderId } from "../convex/permissions";
+import { PROVIDERS, type ProviderId } from "../convex/permissions";
 
-export type { ProviderId };
+export { PROVIDERS, type ProviderId };
 
-export type ConnectionStatus =
-  | { connected: false }
-  | { connected: true; login: string };
+export type ConnectionRow = {
+  connected: boolean;
+  login: string | null;
+};
 
 const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
 
@@ -13,8 +14,6 @@ export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
   google: `${siteUrl}/api/google/connect`,
   slack: `${siteUrl}/api/slack/connect`,
 };
-
-export const GITHUB_CONNECT_URL = PROVIDER_CONNECT_URL.github;
 
 export const CONNECT_ERRORS: Record<string, string> = {
   token:

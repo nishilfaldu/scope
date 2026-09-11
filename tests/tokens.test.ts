@@ -81,10 +81,10 @@ describe("accounts and passports", () => {
       apps: ["github", "demo"],
     });
     await test.action(api.connections.disconnect, { provider: "github" });
-    const github = await test.query(api.connections.status, {
-      provider: "github",
-    });
-    expect(github).toEqual({ connected: false });
+    const statuses = await test.query(api.connections.listStatuses, {});
+    expect(
+      statuses.find((row) => row.provider === "github"),
+    ).toEqual({ provider: "github", connected: false, login: null });
     const passport = await test.query(api.passports.get, {
       passportId: minted.id,
       now: Date.now(),

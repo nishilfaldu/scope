@@ -78,6 +78,39 @@ const ACTOR_ITEMS = [
   })),
 ];
 
+function FilterSelect({
+  label,
+  items,
+  value,
+  onChange,
+}: {
+  label: string;
+  items: ReadonlyArray<{ value: string; label: string }>;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Select
+      items={items}
+      value={value}
+      onValueChange={(next) => {
+        if (next != null) onChange(next);
+      }}
+    >
+      <SelectTrigger size="sm" aria-label={label}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 export function PassportHistory({ passportId }: { passportId: string }) {
   const [kind, setKind] = useState("all");
   const [outcome, setOutcome] = useState("all");
@@ -103,60 +136,24 @@ export function PassportHistory({ passportId }: { passportId: string }) {
             presented / verified / used. Who, scopes, outcome, and why.
           </CardDescription>
           <CardAction className="flex flex-wrap gap-2">
-            <Select
+            <FilterSelect
+              label="Filter by event"
               items={KIND_ITEMS}
               value={kind}
-              onValueChange={(value) => {
-                if (value != null) setKind(value);
-              }}
-            >
-              <SelectTrigger size="sm" aria-label="Filter by event">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {KIND_ITEMS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
+              onChange={setKind}
+            />
+            <FilterSelect
+              label="Filter by outcome"
               items={OUTCOME_ITEMS}
               value={outcome}
-              onValueChange={(value) => {
-                if (value != null) setOutcome(value);
-              }}
-            >
-              <SelectTrigger size="sm" aria-label="Filter by outcome">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {OUTCOME_ITEMS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
+              onChange={setOutcome}
+            />
+            <FilterSelect
+              label="Filter by actor"
               items={ACTOR_ITEMS}
               value={actorType}
-              onValueChange={(value) => {
-                if (value != null) setActorType(value);
-              }}
-            >
-              <SelectTrigger size="sm" aria-label="Filter by actor">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ACTOR_ITEMS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={setActorType}
+            />
           </CardAction>
         </CardHeader>
         {history.status === "LoadingFirstPage" ? (

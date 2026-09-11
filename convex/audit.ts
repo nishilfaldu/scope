@@ -2,17 +2,18 @@ import {
   paginationOptsValidator,
   paginationResultValidator,
 } from "convex/server";
-import { v } from "convex/values";
+import { Infer, v } from "convex/values";
 import {
   internalMutation,
   query,
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { lookupAction } from "./invoke";
+import { PROVIDERS } from "./permissions";
 import schema from "./schema";
+import { revokeLivePlatformTokens } from "./tokens";
 import {
   actorTypeValidator,
   auditKindValidator,
@@ -34,13 +35,7 @@ export const lastEventValidator = v.object({
   occurredAt: v.number(),
 });
 
-export type LastEvent = {
-  kind: AuditKind;
-  outcome: Outcome;
-  action: string | null;
-  reason: string;
-  occurredAt: number;
-};
+type LastEvent = Infer<typeof lastEventValidator>;
 
 type AppendInput = {
   passportId: Id<"passports">;
@@ -93,7 +88,7 @@ export function lifetimeStatus(
 }
 
 export async function boardActorId(ctx: MutationCtx): Promise<string> {
-  for (const provider of ["github", "google", "slack"] as const) {
+  for (const provider of PROVIDERS) {
     const row = await ctx.db
       .query("connections")
       .withIndex("by_provider", (q) => q.eq("provider", provider))
@@ -131,40 +126,6 @@ export async function appendAuditEvent(
   });
 }
 
-async function importLegacyLogs(
-  ctx: MutationCtx,
-  passportId: Id<"passports">,
-): Promise<void> {
-  const existing = await ctx.db
-    .query("auditEvents")
-    .withIndex("by_passport", (q) => q.eq("passportId", passportId))
-    .take(1);
-  if (existing.length > 0) {
-    return;
-  }
-  const logs = await ctx.db
-    .query("passportLogs")
-    .withIndex("by_passport", (q) => q.eq("passportId", passportId))
-    .order("asc")
-    .take(200);
-  for (const log of logs) {
-    await appendAuditEvent(ctx, {
-      passportId,
-      kind: "used",
-      actorType: "agent",
-      actorId: "invoke",
-      scopes: [log.action],
-      outcome: log.ok ? "allowed" : "denied",
-      reason: log.error ?? "Action completed",
-      service: "invoke",
-      action: log.action,
-      argsPreview: log.argsPreview,
-      httpStatus: log.status,
-      occurredAt: log._creationTime,
-    });
-  }
-}
-
 export async function markExpired(
   ctx: MutationCtx,
   passport: Doc<"passports">,
@@ -173,13 +134,14 @@ export async function markExpired(
   if (passport.status !== "active") {
     return passport;
   }
-  await importLegacyLogs(ctx, passport._id);
   await ctx.db.patch("passports", passport._id, { status: "expired" });
-  await ctx.runMutation(internal.tokens.revokeForPassport, {
-    passportId: passport._id,
-    platform: null,
-    reason: "Passport expired",
-  });
+  await revokeLivePlatformTokens(
+    ctx,
+    passport._id,
+    null,
+    "Passport expired",
+    now,
+  );
   await appendAuditEvent(ctx, {
     passportId: passport._id,
     kind: "expired",
@@ -201,28 +163,6 @@ export async function markExpired(
   return updated;
 }
 
-function legacyToEvent(log: Doc<"passportLogs">): Doc<"auditEvents"> {
-  return {
-    _id: log._id as unknown as Id<"auditEvents">,
-    _creationTime: log._creationTime,
-    passportId: log.passportId,
-    kind: "used",
-    actorType: "agent",
-    actorId: "invoke",
-    scopes: [log.action],
-    outcome: log.ok ? "allowed" : "denied",
-    reason: log.error ?? "Action completed",
-    service: "invoke",
-    action: log.action,
-    argsPreview: log.argsPreview,
-    httpStatus: log.status,
-    occurredAt: log._creationTime,
-    seq: 0,
-    prevHash: null,
-    hash: "legacy",
-  };
-}
-
 export async function latestEvent(
   ctx: QueryCtx,
   passportId: Id<"passports">,
@@ -233,30 +173,15 @@ export async function latestEvent(
     .order("desc")
     .take(1);
   const event = chained[0];
-  if (event) {
-    return {
-      kind: event.kind,
-      outcome: event.outcome,
-      action: event.action,
-      reason: event.reason,
-      occurredAt: event.occurredAt,
-    };
-  }
-  const logs = await ctx.db
-    .query("passportLogs")
-    .withIndex("by_passport", (q) => q.eq("passportId", passportId))
-    .order("desc")
-    .take(1);
-  const log = logs[0];
-  if (!log) {
+  if (!event) {
     return null;
   }
   return {
-    kind: "used",
-    outcome: log.ok ? "allowed" : "denied",
-    action: log.action,
-    reason: log.error ?? "Action completed",
-    occurredAt: log._creationTime,
+    kind: event.kind,
+    outcome: event.outcome,
+    action: event.action,
+    reason: event.reason,
+    occurredAt: event.occurredAt,
   };
 }
 
@@ -324,30 +249,6 @@ export const listHistory = query({
     const id = ctx.db.normalizeId("passports", args.passportId);
     if (!id) {
       return empty;
-    }
-
-    const probe = await ctx.db
-      .query("auditEvents")
-      .withIndex("by_passport", (q) => q.eq("passportId", id))
-      .take(1);
-
-    if (probe.length === 0) {
-      const logs = await ctx.db
-        .query("passportLogs")
-        .withIndex("by_passport", (q) => q.eq("passportId", id))
-        .order("desc")
-        .take(200);
-      let page = logs.map(legacyToEvent);
-      if (args.kind !== undefined) {
-        page = page.filter((event) => event.kind === args.kind);
-      }
-      if (args.outcome !== undefined) {
-        page = page.filter((event) => event.outcome === args.outcome);
-      }
-      if (args.actorType !== undefined) {
-        page = page.filter((event) => event.actorType === args.actorType);
-      }
-      return { page, isDone: true, continueCursor: "" };
     }
 
     if (args.kind !== undefined) {
@@ -424,7 +325,6 @@ export const recordPresentation = internalMutation({
     if (!passport) {
       throw new Error("Passport not found");
     }
-    await importLegacyLogs(ctx, passport._id);
 
     const spec = lookupAction(args.action);
     const requestedScopes = spec ? [spec.app, args.action] : [args.action];

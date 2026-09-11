@@ -19,26 +19,6 @@ const connectionValidator = v.object({
   tokenExpiresAt: v.union(v.number(), v.null()),
 });
 
-const statusValidator = v.union(
-  v.object({ connected: v.literal(false) }),
-  v.object({ connected: v.literal(true), login: v.string() }),
-);
-
-export const status = query({
-  args: { provider: providerValidator },
-  returns: statusValidator,
-  handler: async (ctx, args) => {
-    const row = await ctx.db
-      .query("connections")
-      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
-      .unique();
-    if (!row) {
-      return { connected: false as const };
-    }
-    return { connected: true as const, login: row.login };
-  },
-});
-
 export const listStatuses = query({
   args: {},
   returns: v.array(
@@ -69,11 +49,11 @@ export const disconnect = action({
   args: { provider: providerValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const token = await ctx.runQuery(internal.connections.getAccessToken, {
+    const connection = await ctx.runQuery(internal.connections.getConnection, {
       provider: args.provider,
     });
-    if (token) {
-      await revokeProviderGrant(args.provider, token);
+    if (connection) {
+      await revokeProviderGrant(args.provider, connection.accessToken);
     }
     await ctx.runMutation(internal.connections.clearConnection, {
       provider: args.provider,
@@ -94,18 +74,6 @@ export const clearConnection = internalMutation({
       await ctx.db.delete("connections", row._id);
     }
     return null;
-  },
-});
-
-export const getAccessToken = internalQuery({
-  args: { provider: providerValidator },
-  returns: v.union(v.string(), v.null()),
-  handler: async (ctx, args) => {
-    const row = await ctx.db
-      .query("connections")
-      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
-      .unique();
-    return row?.accessToken ?? null;
   },
 });
 

@@ -34,6 +34,7 @@ import {
   CONNECTION_PROVIDERS,
   CONNECT_ERRORS,
   PROVIDER_CONNECT_URL,
+  PROVIDERS,
   type ProviderId,
 } from "@/lib/connections";
 
@@ -42,8 +43,7 @@ function readOauthReturn(): { provider: ProviderId; message: string } | null {
     return null;
   }
   const url = new URL(window.location.href);
-  const providers: ProviderId[] = ["github", "google", "slack"];
-  for (const id of providers) {
+  for (const id of PROVIDERS) {
     const value = url.searchParams.get(id);
     if (!value) {
       continue;
@@ -88,9 +88,8 @@ export function ConnectionsBoard() {
 
   useEffect(() => {
     const url = new URL(window.location.href);
-    const providers: ProviderId[] = ["github", "google", "slack"];
     let dirty = false;
-    for (const id of providers) {
+    for (const id of PROVIDERS) {
       if (url.searchParams.has(id)) {
         url.searchParams.delete(id);
         dirty = true;

@@ -49,7 +49,7 @@ function oauthErrorReason(raw: unknown): string {
   return "token";
 }
 
-export function oauthCallbackUrl(provider: ProviderId): string {
+function oauthCallbackUrl(provider: ProviderId): string {
   return `${env.CONVEX_SITE_URL.replace(/\/$/, "")}/api/${provider}/callback`;
 }
 

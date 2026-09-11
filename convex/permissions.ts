@@ -56,16 +56,8 @@ export const providerValidator = v.union(
   v.literal("slack"),
 );
 
-export function isAppId(value: string): value is AppId {
-  return (ALL_APPS as readonly string[]).includes(value);
-}
-
 export function isAccountAppId(value: string): value is AccountAppId {
   return (ACCOUNT_APPS as readonly string[]).includes(value);
-}
-
-export function isProviderId(value: string): value is ProviderId {
-  return (PROVIDERS as readonly string[]).includes(value);
 }
 
 export function providerForApp(app: AccountAppId): ProviderId;
@@ -86,21 +78,6 @@ export function providerForApp(app: AppId): ProviderId | null {
       return "slack";
     default: {
       const _exhaustive: never = app;
-      return _exhaustive;
-    }
-  }
-}
-
-export function appsForProvider(provider: ProviderId): AccountAppId[] {
-  switch (provider) {
-    case "github":
-      return ["github"];
-    case "google":
-      return ["gmail", "calendar", "drive", "docs", "sheets"];
-    case "slack":
-      return ["slack"];
-    default: {
-      const _exhaustive: never = provider;
       return _exhaustive;
     }
   }

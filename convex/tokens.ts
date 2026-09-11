@@ -288,24 +288,6 @@ export const logMintDenied = internalMutation({
   },
 });
 
-export const revokeForPassport = internalMutation({
-  args: {
-    passportId: v.id("passports"),
-    platform: v.union(accountAppValidator, v.null()),
-    reason: v.string(),
-  },
-  returns: v.number(),
-  handler: async (ctx, args) => {
-    return await revokeLivePlatformTokens(
-      ctx,
-      args.passportId,
-      args.platform,
-      args.reason,
-      Date.now(),
-    );
-  },
-});
-
 export const listLive = query({
   args: { passportId: v.string(), now: v.number() },
   returns: v.array(liveTokenValidator),

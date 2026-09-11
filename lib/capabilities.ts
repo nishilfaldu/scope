@@ -1,11 +1,9 @@
 import {
   ALL_APPS,
-  ACCOUNT_APPS,
   type AppId,
-  type AccountAppId,
 } from "../convex/permissions";
 
-export { ALL_APPS, ACCOUNT_APPS, type AppId, type AccountAppId };
+export { ALL_APPS, type AppId };
 
 export const APP_LABELS: Record<AppId, string> = {
   demo: "Demo",
