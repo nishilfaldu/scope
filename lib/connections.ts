@@ -1,6 +1,6 @@
-import type { ProviderId } from "../convex/permissions";
+import { PROVIDERS, type ProviderId } from "../convex/permissions";
 
-export type { ProviderId };
+export { PROVIDERS, type ProviderId };
 
 export type ConnectionStatus =
   | { connected: false }

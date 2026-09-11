@@ -11,6 +11,7 @@ import {
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { lookupAction } from "./invoke";
+import { PROVIDERS } from "./permissions";
 import schema from "./schema";
 import { revokeLivePlatformTokens } from "./tokens";
 import {
@@ -87,7 +88,7 @@ export function lifetimeStatus(
 }
 
 export async function boardActorId(ctx: MutationCtx): Promise<string> {
-  for (const provider of ["github", "google", "slack"] as const) {
+  for (const provider of PROVIDERS) {
     const row = await ctx.db
       .query("connections")
       .withIndex("by_provider", (q) => q.eq("provider", provider))

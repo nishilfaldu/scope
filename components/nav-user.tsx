@@ -40,13 +40,11 @@ function isThemeOption(value: string): value is ThemeOption {
   return (THEMES as readonly string[]).includes(value);
 }
 
-export function NavUser({
+function GitHubIdentity({
   github,
 }: {
   github: ConnectionStatus | undefined;
 }) {
-  const { isMobile } = useSidebar();
-  const { theme, setTheme } = useTheme();
   const name =
     github === undefined
       ? "GitHub"
@@ -61,6 +59,35 @@ export function NavUser({
         : "Not connected";
 
   return (
+    <>
+      <Avatar className="size-8 rounded-lg">
+        {github?.connected === true ? (
+          <AvatarImage
+            src={`https://github.com/${github.login}.png?size=64`}
+            alt={github.login}
+          />
+        ) : null}
+        <AvatarFallback className="rounded-lg">
+          <HugeiconsIcon icon={GithubIcon} strokeWidth={2} className="size-4" />
+        </AvatarFallback>
+      </Avatar>
+      <div className="grid flex-1 text-left text-sm leading-tight">
+        <span className="truncate font-medium">{name}</span>
+        <span className="truncate text-xs">{status}</span>
+      </div>
+    </>
+  );
+}
+
+export function NavUser({
+  github,
+}: {
+  github: ConnectionStatus | undefined;
+}) {
+  const { isMobile } = useSidebar();
+  const { theme, setTheme } = useTheme();
+
+  return (
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
@@ -72,21 +99,7 @@ export function NavUser({
               />
             }
           >
-            <Avatar className="size-8 rounded-lg">
-              {github?.connected === true ? (
-                <AvatarImage
-                  src={`https://github.com/${github.login}.png?size=64`}
-                  alt={github.login}
-                />
-              ) : null}
-              <AvatarFallback className="rounded-lg">
-                <HugeiconsIcon icon={GithubIcon} strokeWidth={2} className="size-4" />
-              </AvatarFallback>
-            </Avatar>
-            <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-medium">{name}</span>
-              <span className="truncate text-xs">{status}</span>
-            </div>
+            <GitHubIdentity github={github} />
             <HugeiconsIcon
               icon={UnfoldMoreIcon}
               strokeWidth={2}
@@ -102,25 +115,7 @@ export function NavUser({
             <DropdownMenuGroup>
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                  <Avatar className="size-8 rounded-lg">
-                    {github?.connected === true ? (
-                      <AvatarImage
-                        src={`https://github.com/${github.login}.png?size=64`}
-                        alt={github.login}
-                      />
-                    ) : null}
-                    <AvatarFallback className="rounded-lg">
-                      <HugeiconsIcon
-                        icon={GithubIcon}
-                        strokeWidth={2}
-                        className="size-4"
-                      />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{name}</span>
-                    <span className="truncate text-xs">{status}</span>
-                  </div>
+                  <GitHubIdentity github={github} />
                 </div>
               </DropdownMenuLabel>
             </DropdownMenuGroup>
