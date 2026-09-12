@@ -1,7 +1,6 @@
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
-  UNAUTHORIZED_ERROR,
   PLATFORM_UNAVAILABLE_ERROR,
   type AgentErrorCode,
 } from "./agentErrors";
