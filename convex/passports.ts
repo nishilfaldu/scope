@@ -104,6 +104,9 @@ export const get = query({
   },
 });
 
+export const MAX_PASSPORT_NAME = 80;
+export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 export const mint = mutation({
   args: {
     name: v.string(),
@@ -123,8 +126,14 @@ export const mint = mutation({
     if (name.length === 0) {
       throw new Error("Name must be non-empty");
     }
+    if (name.length > MAX_PASSPORT_NAME) {
+      throw new Error("Name must be 80 characters or fewer");
+    }
     if (!Number.isFinite(args.ttlMs) || args.ttlMs <= 0) {
       throw new Error("ttlMs must be a positive number");
+    }
+    if (args.ttlMs > MAX_TTL_MS) {
+      throw new Error("ttlMs must be 7 days or fewer");
     }
     const uniqueApps = [...new Set(args.apps)];
     if (uniqueApps.length === 0) {

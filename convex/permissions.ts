@@ -60,3 +60,7 @@ export function providerForApp(app: AppId): ProviderId {
     }
   }
 }
+
+export function appsForProvider(provider: ProviderId): AccountAppId[] {
+  return ACCOUNT_APPS.filter((app) => providerForApp(app) === provider);
+}

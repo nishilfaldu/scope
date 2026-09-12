@@ -3,12 +3,33 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { resolveReturnTo } from "../convex/httpOauth";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
 function t() {
   return convexTest(schema, modules);
 }
+
+describe("GET /api/health", () => {
+  test("returns ok without secrets", async () => {
+    const response = await t().fetch("/api/health", { method: "GET" });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toEqual({
+      ok: true,
+      oauth: { github: false, google: false, slack: false },
+    });
+    expect(JSON.stringify(body)).not.toMatch(/ghs_|ya29|xoxp|CLIENT_SECRET/);
+  });
+});
+
+describe("removed routes", () => {
+  test("github webhook is gone", async () => {
+    const response = await t().fetch("/api/github/webhook", { method: "POST" });
+    expect(response.status).toBe(404);
+  });
+});
 
 describe("GET /api/credentials", () => {
   test("returns the POST body schema and success shape", async () => {
@@ -81,6 +102,40 @@ describe("OPTIONS", () => {
 });
 
 describe("POST /api/credentials denials", () => {
+  test("invalid JSON and a non-boolean refresh are invalid_request", async () => {
+    const test = t();
+    const minted = await test.mutation(api.passports.mint, {
+      name: "Keyed",
+      ttlMs: 60_000,
+      apps: ["slack"],
+    });
+    const malformed = await test.fetch("/api/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{",
+    });
+    expect(malformed.status).toBe(400);
+    expect(await malformed.json()).toEqual({
+      error: "Invalid JSON body",
+      code: "invalid_request",
+    });
+    const refresh = await test.fetch("/api/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        passportId: minted.passportId,
+        invokeKey: minted.invokeKey,
+        platform: "slack",
+        refresh: "yes",
+      }),
+    });
+    expect(refresh.status).toBe(400);
+    expect(await refresh.json()).toEqual({
+      error: "refresh must be a boolean",
+      code: "invalid_request",
+    });
+  });
+
   test("unknown and off platforms share one code and error text", async () => {
     const test = t();
     const minted = await test.mutation(api.passports.mint, {
@@ -210,5 +265,25 @@ describe("GET /api/platforms", () => {
         { platform: "slack", status: "off" },
       ],
     });
+  });
+});
+
+describe("OAuth returnTo", () => {
+  test("localhost stays allowed and BOARD_ORIGIN is the deployed board", () => {
+    expect(resolveReturnTo("https://evil.example/phish", null)).toBe(
+      "http://localhost:3000/connections",
+    );
+    expect(
+      resolveReturnTo("https://evil.example/phish", "https://board.example"),
+    ).toBe("https://board.example/connections");
+    expect(
+      resolveReturnTo(
+        "https://board.example/connections",
+        "https://board.example",
+      ),
+    ).toBe("https://board.example/connections");
+    expect(resolveReturnTo("http://localhost:3000/", null)).toBe(
+      "http://localhost:3000/",
+    );
   });
 });

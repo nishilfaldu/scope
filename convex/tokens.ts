@@ -23,6 +23,7 @@ import {
 import { hashesEqual, sha256Hex } from "./secrets";
 
 export const PLATFORM_TOKEN_TTL_MS = 15 * 60 * 1000;
+export const TOKEN_REUSE_MIN_REMAINING_MS = 30 * 1000;
 
 const liveTokenValidator = v.object({
   platform: accountAppValidator,
@@ -122,6 +123,8 @@ export const authorizeMint = internalMutation({
       platform: accountAppValidator,
       provider: providerValidator,
       refresh: v.boolean(),
+      liveAccessToken: v.union(v.string(), v.null()),
+      liveExpiresAt: v.union(v.number(), v.null()),
     }),
     denyResultValidator,
   ),
@@ -228,12 +231,34 @@ export const authorizeMint = internalMutation({
       );
     }
 
+    let liveAccessToken: string | null = null;
+    let liveExpiresAt: number | null = null;
+    if (!args.refresh) {
+      const liveRows = await ctx.db
+        .query("platformTokens")
+        .withIndex("by_passport_and_platform", (q) =>
+          q.eq("passportId", passport._id).eq("platform", platform),
+        )
+        .take(20);
+      const live = liveRows.find(
+        (token) =>
+          token.status === "live" &&
+          token.expiresAt > now + TOKEN_REUSE_MIN_REMAINING_MS,
+      );
+      if (live) {
+        liveAccessToken = live.accessToken;
+        liveExpiresAt = live.expiresAt;
+      }
+    }
+
     return {
       ok: true as const,
       passportId: passport._id,
       platform,
       provider,
       refresh: args.refresh,
+      liveAccessToken,
+      liveExpiresAt,
     };
   },
 });
@@ -289,11 +314,47 @@ export const commitMint = internalMutation({
   },
 });
 
+export async function expireStalePlatformTokens(
+  ctx: MutationCtx,
+  now: number,
+): Promise<number> {
+  const stale = await ctx.db
+    .query("platformTokens")
+    .withIndex("by_status_and_expiresAt", (q) =>
+      q.eq("status", "live").lte("expiresAt", now),
+    )
+    .take(25);
+  for (const token of stale) {
+    await ctx.db.patch("platformTokens", token._id, {
+      status: "revoked",
+      revokedAt: now,
+      revokeReason: "Time to live elapsed",
+    });
+    await appendAuditEvent(ctx, {
+      passportId: token.passportId,
+      kind: "token_revoked",
+      actorType: "system",
+      actorId: "expiry",
+      scopes: [token.platform],
+      outcome: "allowed",
+      reason: "Time to live elapsed",
+      service: "credentials",
+      action: null,
+      argsPreview: null,
+      httpStatus: null,
+      platform: token.platform,
+      occurredAt: now,
+    });
+  }
+  return stale.length;
+}
+
 export const logMintDenied = internalMutation({
   args: {
     passportId: v.id("passports"),
     platform: v.string(),
     reason: v.string(),
+    httpStatus: v.union(v.number(), v.null()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -309,7 +370,7 @@ export const logMintDenied = internalMutation({
       service: "credentials",
       action: null,
       argsPreview: null,
-      httpStatus: null,
+      httpStatus: args.httpStatus,
       occurredAt: Date.now(),
     });
     return null;

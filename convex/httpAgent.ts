@@ -7,6 +7,7 @@ import {
 import { corsNoContent, jsonResponse } from "./httpCors";
 import { credentialsContract, type PostContract } from "./httpContracts";
 import { isPlainObject } from "./json";
+import { oauthConfigured } from "./oauth";
 import { issueShortLivedAccess } from "./providerAccess";
 
 function errorResponse(
@@ -59,6 +60,10 @@ function describePost(contract: PostContract) {
 
 export const describeCredentials = describePost(credentialsContract);
 
+export const handleHealth = httpAction(async () => {
+  return jsonResponse(200, { ok: true, oauth: oauthConfigured() });
+});
+
 export const handleCredentials = httpAction(async (ctx, request) => {
   const body = await readObjectBody(request);
   if (body instanceof Response) {
@@ -77,6 +82,9 @@ export const handleCredentials = httpAction(async (ctx, request) => {
   if (platform instanceof Response) {
     return platform;
   }
+  if (body.refresh !== undefined && typeof body.refresh !== "boolean") {
+    return errorResponse(400, "refresh must be a boolean", "invalid_request");
+  }
   const refresh = body.refresh === true;
 
   const decision = await ctx.runMutation(internal.tokens.authorizeMint, {
@@ -89,18 +97,36 @@ export const handleCredentials = httpAction(async (ctx, request) => {
     return errorResponse(decision.status, decision.reason, decision.code);
   }
 
+  if (
+    !refresh &&
+    decision.liveAccessToken !== null &&
+    decision.liveExpiresAt !== null
+  ) {
+    return jsonResponse(200, {
+      accessToken: decision.liveAccessToken,
+      tokenType: "Bearer",
+      platform: decision.platform,
+      expiresAt: decision.liveExpiresAt,
+      expiresIn: Math.max(
+        0,
+        Math.floor((decision.liveExpiresAt - Date.now()) / 1000),
+      ),
+    });
+  }
+
   const issued = await issueShortLivedAccess(ctx, decision.provider);
   if ("error" in issued) {
-    await ctx.runMutation(internal.tokens.logMintDenied, {
-      passportId: decision.passportId,
-      platform: decision.platform,
-      reason: issued.error,
-    });
     const status = issued.error.endsWith("is not connected") ? 403 : 503;
     const code =
       status === 403 ? "platform_unavailable" : "provider_error";
     const error =
       status === 403 ? PLATFORM_UNAVAILABLE_ERROR : issued.error;
+    await ctx.runMutation(internal.tokens.logMintDenied, {
+      passportId: decision.passportId,
+      platform: decision.platform,
+      reason: issued.error,
+      httpStatus: status,
+    });
     return errorResponse(status, error, code);
   }
 

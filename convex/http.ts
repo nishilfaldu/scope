@@ -1,8 +1,8 @@
 import { httpRouter } from "convex/server";
-import { httpAction } from "./_generated/server";
 import {
   describeCredentials,
   handleCredentials,
+  handleHealth,
   handlePlatforms,
   optionsOk,
 } from "./httpAgent";
@@ -36,6 +36,11 @@ http.route({
   method: "GET",
   handler: handlePlatforms,
 });
+http.route({
+  path: "/api/health",
+  method: "GET",
+  handler: handleHealth,
+});
 
 for (const provider of PROVIDERS) {
   http.route({
@@ -49,13 +54,5 @@ for (const provider of PROVIDERS) {
     handler: oauthCallback(provider),
   });
 }
-
-http.route({
-  path: "/api/github/webhook",
-  method: "POST",
-  handler: httpAction(async () => {
-    return new Response(null, { status: 204 });
-  }),
-});
 
 export default http;

@@ -12,7 +12,7 @@ import {
 import type { Doc, Id } from "./_generated/dataModel";
 import { PROVIDERS } from "./permissions";
 import schema from "./schema";
-import { revokeLivePlatformTokens } from "./tokens";
+import { expireStalePlatformTokens, revokeLivePlatformTokens } from "./tokens";
 import { appendAuditEvent, passportDocForHash } from "./auditWrite";
 import {
   actorTypeValidator,
@@ -257,6 +257,7 @@ export const expireDue = internalMutation({
     for (const passport of due) {
       await markExpired(ctx, passport, now);
     }
+    await expireStalePlatformTokens(ctx, now);
     return due.length;
   },
 });
