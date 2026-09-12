@@ -80,7 +80,7 @@ describe("GET /api/invoke", () => {
         properties: {
           passportId: { type: "string" },
           invokeKey: { type: "string" },
-          action: { type: "string", const: "demo.echo" },
+          action: { type: "string", enum: ["demo.echo"] },
           args: { type: "object" },
         },
       },
@@ -96,7 +96,7 @@ describe("GET /api/invoke", () => {
   });
 });
 
-describe("OPTIONS stays CORS preflight", () => {
+describe("OPTIONS", () => {
   test.each(["/api/credentials", "/api/invoke"])(
     "%s returns 204 with an empty body",
     async (path) => {

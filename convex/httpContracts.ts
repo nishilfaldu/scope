@@ -1,3 +1,4 @@
+import { INVOKE_ACTIONS } from "./invoke";
 import { ACCOUNT_APPS } from "./permissions";
 
 type JsonSchema = {
@@ -58,7 +59,7 @@ export const invokeContract: PostContract = {
     properties: {
       passportId: { type: "string" },
       invokeKey: { type: "string" },
-      action: { type: "string", const: "demo.echo" },
+      action: { type: "string", enum: INVOKE_ACTIONS },
       args: { type: "object" },
     },
   },

@@ -31,6 +31,12 @@ const ACTIONS = {
   "demo.echo": { app: "demo", run: demoEcho },
 } as const satisfies Record<string, ActionSpec>;
 
+export type InvokeAction = keyof typeof ACTIONS;
+
+export const INVOKE_ACTIONS: InvokeAction[] = Object.keys(
+  ACTIONS,
+) as InvokeAction[];
+
 export function lookupAction(action: string): ActionSpec | null {
   if (Object.hasOwn(ACTIONS, action)) {
     return ACTIONS[action as keyof typeof ACTIONS];
