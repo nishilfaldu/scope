@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Agent Passport",
-  description: "Mint and revoke virtual GitHub passports for agents",
+  description: "Mint and revoke virtual passports for agents",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

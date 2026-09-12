@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import { corsNoContent, jsonResponse } from "./httpCors";
 import { lookupAction, runAction, type InvokeResult } from "./invoke";
 import { isPlainObject } from "./json";
-import { issueShortLivedAccess, standingAccessToken } from "./providerAccess";
+import { issueShortLivedAccess } from "./providerAccess";
 
 const ARGS_PREVIEW_MAX = 400;
 
@@ -99,10 +99,8 @@ export const handleInvoke = httpAction(async (ctx, request) => {
     return jsonResponse(400, { error: `Unknown action: ${action}` });
   }
 
-  const githubToken = await standingAccessToken(ctx, "github");
   const result: InvokeResult = await runAction(spec, args, {
     passportName: passport.name,
-    githubToken,
   });
   await ctx.runMutation(internal.audit.recordUse, {
     passportId: passport._id,

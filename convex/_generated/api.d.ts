@@ -12,7 +12,6 @@ import type * as audit from "../audit.js";
 import type * as auditFields from "../auditFields.js";
 import type * as connections from "../connections.js";
 import type * as crons from "../crons.js";
-import type * as github from "../github.js";
 import type * as http from "../http.js";
 import type * as httpAgent from "../httpAgent.js";
 import type * as httpCors from "../httpCors.js";
@@ -37,7 +36,6 @@ declare const fullApi: ApiFromModules<{
   auditFields: typeof auditFields;
   connections: typeof connections;
   crons: typeof crons;
-  github: typeof github;
   http: typeof http;
   httpAgent: typeof httpAgent;
   httpCors: typeof httpCors;

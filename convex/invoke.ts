@@ -1,12 +1,4 @@
 import type { AppId } from "./permissions";
-import {
-  githubCreateBranch,
-  githubIssuesComment,
-  githubIssuesList,
-  githubPullsCreate,
-  githubReposGet,
-  githubReposList,
-} from "./github";
 
 export type InvokeResult = {
   ok: boolean;
@@ -19,13 +11,13 @@ type ActionSpec = {
   app: AppId;
   run: (
     args: Record<string, unknown>,
-    ctx: { passportName: string; githubToken: string | null },
+    ctx: { passportName: string },
   ) => Promise<InvokeResult>;
 };
 
 async function demoEcho(
   args: Record<string, unknown>,
-  ctx: { passportName: string; githubToken: string | null },
+  ctx: { passportName: string },
 ): Promise<InvokeResult> {
   return {
     ok: true,
@@ -37,12 +29,6 @@ async function demoEcho(
 
 const ACTIONS = {
   "demo.echo": { app: "demo", run: demoEcho },
-  "github.repos.list": { app: "github", run: githubReposList },
-  "github.repos.get": { app: "github", run: githubReposGet },
-  "github.issues.list": { app: "github", run: githubIssuesList },
-  "github.issues.comment": { app: "github", run: githubIssuesComment },
-  "github.git.createBranch": { app: "github", run: githubCreateBranch },
-  "github.pulls.create": { app: "github", run: githubPullsCreate },
 } as const satisfies Record<string, ActionSpec>;
 
 export function lookupAction(action: string): ActionSpec | null {
@@ -55,7 +41,7 @@ export function lookupAction(action: string): ActionSpec | null {
 export async function runAction(
   spec: ActionSpec,
   args: Record<string, unknown>,
-  ctx: { passportName: string; githubToken: string | null },
+  ctx: { passportName: string },
 ): Promise<InvokeResult> {
   try {
     return await spec.run(args, ctx);

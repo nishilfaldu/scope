@@ -105,13 +105,13 @@ describe("passport audit trail", () => {
   test("denied invoke still records presented and verified, and does not record used", async () => {
     const test = t();
     const minted = await test.mutation(api.passports.mint, {
-      name: "Demo only",
+      name: "GitHub only",
       ttlMs: 60_000,
-      apps: ["demo"],
+      apps: ["github"],
     });
     const decision = await test.mutation(internal.audit.recordPresentation, {
       passportId: minted.id,
-      action: "github.repos.list",
+      action: "demo.echo",
       argsPreview: "{}",
     });
     expect(decision).toEqual({
@@ -130,6 +130,36 @@ describe("passport audit trail", () => {
     ]);
     expect(history.page[0]?.outcome).toBe("denied");
     expect(history.page[0]?.reason).toBe("Action not permitted");
+  });
+
+  test("github invoke actions are unknown even when github is on the passport", async () => {
+    const test = t();
+    const minted = await test.mutation(api.passports.mint, {
+      name: "GitHub",
+      ttlMs: 60_000,
+      apps: ["github"],
+    });
+    const decision = await test.mutation(internal.audit.recordPresentation, {
+      passportId: minted.id,
+      action: "github.repos.list",
+      argsPreview: "{}",
+    });
+    expect(decision).toEqual({
+      allowRun: false,
+      status: 400,
+      reason: "Unknown action: github.repos.list",
+    });
+    const history = await test.query(api.audit.listHistory, {
+      passportId: minted.id,
+      paginationOpts: { numItems: 50, cursor: null },
+    });
+    expect(history.page.map((event) => event.kind)).toEqual([
+      "verified",
+      "presented",
+      "issued",
+    ]);
+    expect(history.page[0]?.outcome).toBe("denied");
+    expect(history.page[0]?.reason).toBe("Unknown action: github.repos.list");
   });
 
   test("history filters by kind, outcome, and actor", async () => {
