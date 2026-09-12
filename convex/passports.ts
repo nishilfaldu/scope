@@ -343,7 +343,7 @@ export const discoverPlatforms = internalQuery({
         ok: false as const,
         status: 401,
         reason: UNAUTHORIZED_ERROR,
-        code: "unauthorized" as const,
+        code: "UNAUTHORIZED" as const,
       };
     }
     if (passport.status === "revoked") {
@@ -351,7 +351,7 @@ export const discoverPlatforms = internalQuery({
         ok: false as const,
         status: 403,
         reason: "Passport revoked",
-        code: "revoked" as const,
+        code: "REVOKED" as const,
       };
     }
     if (passport.status === "expired" || passport.expiresAt <= args.now) {
@@ -359,7 +359,7 @@ export const discoverPlatforms = internalQuery({
         ok: false as const,
         status: 403,
         reason: "Passport expired",
-        code: "expired" as const,
+        code: "EXPIRED" as const,
       };
     }
     return {

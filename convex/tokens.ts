@@ -139,7 +139,7 @@ export const authorizeMint = internalMutation({
         ok: false as const,
         status: 401,
         reason: UNAUTHORIZED_ERROR,
-        code: "unauthorized" as const,
+        code: "UNAUTHORIZED" as const,
       };
     }
 
@@ -150,7 +150,7 @@ export const authorizeMint = internalMutation({
         args.platform,
         401,
         UNAUTHORIZED_ERROR,
-        "unauthorized",
+        "UNAUTHORIZED",
         now,
       );
     }
@@ -162,7 +162,7 @@ export const authorizeMint = internalMutation({
         args.platform,
         401,
         UNAUTHORIZED_ERROR,
-        "unauthorized",
+        "UNAUTHORIZED",
         now,
       );
     }
@@ -174,7 +174,7 @@ export const authorizeMint = internalMutation({
         args.platform,
         403,
         PLATFORM_UNAVAILABLE_ERROR,
-        "platform_unavailable",
+        "PLATFORM_UNAVAILABLE",
         now,
       );
     }
@@ -188,7 +188,7 @@ export const authorizeMint = internalMutation({
         platform,
         403,
         "Passport revoked",
-        "revoked",
+        "REVOKED",
         now,
       );
     }
@@ -199,7 +199,7 @@ export const authorizeMint = internalMutation({
         platform,
         403,
         "Passport expired",
-        "expired",
+        "EXPIRED",
         now,
       );
     }
@@ -210,7 +210,7 @@ export const authorizeMint = internalMutation({
         platform,
         403,
         PLATFORM_UNAVAILABLE_ERROR,
-        "platform_unavailable",
+        "PLATFORM_UNAVAILABLE",
         now,
       );
     }
@@ -226,7 +226,7 @@ export const authorizeMint = internalMutation({
         platform,
         403,
         PLATFORM_UNAVAILABLE_ERROR,
-        "platform_unavailable",
+        "PLATFORM_UNAVAILABLE",
         now,
       );
     }

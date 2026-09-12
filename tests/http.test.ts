@@ -117,7 +117,7 @@ describe("POST /api/credentials denials", () => {
     expect(malformed.status).toBe(400);
     expect(await malformed.json()).toEqual({
       error: "Invalid JSON body",
-      code: "invalid_request",
+      code: "INVALID_REQUEST",
     });
     const refresh = await test.fetch("/api/credentials", {
       method: "POST",
@@ -132,7 +132,7 @@ describe("POST /api/credentials denials", () => {
     expect(refresh.status).toBe(400);
     expect(await refresh.json()).toEqual({
       error: "refresh must be a boolean",
-      code: "invalid_request",
+      code: "INVALID_REQUEST",
     });
   });
 
@@ -145,7 +145,7 @@ describe("POST /api/credentials denials", () => {
     });
     const unavailable = {
       error: "This platform is not available on this passport",
-      code: "platform_unavailable",
+      code: "PLATFORM_UNAVAILABLE",
     };
     const unknown = await test.fetch("/api/credentials", {
       method: "POST",
@@ -190,7 +190,7 @@ describe("POST /api/credentials denials", () => {
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({
       error: "Unknown passport or invoke key",
-      code: "unauthorized",
+      code: "UNAUTHORIZED",
     });
   });
 });
@@ -214,7 +214,7 @@ describe("GET /api/platforms", () => {
     const wrongBody = await wrong.json();
     expect(wrongBody).toEqual({
       error: "Unknown passport or invoke key",
-      code: "unauthorized",
+      code: "UNAUTHORIZED",
     });
     expect(wrongBody).not.toHaveProperty("platforms");
     expect(JSON.stringify(wrongBody)).not.toMatch(/github|slack/);
@@ -227,7 +227,7 @@ describe("GET /api/platforms", () => {
     const missingBody = await missing.json();
     expect(missingBody).toEqual({
       error: "invokeKey must be a string",
-      code: "invalid_request",
+      code: "INVALID_REQUEST",
     });
     expect(missingBody).not.toHaveProperty("platforms");
     expect(JSON.stringify(missingBody)).not.toMatch(/github|slack/);

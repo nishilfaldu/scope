@@ -143,7 +143,7 @@ describe("platform tokens", () => {
       ok: false,
       status: 403,
       reason: "This platform is not available on this passport",
-      code: "platform_unavailable",
+      code: "PLATFORM_UNAVAILABLE",
     });
     const history = await test.query(api.audit.listHistory, {
       passportId: minted.id,
@@ -292,7 +292,7 @@ describe("platform tokens", () => {
     expect(off).toMatchObject({
       ok: false,
       reason: "This platform is not available on this passport",
-      code: "platform_unavailable",
+      code: "PLATFORM_UNAVAILABLE",
     });
 
     await test.mutation(api.passports.setPlatform, {
@@ -312,7 +312,7 @@ describe("platform tokens", () => {
     expect(revoked).toMatchObject({
       ok: false,
       reason: "Passport revoked",
-      code: "revoked",
+      code: "REVOKED",
     });
 
     const short = await test.mutation(api.passports.mint, {
@@ -334,7 +334,7 @@ describe("platform tokens", () => {
     expect(expired).toMatchObject({
       ok: false,
       reason: "Passport expired",
-      code: "expired",
+      code: "EXPIRED",
     });
   });
 
@@ -349,7 +349,7 @@ describe("platform tokens", () => {
       ok: false,
       status: 403,
       reason: "This platform is not available on this passport",
-      code: "platform_unavailable",
+      code: "PLATFORM_UNAVAILABLE",
     };
     const unknown = await test.mutation(internal.tokens.authorizeMint, {
       passportToken: minted.passportId,
@@ -557,7 +557,7 @@ describe("platform tokens", () => {
       ok: false,
       status: 401,
       reason: "Unknown passport or invoke key",
-      code: "unauthorized",
+      code: "UNAUTHORIZED",
     });
   });
 

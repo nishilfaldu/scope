@@ -1,23 +1,23 @@
 import { v } from "convex/values";
 
 export const AGENT_ERROR_CODES = [
-  "unauthorized",
-  "revoked",
-  "expired",
-  "platform_unavailable",
-  "invalid_request",
-  "provider_error",
+  "UNAUTHORIZED",
+  "REVOKED",
+  "EXPIRED",
+  "PLATFORM_UNAVAILABLE",
+  "INVALID_REQUEST",
+  "PROVIDER_ERROR",
 ] as const;
 
 export type AgentErrorCode = (typeof AGENT_ERROR_CODES)[number];
 
 export const agentErrorCodeValidator = v.union(
-  v.literal("unauthorized"),
-  v.literal("revoked"),
-  v.literal("expired"),
-  v.literal("platform_unavailable"),
-  v.literal("invalid_request"),
-  v.literal("provider_error"),
+  v.literal("UNAUTHORIZED"),
+  v.literal("REVOKED"),
+  v.literal("EXPIRED"),
+  v.literal("PLATFORM_UNAVAILABLE"),
+  v.literal("INVALID_REQUEST"),
+  v.literal("PROVIDER_ERROR"),
 );
 
 export const PLATFORM_UNAVAILABLE_ERROR =

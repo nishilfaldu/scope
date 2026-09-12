@@ -19,7 +19,7 @@ Open [http://localhost:3000](http://localhost:3000). Convex HTTP routes live on 
 - `GET /api/credentials` describes `POST`.
 - `POST /api/credentials` with `{ passportId, invokeKey, platform, refresh? }` returns a Bearer token. Without `refresh: true`, a still-valid live token is reused.
 - `GET /api/platforms` with `passportId` and `invokeKey` headers lists each platform as `on` or `off`.
-- Denials are `{ error, code }`. Unknown, off, and unconnected platforms share `platform_unavailable`.
+- Denials are `{ error, code }`. Unknown, off, and unconnected platforms share `PLATFORM_UNAVAILABLE`.
 
 ## Deploy
 

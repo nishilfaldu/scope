@@ -25,10 +25,10 @@ async function readObjectBody(
   try {
     raw = await request.json();
   } catch {
-    return errorResponse(400, "Invalid JSON body", "invalid_request");
+    return errorResponse(400, "Invalid JSON body", "INVALID_REQUEST");
   }
   if (!isPlainObject(raw)) {
-    return errorResponse(400, "Body must be a JSON object", "invalid_request");
+    return errorResponse(400, "Body must be a JSON object", "INVALID_REQUEST");
   }
   return raw;
 }
@@ -39,7 +39,7 @@ function requiredString(
 ): string | Response {
   const value = body[key];
   if (typeof value !== "string" || value.length === 0) {
-    return errorResponse(400, `${key} must be a string`, "invalid_request");
+    return errorResponse(400, `${key} must be a string`, "INVALID_REQUEST");
   }
   return value;
 }
@@ -47,7 +47,7 @@ function requiredString(
 function requiredHeader(request: Request, key: string): string | Response {
   const value = request.headers.get(key);
   if (typeof value !== "string" || value.length === 0) {
-    return errorResponse(400, `${key} must be a string`, "invalid_request");
+    return errorResponse(400, `${key} must be a string`, "INVALID_REQUEST");
   }
   return value;
 }
@@ -83,7 +83,7 @@ export const handleCredentials = httpAction(async (ctx, request) => {
     return platform;
   }
   if (body.refresh !== undefined && typeof body.refresh !== "boolean") {
-    return errorResponse(400, "refresh must be a boolean", "invalid_request");
+    return errorResponse(400, "refresh must be a boolean", "INVALID_REQUEST");
   }
   const refresh = body.refresh === true;
 
@@ -118,7 +118,7 @@ export const handleCredentials = httpAction(async (ctx, request) => {
   if ("error" in issued) {
     const status = issued.error.endsWith("is not connected") ? 403 : 503;
     const code =
-      status === 403 ? "platform_unavailable" : "provider_error";
+      status === 403 ? "PLATFORM_UNAVAILABLE" : "PROVIDER_ERROR";
     const error =
       status === 403 ? PLATFORM_UNAVAILABLE_ERROR : issued.error;
     await ctx.runMutation(internal.tokens.logMintDenied, {
