@@ -10,6 +10,7 @@
 
 import type * as audit from "../audit.js";
 import type * as auditFields from "../auditFields.js";
+import type * as auditWrite from "../auditWrite.js";
 import type * as agentErrors from "../agentErrors.js";
 import type * as connections from "../connections.js";
 import type * as crons from "../crons.js";
@@ -35,6 +36,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   audit: typeof audit;
   auditFields: typeof auditFields;
+  auditWrite: typeof auditWrite;
   agentErrors: typeof agentErrors;
   connections: typeof connections;
   crons: typeof crons;

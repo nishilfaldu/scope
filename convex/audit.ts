@@ -13,16 +13,15 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { PROVIDERS } from "./permissions";
 import schema from "./schema";
 import { revokeLivePlatformTokens } from "./tokens";
+import { appendAuditEvent, passportDocForHash } from "./auditWrite";
 import {
   actorTypeValidator,
   auditKindValidator,
   hashAuditEvent,
   outcomeValidator,
-  type ActorType,
-  type AuditKind,
-  type HashInput,
-  type Outcome,
 } from "./auditFields";
+
+export { appendAuditEvent };
 
 const auditEventDoc = schema.doc("auditEvents");
 
@@ -35,43 +34,6 @@ export const lastEventValidator = v.object({
 });
 
 type LastEvent = Infer<typeof lastEventValidator>;
-
-type AppendInput = {
-  passportId: Id<"passports">;
-  kind: AuditKind;
-  actorType: ActorType;
-  actorId: string;
-  scopes: string[];
-  outcome: Outcome;
-  reason: string;
-  service: string | null;
-  action: string | null;
-  argsPreview: string | null;
-  httpStatus: number | null;
-  occurredAt: number;
-};
-
-function asHashInput(
-  input: AppendInput,
-  seq: number,
-  prevHash: string | null,
-): HashInput {
-  return {
-    seq,
-    prevHash,
-    kind: input.kind,
-    actorType: input.actorType,
-    actorId: input.actorId,
-    scopes: input.scopes,
-    outcome: input.outcome,
-    reason: input.reason,
-    service: input.service,
-    action: input.action,
-    argsPreview: input.argsPreview,
-    httpStatus: input.httpStatus,
-    occurredAt: input.occurredAt,
-  };
-}
 
 export function lifetimeStatus(
   passport: Pick<Doc<"passports">, "status" | "expiresAt">,
@@ -99,32 +61,6 @@ export async function boardActorId(ctx: MutationCtx): Promise<string> {
   return "board";
 }
 
-export async function appendAuditEvent(
-  ctx: MutationCtx,
-  input: AppendInput,
-): Promise<void> {
-  const passport = await ctx.db.get("passports", input.passportId);
-  if (!passport) {
-    throw new Error("Passport not found");
-  }
-  const prevSeq = passport.auditSeq ?? 0;
-  const prevHash = passport.auditHeadHash ?? null;
-  const seq = prevSeq + 1;
-  const scopes = [...new Set(input.scopes)];
-  const normalized = { ...input, scopes };
-  const hash = await hashAuditEvent(asHashInput(normalized, seq, prevHash));
-  await ctx.db.insert("auditEvents", {
-    ...normalized,
-    seq,
-    prevHash,
-    hash,
-  });
-  await ctx.db.patch("passports", passport._id, {
-    auditSeq: seq,
-    auditHeadHash: hash,
-  });
-}
-
 export async function markExpired(
   ctx: MutationCtx,
   passport: Doc<"passports">,
@@ -140,6 +76,7 @@ export async function markExpired(
     null,
     "Passport expired",
     now,
+    { actorType: "system", actorId: "expiry" },
   );
   await appendAuditEvent(ctx, {
     passportId: passport._id,
@@ -153,6 +90,7 @@ export async function markExpired(
     action: null,
     argsPreview: null,
     httpStatus: null,
+    platform: null,
     occurredAt: now,
   });
   const updated = await ctx.db.get("passports", passport._id);
@@ -214,9 +152,7 @@ export const chainStatus = query({
         intact = false;
         break;
       }
-      const expectedHash = await hashAuditEvent(
-        asHashInput(event, event.seq, event.prevHash),
-      );
+      const expectedHash = await hashAuditEvent(passportDocForHash(event));
       if (event.hash !== expectedHash) {
         intact = false;
         break;
@@ -322,5 +258,53 @@ export const expireDue = internalMutation({
       await markExpired(ctx, passport, now);
     }
     return due.length;
+  },
+});
+
+export const wipeDevLogs = internalMutation({
+  args: {},
+  returns: v.object({
+    auditEvents: v.number(),
+    passports: v.number(),
+  }),
+  handler: async (ctx) => {
+    let auditEvents = 0;
+    for (;;) {
+      const page = await ctx.db.query("auditEvents").take(100);
+      if (page.length === 0) {
+        break;
+      }
+      for (const row of page) {
+        await ctx.db.delete("auditEvents", row._id);
+        auditEvents += 1;
+      }
+    }
+    let passports = 0;
+    let cursor: string | null = null;
+    for (;;) {
+      const result = await ctx.db.query("passports").paginate({
+        numItems: 100,
+        cursor,
+      });
+      for (const passport of result.page) {
+        await ctx.db.replace("passports", passport._id, {
+          name: passport.name,
+          token: passport.token,
+          ...(passport.invokeKeyHash !== undefined
+            ? { invokeKeyHash: passport.invokeKeyHash }
+            : {}),
+          status: passport.status,
+          expiresAt: passport.expiresAt,
+          apps: passport.apps,
+          auditSeq: 0,
+        });
+        passports += 1;
+      }
+      if (result.isDone) {
+        break;
+      }
+      cursor = result.continueCursor;
+    }
+    return { auditEvents, passports };
   },
 });

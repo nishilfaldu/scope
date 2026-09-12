@@ -120,17 +120,18 @@ describe("platform tokens", () => {
       reason: "This platform is not available on this passport",
       code: "platform_unavailable",
     });
-    const logs = await test.query(api.tokens.listLogs, {
+    const history = await test.query(api.audit.listHistory, {
       passportId: minted.id,
       paginationOpts: { numItems: 50, cursor: null },
     });
-    expect(logs.page).toHaveLength(1);
-    expect(logs.page[0]?.kind).toBe("mint_denied");
-    expect(logs.page[0]?.platform).toBe("github");
-    expect(logs.page[0]?.reason).toBe(
+    expect(history.page).toHaveLength(2);
+    expect(history.page[0]?.kind).toBe("mint_denied");
+    expect(history.page[0]?.platform).toBe("github");
+    expect(history.page[0]?.reason).toBe(
       "This platform is not available on this passport",
     );
-    expect(logs.page[0]).not.toHaveProperty("accessToken");
+    expect(history.page[0]?.outcome).toBe("denied");
+    expect(JSON.stringify(history.page)).not.toMatch(/ghs_|ya29|xoxp/);
   });
 
   test("issues a short-lived token while live and on, and refresh kills the previous", async () => {
@@ -174,16 +175,25 @@ describe("platform tokens", () => {
     expect(live).toHaveLength(1);
     expect(live[0]?.platform).toBe("github");
     expect(JSON.stringify(live)).not.toMatch(/ghs_/);
-    const logs = await test.query(api.tokens.listLogs, {
+    const history = await test.query(api.audit.listHistory, {
       passportId: minted.id,
       paginationOpts: { numItems: 50, cursor: null },
     });
-    expect(logs.page.map((row) => row.kind)).toEqual([
-      "refreshed",
-      "revoked",
+    expect(history.page.map((row) => row.kind)).toEqual([
+      "token_refreshed",
+      "token_revoked",
+      "token_issued",
       "issued",
     ]);
-    expect(JSON.stringify(logs.page)).not.toMatch(/ghs_/);
+    expect(JSON.stringify(history.page)).not.toMatch(/ghs_/);
+    const chain = await test.query(api.audit.chainStatus, {
+      passportId: minted.id,
+    });
+    expect(chain).toEqual({
+      eventCount: 4,
+      expectedSeq: 4,
+      intact: true,
+    });
   });
 
   test("after expiry, revoke, or platform-off, mint is denied", async () => {
@@ -362,11 +372,13 @@ describe("platform tokens", () => {
       now: Date.now(),
     });
     expect(live).toEqual([]);
-    const logs = await test.query(api.tokens.listLogs, {
+    const history = await test.query(api.audit.listHistory, {
       passportId: minted.id,
       paginationOpts: { numItems: 50, cursor: null },
     });
-    expect(logs.page.filter((row) => row.kind === "revoked").length).toBe(2);
+    expect(
+      history.page.filter((row) => row.kind === "token_revoked").length,
+    ).toBe(2);
   });
 
   test("invalid invoke key is refused with a logged reason", async () => {

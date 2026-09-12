@@ -157,6 +157,7 @@ export const mint = mutation({
       action: null,
       argsPreview: null,
       httpStatus: null,
+      platform: null,
       occurredAt: Date.now(),
     });
 
@@ -202,6 +203,7 @@ export const setPlatform = mutation({
       ? [...passport.apps, args.platform]
       : passport.apps.filter((app) => app !== args.platform);
     await ctx.db.patch("passports", passport._id, { apps });
+    const actorId = await boardActorId(ctx);
     if (!args.enabled) {
       await revokeLivePlatformTokens(
         ctx,
@@ -209,9 +211,9 @@ export const setPlatform = mutation({
         args.platform,
         "Platform turned off",
         now,
+        { actorType: "board", actorId },
       );
     }
-    const actorId = await boardActorId(ctx);
     await appendAuditEvent(ctx, {
       passportId: passport._id,
       kind: "platform_toggled",
@@ -226,6 +228,7 @@ export const setPlatform = mutation({
       action: args.platform,
       argsPreview: null,
       httpStatus: null,
+      platform: args.platform,
       occurredAt: Date.now(),
     });
     return null;
@@ -258,6 +261,7 @@ export const revoke = mutation({
       null,
       "Passport revoked",
       now,
+      { actorType: "board", actorId },
     );
     await appendAuditEvent(ctx, {
       passportId: passport._id,
@@ -271,6 +275,7 @@ export const revoke = mutation({
       action: null,
       argsPreview: null,
       httpStatus: null,
+      platform: null,
       occurredAt: Date.now(),
     });
     return null;

@@ -1,10 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { accountAppValidator, appValidator, providerValidator } from "./permissions";
-import {
-  auditEventValidator,
-  tokenLogKindValidator,
-} from "./auditFields";
+import { auditEventValidator } from "./auditFields";
 
 export default defineSchema({
   passports: defineTable({
@@ -44,16 +41,6 @@ export default defineSchema({
     .index("by_passport_and_platform", ["passportId", "platform"])
     .index("by_passport_and_status", ["passportId", "status"])
     .index("by_status_and_expiresAt", ["status", "expiresAt"]),
-
-  tokenLogs: defineTable({
-    passportId: v.id("passports"),
-    platform: v.string(),
-    kind: tokenLogKindValidator,
-    reason: v.string(),
-    occurredAt: v.number(),
-  })
-    .index("by_passport", ["passportId"])
-    .index("by_passport_and_kind", ["passportId", "kind"]),
 
   connections: defineTable({
     provider: providerValidator,
