@@ -142,58 +142,13 @@ describe("passport audit trail", () => {
     expect(expired.page[0]?.reason).toBe("Time to live elapsed");
   });
 
-  test("wipeDevLogs deletes the chain and the next event starts at seq 1", async () => {
-    const test = t();
-    const minted = await test.mutation(api.passports.mint, {
-      name: "Wipe me",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
-    const wiped = await test.mutation(internal.audit.wipeDevLogs, {});
-    expect(wiped.auditEvents).toBe(1);
-    expect(wiped.passports).toBe(1);
-    const empty = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(empty.page).toEqual([]);
-    const emptyChain = await test.query(api.audit.chainStatus, {
-      passportId: minted.id,
-    });
-    expect(emptyChain).toEqual({
-      eventCount: 0,
-      expectedSeq: 0,
-      intact: true,
-    });
-
-    await test.mutation(api.passports.setPlatform, {
-      passportId: minted.passportId,
-      platform: "slack",
-      enabled: true,
-    });
-    const history = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(history.page).toHaveLength(1);
-    expect(history.page[0]?.kind).toBe("platform_toggled");
-    expect(history.page[0]?.seq).toBe(1);
-    expect(history.page[0]?.prevHash).toBeNull();
-    const chain = await test.query(api.audit.chainStatus, {
-      passportId: minted.id,
-    });
-    expect(chain).toEqual({
-      eventCount: 1,
-      expectedSeq: 1,
-      intact: true,
-    });
-  });
-
   test("public api cannot edit or delete audit records", () => {
     expect(api.audit).not.toHaveProperty("remove");
     expect(api.audit).not.toHaveProperty("delete");
     expect(api.audit).not.toHaveProperty("patch");
     expect(api.audit).not.toHaveProperty("replace");
+    expect(api.audit).not.toHaveProperty("wipeDevLogs");
+    expect(internal.audit).not.toHaveProperty("wipeDevLogs");
     expect(api.passports).not.toHaveProperty("appendLog");
     expect(api.tokens).not.toHaveProperty("listLogs");
   });
