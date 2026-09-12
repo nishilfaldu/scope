@@ -117,7 +117,7 @@ describe("platform tokens", () => {
     expect(denied).toEqual({
       ok: false,
       status: 403,
-      reason: "Platform is off",
+      reason: "This platform is not available on this passport",
     });
     const logs = await test.query(api.tokens.listLogs, {
       passportId: minted.id,
@@ -126,7 +126,9 @@ describe("platform tokens", () => {
     expect(logs.page).toHaveLength(1);
     expect(logs.page[0]?.kind).toBe("mint_denied");
     expect(logs.page[0]?.platform).toBe("github");
-    expect(logs.page[0]?.reason).toBe("Platform is off");
+    expect(logs.page[0]?.reason).toBe(
+      "This platform is not available on this passport",
+    );
     expect(logs.page[0]).not.toHaveProperty("accessToken");
   });
 
@@ -203,7 +205,10 @@ describe("platform tokens", () => {
       platform: "github",
       refresh: false,
     });
-    expect(off).toMatchObject({ ok: false, reason: "Platform is off" });
+    expect(off).toMatchObject({
+      ok: false,
+      reason: "This platform is not available on this passport",
+    });
 
     await test.mutation(api.passports.setPlatform, {
       passportId: minted.passportId,
@@ -240,35 +245,51 @@ describe("platform tokens", () => {
     expect(expired).toMatchObject({ ok: false, reason: "Passport expired" });
   });
 
-  test("demo has no platform token and unknown platforms are rejected", async () => {
+  test("unknown, off, and unconnected platforms share one denial", async () => {
     const test = t();
     const minted = await test.mutation(api.passports.mint, {
       name: "Demo",
       ttlMs: 60_000,
-      apps: ["demo"],
+      apps: ["demo", "github"],
     });
+    const unavailable = {
+      ok: false,
+      status: 403,
+      reason: "This platform is not available on this passport",
+    };
     const demo = await test.mutation(internal.tokens.authorizeMint, {
       passportToken: minted.passportId,
       invokeKey: minted.invokeKey,
       platform: "demo",
       refresh: false,
     });
-    expect(demo).toMatchObject({
-      ok: false,
-      status: 400,
-      reason: "Demo has no platform token; use /api/invoke",
-    });
+    expect(demo).toMatchObject(unavailable);
     const unknown = await test.mutation(internal.tokens.authorizeMint, {
       passportToken: minted.passportId,
       invokeKey: minted.invokeKey,
       platform: "dropbox",
       refresh: false,
     });
-    expect(unknown).toMatchObject({
-      ok: false,
-      status: 400,
-      reason: "Unknown platform",
+    expect(unknown).toMatchObject(unavailable);
+    const unconnected = await test.mutation(internal.tokens.authorizeMint, {
+      passportToken: minted.passportId,
+      invokeKey: minted.invokeKey,
+      platform: "github",
+      refresh: false,
     });
+    expect(unconnected).toMatchObject(unavailable);
+    await test.mutation(api.passports.setPlatform, {
+      passportId: minted.passportId,
+      platform: "github",
+      enabled: false,
+    });
+    const off = await test.mutation(internal.tokens.authorizeMint, {
+      passportToken: minted.passportId,
+      invokeKey: minted.invokeKey,
+      platform: "github",
+      refresh: false,
+    });
+    expect(off).toMatchObject(unavailable);
   });
 
   test("turning one platform off revokes only that platform’s token", async () => {

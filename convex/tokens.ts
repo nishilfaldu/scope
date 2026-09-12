@@ -15,6 +15,7 @@ import {
   type AccountAppId,
 } from "./permissions";
 import schema from "./schema";
+import { PLATFORM_UNAVAILABLE_ERROR } from "./agentErrors";
 import { hashesEqual, sha256Hex } from "./secrets";
 
 export const PLATFORM_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -148,23 +149,13 @@ export const authorizeMint = internalMutation({
       );
     }
 
-    if (args.platform === "demo") {
+    if (args.platform === "demo" || !isAccountAppId(args.platform)) {
       return await denyMint(
         ctx,
         passport._id,
         args.platform,
-        400,
-        "Demo has no platform token; use /api/invoke",
-        now,
-      );
-    }
-    if (!isAccountAppId(args.platform)) {
-      return await denyMint(
-        ctx,
-        passport._id,
-        args.platform,
-        400,
-        "Unknown platform",
+        403,
+        PLATFORM_UNAVAILABLE_ERROR,
         now,
       );
     }
@@ -197,7 +188,7 @@ export const authorizeMint = internalMutation({
         passport._id,
         platform,
         403,
-        "Platform is off",
+        PLATFORM_UNAVAILABLE_ERROR,
         now,
       );
     }
@@ -212,7 +203,7 @@ export const authorizeMint = internalMutation({
         passport._id,
         platform,
         403,
-        `${provider} is not connected`,
+        PLATFORM_UNAVAILABLE_ERROR,
         now,
       );
     }
