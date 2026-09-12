@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Agent Passport
 
-## Getting Started
+Mint short-lived GitHub, Google, and Slack tokens for agents. The board issues a passport and an invoke key. The agent posts those to `/api/credentials` and then calls the provider itself.
 
-First, run the development server:
+This board is a single-operator console. It has no login.
+
+## Run it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). Convex HTTP routes live on your deployment's `.convex.site` origin.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Agent API
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `GET /api/health` returns `{ ok, oauth }` with no secrets.
+- `GET /api/credentials` describes `POST`.
+- `POST /api/credentials` with `{ passportId, invokeKey, platform, refresh? }` returns a Bearer token. Without `refresh: true`, a still-valid live token is reused.
+- `GET /api/platforms` with `passportId` and `invokeKey` headers lists each platform as `on` or `off`.
+- Denials are `{ error, code }`. Unknown, off, and unconnected platforms share `platform_unavailable`.
 
-## Learn More
+## Deploy
 
-To learn more about Next.js, take a look at the following resources:
+Set OAuth client ids and secrets on the Convex deployment. Set `BOARD_ORIGIN` to the board's origin (for example `https://your-app.vercel.app`) so OAuth can return there. Localhost stays allowed.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`GET /api/health` reports which OAuth providers have both a client id and a secret. It does not return the values.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+If schema deploy fails because `tokenLogs` still has rows, delete those documents in the Convex dashboard, then deploy again. Wipe leftover `auditEvents` there too if old chains look broken after the hash payload change. Do not add a wipe mutation.
 
-## Deploy on Vercel
+## Test
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm test
+```
