@@ -1,36 +1,14 @@
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
-  ACTION_UNAVAILABLE_ERROR,
   UNAUTHORIZED_ERROR,
   PLATFORM_UNAVAILABLE_ERROR,
   type AgentErrorCode,
 } from "./agentErrors";
 import { corsNoContent, jsonResponse } from "./httpCors";
-import {
-  credentialsContract,
-  invokeContract,
-  type PostContract,
-} from "./httpContracts";
-import { lookupAction, runAction, type InvokeResult } from "./invoke";
+import { credentialsContract, type PostContract } from "./httpContracts";
 import { isPlainObject } from "./json";
 import { issueShortLivedAccess } from "./providerAccess";
-
-const ARGS_PREVIEW_MAX = 400;
-
-function previewArgs(args: Record<string, unknown>): string {
-  const redacted: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(args)) {
-    redacted[key] = /token|secret|key|authorization/i.test(key)
-      ? "[redacted]"
-      : value;
-  }
-  const raw = JSON.stringify(redacted);
-  if (raw.length <= ARGS_PREVIEW_MAX) {
-    return raw;
-  }
-  return `${raw.slice(0, ARGS_PREVIEW_MAX)}…`;
-}
 
 function errorResponse(
   status: number,
@@ -81,71 +59,6 @@ function describePost(contract: PostContract) {
 }
 
 export const describeCredentials = describePost(credentialsContract);
-export const describeInvoke = describePost(invokeContract);
-
-export const handleInvoke = httpAction(async (ctx, request) => {
-  const body = await readObjectBody(request);
-  if (body instanceof Response) {
-    return body;
-  }
-
-  const passportId = requiredString(body, "passportId");
-  if (passportId instanceof Response) {
-    return passportId;
-  }
-  const invokeKey = requiredString(body, "invokeKey");
-  if (invokeKey instanceof Response) {
-    return invokeKey;
-  }
-  const action = requiredString(body, "action");
-  if (action instanceof Response) {
-    return action;
-  }
-
-  let args: Record<string, unknown> = {};
-  if (body.args !== undefined) {
-    if (!isPlainObject(body.args)) {
-      return errorResponse(400, "args must be an object", "invalid_request");
-    }
-    args = body.args;
-  }
-
-  const passport = await ctx.runQuery(internal.passports.getByCredentials, {
-    token: passportId,
-    invokeKey,
-  });
-  if (!passport) {
-    return errorResponse(401, UNAUTHORIZED_ERROR, "unauthorized");
-  }
-
-  const preview = previewArgs(args);
-  const decision = await ctx.runMutation(internal.audit.recordPresentation, {
-    passportId: passport._id,
-    action,
-    argsPreview: preview,
-  });
-  if (!decision.allowRun) {
-    return errorResponse(decision.status, decision.reason, decision.code);
-  }
-
-  const spec = lookupAction(action);
-  if (!spec) {
-    return errorResponse(403, ACTION_UNAVAILABLE_ERROR, "action_unavailable");
-  }
-
-  const result: InvokeResult = await runAction(spec, args, {
-    passportName: passport.name,
-  });
-  await ctx.runMutation(internal.audit.recordUse, {
-    passportId: passport._id,
-    action,
-    argsPreview: preview,
-    ok: result.ok,
-    status: result.status,
-    error: result.error,
-  });
-  return jsonResponse(result.status, result.body);
-});
 
 export const handleCredentials = httpAction(async (ctx, request) => {
   const body = await readObjectBody(request);

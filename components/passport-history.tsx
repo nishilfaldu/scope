@@ -132,8 +132,8 @@ export function PassportHistory({ passportId }: { passportId: string }) {
         <CardHeader className="border-b">
           <CardTitle>History</CardTitle>
           <CardDescription>
-            Issued, platform toggled, revoked, and expired — plus invoke
-            presented / verified / used. Who, scopes, outcome, and why.
+            Issued, platform toggled, revoked, and expired. Who, scopes,
+            outcome, and why.
           </CardDescription>
           <CardAction className="flex flex-wrap gap-2">
             <FilterSelect

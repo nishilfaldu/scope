@@ -163,7 +163,7 @@ export const authorizeMint = internalMutation({
       );
     }
 
-    if (args.platform === "demo" || !isAccountAppId(args.platform)) {
+    if (!isAccountAppId(args.platform)) {
       return await denyMint(
         ctx,
         passport._id,

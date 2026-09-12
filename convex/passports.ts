@@ -6,7 +6,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { appValidator, isAccountAppId, ALL_APPS } from "./permissions";
+import { appValidator, ALL_APPS } from "./permissions";
 import schema from "./schema";
 import {
   appendAuditEvent,
@@ -202,7 +202,7 @@ export const setPlatform = mutation({
       ? [...passport.apps, args.platform]
       : passport.apps.filter((app) => app !== args.platform);
     await ctx.db.patch("passports", passport._id, { apps });
-    if (!args.enabled && isAccountAppId(args.platform)) {
+    if (!args.enabled) {
       await revokeLivePlatformTokens(
         ctx,
         passport._id,

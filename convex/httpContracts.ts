@@ -1,4 +1,3 @@
-import { INVOKE_ACTIONS } from "./invoke";
 import { ACCOUNT_APPS } from "./permissions";
 
 type JsonSchema = {
@@ -47,28 +46,6 @@ export const credentialsContract: PostContract = {
       platform: { type: "string", enum: ACCOUNT_APPS },
       expiresAt: { type: "number" },
       expiresIn: { type: "number" },
-    },
-  },
-};
-
-export const invokeContract: PostContract = {
-  method: "POST",
-  body: {
-    type: "object",
-    required: ["passportId", "invokeKey", "action"],
-    properties: {
-      passportId: { type: "string" },
-      invokeKey: { type: "string" },
-      action: { type: "string", enum: INVOKE_ACTIONS },
-      args: { type: "object" },
-    },
-  },
-  success: {
-    type: "object",
-    required: ["echo", "passport"],
-    properties: {
-      echo: { type: "object" },
-      passport: { type: "string" },
     },
   },
 };

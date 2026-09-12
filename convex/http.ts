@@ -2,9 +2,7 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import {
   describeCredentials,
-  describeInvoke,
   handleCredentials,
-  handleInvoke,
   handlePlatforms,
   optionsOk,
 } from "./httpAgent";
@@ -13,21 +11,6 @@ import { PROVIDERS } from "./permissions";
 
 const http = httpRouter();
 
-http.route({
-  path: "/api/invoke",
-  method: "OPTIONS",
-  handler: optionsOk,
-});
-http.route({
-  path: "/api/invoke",
-  method: "GET",
-  handler: describeInvoke,
-});
-http.route({
-  path: "/api/invoke",
-  method: "POST",
-  handler: handleInvoke,
-});
 http.route({
   path: "/api/credentials",
   method: "OPTIONS",

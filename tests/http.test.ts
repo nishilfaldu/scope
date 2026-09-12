@@ -69,36 +69,8 @@ describe("GET /api/credentials", () => {
   });
 });
 
-describe("GET /api/invoke", () => {
-  test("returns the POST body schema and success shape", async () => {
-    const response = await t().fetch("/api/invoke", { method: "GET" });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      method: "POST",
-      body: {
-        type: "object",
-        required: ["passportId", "invokeKey", "action"],
-        properties: {
-          passportId: { type: "string" },
-          invokeKey: { type: "string" },
-          action: { type: "string", enum: ["demo.echo"] },
-          args: { type: "object" },
-        },
-      },
-      success: {
-        type: "object",
-        required: ["echo", "passport"],
-        properties: {
-          echo: { type: "object" },
-          passport: { type: "string" },
-        },
-      },
-    });
-  });
-});
-
 describe("OPTIONS", () => {
-  test.each(["/api/credentials", "/api/invoke", "/api/platforms"])(
+  test.each(["/api/credentials", "/api/platforms"])(
     "%s returns 204 with an empty body",
     async (path) => {
       const response = await t().fetch(path, { method: "OPTIONS" });
@@ -114,7 +86,7 @@ describe("POST /api/credentials denials", () => {
     const minted = await test.mutation(api.passports.mint, {
       name: "Keyed",
       ttlMs: 60_000,
-      apps: ["demo"],
+      apps: ["slack"],
     });
     const unavailable = {
       error: "This platform is not available on this passport",
@@ -211,7 +183,7 @@ describe("GET /api/platforms", () => {
     const minted = await test.mutation(api.passports.mint, {
       name: "Mix",
       ttlMs: 60_000,
-      apps: ["demo", "github"],
+      apps: ["github"],
     });
     const passport = await test.query(api.passports.get, {
       passportId: minted.id,
@@ -229,7 +201,6 @@ describe("GET /api/platforms", () => {
     expect(await response.json()).toEqual({
       expiresAt: passport!.expiresAt,
       platforms: [
-        { platform: "demo", status: "on" },
         { platform: "github", status: "on" },
         { platform: "gmail", status: "off" },
         { platform: "calendar", status: "off" },

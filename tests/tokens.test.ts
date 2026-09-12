@@ -78,7 +78,7 @@ describe("accounts and passports", () => {
     const minted = await test.mutation(api.passports.mint, {
       name: "Keep me",
       ttlMs: 60_000,
-      apps: ["github", "demo"],
+      apps: ["github", "slack"],
     });
     await test.action(api.connections.disconnect, { provider: "github" });
     const statuses = await test.query(api.connections.listStatuses, {});
@@ -104,9 +104,9 @@ describe("platform tokens", () => {
     const test = t();
     await seedGithub(test);
     const minted = await test.mutation(api.passports.mint, {
-      name: "Demo only",
+      name: "Slack only",
       ttlMs: 60_000,
-      apps: ["demo"],
+      apps: ["slack"],
     });
     const denied = await test.mutation(internal.tokens.authorizeMint, {
       passportToken: minted.passportId,
@@ -258,9 +258,9 @@ describe("platform tokens", () => {
   test("unknown, off, and unconnected platforms share one denial", async () => {
     const test = t();
     const minted = await test.mutation(api.passports.mint, {
-      name: "Demo",
+      name: "GitHub only",
       ttlMs: 60_000,
-      apps: ["demo", "github"],
+      apps: ["github"],
     });
     const unavailable = {
       ok: false,
@@ -268,13 +268,6 @@ describe("platform tokens", () => {
       reason: "This platform is not available on this passport",
       code: "platform_unavailable",
     };
-    const demo = await test.mutation(internal.tokens.authorizeMint, {
-      passportToken: minted.passportId,
-      invokeKey: minted.invokeKey,
-      platform: "demo",
-      refresh: false,
-    });
-    expect(demo).toMatchObject(unavailable);
     const unknown = await test.mutation(internal.tokens.authorizeMint, {
       passportToken: minted.passportId,
       invokeKey: minted.invokeKey,

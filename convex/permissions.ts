@@ -1,7 +1,6 @@
 import { v } from "convex/values";
 
 export const ALL_APPS = [
-  "demo",
   "github",
   "gmail",
   "calendar",
@@ -13,24 +12,15 @@ export const ALL_APPS = [
 
 export type AppId = (typeof ALL_APPS)[number];
 
-export const ACCOUNT_APPS = [
-  "github",
-  "gmail",
-  "calendar",
-  "drive",
-  "docs",
-  "sheets",
-  "slack",
-] as const;
+export const ACCOUNT_APPS = ALL_APPS;
 
-export type AccountAppId = (typeof ACCOUNT_APPS)[number];
+export type AccountAppId = AppId;
 
 export const PROVIDERS = ["github", "google", "slack"] as const;
 
 export type ProviderId = (typeof PROVIDERS)[number];
 
 export const appValidator = v.union(
-  v.literal("demo"),
   v.literal("github"),
   v.literal("gmail"),
   v.literal("calendar"),
@@ -40,15 +30,7 @@ export const appValidator = v.union(
   v.literal("slack"),
 );
 
-export const accountAppValidator = v.union(
-  v.literal("github"),
-  v.literal("gmail"),
-  v.literal("calendar"),
-  v.literal("drive"),
-  v.literal("docs"),
-  v.literal("sheets"),
-  v.literal("slack"),
-);
+export const accountAppValidator = appValidator;
 
 export const providerValidator = v.union(
   v.literal("github"),
@@ -60,12 +42,8 @@ export function isAccountAppId(value: string): value is AccountAppId {
   return (ACCOUNT_APPS as readonly string[]).includes(value);
 }
 
-export function providerForApp(app: AccountAppId): ProviderId;
-export function providerForApp(app: AppId): ProviderId | null;
-export function providerForApp(app: AppId): ProviderId | null {
+export function providerForApp(app: AppId): ProviderId {
   switch (app) {
-    case "demo":
-      return null;
     case "github":
       return "github";
     case "gmail":
