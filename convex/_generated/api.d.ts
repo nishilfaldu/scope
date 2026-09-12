@@ -15,6 +15,7 @@ import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as httpAgent from "../httpAgent.js";
 import type * as httpCors from "../httpCors.js";
+import type * as httpContracts from "../httpContracts.js";
 import type * as httpOauth from "../httpOauth.js";
 import type * as invoke from "../invoke.js";
 import type * as json from "../json.js";
@@ -39,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   httpAgent: typeof httpAgent;
   httpCors: typeof httpCors;
+  httpContracts: typeof httpContracts;
   httpOauth: typeof httpOauth;
   invoke: typeof invoke;
   json: typeof json;

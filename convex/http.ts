@@ -1,6 +1,12 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { handleCredentials, handleInvoke, optionsOk } from "./httpAgent";
+import {
+  describeCredentials,
+  describeInvoke,
+  handleCredentials,
+  handleInvoke,
+  optionsOk,
+} from "./httpAgent";
 import { oauthCallback, oauthConnect } from "./httpOauth";
 import { PROVIDERS } from "./permissions";
 
@@ -13,6 +19,11 @@ http.route({
 });
 http.route({
   path: "/api/invoke",
+  method: "GET",
+  handler: describeInvoke,
+});
+http.route({
+  path: "/api/invoke",
   method: "POST",
   handler: handleInvoke,
 });
@@ -20,6 +31,11 @@ http.route({
   path: "/api/credentials",
   method: "OPTIONS",
   handler: optionsOk,
+});
+http.route({
+  path: "/api/credentials",
+  method: "GET",
+  handler: describeCredentials,
 });
 http.route({
   path: "/api/credentials",

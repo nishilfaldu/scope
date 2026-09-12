@@ -1,6 +1,11 @@
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { corsNoContent, jsonResponse } from "./httpCors";
+import {
+  credentialsContract,
+  invokeContract,
+  type PostContract,
+} from "./httpContracts";
 import { lookupAction, runAction, type InvokeResult } from "./invoke";
 import { isPlainObject } from "./json";
 import { issueShortLivedAccess } from "./providerAccess";
@@ -48,6 +53,13 @@ function requiredString(
 }
 
 export const optionsOk = httpAction(async () => corsNoContent());
+
+function describePost(contract: PostContract) {
+  return httpAction(async () => jsonResponse(200, contract));
+}
+
+export const describeCredentials = describePost(credentialsContract);
+export const describeInvoke = describePost(invokeContract);
 
 export const handleInvoke = httpAction(async (ctx, request) => {
   const body = await readObjectBody(request);
