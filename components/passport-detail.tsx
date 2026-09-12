@@ -14,7 +14,6 @@ import { api } from "../convex/_generated/api";
 import { BoardShell } from "@/components/board-shell";
 import { PassportHistory } from "@/components/passport-history";
 import { PassportPlatforms } from "@/components/passport-platforms";
-import { PassportTokenLog } from "@/components/passport-token-log";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -216,7 +215,6 @@ export function PassportDetail({ passportId }: { passportId: string }) {
           </Card>
         </div>
 
-        <PassportTokenLog passportId={passportId} />
         <PassportHistory passportId={passportId} />
       </div>
     </BoardShell>
