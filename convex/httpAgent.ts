@@ -1,5 +1,11 @@
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import {
+  ACTION_UNAVAILABLE_ERROR,
+  UNAUTHORIZED_ERROR,
+  PLATFORM_UNAVAILABLE_ERROR,
+  type AgentErrorCode,
+} from "./agentErrors";
 import { corsNoContent, jsonResponse } from "./httpCors";
 import {
   credentialsContract,
@@ -26,6 +32,14 @@ function previewArgs(args: Record<string, unknown>): string {
   return `${raw.slice(0, ARGS_PREVIEW_MAX)}…`;
 }
 
+function errorResponse(
+  status: number,
+  error: string,
+  code: AgentErrorCode,
+): Response {
+  return jsonResponse(status, { error, code });
+}
+
 async function readObjectBody(
   request: Request,
 ): Promise<Record<string, unknown> | Response> {
@@ -33,10 +47,10 @@ async function readObjectBody(
   try {
     raw = await request.json();
   } catch {
-    return jsonResponse(400, { error: "Invalid JSON body" });
+    return errorResponse(400, "Invalid JSON body", "invalid_request");
   }
   if (!isPlainObject(raw)) {
-    return jsonResponse(400, { error: "Body must be a JSON object" });
+    return errorResponse(400, "Body must be a JSON object", "invalid_request");
   }
   return raw;
 }
@@ -47,7 +61,7 @@ function requiredString(
 ): string | Response {
   const value = body[key];
   if (typeof value !== "string" || value.length === 0) {
-    return jsonResponse(400, { error: `${key} must be a string` });
+    return errorResponse(400, `${key} must be a string`, "invalid_request");
   }
   return value;
 }
@@ -83,7 +97,7 @@ export const handleInvoke = httpAction(async (ctx, request) => {
   let args: Record<string, unknown> = {};
   if (body.args !== undefined) {
     if (!isPlainObject(body.args)) {
-      return jsonResponse(400, { error: "args must be an object" });
+      return errorResponse(400, "args must be an object", "invalid_request");
     }
     args = body.args;
   }
@@ -93,7 +107,7 @@ export const handleInvoke = httpAction(async (ctx, request) => {
     invokeKey,
   });
   if (!passport) {
-    return jsonResponse(401, { error: "Unknown passport or invoke key" });
+    return errorResponse(401, UNAUTHORIZED_ERROR, "unauthorized");
   }
 
   const preview = previewArgs(args);
@@ -103,12 +117,12 @@ export const handleInvoke = httpAction(async (ctx, request) => {
     argsPreview: preview,
   });
   if (!decision.allowRun) {
-    return jsonResponse(decision.status, { error: decision.reason });
+    return errorResponse(decision.status, decision.reason, decision.code);
   }
 
   const spec = lookupAction(action);
   if (!spec) {
-    return jsonResponse(400, { error: `Unknown action: ${action}` });
+    return errorResponse(403, ACTION_UNAVAILABLE_ERROR, "action_unavailable");
   }
 
   const result: InvokeResult = await runAction(spec, args, {
@@ -152,7 +166,7 @@ export const handleCredentials = httpAction(async (ctx, request) => {
     refresh,
   });
   if (!decision.ok) {
-    return jsonResponse(decision.status, { error: decision.reason });
+    return errorResponse(decision.status, decision.reason, decision.code);
   }
 
   const issued = await issueShortLivedAccess(ctx, decision.provider);
@@ -163,7 +177,11 @@ export const handleCredentials = httpAction(async (ctx, request) => {
       reason: issued.error,
     });
     const status = issued.error.endsWith("is not connected") ? 403 : 503;
-    return jsonResponse(status, { error: issued.error });
+    const code =
+      status === 403 ? "platform_unavailable" : "provider_error";
+    const error =
+      status === 403 ? PLATFORM_UNAVAILABLE_ERROR : issued.error;
+    return errorResponse(status, error, code);
   }
 
   const committed = await ctx.runMutation(internal.tokens.commitMint, {

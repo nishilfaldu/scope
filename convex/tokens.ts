@@ -15,7 +15,12 @@ import {
   type AccountAppId,
 } from "./permissions";
 import schema from "./schema";
-import { PLATFORM_UNAVAILABLE_ERROR } from "./agentErrors";
+import {
+  denyResultValidator,
+  PLATFORM_UNAVAILABLE_ERROR,
+  UNAUTHORIZED_ERROR,
+  type AgentErrorCode,
+} from "./agentErrors";
 import { hashesEqual, sha256Hex } from "./secrets";
 
 export const PLATFORM_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -82,8 +87,14 @@ async function denyMint(
   platform: string,
   status: number,
   reason: string,
+  code: AgentErrorCode,
   now: number,
-): Promise<{ ok: false; status: number; reason: string }> {
+): Promise<{
+  ok: false;
+  status: number;
+  reason: string;
+  code: AgentErrorCode;
+}> {
   if (passportId) {
     await appendTokenLog(ctx, {
       passportId,
@@ -93,7 +104,7 @@ async function denyMint(
       occurredAt: now,
     });
   }
-  return { ok: false, status, reason };
+  return { ok: false, status, reason, code };
 }
 
 export const authorizeMint = internalMutation({
@@ -111,11 +122,7 @@ export const authorizeMint = internalMutation({
       provider: providerValidator,
       refresh: v.boolean(),
     }),
-    v.object({
-      ok: v.literal(false),
-      status: v.number(),
-      reason: v.string(),
-    }),
+    denyResultValidator,
   ),
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -124,7 +131,12 @@ export const authorizeMint = internalMutation({
       .withIndex("by_token", (q) => q.eq("token", args.passportToken))
       .unique();
     if (!passport) {
-      return { ok: false as const, status: 401, reason: "Unknown passport" };
+      return {
+        ok: false as const,
+        status: 401,
+        reason: UNAUTHORIZED_ERROR,
+        code: "unauthorized" as const,
+      };
     }
 
     if (!passport.invokeKeyHash) {
@@ -133,7 +145,8 @@ export const authorizeMint = internalMutation({
         passport._id,
         args.platform,
         401,
-        "Passport has no invoke key; mint a new passport",
+        UNAUTHORIZED_ERROR,
+        "unauthorized",
         now,
       );
     }
@@ -144,7 +157,8 @@ export const authorizeMint = internalMutation({
         passport._id,
         args.platform,
         401,
-        "Invalid invoke key",
+        UNAUTHORIZED_ERROR,
+        "unauthorized",
         now,
       );
     }
@@ -156,6 +170,7 @@ export const authorizeMint = internalMutation({
         args.platform,
         403,
         PLATFORM_UNAVAILABLE_ERROR,
+        "platform_unavailable",
         now,
       );
     }
@@ -169,6 +184,7 @@ export const authorizeMint = internalMutation({
         platform,
         403,
         "Passport revoked",
+        "revoked",
         now,
       );
     }
@@ -179,6 +195,7 @@ export const authorizeMint = internalMutation({
         platform,
         403,
         "Passport expired",
+        "expired",
         now,
       );
     }
@@ -189,6 +206,7 @@ export const authorizeMint = internalMutation({
         platform,
         403,
         PLATFORM_UNAVAILABLE_ERROR,
+        "platform_unavailable",
         now,
       );
     }
@@ -204,6 +222,7 @@ export const authorizeMint = internalMutation({
         platform,
         403,
         PLATFORM_UNAVAILABLE_ERROR,
+        "platform_unavailable",
         now,
       );
     }

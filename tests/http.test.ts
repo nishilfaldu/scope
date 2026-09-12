@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
+import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -105,4 +106,64 @@ describe("OPTIONS", () => {
       expect(await response.text()).toBe("");
     },
   );
+});
+
+describe("POST /api/credentials denials", () => {
+  test("unknown and off platforms share one code and error text", async () => {
+    const test = t();
+    const minted = await test.mutation(api.passports.mint, {
+      name: "Keyed",
+      ttlMs: 60_000,
+      apps: ["demo"],
+    });
+    const unavailable = {
+      error: "This platform is not available on this passport",
+      code: "platform_unavailable",
+    };
+    const unknown = await test.fetch("/api/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        passportId: minted.passportId,
+        invokeKey: minted.invokeKey,
+        platform: "dropbox",
+      }),
+    });
+    expect(unknown.status).toBe(403);
+    expect(await unknown.json()).toEqual(unavailable);
+    const off = await test.fetch("/api/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        passportId: minted.passportId,
+        invokeKey: minted.invokeKey,
+        platform: "github",
+      }),
+    });
+    expect(off.status).toBe(403);
+    expect(await off.json()).toEqual(unavailable);
+  });
+
+  test("wrong invoke key is unauthorized and does not name the platform", async () => {
+    const test = t();
+    const minted = await test.mutation(api.passports.mint, {
+      name: "Keyed",
+      ttlMs: 60_000,
+      apps: ["github"],
+    });
+    const response = await test.fetch("/api/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        passportId: minted.passportId,
+        invokeKey: "ik_wrong",
+        platform: "github",
+      }),
+    });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      error: "Unknown passport or invoke key",
+      code: "unauthorized",
+    });
+  });
 });

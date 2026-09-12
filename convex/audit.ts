@@ -11,6 +11,11 @@ import {
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { lookupAction } from "./invoke";
+import {
+  ACTION_UNAVAILABLE_ERROR,
+  agentErrorCodeValidator,
+  type AgentErrorCode,
+} from "./agentErrors";
 import { PROVIDERS } from "./permissions";
 import schema from "./schema";
 import { revokeLivePlatformTokens } from "./tokens";
@@ -314,11 +319,20 @@ export const recordPresentation = internalMutation({
     action: v.string(),
     argsPreview: v.string(),
   },
-  returns: v.object({
-    allowRun: v.boolean(),
-    status: v.number(),
-    reason: v.string(),
-  }),
+  returns: v.union(
+    v.object({
+      allowRun: v.literal(true),
+      status: v.number(),
+      reason: v.string(),
+      code: v.null(),
+    }),
+    v.object({
+      allowRun: v.literal(false),
+      status: v.number(),
+      reason: v.string(),
+      code: agentErrorCodeValidator,
+    }),
+  ),
   handler: async (ctx, args) => {
     const now = Date.now();
     const passport = await ctx.db.get("passports", args.passportId);
@@ -349,7 +363,11 @@ export const recordPresentation = internalMutation({
       current = await markExpired(ctx, current, now);
     }
 
-    const deny = async (status: number, reason: string) => {
+    const deny = async (
+      status: number,
+      reason: string,
+      code: AgentErrorCode,
+    ) => {
       await appendAuditEvent(ctx, {
         passportId: current._id,
         kind: "verified",
@@ -364,20 +382,17 @@ export const recordPresentation = internalMutation({
         httpStatus: status,
         occurredAt: Date.now(),
       });
-      return { allowRun: false as const, status, reason };
+      return { allowRun: false as const, status, reason, code };
     };
 
     if (current.status === "revoked") {
-      return await deny(403, "Passport revoked");
+      return await deny(403, "Passport revoked", "revoked");
     }
     if (current.status === "expired" || current.expiresAt <= now) {
-      return await deny(403, "Passport expired");
+      return await deny(403, "Passport expired", "expired");
     }
-    if (!spec) {
-      return await deny(400, `Unknown action: ${args.action}`);
-    }
-    if (!current.apps.includes(spec.app)) {
-      return await deny(403, "Action not permitted");
+    if (!spec || !current.apps.includes(spec.app)) {
+      return await deny(403, ACTION_UNAVAILABLE_ERROR, "action_unavailable");
     }
 
     await appendAuditEvent(ctx, {
@@ -398,6 +413,7 @@ export const recordPresentation = internalMutation({
       allowRun: true as const,
       status: 200,
       reason: `Passport valid for ${args.action}`,
+      code: null,
     };
   },
 });

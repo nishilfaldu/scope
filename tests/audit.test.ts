@@ -117,7 +117,8 @@ describe("passport audit trail", () => {
     expect(decision).toEqual({
       allowRun: false,
       status: 403,
-      reason: "Action not permitted",
+      reason: "This action is not available on this passport",
+      code: "action_unavailable",
     });
     const history = await test.query(api.audit.listHistory, {
       passportId: minted.id,
@@ -129,7 +130,9 @@ describe("passport audit trail", () => {
       "issued",
     ]);
     expect(history.page[0]?.outcome).toBe("denied");
-    expect(history.page[0]?.reason).toBe("Action not permitted");
+    expect(history.page[0]?.reason).toBe(
+      "This action is not available on this passport",
+    );
   });
 
   test("github invoke actions are unknown even when github is on the passport", async () => {
@@ -146,8 +149,9 @@ describe("passport audit trail", () => {
     });
     expect(decision).toEqual({
       allowRun: false,
-      status: 400,
-      reason: "Unknown action: github.repos.list",
+      status: 403,
+      reason: "This action is not available on this passport",
+      code: "action_unavailable",
     });
     const history = await test.query(api.audit.listHistory, {
       passportId: minted.id,
@@ -159,7 +163,9 @@ describe("passport audit trail", () => {
       "issued",
     ]);
     expect(history.page[0]?.outcome).toBe("denied");
-    expect(history.page[0]?.reason).toBe("Unknown action: github.repos.list");
+    expect(history.page[0]?.reason).toBe(
+      "This action is not available on this passport",
+    );
   });
 
   test("history filters by kind, outcome, and actor", async () => {
