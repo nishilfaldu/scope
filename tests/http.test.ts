@@ -98,7 +98,7 @@ describe("GET /api/invoke", () => {
 });
 
 describe("OPTIONS", () => {
-  test.each(["/api/credentials", "/api/invoke"])(
+  test.each(["/api/credentials", "/api/invoke", "/api/platforms"])(
     "%s returns 204 with an empty body",
     async (path) => {
       const response = await t().fetch(path, { method: "OPTIONS" });
@@ -164,6 +164,80 @@ describe("POST /api/credentials denials", () => {
     expect(await response.json()).toEqual({
       error: "Unknown passport or invoke key",
       code: "unauthorized",
+    });
+  });
+});
+
+describe("GET /api/platforms", () => {
+  test("wrong or missing invoke key does not leak platforms", async () => {
+    const test = t();
+    const minted = await test.mutation(api.passports.mint, {
+      name: "Secret",
+      ttlMs: 60_000,
+      apps: ["github", "slack"],
+    });
+    const wrong = await test.fetch("/api/platforms", {
+      method: "GET",
+      headers: {
+        passportId: minted.passportId,
+        invokeKey: "ik_wrong",
+      },
+    });
+    expect(wrong.status).toBe(401);
+    const wrongBody = await wrong.json();
+    expect(wrongBody).toEqual({
+      error: "Unknown passport or invoke key",
+      code: "unauthorized",
+    });
+    expect(wrongBody).not.toHaveProperty("platforms");
+    expect(JSON.stringify(wrongBody)).not.toMatch(/github|slack/);
+
+    const missing = await test.fetch("/api/platforms", {
+      method: "GET",
+      headers: { passportId: minted.passportId },
+    });
+    expect(missing.status).toBe(400);
+    const missingBody = await missing.json();
+    expect(missingBody).toEqual({
+      error: "invokeKey must be a string",
+      code: "invalid_request",
+    });
+    expect(missingBody).not.toHaveProperty("platforms");
+    expect(JSON.stringify(missingBody)).not.toMatch(/github|slack/);
+  });
+
+  test("returns on vs off for each platform and the passport expiry", async () => {
+    const test = t();
+    const minted = await test.mutation(api.passports.mint, {
+      name: "Mix",
+      ttlMs: 60_000,
+      apps: ["demo", "github"],
+    });
+    const passport = await test.query(api.passports.get, {
+      passportId: minted.id,
+      now: Date.now(),
+    });
+    expect(passport).not.toBeNull();
+    const response = await test.fetch("/api/platforms", {
+      method: "GET",
+      headers: {
+        passportId: minted.passportId,
+        invokeKey: minted.invokeKey,
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      expiresAt: passport!.expiresAt,
+      platforms: [
+        { platform: "demo", status: "on" },
+        { platform: "github", status: "on" },
+        { platform: "gmail", status: "off" },
+        { platform: "calendar", status: "off" },
+        { platform: "drive", status: "off" },
+        { platform: "docs", status: "off" },
+        { platform: "sheets", status: "off" },
+        { platform: "slack", status: "off" },
+      ],
     });
   });
 });

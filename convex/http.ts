@@ -5,6 +5,7 @@ import {
   describeInvoke,
   handleCredentials,
   handleInvoke,
+  handlePlatforms,
   optionsOk,
 } from "./httpAgent";
 import { oauthCallback, oauthConnect } from "./httpOauth";
@@ -41,6 +42,16 @@ http.route({
   path: "/api/credentials",
   method: "POST",
   handler: handleCredentials,
+});
+http.route({
+  path: "/api/platforms",
+  method: "OPTIONS",
+  handler: optionsOk,
+});
+http.route({
+  path: "/api/platforms",
+  method: "GET",
+  handler: handlePlatforms,
 });
 
 for (const provider of PROVIDERS) {

@@ -66,6 +66,14 @@ function requiredString(
   return value;
 }
 
+function requiredHeader(request: Request, key: string): string | Response {
+  const value = request.headers.get(key);
+  if (typeof value !== "string" || value.length === 0) {
+    return errorResponse(400, `${key} must be a string`, "invalid_request");
+  }
+  return value;
+}
+
 export const optionsOk = httpAction(async () => corsNoContent());
 
 function describePost(contract: PostContract) {
@@ -200,5 +208,29 @@ export const handleCredentials = httpAction(async (ctx, request) => {
       0,
       Math.floor((committed.expiresAt - Date.now()) / 1000),
     ),
+  });
+});
+
+export const handlePlatforms = httpAction(async (ctx, request) => {
+  const passportId = requiredHeader(request, "passportId");
+  if (passportId instanceof Response) {
+    return passportId;
+  }
+  const invokeKey = requiredHeader(request, "invokeKey");
+  if (invokeKey instanceof Response) {
+    return invokeKey;
+  }
+
+  const decision = await ctx.runQuery(internal.passports.discoverPlatforms, {
+    token: passportId,
+    invokeKey,
+    now: Date.now(),
+  });
+  if (!decision.ok) {
+    return errorResponse(decision.status, decision.reason, decision.code);
+  }
+  return jsonResponse(200, {
+    expiresAt: decision.expiresAt,
+    platforms: decision.platforms,
   });
 });
