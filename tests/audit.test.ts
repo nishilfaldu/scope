@@ -130,7 +130,7 @@ describe("passport audit trail", () => {
     const passport = await test.query(api.tables.passports.queries.get, {
       passportId: created.id,
     });
-    expect(passport?.lifetimeStatus).toBe("expired");
+    expect(passport?.status).toBe("expired");
     const expired = await test.query(api.tables.auditEvents.queries.listHistory, {
       passportId: created.id,
       kind: "expired",
