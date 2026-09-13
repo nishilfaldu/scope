@@ -43,24 +43,6 @@ async function persistIfChanged(
   });
 }
 
-export async function standingAccessToken(
-  ctx: GenericActionCtx<DataModel>,
-  provider: ProviderId,
-): Promise<string | null> {
-  const connection = await ctx.runQuery(internal.connections.getConnection, {
-    provider,
-  });
-  if (!connection) {
-    return null;
-  }
-  const refreshed = await refreshProviderTokens(provider, connection);
-  if (!refreshed) {
-    return connection.accessToken;
-  }
-  await persistIfChanged(ctx, provider, connection, refreshed);
-  return refreshed.accessToken;
-}
-
 export async function issueShortLivedAccess(
   ctx: GenericActionCtx<DataModel>,
   provider: ProviderId,

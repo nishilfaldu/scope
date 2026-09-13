@@ -16,7 +16,7 @@ describe("passport audit trail", () => {
     const minted = await test.mutation(api.passports.mint, {
       name: "PR agent",
       ttlMs: 60_000,
-      apps: ["demo", "github"],
+      apps: ["github", "slack"],
     });
     const history = await test.query(api.audit.listHistory, {
       passportId: minted.id,
@@ -26,7 +26,7 @@ describe("passport audit trail", () => {
     const event = history.page[0];
     expect(event.kind).toBe("issued");
     expect(event.actorType).toBe("board");
-    expect(event.scopes).toEqual(["demo", "github"]);
+    expect(event.scopes).toEqual(["github", "slack"]);
     expect(event.outcome).toBe("allowed");
     expect(event.reason).toBe("Passport minted");
     const chain = await test.query(api.audit.chainStatus, {
@@ -44,7 +44,7 @@ describe("passport audit trail", () => {
     const minted = await test.mutation(api.passports.mint, {
       name: "Temp",
       ttlMs: 60_000,
-      apps: ["demo"],
+      apps: ["github"],
     });
     await test.mutation(api.passports.revoke, {
       passportId: minted.passportId,
@@ -63,87 +63,20 @@ describe("passport audit trail", () => {
     ).rejects.toThrow(/Passport not found/);
   });
 
-  test("presenting a passport records presented, verified, and used when allowed", async () => {
-    const test = t();
-    const minted = await test.mutation(api.passports.mint, {
-      name: "Echo",
-      ttlMs: 60_000,
-      apps: ["demo"],
-    });
-    const decision = await test.mutation(internal.audit.recordPresentation, {
-      passportId: minted.id,
-      action: "demo.echo",
-      argsPreview: "{}",
-    });
-    expect(decision.allowRun).toBe(true);
-    await test.mutation(internal.audit.recordUse, {
-      passportId: minted.id,
-      action: "demo.echo",
-      argsPreview: "{}",
-      ok: true,
-      status: 200,
-      error: null,
-    });
-    const history = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(history.page.map((event) => event.kind)).toEqual([
-      "used",
-      "verified",
-      "presented",
-      "issued",
-    ]);
-    expect(history.page[0]?.outcome).toBe("allowed");
-    const chain = await test.query(api.audit.chainStatus, {
-      passportId: minted.id,
-    });
-    expect(chain.intact).toBe(true);
-    expect(chain.eventCount).toBe(4);
-  });
-
-  test("denied invoke still records presented and verified, and does not record used", async () => {
-    const test = t();
-    const minted = await test.mutation(api.passports.mint, {
-      name: "Demo only",
-      ttlMs: 60_000,
-      apps: ["demo"],
-    });
-    const decision = await test.mutation(internal.audit.recordPresentation, {
-      passportId: minted.id,
-      action: "github.repos.list",
-      argsPreview: "{}",
-    });
-    expect(decision).toEqual({
-      allowRun: false,
-      status: 403,
-      reason: "Action not permitted",
-    });
-    const history = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(history.page.map((event) => event.kind)).toEqual([
-      "verified",
-      "presented",
-      "issued",
-    ]);
-    expect(history.page[0]?.outcome).toBe("denied");
-    expect(history.page[0]?.reason).toBe("Action not permitted");
-  });
-
   test("history filters by kind, outcome, and actor", async () => {
     const test = t();
     const minted = await test.mutation(api.passports.mint, {
       name: "Filter me",
       ttlMs: 60_000,
-      apps: ["demo"],
+      apps: ["github"],
     });
-    await test.mutation(internal.audit.recordPresentation, {
-      passportId: minted.id,
-      action: "missing.action",
-      argsPreview: "{}",
+    await test.run(async (ctx) => {
+      await ctx.db.patch("passports", minted.id, {
+        expiresAt: Date.now() - 1_000,
+      });
     });
+    await test.mutation(internal.audit.expireDue, {});
+
     const denied = await test.query(api.audit.listHistory, {
       passportId: minted.id,
       outcome: "denied",
@@ -151,22 +84,25 @@ describe("passport audit trail", () => {
     });
     expect(denied.page.every((event) => event.outcome === "denied")).toBe(true);
     expect(denied.page).toHaveLength(1);
+    expect(denied.page[0]?.kind).toBe("expired");
 
-    const presented = await test.query(api.audit.listHistory, {
+    const issued = await test.query(api.audit.listHistory, {
       passportId: minted.id,
-      kind: "presented",
+      kind: "issued",
       paginationOpts: { numItems: 50, cursor: null },
     });
-    expect(presented.page).toHaveLength(1);
-    expect(presented.page[0]?.kind).toBe("presented");
+    expect(issued.page).toHaveLength(1);
+    expect(issued.page[0]?.kind).toBe("issued");
 
-    const agent = await test.query(api.audit.listHistory, {
+    const system = await test.query(api.audit.listHistory, {
       passportId: minted.id,
-      actorType: "agent",
+      actorType: "system",
       paginationOpts: { numItems: 50, cursor: null },
     });
-    expect(agent.page.every((event) => event.actorType === "agent")).toBe(true);
-    expect(agent.page.length).toBeGreaterThan(0);
+    expect(system.page.every((event) => event.actorType === "system")).toBe(
+      true,
+    );
+    expect(system.page).toHaveLength(1);
 
     const unknown = await test.query(api.audit.listHistory, {
       passportId: "not-an-id",
@@ -180,7 +116,7 @@ describe("passport audit trail", () => {
     const minted = await test.mutation(api.passports.mint, {
       name: "Short",
       ttlMs: 60_000,
-      apps: ["demo"],
+      apps: ["github"],
     });
     await test.run(async (ctx) => {
       await ctx.db.patch("passports", minted.id, {
@@ -211,6 +147,9 @@ describe("passport audit trail", () => {
     expect(api.audit).not.toHaveProperty("delete");
     expect(api.audit).not.toHaveProperty("patch");
     expect(api.audit).not.toHaveProperty("replace");
+    expect(api.audit).not.toHaveProperty("wipeDevLogs");
+    expect(internal.audit).not.toHaveProperty("wipeDevLogs");
     expect(api.passports).not.toHaveProperty("appendLog");
+    expect(api.tokens).not.toHaveProperty("listLogs");
   });
 });

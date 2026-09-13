@@ -52,6 +52,7 @@ import {
   OUTCOME_LABELS,
   formatActor,
   formatWhen,
+  kindLabel,
 } from "@/lib/audit";
 
 const KIND_ITEMS = [
@@ -132,8 +133,8 @@ export function PassportHistory({ passportId }: { passportId: string }) {
         <CardHeader className="border-b">
           <CardTitle>History</CardTitle>
           <CardDescription>
-            Issued, platform toggled, revoked, and expired — plus invoke
-            presented / verified / used. Who, scopes, outcome, and why.
+            Everything that touched this passport, including credential issue,
+            refresh, revoke, and deny. Who, scopes, outcome, and why.
           </CardDescription>
           <CardAction className="flex flex-wrap gap-2">
             <FilterSelect
@@ -195,7 +196,7 @@ export function PassportHistory({ passportId }: { passportId: string }) {
                     </TableCell>
                     <TableCell>
                       <div className="min-w-0">
-                        <p className="font-medium">{KIND_LABELS[event.kind]}</p>
+                        <p className="font-medium">{kindLabel(event.kind)}</p>
                         {event.action ? (
                           <p className="truncate font-mono text-xs text-muted-foreground">
                             {event.action}

@@ -79,7 +79,7 @@ export function PassportDashboard() {
 
   const [name, setName] = useState("");
   const [ttlMs, setTtlMs] = useState<number>(DEFAULT_TTL_MS);
-  const [apps, setApps] = useState<AppId[]>(["demo"]);
+  const [apps, setApps] = useState<AppId[]>([]);
   const [minting, setMinting] = useState(false);
   const [mintError, setMintError] = useState<string | null>(null);
   const [mintOpen, setMintOpen] = useState(false);
@@ -122,7 +122,7 @@ export function PassportDashboard() {
         name: result.name,
       });
       setName("");
-      setApps(["demo"]);
+      setApps([]);
       setNow(Date.now());
       setMintOpen(false);
     } catch (err) {

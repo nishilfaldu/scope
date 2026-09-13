@@ -7,7 +7,8 @@ import {
   query,
 } from "./_generated/server";
 import { revokeProviderGrant } from "./oauth";
-import { PROVIDERS, providerValidator } from "./permissions";
+import { appsForProvider, PROVIDERS, providerValidator } from "./permissions";
+import { revokeLivePlatformTokens } from "./tokens";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -71,6 +72,31 @@ export const clearConnection = internalMutation({
       .withIndex("by_provider", (q) => q.eq("provider", args.provider))
       .unique();
     if (row) {
+      const now = Date.now();
+      const platforms = new Set(appsForProvider(args.provider));
+      const live = await ctx.db
+        .query("platformTokens")
+        .withIndex("by_status_and_expiresAt", (q) => q.eq("status", "live"))
+        .take(100);
+      const seen = new Set<string>();
+      for (const token of live) {
+        if (!platforms.has(token.platform)) {
+          continue;
+        }
+        const key = `${token.passportId}:${token.platform}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        await revokeLivePlatformTokens(
+          ctx,
+          token.passportId,
+          token.platform,
+          "Provider disconnected",
+          now,
+          { actorType: "board", actorId: "connections" },
+        );
+      }
       await ctx.db.delete("connections", row._id);
     }
     return null;

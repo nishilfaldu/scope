@@ -1,12 +1,32 @@
-import { httpAction } from "./_generated/server";
+import { env, httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { exchangeAuthorizationCode, startAuthorize } from "./oauth";
 import type { ProviderId } from "./permissions";
 
 const ALLOWED_RETURN_PATHS = new Set(["/", "/connections"]);
 
-function allowedReturnTo(value: string | null): string {
-  const fallback = "http://localhost:3000/connections";
+export function parseBoardOrigin(raw: string | undefined): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveReturnTo(
+  value: string | null,
+  boardOrigin: string | null,
+): string {
+  const fallbackOrigin = boardOrigin ?? "http://localhost:3000";
+  const fallback = `${fallbackOrigin}/connections`;
   if (!value) {
     return fallback;
   }
@@ -15,7 +35,10 @@ function allowedReturnTo(value: string | null): string {
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       return fallback;
     }
-    if (url.hostname !== "localhost" && url.hostname !== "127.0.0.1") {
+    const local =
+      url.hostname === "localhost" || url.hostname === "127.0.0.1";
+    const configured = boardOrigin !== null && url.origin === boardOrigin;
+    if (!local && !configured) {
       return fallback;
     }
     const path = ALLOWED_RETURN_PATHS.has(url.pathname)
@@ -25,6 +48,10 @@ function allowedReturnTo(value: string | null): string {
   } catch {
     return fallback;
   }
+}
+
+function allowedReturnTo(value: string | null): string {
+  return resolveReturnTo(value, parseBoardOrigin(env.BOARD_ORIGIN));
 }
 
 function redirectTo(

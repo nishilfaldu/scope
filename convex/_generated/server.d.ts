@@ -36,6 +36,7 @@ type Env = {
   readonly GOOGLE_CLIENT_SECRET: string | undefined;
   readonly SLACK_CLIENT_ID: string | undefined;
   readonly SLACK_CLIENT_SECRET: string | undefined;
+  readonly BOARD_ORIGIN: string | undefined;
 };
 
 /**

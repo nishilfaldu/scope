@@ -10,20 +10,18 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { lookupAction } from "./invoke";
 import { PROVIDERS } from "./permissions";
 import schema from "./schema";
-import { revokeLivePlatformTokens } from "./tokens";
+import { expireStalePlatformTokens, revokeLivePlatformTokens } from "./tokens";
+import { appendAuditEvent, passportDocForHash } from "./auditWrite";
 import {
   actorTypeValidator,
   auditKindValidator,
   hashAuditEvent,
   outcomeValidator,
-  type ActorType,
-  type AuditKind,
-  type HashInput,
-  type Outcome,
 } from "./auditFields";
+
+export { appendAuditEvent };
 
 const auditEventDoc = schema.doc("auditEvents");
 
@@ -36,43 +34,6 @@ export const lastEventValidator = v.object({
 });
 
 type LastEvent = Infer<typeof lastEventValidator>;
-
-type AppendInput = {
-  passportId: Id<"passports">;
-  kind: AuditKind;
-  actorType: ActorType;
-  actorId: string;
-  scopes: string[];
-  outcome: Outcome;
-  reason: string;
-  service: string | null;
-  action: string | null;
-  argsPreview: string | null;
-  httpStatus: number | null;
-  occurredAt: number;
-};
-
-function asHashInput(
-  input: AppendInput,
-  seq: number,
-  prevHash: string | null,
-): HashInput {
-  return {
-    seq,
-    prevHash,
-    kind: input.kind,
-    actorType: input.actorType,
-    actorId: input.actorId,
-    scopes: input.scopes,
-    outcome: input.outcome,
-    reason: input.reason,
-    service: input.service,
-    action: input.action,
-    argsPreview: input.argsPreview,
-    httpStatus: input.httpStatus,
-    occurredAt: input.occurredAt,
-  };
-}
 
 export function lifetimeStatus(
   passport: Pick<Doc<"passports">, "status" | "expiresAt">,
@@ -100,32 +61,6 @@ export async function boardActorId(ctx: MutationCtx): Promise<string> {
   return "board";
 }
 
-export async function appendAuditEvent(
-  ctx: MutationCtx,
-  input: AppendInput,
-): Promise<void> {
-  const passport = await ctx.db.get("passports", input.passportId);
-  if (!passport) {
-    throw new Error("Passport not found");
-  }
-  const prevSeq = passport.auditSeq ?? 0;
-  const prevHash = passport.auditHeadHash ?? null;
-  const seq = prevSeq + 1;
-  const scopes = [...new Set(input.scopes)];
-  const normalized = { ...input, scopes };
-  const hash = await hashAuditEvent(asHashInput(normalized, seq, prevHash));
-  await ctx.db.insert("auditEvents", {
-    ...normalized,
-    seq,
-    prevHash,
-    hash,
-  });
-  await ctx.db.patch("passports", passport._id, {
-    auditSeq: seq,
-    auditHeadHash: hash,
-  });
-}
-
 export async function markExpired(
   ctx: MutationCtx,
   passport: Doc<"passports">,
@@ -141,6 +76,7 @@ export async function markExpired(
     null,
     "Passport expired",
     now,
+    { actorType: "system", actorId: "expiry" },
   );
   await appendAuditEvent(ctx, {
     passportId: passport._id,
@@ -154,6 +90,7 @@ export async function markExpired(
     action: null,
     argsPreview: null,
     httpStatus: null,
+    platform: null,
     occurredAt: now,
   });
   const updated = await ctx.db.get("passports", passport._id);
@@ -215,9 +152,7 @@ export const chainStatus = query({
         intact = false;
         break;
       }
-      const expectedHash = await hashAuditEvent(
-        asHashInput(event, event.seq, event.prevHash),
-      );
+      const expectedHash = await hashAuditEvent(passportDocForHash(event));
       if (event.hash !== expectedHash) {
         intact = false;
         break;
@@ -308,134 +243,6 @@ export const listHistory = query({
   },
 });
 
-export const recordPresentation = internalMutation({
-  args: {
-    passportId: v.id("passports"),
-    action: v.string(),
-    argsPreview: v.string(),
-  },
-  returns: v.object({
-    allowRun: v.boolean(),
-    status: v.number(),
-    reason: v.string(),
-  }),
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const passport = await ctx.db.get("passports", args.passportId);
-    if (!passport) {
-      throw new Error("Passport not found");
-    }
-
-    const spec = lookupAction(args.action);
-    const requestedScopes = spec ? [spec.app, args.action] : [args.action];
-
-    await appendAuditEvent(ctx, {
-      passportId: passport._id,
-      kind: "presented",
-      actorType: "agent",
-      actorId: "invoke",
-      scopes: requestedScopes,
-      outcome: "allowed",
-      reason: "Presented to invoke",
-      service: "invoke",
-      action: args.action,
-      argsPreview: args.argsPreview,
-      httpStatus: null,
-      occurredAt: now,
-    });
-
-    let current = passport;
-    if (current.status === "active" && current.expiresAt <= now) {
-      current = await markExpired(ctx, current, now);
-    }
-
-    const deny = async (status: number, reason: string) => {
-      await appendAuditEvent(ctx, {
-        passportId: current._id,
-        kind: "verified",
-        actorType: "agent",
-        actorId: "invoke",
-        scopes: [...current.apps, ...requestedScopes],
-        outcome: "denied",
-        reason,
-        service: "invoke",
-        action: args.action,
-        argsPreview: args.argsPreview,
-        httpStatus: status,
-        occurredAt: Date.now(),
-      });
-      return { allowRun: false as const, status, reason };
-    };
-
-    if (current.status === "revoked") {
-      return await deny(403, "Passport revoked");
-    }
-    if (current.status === "expired" || current.expiresAt <= now) {
-      return await deny(403, "Passport expired");
-    }
-    if (!spec) {
-      return await deny(400, `Unknown action: ${args.action}`);
-    }
-    if (!current.apps.includes(spec.app)) {
-      return await deny(403, "Action not permitted");
-    }
-
-    await appendAuditEvent(ctx, {
-      passportId: current._id,
-      kind: "verified",
-      actorType: "agent",
-      actorId: "invoke",
-      scopes: [...current.apps, spec.app, args.action],
-      outcome: "allowed",
-      reason: `Passport valid for ${args.action}`,
-      service: "invoke",
-      action: args.action,
-      argsPreview: args.argsPreview,
-      httpStatus: 200,
-      occurredAt: Date.now(),
-    });
-    return {
-      allowRun: true as const,
-      status: 200,
-      reason: `Passport valid for ${args.action}`,
-    };
-  },
-});
-
-export const recordUse = internalMutation({
-  args: {
-    passportId: v.id("passports"),
-    action: v.string(),
-    argsPreview: v.string(),
-    ok: v.boolean(),
-    status: v.number(),
-    error: v.union(v.string(), v.null()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const passport = await ctx.db.get("passports", args.passportId);
-    if (!passport) {
-      throw new Error("Passport not found");
-    }
-    const spec = lookupAction(args.action);
-    await appendAuditEvent(ctx, {
-      passportId: passport._id,
-      kind: "used",
-      actorType: "agent",
-      actorId: "invoke",
-      scopes: spec ? [spec.app, args.action] : [args.action],
-      outcome: args.ok ? "allowed" : "denied",
-      reason: args.error ?? "Action succeeded",
-      service: "invoke",
-      action: args.action,
-      argsPreview: args.argsPreview,
-      httpStatus: args.status,
-      occurredAt: Date.now(),
-    });
-    return null;
-  },
-});
-
 export const expireDue = internalMutation({
   args: {},
   returns: v.number(),
@@ -450,6 +257,7 @@ export const expireDue = internalMutation({
     for (const passport of due) {
       await markExpired(ctx, passport, now);
     }
+    await expireStalePlatformTokens(ctx, now);
     return due.length;
   },
 });

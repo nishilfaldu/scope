@@ -489,6 +489,20 @@ async function githubIdentity(
   return { login: "github", providerUserId: "unknown" };
 }
 
+export function oauthConfigured(): Record<ProviderId, boolean> {
+  return {
+    github:
+      Boolean(env.GITHUB_CLIENT_ID?.trim()) &&
+      Boolean(env.GITHUB_CLIENT_SECRET?.trim()),
+    google:
+      Boolean(env.GOOGLE_CLIENT_ID?.trim()) &&
+      Boolean(env.GOOGLE_CLIENT_SECRET?.trim()),
+    slack:
+      Boolean(env.SLACK_CLIENT_ID?.trim()) &&
+      Boolean(env.SLACK_CLIENT_SECRET?.trim()),
+  };
+}
+
 export function startAuthorize(
   provider: ProviderId,
   state: string,

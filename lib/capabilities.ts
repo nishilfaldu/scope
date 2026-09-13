@@ -6,7 +6,6 @@ import {
 export { ALL_APPS, type AppId };
 
 export const APP_LABELS: Record<AppId, string> = {
-  demo: "Demo",
   github: "GitHub",
   gmail: "Gmail",
   calendar: "Calendar",
@@ -17,14 +16,13 @@ export const APP_LABELS: Record<AppId, string> = {
 };
 
 export const APP_HINTS: Record<AppId, string> = {
-  demo: "Echo test calls. No account needed.",
-  github: "Talk to GitHub as you.",
+  github: "Mint a short-lived GitHub token. The agent calls GitHub directly.",
   gmail: "Gmail via the Google login.",
   calendar: "Calendar via the Google login.",
   drive: "Drive via the Google login.",
   docs: "Docs via the Google login.",
   sheets: "Sheets via the Google login.",
-  slack: "Talk to Slack as you.",
+  slack: "Mint a short-lived Slack token. The agent calls Slack directly.",
 };
 
 export const TTL_OPTIONS = [

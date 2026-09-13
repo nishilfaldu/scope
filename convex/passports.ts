@@ -3,9 +3,10 @@ import {
   internalQuery,
   mutation,
   query,
+  type QueryCtx,
 } from "./_generated/server";
 import type { Doc } from "./_generated/dataModel";
-import { appValidator, isAccountAppId } from "./permissions";
+import { appValidator, ALL_APPS } from "./permissions";
 import schema from "./schema";
 import {
   appendAuditEvent,
@@ -17,6 +18,10 @@ import {
 } from "./audit";
 import { hashesEqual, randomSecret, sha256Hex } from "./secrets";
 import { revokeLivePlatformTokens } from "./tokens";
+import {
+  denyResultValidator,
+  UNAUTHORIZED_ERROR,
+} from "./agentErrors";
 
 const passportDoc = schema.doc("passports");
 const boardPassport = passportDoc.omit("invokeKeyHash").extend({
@@ -99,6 +104,9 @@ export const get = query({
   },
 });
 
+export const MAX_PASSPORT_NAME = 80;
+export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 export const mint = mutation({
   args: {
     name: v.string(),
@@ -118,8 +126,14 @@ export const mint = mutation({
     if (name.length === 0) {
       throw new Error("Name must be non-empty");
     }
+    if (name.length > MAX_PASSPORT_NAME) {
+      throw new Error("Name must be 80 characters or fewer");
+    }
     if (!Number.isFinite(args.ttlMs) || args.ttlMs <= 0) {
       throw new Error("ttlMs must be a positive number");
+    }
+    if (args.ttlMs > MAX_TTL_MS) {
+      throw new Error("ttlMs must be 7 days or fewer");
     }
     const uniqueApps = [...new Set(args.apps)];
     if (uniqueApps.length === 0) {
@@ -152,6 +166,7 @@ export const mint = mutation({
       action: null,
       argsPreview: null,
       httpStatus: null,
+      platform: null,
       occurredAt: Date.now(),
     });
 
@@ -197,16 +212,17 @@ export const setPlatform = mutation({
       ? [...passport.apps, args.platform]
       : passport.apps.filter((app) => app !== args.platform);
     await ctx.db.patch("passports", passport._id, { apps });
-    if (!args.enabled && isAccountAppId(args.platform)) {
+    const actorId = await boardActorId(ctx);
+    if (!args.enabled) {
       await revokeLivePlatformTokens(
         ctx,
         passport._id,
         args.platform,
         "Platform turned off",
         now,
+        { actorType: "board", actorId },
       );
     }
-    const actorId = await boardActorId(ctx);
     await appendAuditEvent(ctx, {
       passportId: passport._id,
       kind: "platform_toggled",
@@ -221,6 +237,7 @@ export const setPlatform = mutation({
       action: args.platform,
       argsPreview: null,
       httpStatus: null,
+      platform: args.platform,
       occurredAt: Date.now(),
     });
     return null;
@@ -253,6 +270,7 @@ export const revoke = mutation({
       null,
       "Passport revoked",
       now,
+      { actorType: "board", actorId },
     );
     await appendAuditEvent(ctx, {
       passportId: passport._id,
@@ -266,27 +284,91 @@ export const revoke = mutation({
       action: null,
       argsPreview: null,
       httpStatus: null,
+      platform: null,
       occurredAt: Date.now(),
     });
     return null;
   },
 });
 
+async function passportByInvokeKey(
+  ctx: QueryCtx,
+  args: { token: string; invokeKey: string },
+): Promise<Doc<"passports"> | null> {
+  const passport = await ctx.db
+    .query("passports")
+    .withIndex("by_token", (q) => q.eq("token", args.token))
+    .unique();
+  if (!passport?.invokeKeyHash) {
+    return null;
+  }
+  const invokeHash = await sha256Hex(args.invokeKey);
+  if (!hashesEqual(invokeHash, passport.invokeKeyHash)) {
+    return null;
+  }
+  return passport;
+}
+
 export const getByCredentials = internalQuery({
   args: { token: v.string(), invokeKey: v.string() },
   returns: v.union(passportDoc, v.null()),
   handler: async (ctx, args) => {
-    const passport = await ctx.db
-      .query("passports")
-      .withIndex("by_token", (q) => q.eq("token", args.token))
-      .unique();
-    if (!passport?.invokeKeyHash) {
-      return null;
+    return await passportByInvokeKey(ctx, args);
+  },
+});
+
+export const discoverPlatforms = internalQuery({
+  args: {
+    token: v.string(),
+    invokeKey: v.string(),
+    now: v.number(),
+  },
+  returns: v.union(
+    v.object({
+      ok: v.literal(true),
+      expiresAt: v.number(),
+      platforms: v.array(
+        v.object({
+          platform: appValidator,
+          status: v.union(v.literal("on"), v.literal("off")),
+        }),
+      ),
+    }),
+    denyResultValidator,
+  ),
+  handler: async (ctx, args) => {
+    const passport = await passportByInvokeKey(ctx, args);
+    if (!passport) {
+      return {
+        ok: false as const,
+        status: 401,
+        reason: UNAUTHORIZED_ERROR,
+        code: "UNAUTHORIZED" as const,
+      };
     }
-    const invokeHash = await sha256Hex(args.invokeKey);
-    if (!hashesEqual(invokeHash, passport.invokeKeyHash)) {
-      return null;
+    if (passport.status === "revoked") {
+      return {
+        ok: false as const,
+        status: 403,
+        reason: "Passport revoked",
+        code: "REVOKED" as const,
+      };
     }
-    return passport;
+    if (passport.status === "expired" || passport.expiresAt <= args.now) {
+      return {
+        ok: false as const,
+        status: 403,
+        reason: "Passport expired",
+        code: "EXPIRED" as const,
+      };
+    }
+    return {
+      ok: true as const,
+      expiresAt: passport.expiresAt,
+      platforms: ALL_APPS.map((platform) => ({
+        platform,
+        status: passport.apps.includes(platform) ? ("on" as const) : ("off" as const),
+      })),
+    };
   },
 });

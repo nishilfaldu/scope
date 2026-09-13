@@ -1,30 +1,45 @@
 import { httpRouter } from "convex/server";
-import { httpAction } from "./_generated/server";
-import { handleCredentials, handleInvoke, optionsOk } from "./httpAgent";
+import {
+  describeCredentials,
+  handleCredentials,
+  handleHealth,
+  handlePlatforms,
+  optionsOk,
+} from "./httpAgent";
 import { oauthCallback, oauthConnect } from "./httpOauth";
 import { PROVIDERS } from "./permissions";
 
 const http = httpRouter();
 
 http.route({
-  path: "/api/invoke",
-  method: "OPTIONS",
-  handler: optionsOk,
-});
-http.route({
-  path: "/api/invoke",
-  method: "POST",
-  handler: handleInvoke,
-});
-http.route({
   path: "/api/credentials",
   method: "OPTIONS",
   handler: optionsOk,
+});
+http.route({
+  path: "/api/credentials",
+  method: "GET",
+  handler: describeCredentials,
 });
 http.route({
   path: "/api/credentials",
   method: "POST",
   handler: handleCredentials,
+});
+http.route({
+  path: "/api/platforms",
+  method: "OPTIONS",
+  handler: optionsOk,
+});
+http.route({
+  path: "/api/platforms",
+  method: "GET",
+  handler: handlePlatforms,
+});
+http.route({
+  path: "/api/health",
+  method: "GET",
+  handler: handleHealth,
 });
 
 for (const provider of PROVIDERS) {
@@ -39,13 +54,5 @@ for (const provider of PROVIDERS) {
     handler: oauthCallback(provider),
   });
 }
-
-http.route({
-  path: "/api/github/webhook",
-  method: "POST",
-  handler: httpAction(async () => {
-    return new Response(null, { status: 204 });
-  }),
-});
 
 export default http;

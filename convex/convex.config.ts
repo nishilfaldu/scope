@@ -9,6 +9,7 @@ const app = defineApp({
     GOOGLE_CLIENT_SECRET: v.optional(v.string()),
     SLACK_CLIENT_ID: v.optional(v.string()),
     SLACK_CLIENT_SECRET: v.optional(v.string()),
+    BOARD_ORIGIN: v.optional(v.string()),
   },
 });
 

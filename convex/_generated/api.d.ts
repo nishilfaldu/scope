@@ -10,14 +10,15 @@
 
 import type * as audit from "../audit.js";
 import type * as auditFields from "../auditFields.js";
+import type * as auditWrite from "../auditWrite.js";
+import type * as agentErrors from "../agentErrors.js";
 import type * as connections from "../connections.js";
 import type * as crons from "../crons.js";
-import type * as github from "../github.js";
 import type * as http from "../http.js";
 import type * as httpAgent from "../httpAgent.js";
 import type * as httpCors from "../httpCors.js";
+import type * as httpContracts from "../httpContracts.js";
 import type * as httpOauth from "../httpOauth.js";
-import type * as invoke from "../invoke.js";
 import type * as json from "../json.js";
 import type * as oauth from "../oauth.js";
 import type * as passports from "../passports.js";
@@ -35,14 +36,15 @@ import type {
 declare const fullApi: ApiFromModules<{
   audit: typeof audit;
   auditFields: typeof auditFields;
+  auditWrite: typeof auditWrite;
+  agentErrors: typeof agentErrors;
   connections: typeof connections;
   crons: typeof crons;
-  github: typeof github;
   http: typeof http;
   httpAgent: typeof httpAgent;
   httpCors: typeof httpCors;
+  httpContracts: typeof httpContracts;
   httpOauth: typeof httpOauth;
-  invoke: typeof invoke;
   json: typeof json;
   oauth: typeof oauth;
   passports: typeof passports;

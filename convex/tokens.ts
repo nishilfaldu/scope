@@ -1,12 +1,12 @@
-import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 import {
   internalMutation,
   query,
   type MutationCtx,
 } from "./_generated/server";
-import { type TokenLogKind } from "./auditFields";
+import { appendAuditEvent } from "./auditWrite";
+import { type ActorType } from "./auditFields";
 import {
   accountAppValidator,
   isAccountAppId,
@@ -14,10 +14,16 @@ import {
   providerValidator,
   type AccountAppId,
 } from "./permissions";
-import schema from "./schema";
+import {
+  denyResultValidator,
+  PLATFORM_UNAVAILABLE_ERROR,
+  UNAUTHORIZED_ERROR,
+  type AgentErrorCode,
+} from "./agentErrors";
 import { hashesEqual, sha256Hex } from "./secrets";
 
 export const PLATFORM_TOKEN_TTL_MS = 15 * 60 * 1000;
+export const TOKEN_REUSE_MIN_REMAINING_MS = 30 * 1000;
 
 const liveTokenValidator = v.object({
   platform: accountAppValidator,
@@ -25,27 +31,13 @@ const liveTokenValidator = v.object({
   expiresAt: v.number(),
 });
 
-const tokenLogDoc = schema.doc("tokenLogs");
-
-export async function appendTokenLog(
-  ctx: MutationCtx,
-  input: {
-    passportId: Id<"passports">;
-    platform: string;
-    kind: TokenLogKind;
-    reason: string;
-    occurredAt: number;
-  },
-): Promise<void> {
-  await ctx.db.insert("tokenLogs", input);
-}
-
 export async function revokeLivePlatformTokens(
   ctx: MutationCtx,
   passportId: Id<"passports">,
   platform: AccountAppId | null,
   reason: string,
   now: number,
+  actor: { actorType: ActorType; actorId: string },
 ): Promise<number> {
   const live = await ctx.db
     .query("platformTokens")
@@ -63,11 +55,19 @@ export async function revokeLivePlatformTokens(
       revokedAt: now,
       revokeReason: reason,
     });
-    await appendTokenLog(ctx, {
+    await appendAuditEvent(ctx, {
       passportId,
-      platform: token.platform,
-      kind: "revoked",
+      kind: "token_revoked",
+      actorType: actor.actorType,
+      actorId: actor.actorId,
+      scopes: [token.platform],
+      outcome: "allowed",
       reason,
+      service: "credentials",
+      action: null,
+      argsPreview: null,
+      httpStatus: null,
+      platform: token.platform,
       occurredAt: now,
     });
     count += 1;
@@ -81,18 +81,32 @@ async function denyMint(
   platform: string,
   status: number,
   reason: string,
+  code: AgentErrorCode,
   now: number,
-): Promise<{ ok: false; status: number; reason: string }> {
+): Promise<{
+  ok: false;
+  status: number;
+  reason: string;
+  code: AgentErrorCode;
+}> {
   if (passportId) {
-    await appendTokenLog(ctx, {
+    await appendAuditEvent(ctx, {
       passportId,
-      platform,
       kind: "mint_denied",
+      actorType: "agent",
+      actorId: "credentials",
+      scopes: [platform],
+      outcome: "denied",
       reason,
+      service: "credentials",
+      action: null,
+      argsPreview: null,
+      httpStatus: status,
+      platform,
       occurredAt: now,
     });
   }
-  return { ok: false, status, reason };
+  return { ok: false, status, reason, code };
 }
 
 export const authorizeMint = internalMutation({
@@ -109,12 +123,10 @@ export const authorizeMint = internalMutation({
       platform: accountAppValidator,
       provider: providerValidator,
       refresh: v.boolean(),
+      liveAccessToken: v.union(v.string(), v.null()),
+      liveExpiresAt: v.union(v.number(), v.null()),
     }),
-    v.object({
-      ok: v.literal(false),
-      status: v.number(),
-      reason: v.string(),
-    }),
+    denyResultValidator,
   ),
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -123,7 +135,12 @@ export const authorizeMint = internalMutation({
       .withIndex("by_token", (q) => q.eq("token", args.passportToken))
       .unique();
     if (!passport) {
-      return { ok: false as const, status: 401, reason: "Unknown passport" };
+      return {
+        ok: false as const,
+        status: 401,
+        reason: UNAUTHORIZED_ERROR,
+        code: "UNAUTHORIZED" as const,
+      };
     }
 
     if (!passport.invokeKeyHash) {
@@ -132,7 +149,8 @@ export const authorizeMint = internalMutation({
         passport._id,
         args.platform,
         401,
-        "Passport has no invoke key; mint a new passport",
+        UNAUTHORIZED_ERROR,
+        "UNAUTHORIZED",
         now,
       );
     }
@@ -143,28 +161,20 @@ export const authorizeMint = internalMutation({
         passport._id,
         args.platform,
         401,
-        "Invalid invoke key",
+        UNAUTHORIZED_ERROR,
+        "UNAUTHORIZED",
         now,
       );
     }
 
-    if (args.platform === "demo") {
-      return await denyMint(
-        ctx,
-        passport._id,
-        args.platform,
-        400,
-        "Demo has no platform token; use /api/invoke",
-        now,
-      );
-    }
     if (!isAccountAppId(args.platform)) {
       return await denyMint(
         ctx,
         passport._id,
         args.platform,
-        400,
-        "Unknown platform",
+        403,
+        PLATFORM_UNAVAILABLE_ERROR,
+        "PLATFORM_UNAVAILABLE",
         now,
       );
     }
@@ -178,6 +188,7 @@ export const authorizeMint = internalMutation({
         platform,
         403,
         "Passport revoked",
+        "REVOKED",
         now,
       );
     }
@@ -188,6 +199,7 @@ export const authorizeMint = internalMutation({
         platform,
         403,
         "Passport expired",
+        "EXPIRED",
         now,
       );
     }
@@ -197,7 +209,8 @@ export const authorizeMint = internalMutation({
         passport._id,
         platform,
         403,
-        "Platform is off",
+        PLATFORM_UNAVAILABLE_ERROR,
+        "PLATFORM_UNAVAILABLE",
         now,
       );
     }
@@ -212,9 +225,30 @@ export const authorizeMint = internalMutation({
         passport._id,
         platform,
         403,
-        `${provider} is not connected`,
+        PLATFORM_UNAVAILABLE_ERROR,
+        "PLATFORM_UNAVAILABLE",
         now,
       );
+    }
+
+    let liveAccessToken: string | null = null;
+    let liveExpiresAt: number | null = null;
+    if (!args.refresh) {
+      const liveRows = await ctx.db
+        .query("platformTokens")
+        .withIndex("by_passport_and_platform", (q) =>
+          q.eq("passportId", passport._id).eq("platform", platform),
+        )
+        .take(20);
+      const live = liveRows.find(
+        (token) =>
+          token.status === "live" &&
+          token.expiresAt > now + TOKEN_REUSE_MIN_REMAINING_MS,
+      );
+      if (live) {
+        liveAccessToken = live.accessToken;
+        liveExpiresAt = live.expiresAt;
+      }
     }
 
     return {
@@ -223,6 +257,8 @@ export const authorizeMint = internalMutation({
       platform,
       provider,
       refresh: args.refresh,
+      liveAccessToken,
+      liveExpiresAt,
     };
   },
 });
@@ -247,6 +283,7 @@ export const commitMint = internalMutation({
       args.platform,
       args.refresh ? "Replaced by refresh" : "Replaced by new issue",
       now,
+      { actorType: "agent", actorId: "credentials" },
     );
     const expiresAt = Math.min(args.expiresAt, now + PLATFORM_TOKEN_TTL_MS);
     await ctx.db.insert("platformTokens", {
@@ -256,32 +293,84 @@ export const commitMint = internalMutation({
       status: "live",
       expiresAt,
     });
-    await appendTokenLog(ctx, {
+    await appendAuditEvent(ctx, {
       passportId: args.passportId,
-      platform: args.platform,
-      kind: args.refresh ? "refreshed" : "issued",
+      kind: args.refresh ? "token_refreshed" : "token_issued",
+      actorType: "agent",
+      actorId: "credentials",
+      scopes: [args.platform],
+      outcome: "allowed",
       reason: args.refresh
         ? "Short-lived token refreshed"
         : "Short-lived token issued",
+      service: "credentials",
+      action: null,
+      argsPreview: null,
+      httpStatus: 200,
+      platform: args.platform,
       occurredAt: now,
     });
     return { expiresAt, revokedPrevious: revokedCount > 0 };
   },
 });
 
+export async function expireStalePlatformTokens(
+  ctx: MutationCtx,
+  now: number,
+): Promise<number> {
+  const stale = await ctx.db
+    .query("platformTokens")
+    .withIndex("by_status_and_expiresAt", (q) =>
+      q.eq("status", "live").lte("expiresAt", now),
+    )
+    .take(25);
+  for (const token of stale) {
+    await ctx.db.patch("platformTokens", token._id, {
+      status: "revoked",
+      revokedAt: now,
+      revokeReason: "Time to live elapsed",
+    });
+    await appendAuditEvent(ctx, {
+      passportId: token.passportId,
+      kind: "token_revoked",
+      actorType: "system",
+      actorId: "expiry",
+      scopes: [token.platform],
+      outcome: "allowed",
+      reason: "Time to live elapsed",
+      service: "credentials",
+      action: null,
+      argsPreview: null,
+      httpStatus: null,
+      platform: token.platform,
+      occurredAt: now,
+    });
+  }
+  return stale.length;
+}
+
 export const logMintDenied = internalMutation({
   args: {
     passportId: v.id("passports"),
     platform: v.string(),
     reason: v.string(),
+    httpStatus: v.union(v.number(), v.null()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await appendTokenLog(ctx, {
+    await appendAuditEvent(ctx, {
       passportId: args.passportId,
       platform: args.platform,
       kind: "mint_denied",
+      actorType: "agent",
+      actorId: "credentials",
+      scopes: [args.platform],
+      outcome: "denied",
       reason: args.reason,
+      service: "credentials",
+      action: null,
+      argsPreview: null,
+      httpStatus: args.httpStatus,
       occurredAt: Date.now(),
     });
     return null;
@@ -309,29 +398,5 @@ export const listLive = query({
         status: "live" as const,
         expiresAt: token.expiresAt,
       }));
-  },
-});
-
-export const listLogs = query({
-  args: {
-    passportId: v.string(),
-    paginationOpts: paginationOptsValidator,
-  },
-  returns: paginationResultValidator(tokenLogDoc),
-  handler: async (ctx, args) => {
-    const empty = {
-      page: [] as Doc<"tokenLogs">[],
-      isDone: true,
-      continueCursor: "",
-    };
-    const id = ctx.db.normalizeId("passports", args.passportId);
-    if (!id) {
-      return empty;
-    }
-    return await ctx.db
-      .query("tokenLogs")
-      .withIndex("by_passport", (q) => q.eq("passportId", id))
-      .order("desc")
-      .paginate(args.paginationOpts);
   },
 });
