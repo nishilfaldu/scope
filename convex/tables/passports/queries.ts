@@ -1,3 +1,7 @@
+import {
+  paginationOptsValidator,
+  paginationResultValidator,
+} from "convex/server";
 import { v } from "convex/values";
 import { internalQuery, query, type QueryCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
@@ -33,38 +37,21 @@ function withoutInvokeKey(passport: Doc<"passports">) {
 }
 
 export const list = query({
-  args: {},
-  returns: v.array(boardPassport),
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(boardPassport),
   handler: async (ctx, args) => {
-    const [active, revoked, expired] = await Promise.all([
-      ctx.db
-        .query("passports")
-        .withIndex("by_status", (q) => q.eq("status", "active"))
-        .take(100),
-      ctx.db
-        .query("passports")
-        .withIndex("by_status", (q) => q.eq("status", "revoked"))
-        .take(100),
-      ctx.db
-        .query("passports")
-        .withIndex("by_status", (q) => q.eq("status", "expired"))
-        .take(100),
-    ]);
-    const rows = [...active, ...revoked, ...expired];
-    const result = [];
-    for (const passport of rows) {
-      result.push({
+    const results = await ctx.db
+      .query("passports")
+      .order("desc")
+      .paginate(args.paginationOpts);
+    const page = [];
+    for (const passport of results.page) {
+      page.push({
         ...withoutInvokeKey(passport),
         lastEvent: await latestEvent(ctx, passport._id),
       });
     }
-    const rank = { active: 0, expired: 1, revoked: 2 } as const;
-    result.sort(
-      (a, b) =>
-        rank[a.status] - rank[b.status] ||
-        b._creationTime - a._creationTime,
-    );
-    return result;
+    return { ...results, page };
   },
 });
 
@@ -114,7 +101,7 @@ export const getByCredentials = internalQuery({
   },
 });
 
-export const discoverPlatforms = internalQuery({
+export const discoverApps = internalQuery({
   args: {
     token: v.string(),
     invokeKey: v.string(),
@@ -124,9 +111,9 @@ export const discoverPlatforms = internalQuery({
     v.object({
       ok: v.literal(true),
       expiresAt: v.number(),
-      platforms: v.array(
+      apps: v.array(
         v.object({
-          platform: appValidator,
+          app: appValidator,
           status: v.union(v.literal("on"), v.literal("off")),
         }),
       ),
@@ -162,9 +149,9 @@ export const discoverPlatforms = internalQuery({
     return {
       ok: true as const,
       expiresAt: passport.expiresAt,
-      platforms: ALL_APPS.map((platform) => ({
-        platform,
-        status: passport.apps.includes(platform) ? ("on" as const) : ("off" as const),
+      apps: ALL_APPS.map((app) => ({
+        app,
+        status: passport.apps.includes(app) ? ("on" as const) : ("off" as const),
       })),
     };
   },

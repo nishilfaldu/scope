@@ -70,7 +70,7 @@ export const create = mutation({
       action: null,
       argsPreview: null,
       httpStatus: null,
-      platform: null,
+      app: null,
       occurredAt: Date.now(),
     });
 
@@ -85,10 +85,10 @@ export const create = mutation({
   },
 });
 
-export const setPlatform = mutation({
+export const setApp = mutation({
   args: {
     passportId: v.string(),
-    platform: appValidator,
+    app: appValidator,
     enabled: v.boolean(),
   },
   returns: v.null(),
@@ -108,30 +108,30 @@ export const setPlatform = mutation({
     if (passport.status !== "active") {
       throw new Error("Passport is not live");
     }
-    const enabled = passport.apps.includes(args.platform);
+    const enabled = passport.apps.includes(args.app);
     if (enabled === args.enabled) {
       return null;
     }
     const apps = args.enabled
-      ? [...passport.apps, args.platform]
-      : passport.apps.filter((app) => app !== args.platform);
+      ? [...passport.apps, args.app]
+      : passport.apps.filter((app) => app !== args.app);
     await ctx.db.patch("passports", passport._id, { apps });
     const actorId = await boardActorId(ctx);
     await appendAuditEvent(ctx, {
       passportId: passport._id,
-      kind: "platform_toggled",
+      kind: "app_toggled",
       actorType: "board",
       actorId,
-      scopes: [args.platform],
+      scopes: [args.app],
       outcome: "allowed",
       reason: args.enabled
-        ? `Enabled ${args.platform}`
-        : `Disabled ${args.platform}`,
+        ? `Enabled ${args.app}`
+        : `Disabled ${args.app}`,
       service: "board",
-      action: args.platform,
+      action: args.app,
       argsPreview: null,
       httpStatus: null,
-      platform: args.platform,
+      app: args.app,
       occurredAt: Date.now(),
     });
     return null;
@@ -170,7 +170,7 @@ export const revoke = mutation({
       action: null,
       argsPreview: null,
       httpStatus: null,
-      platform: null,
+      app: null,
       occurredAt: Date.now(),
     });
     return null;
