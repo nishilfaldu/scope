@@ -15,11 +15,6 @@ import {
 
 const passportDoc = schema.doc("passports");
 const boardPassport = passportDoc.omit("invokeKeyHash").extend({
-  lifetimeStatus: v.union(
-    v.literal("active"),
-    v.literal("revoked"),
-    v.literal("expired"),
-  ),
   lastEvent: v.union(lastEventValidator, v.null()),
 });
 
@@ -60,14 +55,13 @@ export const list = query({
     for (const passport of rows) {
       result.push({
         ...withoutInvokeKey(passport),
-        lifetimeStatus: passport.status,
         lastEvent: await latestEvent(ctx, passport._id),
       });
     }
     const rank = { active: 0, expired: 1, revoked: 2 } as const;
     result.sort(
       (a, b) =>
-        rank[a.lifetimeStatus] - rank[b.lifetimeStatus] ||
+        rank[a.status] - rank[b.status] ||
         b._creationTime - a._creationTime,
     );
     return result;
@@ -88,7 +82,6 @@ export const get = query({
     }
     return {
       ...withoutInvokeKey(passport),
-      lifetimeStatus: passport.status,
       lastEvent: await latestEvent(ctx, passport._id),
     };
   },
