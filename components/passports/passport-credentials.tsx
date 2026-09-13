@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { toast } from "sonner";
 
 import type { CreatedPassport } from "@/components/passports/create-passport-form";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 
 export function PassportCredentials({ passport }: { passport: CreatedPassport }) {
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
@@ -15,10 +15,13 @@ export function PassportCredentials({ passport }: { passport: CreatedPassport })
     try {
       await navigator.clipboard.writeText(value);
       setCopiedValue(value);
-      toast.success(`${label} copied`);
+      toast.add({ title: `${label} copied`, type: "success" });
       window.setTimeout(() => setCopiedValue(null), 1500);
     } catch {
-      toast.error(`Could not copy ${label.toLowerCase()}`);
+      toast.add({
+        title: `Could not copy ${label.toLowerCase()}`,
+        type: "error",
+      });
     }
   }
 

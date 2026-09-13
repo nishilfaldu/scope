@@ -1,40 +1,32 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
-import { toast } from "sonner";
+import { useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ALL_APPS, APP_LABELS, type AppId } from "@/lib/capabilities";
+import { useErrorCatchingMutation } from "@/lib/errors";
 
 export function PassportApps({ passportId }: { passportId: string }) {
   const passport = useQuery(api.tables.passports.queries.get, { passportId });
-  const setPlatform = useMutation(api.tables.passports.mutations.setPlatform);
-  const [toggling, setToggling] = useState<string | null>(null);
+  const [setApp, isToggling] = useErrorCatchingMutation(
+    api.tables.passports.mutations.setApp,
+    {
+      successMessage: (args) =>
+        args.enabled
+          ? `${APP_LABELS[args.app]} enabled`
+          : `${APP_LABELS[args.app]} disabled`,
+    },
+  );
 
-  async function handleToggle(app: AppId, enabled: boolean) {
+  function handleToggle(app: AppId, enabled: boolean) {
     if (!passport) return;
-    setToggling(app);
-    try {
-      await setPlatform({
-        passportId: passport.token,
-        platform: app,
-        enabled,
-      });
-      toast.success(
-        enabled
-          ? `${APP_LABELS[app]} enabled`
-          : `${APP_LABELS[app]} disabled`,
-      );
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not update app",
-      );
-    } finally {
-      setToggling(null);
-    }
+    void setApp({
+      passportId: passport.token,
+      app,
+      enabled,
+    });
   }
 
   if (passport === undefined) {
@@ -70,10 +62,8 @@ export function PassportApps({ passportId }: { passportId: string }) {
                 <span className="text-sm">{APP_LABELS[app]}</span>
                 <Switch
                   checked={on}
-                  disabled={
-                    passport.status !== "active" || toggling === app
-                  }
-                  onCheckedChange={(checked) => void handleToggle(app, checked)}
+                  disabled={passport.status !== "active" || isToggling}
+                  onCheckedChange={(checked) => handleToggle(app, checked)}
                   aria-label={`${APP_LABELS[app]} on this passport`}
                 />
               </label>

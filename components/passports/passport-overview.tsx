@@ -1,10 +1,9 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useState } from "react";
 import { Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { toast } from "sonner";
 
 import { api } from "@/convex/_generated/api";
 import { PassportApps } from "@/components/passports/passport-apps";
@@ -15,26 +14,15 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { STATUS_LABELS } from "@/lib/audit";
 import { formatRemaining } from "@/lib/capabilities";
+import { useErrorCatchingMutation } from "@/lib/errors";
 
 export function PassportOverview({ passportId }: { passportId: string }) {
   const passport = useQuery(api.tables.passports.queries.get, { passportId });
-  const revoke = useMutation(api.tables.passports.mutations.revoke);
-  const [revoking, setRevoking] = useState(false);
+  const [revoke, isRevoking] = useErrorCatchingMutation(
+    api.tables.passports.mutations.revoke,
+    { successMessage: "Passport revoked" },
+  );
   const [now] = useState(() => Date.now());
-
-  async function handleRevoke(token: string) {
-    setRevoking(true);
-    try {
-      await revoke({ passportId: token });
-      toast.success("Passport revoked");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not revoke passport",
-      );
-    } finally {
-      setRevoking(false);
-    }
-  }
 
   if (passport === undefined) {
     return <Skeleton className="h-28 w-full" />;
@@ -53,15 +41,15 @@ export function PassportOverview({ passportId }: { passportId: string }) {
           <Button
             variant="outline"
             size="sm"
-            disabled={revoking}
-            onClick={() => void handleRevoke(passport.token)}
+            disabled={isRevoking}
+            onClick={() => void revoke({ passportId: passport.token })}
           >
             <HugeiconsIcon
               icon={Delete02Icon}
               strokeWidth={2}
               data-icon="inline-start"
             />
-            {revoking ? "Revoking…" : "Revoke"}
+            {isRevoking ? "Revoking…" : "Revoke"}
           </Button>
         ) : null
       }
