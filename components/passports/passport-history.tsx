@@ -16,10 +16,10 @@ import {
   type Outcome,
 } from "@/convex/tables/auditEvents/fields";
 import { ContentCard } from "@/components/shared/content-card";
+import { ConvexPagination } from "@/components/shared/convex-pagination";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FilterSelect } from "@/components/shared/filter-select";
-import { LoadMoreRow } from "@/components/shared/load-more-row";
 import { Badge } from "@/components/ui/badge";
 import {
   ACTOR_TYPE_LABELS,
@@ -169,6 +169,12 @@ export function PassportHistory({ passportId }: { passportId: string }) {
         data={history.status === "LoadingFirstPage" ? undefined : history.results}
         columns={columns}
         getRowKey={(event) => event._id}
+        pagination={
+          <ConvexPagination
+            status={history.status}
+            onLoadMore={() => history.loadMore(50)}
+          />
+        }
         empty={
           <EmptyState
             title="No matching events"
@@ -176,10 +182,6 @@ export function PassportHistory({ passportId }: { passportId: string }) {
             icon={<HugeiconsIcon icon={UnavailableIcon} strokeWidth={2} />}
           />
         }
-      />
-      <LoadMoreRow
-        status={history.status}
-        onLoadMore={() => history.loadMore(50)}
       />
     </ContentCard>
   );
