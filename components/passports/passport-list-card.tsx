@@ -18,7 +18,7 @@ export function PassportListCard({
   passports: Passports | undefined;
 }) {
   const activeCount = passports?.filter(
-    (passport) => passport.lifetimeStatus === "active",
+    (passport) => passport.status === "active",
   ).length;
 
   return (

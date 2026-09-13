@@ -31,7 +31,7 @@ export function CreatePassportDialog({
       description={
         createdPassport
           ? "Copy these credentials now. The invoke key will not be shown again."
-          : "Create a time-boxed identity for one job and choose which connected platforms it can request."
+          : "Create a time-boxed identity for one job and choose which connected apps it can request."
       }
       content={
         createdPassport ? (

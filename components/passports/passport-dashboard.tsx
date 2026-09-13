@@ -12,8 +12,7 @@ export function PassportDashboard() {
   const activeCount =
     passports === undefined
       ? undefined
-      : passports.filter((passport) => passport.lifetimeStatus === "active")
-          .length;
+      : passports.filter((passport) => passport.status === "active").length;
 
   return (
     <BoardShell title="Passports">
