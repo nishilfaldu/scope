@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useMutation } from "convex/react";
 import {
   Copy01Icon,
   Delete02Icon,
@@ -13,7 +15,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { FunctionReturnType } from "convex/server";
 
-import type { api } from "@/convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 import { CreatePassportDialog } from "@/components/passports/create-passport-dialog";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -37,18 +39,29 @@ type Passport = FunctionReturnType<typeof api.tables.passports.queries.list>[num
 
 export function PassportsTable({
   passports,
-  copiedValue,
-  revokingId,
-  onCopy,
-  onRevoke,
 }: {
   passports: FunctionReturnType<typeof api.tables.passports.queries.list> | undefined;
-  copiedValue: string | null;
-  revokingId: string | null;
-  onCopy: (value: string) => void;
-  onRevoke: (passportId: string) => void;
 }) {
   const router = useRouter();
+  const revoke = useMutation(api.tables.passports.mutations.revoke);
+  const [copiedValue, setCopiedValue] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+
+  async function handleCopy(value: string) {
+    await navigator.clipboard.writeText(value);
+    setCopiedValue(value);
+    window.setTimeout(() => setCopiedValue(null), 1500);
+  }
+
+  async function handleRevoke(passportId: string) {
+    setRevokingId(passportId);
+    try {
+      await revoke({ passportId });
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
   const columns: DataTableColumn<Passport>[] = [
     {
       id: "name",
@@ -136,7 +149,7 @@ export function PassportsTable({
             type="button"
             variant="ghost"
             size="icon-xs"
-            onClick={() => onCopy(passport.token)}
+            onClick={() => void handleCopy(passport.token)}
           >
             <HugeiconsIcon
               icon={copiedValue === passport.token ? Tick02Icon : Copy01Icon}
@@ -165,7 +178,7 @@ export function PassportsTable({
               <HugeiconsIcon icon={File01Icon} strokeWidth={2} />
               View history
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onCopy(passport.token)}>
+            <DropdownMenuItem onClick={() => void handleCopy(passport.token)}>
               <HugeiconsIcon icon={Copy01Icon} strokeWidth={2} />
               Copy token
             </DropdownMenuItem>
@@ -175,7 +188,7 @@ export function PassportsTable({
                 <DropdownMenuItem
                   variant="destructive"
                   disabled={revokingId === passport.token}
-                  onClick={() => onRevoke(passport.token)}
+                  onClick={() => void handleRevoke(passport.token)}
                 >
                   <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
                   {revokingId === passport.token ? "Revoking…" : "Revoke"}
