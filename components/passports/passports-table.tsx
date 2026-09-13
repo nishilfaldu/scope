@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useMutation } from "convex/react";
+import { usePaginatedQuery } from "convex/react";
 import {
   Copy01Icon,
   Delete02Icon,
@@ -12,7 +12,6 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { FunctionReturnType } from "convex/server";
-import { toast } from "sonner";
 
 import { api } from "@/convex/_generated/api";
 import { CreatePassportDialog } from "@/components/passports/create-passport-dialog";
@@ -20,30 +19,42 @@ import {
   ActionsMenu,
   type ActionsMenuItem,
 } from "@/components/shared/actions-menu";
+import { ConvexPagination } from "@/components/shared/convex-pagination";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { STATUS_LABELS } from "@/lib/audit";
 import { APP_LABELS, formatRemaining } from "@/lib/capabilities";
+import { useErrorCatchingMutation } from "@/lib/errors";
 
-type Passport = FunctionReturnType<typeof api.tables.passports.queries.list>[number];
+type Passport = FunctionReturnType<
+  typeof api.tables.passports.queries.list
+>["page"][number];
 
-export function PassportsTable({
-  passports,
-}: {
-  passports: FunctionReturnType<typeof api.tables.passports.queries.list> | undefined;
-}) {
+export function PassportsTable() {
   const router = useRouter();
-  const revoke = useMutation(api.tables.passports.mutations.revoke);
+  const passports = usePaginatedQuery(
+    api.tables.passports.queries.list,
+    {},
+    { initialNumItems: 10 },
+  );
+  const [revoke] = useErrorCatchingMutation(
+    api.tables.passports.mutations.revoke,
+    { successMessage: "Passport revoked" },
+  );
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
   async function handleCopy(label: string, value: string) {
     try {
       await navigator.clipboard.writeText(value);
-      toast.success(`${label} copied`);
+      toast.add({ title: `${label} copied`, type: "success" });
     } catch {
-      toast.error(`Could not copy ${label.toLowerCase()}`);
+      toast.add({
+        title: `Could not copy ${label.toLowerCase()}`,
+        type: "error",
+      });
     }
   }
 
@@ -51,11 +62,6 @@ export function PassportsTable({
     setRevokingId(passportToken);
     try {
       await revoke({ passportId: passportToken });
-      toast.success("Passport revoked");
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Could not revoke passport",
-      );
     } finally {
       setRevokingId(null);
     }
@@ -155,10 +161,17 @@ export function PassportsTable({
 
   return (
     <DataTable
-      data={passports}
+      data={
+        passports.status === "LoadingFirstPage" ? undefined : passports.results
+      }
       columns={columns}
       getRowKey={(passport) => passport._id}
-      pageSize={10}
+      pagination={
+        <ConvexPagination
+          status={passports.status}
+          onLoadMore={() => passports.loadMore(10)}
+        />
+      }
       empty={
         <EmptyState
           title="No passports"
