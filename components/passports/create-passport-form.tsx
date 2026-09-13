@@ -1,12 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation } from "convex/react";
-import { toast } from "sonner";
-
 import { api } from "@/convex/_generated/api";
 import { useAppForm } from "@/components/form";
-import { FieldError } from "@/components/ui/field";
 import {
   ALL_APPS,
   APP_HINTS,
@@ -14,6 +9,7 @@ import {
   TTL_OPTIONS,
   type AppId,
 } from "@/lib/capabilities";
+import { useErrorCatchingMutation } from "@/lib/errors";
 
 const DEFAULT_TTL_MS = TTL_OPTIONS[1]?.ttlMs ?? 60 * 60 * 1000;
 const TTL_ITEMS = TTL_OPTIONS.map((option) => ({
@@ -37,8 +33,10 @@ export function CreatePassportForm({
 }: {
   onCreated: (result: CreatedPassport) => void;
 }) {
-  const createPassport = useMutation(api.tables.passports.mutations.create);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [createPassport] = useErrorCatchingMutation(
+    api.tables.passports.mutations.create,
+    { successMessage: "Passport created" },
+  );
 
   const form = useAppForm({
     defaultValues: {
@@ -47,26 +45,18 @@ export function CreatePassportForm({
       apps: [] as AppId[],
     },
     onSubmit: async ({ value, formApi }) => {
-      setSubmitError(null);
-      try {
-        const result = await createPassport({
-          name: value.name.trim() || "Untitled agent",
-          ttlMs: Number(value.ttlMs),
-          apps: value.apps,
-        });
-        onCreated({
-          passportId: result.passportId,
-          invokeKey: result.invokeKey,
-          name: result.name,
-        });
-        toast.success("Passport created");
-        formApi.reset();
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : "Creation failed";
-        setSubmitError(message);
-        toast.error(message);
-      }
+      const result = await createPassport({
+        name: value.name.trim() || "Untitled agent",
+        ttlMs: Number(value.ttlMs),
+        apps: value.apps,
+      });
+      if (result === undefined) return;
+      onCreated({
+        passportId: result.passportId,
+        invokeKey: result.invokeKey,
+        name: result.name,
+      });
+      formApi.reset();
     },
   });
 
@@ -97,7 +87,6 @@ export function CreatePassportForm({
             />
           )}
         </form.AppField>
-        {submitError ? <FieldError>{submitError}</FieldError> : null}
         <form.SubmitButton pendingLabel="Creating…">
           Create passport
         </form.SubmitButton>
