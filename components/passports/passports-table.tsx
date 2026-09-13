@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { usePaginatedQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import {
   Copy01Icon,
   Delete02Icon,
@@ -25,6 +25,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
+import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { STATUS_LABELS } from "@/lib/audit";
 import { APP_LABELS, formatRemaining } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
@@ -33,13 +34,15 @@ type Passport = FunctionReturnType<
   typeof api.tables.passports.queries.list
 >["page"][number];
 
+const PAGE_SIZE = 10;
+
 export function PassportsTable() {
   const router = useRouter();
-  const passports = usePaginatedQuery(
-    api.tables.passports.queries.list,
-    {},
-    { initialNumItems: 10 },
-  );
+  const { paginationOpts, canPrevious, goNext, goPrevious } =
+    useCursorPagination(PAGE_SIZE);
+  const result = useQuery(api.tables.passports.queries.list, {
+    paginationOpts,
+  });
   const [revoke] = useErrorCatchingMutation(
     api.tables.passports.mutations.revoke,
     { successMessage: "Passport revoked" },
@@ -159,17 +162,23 @@ export function PassportsTable() {
     },
   ];
 
+  const canNext = result !== undefined && !result.isDone;
+
   return (
     <DataTable
-      data={
-        passports.status === "LoadingFirstPage" ? undefined : passports.results
-      }
+      data={result === undefined ? undefined : result.page}
       columns={columns}
       getRowKey={(passport) => passport._id}
       pagination={
         <ConvexPagination
-          status={passports.status}
-          onLoadMore={() => passports.loadMore(10)}
+          canPrevious={canPrevious}
+          canNext={canNext}
+          onPrevious={goPrevious}
+          onNext={() => {
+            if (result && !result.isDone) {
+              goNext(result.continueCursor);
+            }
+          }}
         />
       }
       empty={
