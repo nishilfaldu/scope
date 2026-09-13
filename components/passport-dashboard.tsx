@@ -3,7 +3,7 @@
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState } from "react";
 import {
   Copy01Icon,
   Delete02Icon,
@@ -61,27 +61,16 @@ import {
 } from "@/components/ui/table";
 import {
   APP_LABELS,
-  TTL_OPTIONS,
   formatRelativeTime,
   formatRemaining,
-  type AppId,
 } from "@/lib/capabilities";
 import { STATUS_LABELS, lastEventLabel } from "@/lib/audit";
-
-const DEFAULT_TTL_MS = TTL_OPTIONS[1]?.ttlMs ?? 60 * 60 * 1000;
 
 export function PassportDashboard() {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
   const passports = useQuery(api.passports.list, { now });
-  const mint = useMutation(api.passports.mint);
   const revoke = useMutation(api.passports.revoke);
-
-  const [name, setName] = useState("");
-  const [ttlMs, setTtlMs] = useState<number>(DEFAULT_TTL_MS);
-  const [apps, setApps] = useState<AppId[]>([]);
-  const [minting, setMinting] = useState(false);
-  const [mintError, setMintError] = useState<string | null>(null);
   const [mintOpen, setMintOpen] = useState(false);
   const [lastMinted, setLastMinted] = useState<{
     passportId: string;
@@ -95,42 +84,6 @@ export function PassportDashboard() {
     const id = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(id);
   }, []);
-
-  function toggleApp(app: AppId) {
-    setApps((prev) =>
-      prev.includes(app) ? prev.filter((item) => item !== app) : [...prev, app],
-    );
-  }
-
-  async function handleMint(event: FormEvent) {
-    event.preventDefault();
-    setMintError(null);
-    if (apps.length === 0) {
-      setMintError("Turn on at least one app.");
-      return;
-    }
-    setMinting(true);
-    try {
-      const result = await mint({
-        name: name.trim() || "Untitled agent",
-        ttlMs,
-        apps,
-      });
-      setLastMinted({
-        passportId: result.passportId,
-        invokeKey: result.invokeKey,
-        name: result.name,
-      });
-      setName("");
-      setApps([]);
-      setNow(Date.now());
-      setMintOpen(false);
-    } catch (err) {
-      setMintError(err instanceof Error ? err.message : "Mint failed");
-    } finally {
-      setMinting(false);
-    }
-  }
 
   async function handleRevoke(passportId: string) {
     setRevokingId(passportId);
@@ -458,15 +411,11 @@ export function PassportDashboard() {
           </SheetHeader>
           <div className="px-6 pb-6">
             <MintPassportForm
-              name={name}
-              ttlMs={ttlMs}
-              apps={apps}
-              minting={minting}
-              mintError={mintError}
-              onNameChange={setName}
-              onTtlChange={setTtlMs}
-              onToggleApp={toggleApp}
-              onSubmit={(event) => void handleMint(event)}
+              onMinted={(result) => {
+                setLastMinted(result);
+                setNow(Date.now());
+                setMintOpen(false);
+              }}
             />
           </div>
         </SheetContent>

@@ -1,28 +1,11 @@
 "use client";
 
-import { type FormEvent } from "react";
+import { useState } from "react";
+import { useMutation } from "convex/react";
 
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-  FieldLegend,
-  FieldSet,
-  FieldTitle,
-} from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { api } from "../convex/_generated/api";
+import { useAppForm } from "@/components/form";
+import { FieldError } from "@/components/ui/field";
 import {
   ALL_APPS,
   APP_HINTS,
@@ -31,84 +14,89 @@ import {
   type AppId,
 } from "@/lib/capabilities";
 
+const DEFAULT_TTL_MS = TTL_OPTIONS[1]?.ttlMs ?? 60 * 60 * 1000;
+
+const TTL_ITEMS = TTL_OPTIONS.map((opt) => ({
+  value: String(opt.ttlMs),
+  label: opt.label,
+}));
+
+const APP_OPTIONS = ALL_APPS.map((app) => ({
+  value: app,
+  title: APP_LABELS[app],
+  description: APP_HINTS[app],
+}));
+
 export function MintPassportForm({
-  name,
-  ttlMs,
-  apps,
-  minting,
-  mintError,
-  onNameChange,
-  onTtlChange,
-  onToggleApp,
-  onSubmit,
+  onMinted,
 }: {
-  name: string;
-  ttlMs: number;
-  apps: AppId[];
-  minting: boolean;
-  mintError: string | null;
-  onNameChange: (value: string) => void;
-  onTtlChange: (ttlMs: number) => void;
-  onToggleApp: (app: AppId) => void;
-  onSubmit: (event: FormEvent) => void;
+  onMinted: (result: {
+    passportId: string;
+    invokeKey: string;
+    name: string;
+  }) => void;
 }) {
+  const mint = useMutation(api.passports.mint);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const form = useAppForm({
+    defaultValues: {
+      name: "",
+      ttlMs: String(DEFAULT_TTL_MS),
+      apps: [] as AppId[],
+    },
+    onSubmit: async ({ value, formApi }) => {
+      setSubmitError(null);
+      try {
+        const result = await mint({
+          name: value.name.trim() || "Untitled agent",
+          ttlMs: Number(value.ttlMs),
+          apps: value.apps,
+        });
+        onMinted({
+          passportId: result.passportId,
+          invokeKey: result.invokeKey,
+          name: result.name,
+        });
+        formApi.reset();
+      } catch (err) {
+        setSubmitError(err instanceof Error ? err.message : "Mint failed");
+      }
+    },
+  });
+
   return (
-    <form onSubmit={onSubmit}>
-      <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor="passport-name">Name</FieldLabel>
-          <Input
-            id="passport-name"
-            value={name}
-            onChange={(event) => onNameChange(event.target.value)}
-            placeholder="e.g. PR agent"
-          />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="passport-ttl">Time to live</FieldLabel>
-          <Select
-            items={TTL_OPTIONS.map((opt) => ({
-              value: String(opt.ttlMs),
-              label: opt.label,
-            }))}
-            value={String(ttlMs)}
-            onValueChange={(value) => {
-              if (value == null) return;
-              onTtlChange(Number(value));
-            }}
-          >
-            <SelectTrigger id="passport-ttl" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {TTL_OPTIONS.map((opt) => (
-                <SelectItem key={opt.ttlMs} value={String(opt.ttlMs)}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <FieldSet>
-          <FieldLegend variant="label">Platforms</FieldLegend>
-          {ALL_APPS.map((app) => (
-            <Field key={app} orientation="horizontal">
-              <Checkbox
-                checked={apps.includes(app)}
-                onCheckedChange={() => onToggleApp(app)}
-              />
-              <FieldContent>
-                <FieldTitle>{APP_LABELS[app]}</FieldTitle>
-                <FieldDescription>{APP_HINTS[app]}</FieldDescription>
-              </FieldContent>
-            </Field>
-          ))}
-        </FieldSet>
-        {mintError ? <FieldError>{mintError}</FieldError> : null}
-        <Button type="submit" disabled={minting}>
-          {minting ? "Minting…" : "Mint passport"}
-        </Button>
-      </FieldGroup>
-    </form>
+    <form.AppForm>
+      <form.Form>
+        <form.AppField name="name">
+          {(field) => (
+            <field.TextField label="Name" placeholder="e.g. PR agent" />
+          )}
+        </form.AppField>
+        <form.AppField name="ttlMs">
+          {(field) => (
+            <field.SelectField label="Time to live" items={TTL_ITEMS} />
+          )}
+        </form.AppField>
+        <form.AppField
+          name="apps"
+          validators={{
+            onSubmit: ({ value }) =>
+              value.length === 0 ? "Turn on at least one app." : undefined,
+          }}
+        >
+          {(field) => (
+            <field.CheckboxGroupField
+              legend="Platforms"
+              options={APP_OPTIONS}
+            />
+          )}
+        </form.AppField>
+        {submitError ? <FieldError>{submitError}</FieldError> : null}
+        <form.SubmitButton pendingLabel="Minting…">
+          Mint passport
+        </form.SubmitButton>
+      </form.Form>
+    </form.AppForm>
   );
 }
