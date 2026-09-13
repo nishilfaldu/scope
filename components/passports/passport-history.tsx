@@ -1,7 +1,7 @@
 "use client";
 
-import { usePaginatedQuery } from "convex/react";
-import { useState } from "react";
+import { useQuery } from "convex/react";
+import { useEffect, useState } from "react";
 import { UnavailableIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -21,6 +21,7 @@ import { DataTable, type DataTableColumn } from "@/components/shared/data-table"
 import { EmptyState } from "@/components/shared/empty-state";
 import { FilterSelect } from "@/components/shared/filter-select";
 import { Badge } from "@/components/ui/badge";
+import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import {
   ACTOR_TYPE_LABELS,
   KIND_LABELS,
@@ -49,20 +50,27 @@ const ACTOR_ITEMS = [
   })),
 ];
 
+const PAGE_SIZE = 50;
+
 export function PassportHistory({ passportId }: { passportId: string }) {
   const [kind, setKind] = useState("all");
   const [outcome, setOutcome] = useState("all");
   const [actorType, setActorType] = useState("all");
-  const history = usePaginatedQuery(
-    api.tables.auditEvents.queries.listHistory,
-    {
-      passportId,
-      kind: kind === "all" ? undefined : (kind as AuditKind),
-      outcome: outcome === "all" ? undefined : (outcome as Outcome),
-      actorType: actorType === "all" ? undefined : (actorType as ActorType),
-    },
-    { initialNumItems: 50 },
-  );
+  const { paginationOpts, canPrevious, reset, goNext, goPrevious } =
+    useCursorPagination(PAGE_SIZE);
+
+  useEffect(() => {
+    reset();
+  }, [kind, outcome, actorType, passportId, reset]);
+
+  const result = useQuery(api.tables.auditEvents.queries.listHistory, {
+    passportId,
+    kind: kind === "all" ? undefined : (kind as AuditKind),
+    outcome: outcome === "all" ? undefined : (outcome as Outcome),
+    actorType: actorType === "all" ? undefined : (actorType as ActorType),
+    paginationOpts,
+  });
+
   const columns: DataTableColumn<Doc<"auditEvents">>[] = [
     {
       id: "when",
@@ -138,6 +146,8 @@ export function PassportHistory({ passportId }: { passportId: string }) {
     },
   ];
 
+  const canNext = result !== undefined && !result.isDone;
+
   return (
     <ContentCard
       title="History"
@@ -166,13 +176,19 @@ export function PassportHistory({ passportId }: { passportId: string }) {
       }
     >
       <DataTable
-        data={history.status === "LoadingFirstPage" ? undefined : history.results}
+        data={result === undefined ? undefined : result.page}
         columns={columns}
         getRowKey={(event) => event._id}
         pagination={
           <ConvexPagination
-            status={history.status}
-            onLoadMore={() => history.loadMore(50)}
+            canPrevious={canPrevious}
+            canNext={canNext}
+            onPrevious={goPrevious}
+            onNext={() => {
+              if (result && !result.isDone) {
+                goNext(result.continueCursor);
+              }
+            }}
           />
         }
         empty={
