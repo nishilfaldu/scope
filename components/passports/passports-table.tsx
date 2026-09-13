@@ -2,19 +2,21 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ReactNode } from "react";
 import {
   Copy01Icon,
   Delete02Icon,
   File01Icon,
   MoreHorizontalIcon,
+  PlusSignIcon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { FunctionReturnType } from "convex/server";
 
 import type { api } from "@/convex/_generated/api";
+import { CreatePassportDialog } from "@/components/passports/create-passport-dialog";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
+import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,14 +41,12 @@ export function PassportsTable({
   revokingId,
   onCopy,
   onRevoke,
-  empty,
 }: {
   passports: FunctionReturnType<typeof api.tables.passports.queries.list> | undefined;
   copiedValue: string | null;
   revokingId: string | null;
   onCopy: (value: string) => void;
   onRevoke: (passportId: string) => void;
-  empty: ReactNode;
 }) {
   const router = useRouter();
   const columns: DataTableColumn<Passport>[] = [
@@ -193,7 +193,22 @@ export function PassportsTable({
       data={passports}
       columns={columns}
       getRowKey={(passport) => passport._id}
-      empty={empty}
+      empty={
+        <EmptyState
+          title="No passports"
+          description="Create a virtual card for a job. Agents receive a passport id and an invoke key—never standing account tokens."
+          icon={<HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />}
+          action={
+            <CreatePassportDialog>
+              {({ openModal }) => (
+                <Button type="button" onClick={openModal}>
+                  Create passport
+                </Button>
+              )}
+            </CreatePassportDialog>
+          }
+        />
+      }
     />
   );
 }
