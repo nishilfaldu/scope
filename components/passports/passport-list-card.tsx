@@ -2,16 +2,21 @@
 
 import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 
-import { api } from "@/convex/_generated/api";
+import type { api } from "@/convex/_generated/api";
 import { CreatePassportDialog } from "@/components/passports/create-passport-dialog";
 import { ContentCard } from "@/components/shared/content-card";
 import { PassportsTable } from "@/components/passports/passports-table";
 import { Button } from "@/components/ui/button";
 
-export function PassportListCard() {
-  const passports = useQuery(api.tables.passports.queries.list, {});
+type Passports = FunctionReturnType<typeof api.tables.passports.queries.list>;
+
+export function PassportListCard({
+  passports,
+}: {
+  passports: Passports | undefined;
+}) {
   const activeCount = passports?.filter(
     (passport) => passport.lifetimeStatus === "active",
   ).length;
@@ -24,7 +29,7 @@ export function PassportListCard() {
           ? "Loading cards…"
           : passports.length === 0
             ? "Create a card to give an agent time-boxed access."
-            : `${activeCount} acting as you · ${passports.length} total`
+            : `${activeCount} active · ${passports.length} total`
       }
       action={
         <CreatePassportDialog>
