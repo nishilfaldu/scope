@@ -11,15 +11,15 @@ function t() {
 }
 
 describe("passport audit trail", () => {
-  test("mint records an issued event with board actor and granted scopes", async () => {
+  test("create records an issued event with board actor and granted scopes", async () => {
     const test = t();
-    const minted = await test.mutation(api.passports.mint, {
+    const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "PR agent",
       ttlMs: 60_000,
       apps: ["github", "slack"],
     });
-    const history = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
+    const history = await test.query(api.tables.auditEvents.queries.listHistory, {
+      passportId: created.id,
       paginationOpts: { numItems: 50, cursor: null },
     });
     expect(history.page).toHaveLength(1);
@@ -28,9 +28,9 @@ describe("passport audit trail", () => {
     expect(event.actorType).toBe("board");
     expect(event.scopes).toEqual(["github", "slack"]);
     expect(event.outcome).toBe("allowed");
-    expect(event.reason).toBe("Passport minted");
-    const chain = await test.query(api.audit.chainStatus, {
-      passportId: minted.id,
+    expect(event.reason).toBe("Passport created");
+    const chain = await test.query(api.tables.auditEvents.queries.chainStatus, {
+      passportId: created.id,
     });
     expect(chain).toEqual({
       eventCount: 1,
@@ -41,16 +41,16 @@ describe("passport audit trail", () => {
 
   test("revoke records a revoked event and refuses unknown passports", async () => {
     const test = t();
-    const minted = await test.mutation(api.passports.mint, {
+    const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Temp",
       ttlMs: 60_000,
       apps: ["github"],
     });
-    await test.mutation(api.passports.revoke, {
-      passportId: minted.passportId,
+    await test.mutation(api.tables.passports.mutations.revoke, {
+      passportId: created.passportId,
     });
-    const history = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
+    const history = await test.query(api.tables.auditEvents.queries.listHistory, {
+      passportId: created.id,
       kind: "revoked",
       paginationOpts: { numItems: 50, cursor: null },
     });
@@ -59,26 +59,26 @@ describe("passport audit trail", () => {
     expect(history.page[0]?.reason).toBe("Revoked by board");
 
     await expect(
-      test.mutation(api.passports.revoke, { passportId: "pp_missing" }),
+      test.mutation(api.tables.passports.mutations.revoke, { passportId: "pp_missing" }),
     ).rejects.toThrow(/Passport not found/);
   });
 
   test("history filters by kind, outcome, and actor", async () => {
     const test = t();
-    const minted = await test.mutation(api.passports.mint, {
+    const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Filter me",
       ttlMs: 60_000,
       apps: ["github"],
     });
     await test.run(async (ctx) => {
-      await ctx.db.patch("passports", minted.id, {
+      await ctx.db.patch("passports", created.id, {
         expiresAt: Date.now() - 1_000,
       });
     });
-    await test.mutation(internal.audit.expireDue, {});
+    await test.mutation(internal.tables.auditEvents.mutations.expireDue, {});
 
-    const denied = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
+    const denied = await test.query(api.tables.auditEvents.queries.listHistory, {
+      passportId: created.id,
       outcome: "denied",
       paginationOpts: { numItems: 50, cursor: null },
     });
@@ -86,16 +86,16 @@ describe("passport audit trail", () => {
     expect(denied.page).toHaveLength(1);
     expect(denied.page[0]?.kind).toBe("expired");
 
-    const issued = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
+    const issued = await test.query(api.tables.auditEvents.queries.listHistory, {
+      passportId: created.id,
       kind: "issued",
       paginationOpts: { numItems: 50, cursor: null },
     });
     expect(issued.page).toHaveLength(1);
     expect(issued.page[0]?.kind).toBe("issued");
 
-    const system = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
+    const system = await test.query(api.tables.auditEvents.queries.listHistory, {
+      passportId: created.id,
       actorType: "system",
       paginationOpts: { numItems: 50, cursor: null },
     });
@@ -104,7 +104,7 @@ describe("passport audit trail", () => {
     );
     expect(system.page).toHaveLength(1);
 
-    const unknown = await test.query(api.audit.listHistory, {
+    const unknown = await test.query(api.tables.auditEvents.queries.listHistory, {
       passportId: "not-an-id",
       paginationOpts: { numItems: 50, cursor: null },
     });
@@ -113,27 +113,26 @@ describe("passport audit trail", () => {
 
   test("expireDue records expired once and is idempotent", async () => {
     const test = t();
-    const minted = await test.mutation(api.passports.mint, {
+    const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Short",
       ttlMs: 60_000,
       apps: ["github"],
     });
     await test.run(async (ctx) => {
-      await ctx.db.patch("passports", minted.id, {
+      await ctx.db.patch("passports", created.id, {
         expiresAt: Date.now() - 1_000,
       });
     });
-    const first = await test.mutation(internal.audit.expireDue, {});
-    const second = await test.mutation(internal.audit.expireDue, {});
+    const first = await test.mutation(internal.tables.auditEvents.mutations.expireDue, {});
+    const second = await test.mutation(internal.tables.auditEvents.mutations.expireDue, {});
     expect(first).toBe(1);
     expect(second).toBe(0);
-    const passport = await test.query(api.passports.get, {
-      passportId: minted.id,
-      now: Date.now(),
+    const passport = await test.query(api.tables.passports.queries.get, {
+      passportId: created.id,
     });
     expect(passport?.lifetimeStatus).toBe("expired");
-    const expired = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
+    const expired = await test.query(api.tables.auditEvents.queries.listHistory, {
+      passportId: created.id,
       kind: "expired",
       paginationOpts: { numItems: 50, cursor: null },
     });
@@ -143,13 +142,17 @@ describe("passport audit trail", () => {
   });
 
   test("public api cannot edit or delete audit records", () => {
-    expect(api.audit).not.toHaveProperty("remove");
-    expect(api.audit).not.toHaveProperty("delete");
-    expect(api.audit).not.toHaveProperty("patch");
-    expect(api.audit).not.toHaveProperty("replace");
-    expect(api.audit).not.toHaveProperty("wipeDevLogs");
-    expect(internal.audit).not.toHaveProperty("wipeDevLogs");
-    expect(api.passports).not.toHaveProperty("appendLog");
-    expect(api.tokens).not.toHaveProperty("listLogs");
+    expect(api.tables.auditEvents.queries).not.toHaveProperty("remove");
+    expect(api.tables.auditEvents.queries).not.toHaveProperty("delete");
+    expect(api.tables.auditEvents.queries).not.toHaveProperty("patch");
+    expect(api.tables.auditEvents.queries).not.toHaveProperty("replace");
+    expect(api.tables.auditEvents.queries).not.toHaveProperty("wipeDevLogs");
+    expect(internal.tables.auditEvents.mutations).not.toHaveProperty(
+      "wipeDevLogs",
+    );
+    expect(api.tables.passports.mutations).not.toHaveProperty("appendLog");
+    expect(internal.tables.passports.credentials).not.toHaveProperty(
+      "listLogs",
+    );
   });
 });

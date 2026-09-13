@@ -6,7 +6,7 @@ const crons = cronJobs();
 crons.interval(
   "expire passports",
   { minutes: 1 },
-  internal.audit.expireDue,
+  internal.tables.auditEvents.mutations.expireDue,
   {},
 );
 

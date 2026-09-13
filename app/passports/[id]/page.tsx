@@ -1,4 +1,4 @@
-import { PassportDetail } from "@/components/passport-detail";
+import { PassportDetail } from "@/components/passports/passport-detail";
 
 export default async function Page({
   params,

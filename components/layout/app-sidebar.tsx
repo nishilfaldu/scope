@@ -10,20 +10,19 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-import { NavUser } from "@/components/nav-user";
+import { NavUser } from "@/components/layout/nav-user";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import type { ConnectionRow } from "@/lib/connections";
+import type { UserInfo } from "@/lib/user";
 
 const NAV = [
   { title: "Passports", href: "/", icon: CreditCardIcon },
@@ -31,10 +30,10 @@ const NAV = [
 ] as const;
 
 export function AppSidebar({
-  github,
+  user,
   ...props
 }: ComponentProps<typeof Sidebar> & {
-  github: ConnectionRow | undefined;
+  user: UserInfo;
 }) {
   const pathname = usePathname();
 
@@ -60,7 +59,6 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Board</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {NAV.map((item) => (
@@ -84,7 +82,7 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <NavUser github={github} />
+        <NavUser user={user} />
       </SidebarFooter>
     </Sidebar>
   );

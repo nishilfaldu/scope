@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { sha256Hex } from "./secrets";
+import { sha256Hex } from "../../secrets";
 
 export const AUDIT_KINDS = [
   "issued",
@@ -9,7 +9,7 @@ export const AUDIT_KINDS = [
   "token_issued",
   "token_refreshed",
   "token_revoked",
-  "mint_denied",
+  "create_denied",
 ] as const;
 
 export const ACTOR_TYPES = ["board", "agent", "system"] as const;
@@ -28,7 +28,7 @@ export const auditKindValidator = v.union(
   v.literal("token_issued"),
   v.literal("token_refreshed"),
   v.literal("token_revoked"),
-  v.literal("mint_denied"),
+  v.literal("create_denied"),
   v.literal("presented"),
   v.literal("verified"),
   v.literal("used"),

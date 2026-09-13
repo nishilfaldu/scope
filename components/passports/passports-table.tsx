@@ -139,7 +139,7 @@ export function PassportsTable({
     },
     {
       id: "passport-id",
-      header: "Passport id",
+      header: "Passport ID",
       cell: ({ row: { original: passport } }) => (
         <div className="flex min-w-0 items-center gap-1">
           <code className="max-w-28 truncate font-mono text-xs">

@@ -1,6 +1,6 @@
 # Agent Passport
 
-Mint short-lived GitHub, Google, and Slack tokens for agents. The board issues a passport and an invoke key. The agent posts those to `/api/credentials` and then calls the provider itself.
+Create short-lived GitHub, Google, and Slack tokens for agents. The board issues a passport and an invoke key. The agent posts those to `/api/credentials` and then calls the provider itself.
 
 This board is a single-operator console. It has no login.
 

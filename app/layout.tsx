@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { ConvexClientProvider } from "./ConvexClientProvider";
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider } from "@/components/providers/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import "./globals.css";
@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Agent Passport",
-  description: "Mint and revoke virtual passports for agents",
+  description: "Create and revoke virtual passports for agents",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

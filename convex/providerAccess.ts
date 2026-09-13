@@ -7,7 +7,7 @@ import {
   type RefreshedTokens,
 } from "./oauth";
 import type { ProviderId } from "./permissions";
-import { PLATFORM_TOKEN_TTL_MS } from "./tokens";
+import { PLATFORM_TOKEN_TTL_MS } from "./tables/passports/credentials";
 
 function secretsChanged(
   connection: ConnectionSecrets,
@@ -32,7 +32,7 @@ async function persistIfChanged(
   if (!secretsChanged(connection, refreshed)) {
     return;
   }
-  await ctx.runMutation(internal.connections.saveConnection, {
+  await ctx.runMutation(internal.tables.connections.mutations.saveConnection, {
     provider,
     accessToken: refreshed.accessToken,
     login: connection.login,
@@ -47,7 +47,7 @@ export async function issueShortLivedAccess(
   ctx: GenericActionCtx<DataModel>,
   provider: ProviderId,
 ): Promise<{ accessToken: string; expiresAt: number } | { error: string }> {
-  const connection = await ctx.runQuery(internal.connections.getConnection, {
+  const connection = await ctx.runQuery(internal.tables.connections.queries.getConnection, {
     provider,
   });
   if (!connection) {

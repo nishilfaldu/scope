@@ -1,4 +1,4 @@
-import { PassportDashboard } from "@/components/passport-dashboard";
+import { PassportDashboard } from "@/components/passports/passport-dashboard";
 
 export default function Page() {
   return <PassportDashboard />;

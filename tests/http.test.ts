@@ -104,7 +104,7 @@ describe("OPTIONS", () => {
 describe("POST /api/credentials denials", () => {
   test("invalid JSON and a non-boolean refresh are invalid_request", async () => {
     const test = t();
-    const minted = await test.mutation(api.passports.mint, {
+    const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Keyed",
       ttlMs: 60_000,
       apps: ["slack"],
@@ -123,8 +123,8 @@ describe("POST /api/credentials denials", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        passportId: minted.passportId,
-        invokeKey: minted.invokeKey,
+        passportId: created.passportId,
+        invokeKey: created.invokeKey,
         platform: "slack",
         refresh: "yes",
       }),
@@ -138,7 +138,7 @@ describe("POST /api/credentials denials", () => {
 
   test("unknown and off platforms share one code and error text", async () => {
     const test = t();
-    const minted = await test.mutation(api.passports.mint, {
+    const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Keyed",
       ttlMs: 60_000,
       apps: ["slack"],
@@ -151,8 +151,8 @@ describe("POST /api/credentials denials", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        passportId: minted.passportId,
-        invokeKey: minted.invokeKey,
+        passportId: created.passportId,
+        invokeKey: created.invokeKey,
         platform: "dropbox",
       }),
     });
@@ -162,8 +162,8 @@ describe("POST /api/credentials denials", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        passportId: minted.passportId,
-        invokeKey: minted.invokeKey,
+        passportId: created.passportId,
+        invokeKey: created.invokeKey,
         platform: "github",
       }),
     });
@@ -173,7 +173,7 @@ describe("POST /api/credentials denials", () => {
 
   test("wrong invoke key is unauthorized and does not name the platform", async () => {
     const test = t();
-    const minted = await test.mutation(api.passports.mint, {
+    const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Keyed",
       ttlMs: 60_000,
       apps: ["github"],
@@ -182,7 +182,7 @@ describe("POST /api/credentials denials", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        passportId: minted.passportId,
+        passportId: created.passportId,
         invokeKey: "ik_wrong",
         platform: "github",
       }),
@@ -198,7 +198,7 @@ describe("POST /api/credentials denials", () => {
 describe("GET /api/platforms", () => {
   test("wrong or missing invoke key does not leak platforms", async () => {
     const test = t();
-    const minted = await test.mutation(api.passports.mint, {
+    const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Secret",
       ttlMs: 60_000,
       apps: ["github", "slack"],
@@ -206,7 +206,7 @@ describe("GET /api/platforms", () => {
     const wrong = await test.fetch("/api/platforms", {
       method: "GET",
       headers: {
-        passportId: minted.passportId,
+        passportId: created.passportId,
         invokeKey: "ik_wrong",
       },
     });
@@ -221,7 +221,7 @@ describe("GET /api/platforms", () => {
 
     const missing = await test.fetch("/api/platforms", {
       method: "GET",
-      headers: { passportId: minted.passportId },
+      headers: { passportId: created.passportId },
     });
     expect(missing.status).toBe(400);
     const missingBody = await missing.json();
@@ -235,21 +235,20 @@ describe("GET /api/platforms", () => {
 
   test("returns on vs off for each platform and the passport expiry", async () => {
     const test = t();
-    const minted = await test.mutation(api.passports.mint, {
+    const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Mix",
       ttlMs: 60_000,
       apps: ["github"],
     });
-    const passport = await test.query(api.passports.get, {
-      passportId: minted.id,
-      now: Date.now(),
+    const passport = await test.query(api.tables.passports.queries.get, {
+      passportId: created.id,
     });
     expect(passport).not.toBeNull();
     const response = await test.fetch("/api/platforms", {
       method: "GET",
       headers: {
-        passportId: minted.passportId,
-        invokeKey: minted.invokeKey,
+        passportId: created.passportId,
+        invokeKey: created.invokeKey,
       },
     });
     expect(response.status).toBe(200);

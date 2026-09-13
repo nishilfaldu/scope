@@ -81,7 +81,7 @@ export function oauthConnect(provider: ProviderId) {
         headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
     }
-    await ctx.runMutation(internal.connections.putOauthState, {
+    await ctx.runMutation(internal.tables.oauthStates.mutations.put, {
       provider,
       state,
       returnTo,
@@ -108,7 +108,7 @@ export function oauthCallback(provider: ProviderId) {
       return redirectTo(returnFallback, provider, "error", "state");
     }
     const origin = await ctx.runMutation(
-      internal.connections.consumeOauthState,
+      internal.tables.oauthStates.mutations.consume,
       { state },
     );
     if (!origin || origin.provider !== provider) {
@@ -119,7 +119,7 @@ export function oauthCallback(provider: ProviderId) {
     if ("error" in grant) {
       return redirectTo(origin.returnTo, provider, "error", grant.error);
     }
-    await ctx.runMutation(internal.connections.saveConnection, {
+    await ctx.runMutation(internal.tables.connections.mutations.saveConnection, {
       provider,
       accessToken: grant.accessToken,
       login: grant.login,

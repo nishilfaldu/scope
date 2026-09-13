@@ -11,7 +11,7 @@ function t() {
 }
 
 async function seedGithub(test: ReturnType<typeof t>) {
-  await test.mutation(internal.connections.saveConnection, {
+  await test.mutation(internal.tables.connections.mutations.saveConnection, {
     provider: "github",
     accessToken: "ghs_standing_token",
     login: "octocat",
@@ -19,331 +19,171 @@ async function seedGithub(test: ReturnType<typeof t>) {
   });
 }
 
-async function seedSlack(test: ReturnType<typeof t>) {
-  await test.mutation(internal.connections.saveConnection, {
-    provider: "slack",
-    accessToken: "xoxp-standing-token",
-    login: "nishil",
-    providerUserId: "U1",
-  });
-}
-
 describe("accounts and passports", () => {
-  test("mint returns a passport id and invoke key, and never echoes the key hash", async () => {
+  test("create returns credentials without exposing the key hash", async () => {
     const test = t();
-    const minted = await test.mutation(api.passports.mint, {
+    const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "PR agent",
       ttlMs: 60_000,
       apps: ["github", "gmail", "slack"],
     });
-    expect(minted.passportId.startsWith("pp_")).toBe(true);
-    expect(minted.invokeKey.startsWith("ik_")).toBe(true);
-    const listed = await test.query(api.passports.list, { now: Date.now() });
+    expect(created.passportId.startsWith("pp_")).toBe(true);
+    expect(created.invokeKey.startsWith("ik_")).toBe(true);
+    const listed = await test.query(api.tables.passports.queries.list, {});
     expect(listed).toHaveLength(1);
     expect(listed[0]).not.toHaveProperty("invokeKey");
     expect(listed[0]).not.toHaveProperty("invokeKeyHash");
-    expect(listed[0]?.token).toBe(minted.passportId);
   });
 
-  test("mint rejects an empty name, a name that is too long, and a TTL over 7 days", async () => {
+  test("create validates its name and TTL", async () => {
     const test = t();
     await expect(
-      test.mutation(api.passports.mint, {
-        name: "   ",
-        ttlMs: 60_000,
-        apps: ["github"],
+      test.mutation(api.tables.passports.mutations.create, {
+        name: "   ", ttlMs: 60_000, apps: ["github"],
       }),
     ).rejects.toThrow(/Name must be non-empty/);
     await expect(
-      test.mutation(api.passports.mint, {
-        name: "n".repeat(81),
-        ttlMs: 60_000,
-        apps: ["github"],
+      test.mutation(api.tables.passports.mutations.create, {
+        name: "n".repeat(81), ttlMs: 60_000, apps: ["github"],
       }),
     ).rejects.toThrow(/80 characters/);
     await expect(
-      test.mutation(api.passports.mint, {
-        name: "Long",
-        ttlMs: 8 * 24 * 60 * 60 * 1000,
-        apps: ["github"],
+      test.mutation(api.tables.passports.mutations.create, {
+        name: "Long", ttlMs: 8 * 24 * 60 * 60 * 1000, apps: ["github"],
       }),
     ).rejects.toThrow(/7 days/);
   });
 
-  test("setPlatform turns one platform off without turning the others off", async () => {
+  test("setPlatform updates only the selected platform and records it", async () => {
     const test = t();
-    const minted = await test.mutation(api.passports.mint, {
-      name: "Multi",
-      ttlMs: 60_000,
-      apps: ["github", "gmail", "slack"],
+    const created = await test.mutation(api.tables.passports.mutations.create, {
+      name: "Multi", ttlMs: 60_000, apps: ["github", "gmail", "slack"],
     });
-    await test.mutation(api.passports.setPlatform, {
-      passportId: minted.passportId,
-      platform: "gmail",
-      enabled: false,
+    await test.mutation(api.tables.passports.mutations.setPlatform, {
+      passportId: created.passportId, platform: "gmail", enabled: false,
     });
-    const passport = await test.query(api.passports.get, {
-      passportId: minted.id,
-      now: Date.now(),
+    const passport = await test.query(api.tables.passports.queries.get, {
+      passportId: created.id,
     });
     expect(passport?.apps.sort()).toEqual(["github", "slack"]);
-    const toggled = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
+    const toggled = await test.query(api.tables.auditEvents.queries.listHistory, {
+      passportId: created.id,
       kind: "platform_toggled",
       paginationOpts: { numItems: 50, cursor: null },
     });
     expect(toggled.page).toHaveLength(1);
     expect(toggled.page[0]?.reason).toBe("Disabled gmail");
-    expect(toggled.page[0]?.scopes).toEqual(["gmail"]);
   });
 
-  test("disconnecting github does not wipe passports or logs", async () => {
+  test("disconnecting an account leaves passports and logs intact", async () => {
     const test = t();
     await seedGithub(test);
-    const minted = await test.mutation(api.passports.mint, {
-      name: "Keep me",
-      ttlMs: 60_000,
-      apps: ["github", "slack"],
+    const created = await test.mutation(api.tables.passports.mutations.create, {
+      name: "Keep me", ttlMs: 60_000, apps: ["github"],
     });
-    await test.action(api.connections.disconnect, { provider: "github" });
-    const statuses = await test.query(api.connections.listStatuses, {});
-    expect(
-      statuses.find((row) => row.provider === "github"),
-    ).toEqual({ provider: "github", connected: false, login: null });
-    const passport = await test.query(api.passports.get, {
-      passportId: minted.id,
-      now: Date.now(),
+    await test.action(api.tables.connections.actions.disconnect, { provider: "github" });
+    const passport = await test.query(api.tables.passports.queries.get, {
+      passportId: created.id,
     });
     expect(passport?.name).toBe("Keep me");
-    const history = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
+    const history = await test.query(api.tables.auditEvents.queries.listHistory, {
+      passportId: created.id,
       paginationOpts: { numItems: 50, cursor: null },
     });
-    expect(history.page.length).toBeGreaterThan(0);
     expect(history.page[0]?.kind).toBe("issued");
   });
 });
 
-describe("platform tokens", () => {
-  test("connecting an account does not mint access by itself", async () => {
+describe("credential authorization", () => {
+  test("an enabled connected platform is authorized and issuance is audited without its secret", async () => {
     const test = t();
     await seedGithub(test);
-    const minted = await test.mutation(api.passports.mint, {
-      name: "Slack only",
-      ttlMs: 60_000,
-      apps: ["slack"],
+    const created = await test.mutation(api.tables.passports.mutations.create, {
+      name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
     });
-    const denied = await test.mutation(internal.tokens.authorizeMint, {
-      passportToken: minted.passportId,
-      invokeKey: minted.invokeKey,
+    const allowed = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+      passportToken: created.passportId,
+      invokeKey: created.invokeKey,
       platform: "github",
       refresh: false,
     });
-    expect(denied).toEqual({
-      ok: false,
-      status: 403,
-      reason: "This platform is not available on this passport",
-      code: "PLATFORM_UNAVAILABLE",
+    expect(allowed).toMatchObject({
+      ok: true, passportId: created.id, platform: "github", provider: "github",
     });
-    const history = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(history.page).toHaveLength(2);
-    expect(history.page[0]?.kind).toBe("mint_denied");
-    expect(history.page[0]?.platform).toBe("github");
-    expect(history.page[0]?.reason).toBe(
-      "This platform is not available on this passport",
-    );
-    expect(history.page[0]?.outcome).toBe("denied");
-    expect(JSON.stringify(history.page)).not.toMatch(/ghs_|ya29|xoxp/);
-  });
-
-  test("issues a short-lived token while live and on, and refresh kills the previous", async () => {
-    const test = t();
-    await seedGithub(test);
-    const minted = await test.mutation(api.passports.mint, {
-      name: "GitHub agent",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
-    const allowed = await test.mutation(internal.tokens.authorizeMint, {
-      passportToken: minted.passportId,
-      invokeKey: minted.invokeKey,
-      platform: "github",
-      refresh: false,
-    });
-    expect(allowed.ok).toBe(true);
-    if (!allowed.ok) {
-      throw new Error("expected authorize");
-    }
-    const first = await test.mutation(internal.tokens.commitMint, {
+    if (!allowed.ok) throw new Error("expected authorization");
+    const committed = await test.mutation(internal.tables.passports.credentials.commitCreate, {
       passportId: allowed.passportId,
-      platform: "github",
-      accessToken: "ghs_first",
+      platform: allowed.platform,
       expiresAt: Date.now() + 60_000,
       refresh: false,
     });
-    expect(first.revokedPrevious).toBe(false);
-    const second = await test.mutation(internal.tokens.commitMint, {
-      passportId: allowed.passportId,
-      platform: "github",
-      accessToken: "ghs_second",
-      expiresAt: Date.now() + 60_000,
-      refresh: true,
-    });
-    expect(second.revokedPrevious).toBe(true);
-    const live = await test.query(api.tokens.listLive, {
-      passportId: minted.id,
-      now: Date.now(),
-    });
-    expect(live).toHaveLength(1);
-    expect(live[0]?.platform).toBe("github");
-    expect(JSON.stringify(live)).not.toMatch(/ghs_/);
-    const history = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
+    expect(committed.expiresAt).toBeGreaterThan(Date.now());
+    const history = await test.query(api.tables.auditEvents.queries.listHistory, {
+      passportId: created.id,
       paginationOpts: { numItems: 50, cursor: null },
     });
-    expect(history.page.map((row) => row.kind)).toEqual([
-      "token_refreshed",
-      "token_revoked",
-      "token_issued",
-      "issued",
-    ]);
-    expect(JSON.stringify(history.page)).not.toMatch(/ghs_/);
-    const chain = await test.query(api.audit.chainStatus, {
-      passportId: minted.id,
-    });
-    expect(chain).toEqual({
-      eventCount: 4,
-      expectedSeq: 4,
-      intact: true,
-    });
-  });
-
-  test("a second mint without refresh returns the live token and does not rotate", async () => {
-    const test = t();
-    await seedGithub(test);
-    const minted = await test.mutation(api.passports.mint, {
-      name: "GitHub agent",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
-    await test.mutation(internal.tokens.commitMint, {
-      passportId: minted.id,
-      platform: "github",
-      accessToken: "ghs_live",
-      expiresAt: Date.now() + 10 * 60 * 1000,
-      refresh: false,
-    });
-    const reused = await test.mutation(internal.tokens.authorizeMint, {
-      passportToken: minted.passportId,
-      invokeKey: minted.invokeKey,
-      platform: "github",
-      refresh: false,
-    });
-    expect(reused).toMatchObject({
-      ok: true,
-      liveAccessToken: "ghs_live",
-      refresh: false,
-    });
-    const rotate = await test.mutation(internal.tokens.authorizeMint, {
-      passportToken: minted.passportId,
-      invokeKey: minted.invokeKey,
-      platform: "github",
-      refresh: true,
-    });
-    expect(rotate).toMatchObject({
-      ok: true,
-      liveAccessToken: null,
-      liveExpiresAt: null,
-      refresh: true,
-    });
-    const history = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(history.page.filter((row) => row.kind === "token_issued")).toHaveLength(
-      1,
-    );
+    expect(history.page.map((row) => row.kind)).toEqual(["token_issued", "issued"]);
     expect(JSON.stringify(history.page)).not.toMatch(/ghs_/);
   });
 
-  test("after expiry, revoke, or platform-off, mint is denied", async () => {
+  test("a disabled platform is denied server-side", async () => {
     const test = t();
     await seedGithub(test);
-    const minted = await test.mutation(api.passports.mint, {
-      name: "Gates",
-      ttlMs: 60_000,
-      apps: ["github"],
+    const created = await test.mutation(api.tables.passports.mutations.create, {
+      name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
     });
-
-    await test.mutation(api.passports.setPlatform, {
-      passportId: minted.passportId,
-      platform: "github",
-      enabled: false,
+    await test.mutation(api.tables.passports.mutations.setPlatform, {
+      passportId: created.passportId, platform: "github", enabled: false,
     });
-    const off = await test.mutation(internal.tokens.authorizeMint, {
-      passportToken: minted.passportId,
-      invokeKey: minted.invokeKey,
+    const denied = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+      passportToken: created.passportId,
+      invokeKey: created.invokeKey,
       platform: "github",
       refresh: false,
     });
-    expect(off).toMatchObject({
-      ok: false,
-      reason: "This platform is not available on this passport",
-      code: "PLATFORM_UNAVAILABLE",
+    expect(denied).toMatchObject({
+      ok: false, status: 403, code: "PLATFORM_UNAVAILABLE",
     });
+  });
 
-    await test.mutation(api.passports.setPlatform, {
-      passportId: minted.passportId,
-      platform: "github",
-      enabled: true,
+  test("revoked and expired passports are denied", async () => {
+    const test = t();
+    await seedGithub(test);
+    const revokedPassport = await test.mutation(api.tables.passports.mutations.create, {
+      name: "Revoked", ttlMs: 60_000, apps: ["github"],
     });
-    await test.mutation(api.passports.revoke, {
-      passportId: minted.passportId,
+    await test.mutation(api.tables.passports.mutations.revoke, {
+      passportId: revokedPassport.passportId,
     });
-    const revoked = await test.mutation(internal.tokens.authorizeMint, {
-      passportToken: minted.passportId,
-      invokeKey: minted.invokeKey,
+    const revoked = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+      passportToken: revokedPassport.passportId,
+      invokeKey: revokedPassport.invokeKey,
       platform: "github",
       refresh: false,
     });
-    expect(revoked).toMatchObject({
-      ok: false,
-      reason: "Passport revoked",
-      code: "REVOKED",
-    });
+    expect(revoked).toMatchObject({ ok: false, code: "REVOKED" });
 
-    const short = await test.mutation(api.passports.mint, {
-      name: "Short",
-      ttlMs: 60_000,
-      apps: ["github"],
+    const expiredPassport = await test.mutation(api.tables.passports.mutations.create, {
+      name: "Expired", ttlMs: 60_000, apps: ["github"],
     });
     await test.run(async (ctx) => {
-      await ctx.db.patch("passports", short.id, {
+      await ctx.db.patch("passports", expiredPassport.id, {
         expiresAt: Date.now() - 1_000,
       });
     });
-    const expired = await test.mutation(internal.tokens.authorizeMint, {
-      passportToken: short.passportId,
-      invokeKey: short.invokeKey,
+    const expired = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+      passportToken: expiredPassport.passportId,
+      invokeKey: expiredPassport.invokeKey,
       platform: "github",
       refresh: false,
     });
-    expect(expired).toMatchObject({
-      ok: false,
-      reason: "Passport expired",
-      code: "EXPIRED",
-    });
+    expect(expired).toMatchObject({ ok: false, code: "EXPIRED" });
   });
 
-  test("unknown, off, and unconnected platforms share one denial", async () => {
+  test("unknown and unconnected platforms share the unavailable denial", async () => {
     const test = t();
-    const minted = await test.mutation(api.passports.mint, {
-      name: "GitHub only",
-      ttlMs: 60_000,
-      apps: ["github"],
+    const created = await test.mutation(api.tables.passports.mutations.create, {
+      name: "GitHub only", ttlMs: 60_000, apps: ["github"],
     });
     const unavailable = {
       ok: false,
@@ -351,233 +191,53 @@ describe("platform tokens", () => {
       reason: "This platform is not available on this passport",
       code: "PLATFORM_UNAVAILABLE",
     };
-    const unknown = await test.mutation(internal.tokens.authorizeMint, {
-      passportToken: minted.passportId,
-      invokeKey: minted.invokeKey,
+    const unknown = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+      passportToken: created.passportId,
+      invokeKey: created.invokeKey,
       platform: "dropbox",
       refresh: false,
     });
     expect(unknown).toMatchObject(unavailable);
-    const unconnected = await test.mutation(internal.tokens.authorizeMint, {
-      passportToken: minted.passportId,
-      invokeKey: minted.invokeKey,
+    const unconnected = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+      passportToken: created.passportId,
+      invokeKey: created.invokeKey,
       platform: "github",
       refresh: false,
     });
     expect(unconnected).toMatchObject(unavailable);
-    await test.mutation(api.passports.setPlatform, {
-      passportId: minted.passportId,
-      platform: "github",
-      enabled: false,
-    });
-    const off = await test.mutation(internal.tokens.authorizeMint, {
-      passportToken: minted.passportId,
-      invokeKey: minted.invokeKey,
-      platform: "github",
-      refresh: false,
-    });
-    expect(off).toMatchObject(unavailable);
   });
 
-  test("turning one platform off revokes only that platform’s token", async () => {
+  test("an invalid invoke key is refused", async () => {
     const test = t();
     await seedGithub(test);
-    await seedSlack(test);
-    const minted = await test.mutation(api.passports.mint, {
-      name: "Two",
-      ttlMs: 60_000,
-      apps: ["github", "slack"],
+    const created = await test.mutation(api.tables.passports.mutations.create, {
+      name: "Keyed", ttlMs: 60_000, apps: ["github"],
     });
-    await test.mutation(internal.tokens.commitMint, {
-      passportId: minted.id,
-      platform: "github",
-      accessToken: "ghs_live",
-      expiresAt: Date.now() + 60_000,
-      refresh: false,
-    });
-    await test.mutation(internal.tokens.commitMint, {
-      passportId: minted.id,
-      platform: "slack",
-      accessToken: "xoxp-live",
-      expiresAt: Date.now() + 60_000,
-      refresh: false,
-    });
-    await test.mutation(api.passports.setPlatform, {
-      passportId: minted.passportId,
-      platform: "github",
-      enabled: false,
-    });
-    const live = await test.query(api.tokens.listLive, {
-      passportId: minted.id,
-      now: Date.now(),
-    });
-    expect(live.map((row) => row.platform)).toEqual(["slack"]);
-  });
-
-  test("revoking the passport revokes every token on it", async () => {
-    const test = t();
-    await seedGithub(test);
-    await seedSlack(test);
-    const minted = await test.mutation(api.passports.mint, {
-      name: "All",
-      ttlMs: 60_000,
-      apps: ["github", "slack"],
-    });
-    await test.mutation(internal.tokens.commitMint, {
-      passportId: minted.id,
-      platform: "github",
-      accessToken: "ghs_live",
-      expiresAt: Date.now() + 60_000,
-      refresh: false,
-    });
-    await test.mutation(internal.tokens.commitMint, {
-      passportId: minted.id,
-      platform: "slack",
-      accessToken: "xoxp-live",
-      expiresAt: Date.now() + 60_000,
-      refresh: false,
-    });
-    await test.mutation(api.passports.revoke, {
-      passportId: minted.passportId,
-    });
-    const live = await test.query(api.tokens.listLive, {
-      passportId: minted.id,
-      now: Date.now(),
-    });
-    expect(live).toEqual([]);
-    const history = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(
-      history.page.filter((row) => row.kind === "token_revoked").length,
-    ).toBe(2);
-  });
-
-  test("expireDue revokes live platform tokens whose TTL has elapsed", async () => {
-    const test = t();
-    await seedGithub(test);
-    const minted = await test.mutation(api.passports.mint, {
-      name: "TTL",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
-    await test.mutation(internal.tokens.commitMint, {
-      passportId: minted.id,
-      platform: "github",
-      accessToken: "ghs_live",
-      expiresAt: Date.now() + 60_000,
-      refresh: false,
-    });
-    const tokens = await test.run(async (ctx) => {
-      return await ctx.db
-        .query("platformTokens")
-        .withIndex("by_passport", (q) => q.eq("passportId", minted.id))
-        .take(10);
-    });
-    const live = tokens.find((row) => row.status === "live");
-    expect(live).toBeDefined();
-    await test.run(async (ctx) => {
-      await ctx.db.patch("platformTokens", live!._id, {
-        expiresAt: Date.now() - 1_000,
-      });
-    });
-    const expiredCount = await test.mutation(internal.audit.expireDue, {});
-    expect(expiredCount).toBe(0);
-    const after = await test.query(api.tokens.listLive, {
-      passportId: minted.id,
-      now: Date.now(),
-    });
-    expect(after).toEqual([]);
-    const history = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
-      kind: "token_revoked",
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(history.page).toHaveLength(1);
-    expect(history.page[0]?.reason).toBe("Time to live elapsed");
-    expect(JSON.stringify(history.page)).not.toMatch(/ghs_/);
-  });
-
-  test("disconnecting github revokes github copies and leaves slack live", async () => {
-    const test = t();
-    await seedGithub(test);
-    await seedSlack(test);
-    const minted = await test.mutation(api.passports.mint, {
-      name: "Two",
-      ttlMs: 60_000,
-      apps: ["github", "slack"],
-    });
-    await test.mutation(internal.tokens.commitMint, {
-      passportId: minted.id,
-      platform: "github",
-      accessToken: "ghs_live",
-      expiresAt: Date.now() + 10 * 60 * 1000,
-      refresh: false,
-    });
-    await test.mutation(internal.tokens.commitMint, {
-      passportId: minted.id,
-      platform: "slack",
-      accessToken: "xoxp-live",
-      expiresAt: Date.now() + 10 * 60 * 1000,
-      refresh: false,
-    });
-    await test.action(api.connections.disconnect, { provider: "github" });
-    const live = await test.query(api.tokens.listLive, {
-      passportId: minted.id,
-      now: Date.now(),
-    });
-    expect(live.map((row) => row.platform)).toEqual(["slack"]);
-    const history = await test.query(api.audit.listHistory, {
-      passportId: minted.id,
-      kind: "token_revoked",
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(history.page).toHaveLength(1);
-    expect(history.page[0]?.platform).toBe("github");
-    expect(history.page[0]?.reason).toBe("Provider disconnected");
-    expect(JSON.stringify(history.page)).not.toMatch(/ghs_|xoxp/);
-  });
-
-  test("invalid invoke key is refused with a logged reason", async () => {
-    const test = t();
-    await seedGithub(test);
-    const minted = await test.mutation(api.passports.mint, {
-      name: "Keyed",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
-    const denied = await test.mutation(internal.tokens.authorizeMint, {
-      passportToken: minted.passportId,
+    const denied = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+      passportToken: created.passportId,
       invokeKey: "ik_wrong",
       platform: "github",
       refresh: false,
     });
-    expect(denied).toMatchObject({
-      ok: false,
-      status: 401,
-      reason: "Unknown passport or invoke key",
-      code: "UNAUTHORIZED",
-    });
+    expect(denied).toMatchObject({ ok: false, status: 401, code: "UNAUTHORIZED" });
   });
 
-  test("google connection covers gmail through sheets on one provider", async () => {
+  test("one Google connection covers every Google platform", async () => {
     const test = t();
-    await test.mutation(internal.connections.saveConnection, {
+    await test.mutation(internal.tables.connections.mutations.saveConnection, {
       provider: "google",
       accessToken: "ya29.standing",
       login: "user@gmail.com",
       providerUserId: "sub",
     });
-    const minted = await test.mutation(api.passports.mint, {
-      name: "Workspace",
-      ttlMs: 60_000,
-      apps: ["gmail", "calendar", "drive", "docs", "sheets"],
+    const platforms = ["gmail", "calendar", "drive", "docs", "sheets"] as const;
+    const created = await test.mutation(api.tables.passports.mutations.create, {
+      name: "Workspace", ttlMs: 60_000, apps: [...platforms],
     });
-    for (const platform of ["gmail", "calendar", "drive", "docs", "sheets"] as const) {
-      const allowed = await test.mutation(internal.tokens.authorizeMint, {
-        passportToken: minted.passportId,
-        invokeKey: minted.invokeKey,
+    for (const platform of platforms) {
+      const allowed = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+        passportToken: created.passportId,
+        invokeKey: created.invokeKey,
         platform,
         refresh: false,
       });

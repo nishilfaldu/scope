@@ -1,23 +1,19 @@
 "use client";
 
-import Link from "next/link";
 import {
   ComputerIcon,
-  GithubIcon,
   Moon02Icon,
-  Plug01Icon,
   Sun01Icon,
   UnfoldMoreIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTheme } from "next-themes";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserIdentity } from "@/components/layout/user-identity";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -30,7 +26,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import type { ConnectionRow } from "@/lib/connections";
+import type { UserInfo } from "@/lib/user";
 
 const THEMES = ["light", "dark", "system"] as const;
 
@@ -40,46 +36,10 @@ function isThemeOption(value: string): value is ThemeOption {
   return (THEMES as readonly string[]).includes(value);
 }
 
-function GitHubIdentity({
-  github,
-}: {
-  github: ConnectionRow | undefined;
-}) {
-  const login =
-    github?.connected === true && github.login ? github.login : null;
-  const name = login ?? "GitHub";
-  const status =
-    github === undefined
-      ? "Checking…"
-      : github.connected
-        ? "Connected"
-        : "Not connected";
-
-  return (
-    <>
-      <Avatar className="size-8 rounded-lg">
-        {login ? (
-          <AvatarImage
-            src={`https://github.com/${login}.png?size=64`}
-            alt={login}
-          />
-        ) : null}
-        <AvatarFallback className="rounded-lg">
-          <HugeiconsIcon icon={GithubIcon} strokeWidth={2} className="size-4" />
-        </AvatarFallback>
-      </Avatar>
-      <div className="grid flex-1 text-left text-sm leading-tight">
-        <span className="truncate font-medium">{name}</span>
-        <span className="truncate text-xs">{status}</span>
-      </div>
-    </>
-  );
-}
-
 export function NavUser({
-  github,
+  user,
 }: {
-  github: ConnectionRow | undefined;
+  user: UserInfo;
 }) {
   const { isMobile } = useSidebar();
   const { theme, setTheme } = useTheme();
@@ -96,7 +56,7 @@ export function NavUser({
               />
             }
           >
-            <GitHubIdentity github={github} />
+            <UserIdentity user={user} />
             <HugeiconsIcon
               icon={UnfoldMoreIcon}
               strokeWidth={2}
@@ -112,15 +72,10 @@ export function NavUser({
             <DropdownMenuGroup>
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                  <GitHubIdentity github={github} />
+                  <UserIdentity user={user} />
                 </div>
               </DropdownMenuLabel>
             </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem render={<Link href="/connections" />}>
-              <HugeiconsIcon icon={Plug01Icon} strokeWidth={2} />
-              Connections
-            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuRadioGroup
               value={theme}

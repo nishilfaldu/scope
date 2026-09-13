@@ -1,4 +1,8 @@
-import type { ActorType, AuditKind, Outcome } from "../convex/auditFields";
+import type {
+  ActorType,
+  AuditKind,
+  Outcome,
+} from "../convex/tables/auditEvents/fields";
 
 export const KIND_LABELS: Record<AuditKind, string> = {
   issued: "Issued",
@@ -8,7 +12,7 @@ export const KIND_LABELS: Record<AuditKind, string> = {
   token_issued: "Token issued",
   token_refreshed: "Token refreshed",
   token_revoked: "Token revoked",
-  mint_denied: "Mint denied",
+  create_denied: "Create denied",
 };
 
 const LEGACY_KIND_LABELS: Record<string, string> = {

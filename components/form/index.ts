@@ -10,10 +10,11 @@ import {
 } from "@/components/form/context";
 import {
   CheckboxGroupField,
-  SelectField,
-  TextField,
-} from "@/components/form/fields";
-import { Form, SubmitButton } from "@/components/form/form";
+} from "@/components/form/checkbox-group-field";
+import { Form } from "@/components/form/app-form";
+import { SelectField } from "@/components/form/select-field";
+import { SubmitButton } from "@/components/form/submit-button";
+import { TextField } from "@/components/form/text-field";
 
 export const { useAppForm, withForm } = createFormHook({
   fieldContext,

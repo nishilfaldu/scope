@@ -16,13 +16,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { STATUS_LABELS } from "@/lib/audit";
-import { APP_LABELS, formatRemaining } from "@/lib/capabilities";
+import { formatRemaining } from "@/lib/capabilities";
 
 export function PassportOverview({ passportId }: { passportId: string }) {
   const passport = useQuery(api.tables.passports.queries.get, { passportId });
-  const chain = useQuery(api.tables.auditEvents.queries.chainStatus, {
-    passportId,
-  });
   const revoke = useMutation(api.tables.passports.mutations.revoke);
   const [copied, setCopied] = useState(false);
   const [revoking, setRevoking] = useState(false);
@@ -54,7 +51,7 @@ export function PassportOverview({ passportId }: { passportId: string }) {
   return (
     <ContentCard
       title={passport.name}
-      description="Complete history of everything that touched this passport. Events cannot be edited or deleted."
+      description="Complete history of this passport's activity."
       action={
         passport.lifetimeStatus === "active" ? (
           <Button
@@ -90,16 +87,6 @@ export function PassportOverview({ passportId }: { passportId: string }) {
           </Badge>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Apps</p>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {passport.apps.map((app) => (
-              <Badge key={app} variant="secondary">
-                {APP_LABELS[app]}
-              </Badge>
-            ))}
-          </div>
-        </div>
-        <div>
           <p className="text-xs text-muted-foreground">Expires</p>
           <p className="mt-1 text-sm">
             {formatRemaining(passport.expiresAt, now)}
@@ -126,23 +113,6 @@ export function PassportOverview({ passportId }: { passportId: string }) {
           </div>
         </div>
       </div>
-      {chain ? (
-        <div className="border-t px-6 py-3 text-sm">
-          {chain.eventCount === 0 ? (
-            <p className="text-muted-foreground">No chained events yet.</p>
-          ) : chain.intact ? (
-            <p>
-              Audit chain intact · {chain.eventCount} event
-              {chain.eventCount === 1 ? "" : "s"}. Records are append-only.
-            </p>
-          ) : (
-            <p className="text-destructive">
-              Audit chain broken · expected seq {chain.expectedSeq}, found{" "}
-              {chain.eventCount}.
-            </p>
-          )}
-        </div>
-      ) : null}
       <PassportPlatforms passportId={passportId} />
     </ContentCard>
   );

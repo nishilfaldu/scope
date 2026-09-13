@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
 
-import { api } from "../convex/_generated/api";
+import { api } from "@/convex/_generated/api";
 import { useAppForm } from "@/components/form";
 import { FieldError } from "@/components/ui/field";
 import {
@@ -15,28 +15,28 @@ import {
 } from "@/lib/capabilities";
 
 const DEFAULT_TTL_MS = TTL_OPTIONS[1]?.ttlMs ?? 60 * 60 * 1000;
-
-const TTL_ITEMS = TTL_OPTIONS.map((opt) => ({
-  value: String(opt.ttlMs),
-  label: opt.label,
+const TTL_ITEMS = TTL_OPTIONS.map((option) => ({
+  value: String(option.ttlMs),
+  label: option.label,
 }));
-
 const APP_OPTIONS = ALL_APPS.map((app) => ({
   value: app,
   title: APP_LABELS[app],
   description: APP_HINTS[app],
 }));
 
-export function MintPassportForm({
-  onMinted,
+export type CreatedPassport = {
+  passportId: string;
+  invokeKey: string;
+  name: string;
+};
+
+export function CreatePassportForm({
+  onCreated,
 }: {
-  onMinted: (result: {
-    passportId: string;
-    invokeKey: string;
-    name: string;
-  }) => void;
+  onCreated: (result: CreatedPassport) => void;
 }) {
-  const mint = useMutation(api.passports.mint);
+  const createPassport = useMutation(api.tables.passports.mutations.create);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const form = useAppForm({
@@ -48,19 +48,21 @@ export function MintPassportForm({
     onSubmit: async ({ value, formApi }) => {
       setSubmitError(null);
       try {
-        const result = await mint({
+        const result = await createPassport({
           name: value.name.trim() || "Untitled agent",
           ttlMs: Number(value.ttlMs),
           apps: value.apps,
         });
-        onMinted({
+        onCreated({
           passportId: result.passportId,
           invokeKey: result.invokeKey,
           name: result.name,
         });
         formApi.reset();
-      } catch (err) {
-        setSubmitError(err instanceof Error ? err.message : "Mint failed");
+      } catch (error) {
+        setSubmitError(
+          error instanceof Error ? error.message : "Creation failed",
+        );
       }
     },
   });
@@ -93,8 +95,8 @@ export function MintPassportForm({
           )}
         </form.AppField>
         {submitError ? <FieldError>{submitError}</FieldError> : null}
-        <form.SubmitButton pendingLabel="Minting…">
-          Mint passport
+        <form.SubmitButton pendingLabel="Creating…">
+          Create passport
         </form.SubmitButton>
       </form.Form>
     </form.AppForm>

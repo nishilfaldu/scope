@@ -1,12 +1,15 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { useQuery } from "convex/react";
 
-import { api } from "../convex/_generated/api";
-import { AppSidebar } from "@/components/app-sidebar";
-import { SiteHeader, type HeaderCrumb } from "@/components/site-header";
+import { AppSidebar } from "@/components/layout/app-sidebar";
+import { SiteHeader, type HeaderCrumb } from "@/components/layout/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+
+const PLACEHOLDER_USER = {
+  name: "Demo User",
+  email: "demo@example.com",
+};
 
 export function BoardShell({
   title,
@@ -17,9 +20,6 @@ export function BoardShell({
   crumbs?: HeaderCrumb[];
   children: ReactNode;
 }) {
-  const statuses = useQuery(api.connections.listStatuses);
-  const github = statuses?.find((row) => row.provider === "github");
-
   return (
     <SidebarProvider
       style={
@@ -29,7 +29,7 @@ export function BoardShell({
         } as CSSProperties
       }
     >
-      <AppSidebar variant="inset" github={github} />
+      <AppSidebar variant="inset" user={PLACEHOLDER_USER} />
       <SidebarInset>
         <SiteHeader title={title} crumbs={crumbs} />
         <div className="flex flex-1 flex-col">{children}</div>

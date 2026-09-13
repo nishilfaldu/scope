@@ -87,7 +87,7 @@ export const handleCredentials = httpAction(async (ctx, request) => {
   }
   const refresh = body.refresh === true;
 
-  const decision = await ctx.runMutation(internal.tokens.authorizeMint, {
+  const decision = await ctx.runMutation(internal.tables.passports.credentials.authorizeCreate, {
     passportToken: passportId,
     invokeKey,
     platform,
@@ -97,23 +97,6 @@ export const handleCredentials = httpAction(async (ctx, request) => {
     return errorResponse(decision.status, decision.reason, decision.code);
   }
 
-  if (
-    !refresh &&
-    decision.liveAccessToken !== null &&
-    decision.liveExpiresAt !== null
-  ) {
-    return jsonResponse(200, {
-      accessToken: decision.liveAccessToken,
-      tokenType: "Bearer",
-      platform: decision.platform,
-      expiresAt: decision.liveExpiresAt,
-      expiresIn: Math.max(
-        0,
-        Math.floor((decision.liveExpiresAt - Date.now()) / 1000),
-      ),
-    });
-  }
-
   const issued = await issueShortLivedAccess(ctx, decision.provider);
   if ("error" in issued) {
     const status = issued.error.endsWith("is not connected") ? 403 : 503;
@@ -121,7 +104,7 @@ export const handleCredentials = httpAction(async (ctx, request) => {
       status === 403 ? "PLATFORM_UNAVAILABLE" : "PROVIDER_ERROR";
     const error =
       status === 403 ? PLATFORM_UNAVAILABLE_ERROR : issued.error;
-    await ctx.runMutation(internal.tokens.logMintDenied, {
+    await ctx.runMutation(internal.tables.passports.credentials.logCreateDenied, {
       passportId: decision.passportId,
       platform: decision.platform,
       reason: issued.error,
@@ -130,10 +113,9 @@ export const handleCredentials = httpAction(async (ctx, request) => {
     return errorResponse(status, error, code);
   }
 
-  const committed = await ctx.runMutation(internal.tokens.commitMint, {
+  const committed = await ctx.runMutation(internal.tables.passports.credentials.commitCreate, {
     passportId: decision.passportId,
     platform: decision.platform,
-    accessToken: issued.accessToken,
     expiresAt: issued.expiresAt,
     refresh,
   });
@@ -159,7 +141,7 @@ export const handlePlatforms = httpAction(async (ctx, request) => {
     return invokeKey;
   }
 
-  const decision = await ctx.runQuery(internal.passports.discoverPlatforms, {
+  const decision = await ctx.runQuery(internal.tables.passports.queries.discoverPlatforms, {
     token: passportId,
     invokeKey,
     now: Date.now(),
