@@ -23,11 +23,11 @@ export const credentialsContract: PostContract = {
   method: "POST",
   body: {
     type: "object",
-    required: ["passportId", "invokeKey", "platform"],
+    required: ["passportId", "invokeKey", "app"],
     properties: {
       passportId: { type: "string" },
       invokeKey: { type: "string" },
-      platform: { type: "string", enum: ACCOUNT_APPS },
+      app: { type: "string", enum: ACCOUNT_APPS },
       refresh: { type: "boolean" },
     },
   },
@@ -36,14 +36,14 @@ export const credentialsContract: PostContract = {
     required: [
       "accessToken",
       "tokenType",
-      "platform",
+      "app",
       "expiresAt",
       "expiresIn",
     ],
     properties: {
       accessToken: { type: "string" },
       tokenType: { type: "string", const: "Bearer" },
-      platform: { type: "string", enum: ACCOUNT_APPS },
+      app: { type: "string", enum: ACCOUNT_APPS },
       expiresAt: { type: "number" },
       expiresIn: { type: "number" },
     },

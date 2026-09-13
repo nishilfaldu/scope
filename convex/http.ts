@@ -3,7 +3,7 @@ import {
   describeCredentials,
   handleCredentials,
   handleHealth,
-  handlePlatforms,
+  handleApps,
   optionsOk,
 } from "./httpAgent";
 import { oauthCallback, oauthConnect } from "./httpOauth";
@@ -27,14 +27,14 @@ http.route({
   handler: handleCredentials,
 });
 http.route({
-  path: "/api/platforms",
+  path: "/api/apps",
   method: "OPTIONS",
   handler: optionsOk,
 });
 http.route({
-  path: "/api/platforms",
+  path: "/api/apps",
   method: "GET",
-  handler: handlePlatforms,
+  handler: handleApps,
 });
 http.route({
   path: "/api/health",

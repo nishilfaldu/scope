@@ -6,7 +6,7 @@ import type {
 
 export const KIND_LABELS: Record<AuditKind, string> = {
   issued: "Issued",
-  platform_toggled: "Platform toggled",
+  app_toggled: "App toggled",
   revoked: "Revoked",
   expired: "Expired",
   token_issued: "Token issued",
@@ -19,6 +19,7 @@ const LEGACY_KIND_LABELS: Record<string, string> = {
   presented: "Presented",
   verified: "Verified",
   used: "Used",
+  platform_toggled: "App toggled",
 };
 
 export const ACTOR_TYPE_LABELS: Record<ActorType, string> = {

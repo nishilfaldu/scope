@@ -4,7 +4,7 @@ export const AGENT_ERROR_CODES = [
   "UNAUTHORIZED",
   "REVOKED",
   "EXPIRED",
-  "PLATFORM_UNAVAILABLE",
+  "APP_UNAVAILABLE",
   "INVALID_REQUEST",
   "PROVIDER_ERROR",
 ] as const;
@@ -15,13 +15,13 @@ export const agentErrorCodeValidator = v.union(
   v.literal("UNAUTHORIZED"),
   v.literal("REVOKED"),
   v.literal("EXPIRED"),
-  v.literal("PLATFORM_UNAVAILABLE"),
+  v.literal("APP_UNAVAILABLE"),
   v.literal("INVALID_REQUEST"),
   v.literal("PROVIDER_ERROR"),
 );
 
-export const PLATFORM_UNAVAILABLE_ERROR =
-  "This platform is not available on this passport";
+export const APP_UNAVAILABLE_ERROR =
+  "This app is not available on this passport";
 
 export const UNAUTHORIZED_ERROR = "Unknown passport or invoke key";
 

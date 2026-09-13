@@ -17,9 +17,9 @@ Open [http://localhost:3000](http://localhost:3000). Convex HTTP routes live on 
 
 - `GET /api/health` returns `{ ok, oauth }` with no secrets.
 - `GET /api/credentials` describes `POST`.
-- `POST /api/credentials` with `{ passportId, invokeKey, platform, refresh? }` returns a Bearer token. Without `refresh: true`, a still-valid live token is reused.
-- `GET /api/platforms` with `passportId` and `invokeKey` headers lists each platform as `on` or `off`.
-- Denials are `{ error, code }`. Unknown, off, and unconnected platforms share `PLATFORM_UNAVAILABLE`.
+- `POST /api/credentials` with `{ passportId, invokeKey, app, refresh? }` returns a Bearer token. Without `refresh: true`, a still-valid live token is reused.
+- `GET /api/apps` with `passportId` and `invokeKey` headers lists each app as `on` or `off`.
+- Denials are `{ error, code }`. Unknown, off, and unconnected apps share `APP_UNAVAILABLE`.
 
 ## Deploy
 
