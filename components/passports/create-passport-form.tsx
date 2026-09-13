@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMutation } from "convex/react";
+import { toast } from "sonner";
 
 import { api } from "@/convex/_generated/api";
 import { useAppForm } from "@/components/form";
@@ -58,11 +59,13 @@ export function CreatePassportForm({
           invokeKey: result.invokeKey,
           name: result.name,
         });
+        toast.success("Passport created");
         formApi.reset();
       } catch (error) {
-        setSubmitError(
-          error instanceof Error ? error.message : "Creation failed",
-        );
+        const message =
+          error instanceof Error ? error.message : "Creation failed";
+        setSubmitError(message);
+        toast.error(message);
       }
     },
   });
@@ -89,7 +92,7 @@ export function CreatePassportForm({
         >
           {(field) => (
             <field.CheckboxGroupField
-              legend="Platforms"
+              legend="Apps"
               options={APP_OPTIONS}
             />
           )}
