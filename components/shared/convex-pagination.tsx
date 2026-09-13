@@ -5,18 +5,21 @@ import {
   PaginationContent,
   PaginationItem,
   PaginationNext,
+  PaginationPrevious,
 } from "@/components/ui/pagination";
 
 export function ConvexPagination({
-  status,
-  onLoadMore,
+  canPrevious,
+  canNext,
+  onPrevious,
+  onNext,
 }: {
-  status: string;
-  onLoadMore: () => void;
+  canPrevious: boolean;
+  canNext: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
 }) {
-  const canLoadMore = status === "CanLoadMore";
-  const loadingMore = status === "LoadingMore";
-  if (!canLoadMore && !loadingMore) {
+  if (!canPrevious && !canNext) {
     return null;
   }
 
@@ -24,14 +27,26 @@ export function ConvexPagination({
     <Pagination className="justify-end px-4 py-3">
       <PaginationContent>
         <PaginationItem>
-          <PaginationNext
+          <PaginationPrevious
             href="#"
-            text={loadingMore ? "Loading…" : "Next"}
-            aria-disabled={!canLoadMore}
-            className={!canLoadMore ? "pointer-events-none opacity-50" : undefined}
+            aria-disabled={!canPrevious}
+            className={
+              !canPrevious ? "pointer-events-none opacity-50" : undefined
+            }
             onClick={(event) => {
               event.preventDefault();
-              if (canLoadMore) onLoadMore();
+              if (canPrevious) onPrevious();
+            }}
+          />
+        </PaginationItem>
+        <PaginationItem>
+          <PaginationNext
+            href="#"
+            aria-disabled={!canNext}
+            className={!canNext ? "pointer-events-none opacity-50" : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              if (canNext) onNext();
             }}
           />
         </PaginationItem>
