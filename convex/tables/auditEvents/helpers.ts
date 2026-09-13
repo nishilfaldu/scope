@@ -52,7 +52,7 @@ export async function markExpired(
     action: null,
     argsPreview: null,
     httpStatus: null,
-    platform: null,
+    app: null,
     occurredAt: now,
   });
   const updated = await ctx.db.get("passports", passport._id);
@@ -92,7 +92,7 @@ export type AppendInput = {
   action: string | null;
   argsPreview: string | null;
   httpStatus: number | null;
-  platform: string | null;
+  app: string | null;
   occurredAt: number;
 };
 
@@ -108,7 +108,7 @@ export function asHashInput(
     action: string | null;
     argsPreview: string | null;
     httpStatus: number | null;
-    platform?: string | null;
+    app?: string | null;
     occurredAt: number;
   },
   seq: number,
@@ -127,7 +127,7 @@ export function asHashInput(
     action: input.action,
     argsPreview: input.argsPreview,
     httpStatus: input.httpStatus,
-    platform: input.platform ?? null,
+    app: input.app ?? null,
     occurredAt: input.occurredAt,
   };
 }

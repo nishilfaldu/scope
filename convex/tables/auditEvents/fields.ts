@@ -3,7 +3,7 @@ import { sha256Hex } from "../../secrets";
 
 export const AUDIT_KINDS = [
   "issued",
-  "platform_toggled",
+  "app_toggled",
   "revoked",
   "expired",
   "token_issued",
@@ -22,6 +22,7 @@ export type Outcome = (typeof OUTCOMES)[number];
 
 export const auditKindValidator = v.union(
   v.literal("issued"),
+  v.literal("app_toggled"),
   v.literal("platform_toggled"),
   v.literal("revoked"),
   v.literal("expired"),
@@ -57,6 +58,7 @@ export const auditEventValidator = v.object({
   action: v.union(v.string(), v.null()),
   argsPreview: v.union(v.string(), v.null()),
   httpStatus: v.union(v.number(), v.null()),
+  app: v.optional(v.union(v.string(), v.null())),
   platform: v.optional(v.union(v.string(), v.null())),
   occurredAt: v.number(),
   seq: v.number(),
@@ -77,7 +79,7 @@ export type HashInput = {
   action: string | null;
   argsPreview: string | null;
   httpStatus: number | null;
-  platform: string | null;
+  app: string | null;
   occurredAt: number;
 };
 
@@ -95,7 +97,7 @@ function canonicalAuditPayload(input: HashInput): string {
     input.action,
     input.argsPreview,
     input.httpStatus,
-    input.platform,
+    input.app,
     input.occurredAt,
   ]);
 }
