@@ -6,7 +6,7 @@ export default defineSchema({
   passports: defineTable({
     name: v.string(),
     token: v.string(),
-    invokeKeyHash: v.optional(v.string()),
+    passportSecretHash: v.optional(v.string()),
     status: v.union(
       v.literal("active"),
       v.literal("revoked"),

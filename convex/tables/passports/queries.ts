@@ -3,30 +3,17 @@ import {
   paginationResultValidator,
 } from "convex/server";
 import { v } from "convex/values";
-import { internalQuery, query, type QueryCtx } from "../../_generated/server";
-import type { Doc } from "../../_generated/dataModel";
+import { internalQuery, query } from "../../_generated/server";
 import { appValidator, ALL_APPS } from "../../permissions";
 import schema from "../../schema";
-import { hashesEqual, sha256Hex } from "../../secrets";
 import {
   denyResultValidator,
   UNAUTHORIZED_ERROR,
 } from "../../agentErrors";
+import { passportBySecret, withoutPassportSecretHash } from "./helpers";
 
 const passportDoc = schema.doc("passports");
-const boardPassport = passportDoc.omit("invokeKeyHash");
-
-function withoutInvokeKey(passport: Doc<"passports">) {
-  return {
-    _id: passport._id,
-    _creationTime: passport._creationTime,
-    name: passport.name,
-    token: passport.token,
-    status: passport.status,
-    expiresAt: passport.expiresAt,
-    apps: passport.apps,
-  };
-}
+const boardPassport = passportDoc.omit("passportSecretHash");
 
 export const list = query({
   args: { paginationOpts: paginationOptsValidator },
@@ -38,7 +25,7 @@ export const list = query({
       .paginate(args.paginationOpts);
     return {
       ...results,
-      page: results.page.map(withoutInvokeKey),
+      page: results.page.map(withoutPassportSecretHash),
     };
   },
 });
@@ -55,40 +42,14 @@ export const get = query({
     if (!passport) {
       return null;
     }
-    return withoutInvokeKey(passport);
-  },
-});
-
-async function passportByInvokeKey(
-  ctx: QueryCtx,
-  args: { token: string; invokeKey: string },
-): Promise<Doc<"passports"> | null> {
-  const passport = await ctx.db
-    .query("passports")
-    .withIndex("by_token", (q) => q.eq("token", args.token))
-    .unique();
-  if (!passport?.invokeKeyHash) {
-    return null;
-  }
-  const invokeHash = await sha256Hex(args.invokeKey);
-  if (!hashesEqual(invokeHash, passport.invokeKeyHash)) {
-    return null;
-  }
-  return passport;
-}
-
-export const getByCredentials = internalQuery({
-  args: { token: v.string(), invokeKey: v.string() },
-  returns: v.union(passportDoc, v.null()),
-  handler: async (ctx, args) => {
-    return await passportByInvokeKey(ctx, args);
+    return withoutPassportSecretHash(passport);
   },
 });
 
 export const discoverApps = internalQuery({
   args: {
-    token: v.string(),
-    invokeKey: v.string(),
+    passportToken: v.string(),
+    passportSecret: v.string(),
     now: v.number(),
   },
   returns: v.union(
@@ -105,7 +66,7 @@ export const discoverApps = internalQuery({
     denyResultValidator,
   ),
   handler: async (ctx, args) => {
-    const passport = await passportByInvokeKey(ctx, args);
+    const passport = await passportBySecret(ctx, args);
     if (!passport) {
       return {
         ok: false as const,

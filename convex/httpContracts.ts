@@ -23,10 +23,10 @@ export const credentialsContract: PostContract = {
   method: "POST",
   body: {
     type: "object",
-    required: ["passportId", "invokeKey", "app"],
+    required: ["passportToken", "passportSecret", "app"],
     properties: {
-      passportId: { type: "string" },
-      invokeKey: { type: "string" },
+      passportToken: { type: "string" },
+      passportSecret: { type: "string" },
       app: { type: "string", enum: ACCOUNT_APPS },
       refresh: { type: "boolean" },
     },

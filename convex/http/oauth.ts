@@ -1,72 +1,10 @@
-import { env, httpAction } from "./_generated/server";
-import { internal } from "./_generated/api";
-import { exchangeAuthorizationCode, startAuthorize } from "./oauth";
-import type { ProviderId } from "./permissions";
+import { httpAction } from "../_generated/server";
+import { internal } from "../_generated/api";
+import { exchangeAuthorizationCode, startAuthorize } from "../oauth";
+import type { ProviderId } from "../permissions";
+import { allowedReturnTo, redirectTo } from "./helpers";
 
-const ALLOWED_RETURN_PATHS = new Set(["/", "/connections"]);
-
-export function parseBoardOrigin(raw: string | undefined): string | null {
-  const trimmed = raw?.trim();
-  if (!trimmed) {
-    return null;
-  }
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return null;
-    }
-    return url.origin;
-  } catch {
-    return null;
-  }
-}
-
-export function resolveReturnTo(
-  value: string | null,
-  boardOrigin: string | null,
-): string {
-  const fallbackOrigin = boardOrigin ?? "http://localhost:3000";
-  const fallback = `${fallbackOrigin}/connections`;
-  if (!value) {
-    return fallback;
-  }
-  try {
-    const url = new URL(value);
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return fallback;
-    }
-    const local =
-      url.hostname === "localhost" || url.hostname === "127.0.0.1";
-    const configured = boardOrigin !== null && url.origin === boardOrigin;
-    if (!local && !configured) {
-      return fallback;
-    }
-    const path = ALLOWED_RETURN_PATHS.has(url.pathname)
-      ? url.pathname
-      : "/connections";
-    return `${url.origin}${path}`;
-  } catch {
-    return fallback;
-  }
-}
-
-function allowedReturnTo(value: string | null): string {
-  return resolveReturnTo(value, parseBoardOrigin(env.BOARD_ORIGIN));
-}
-
-function redirectTo(
-  returnTo: string,
-  provider: ProviderId,
-  status: string,
-  reason?: string,
-): Response {
-  const url = new URL(returnTo);
-  url.searchParams.set(provider, status);
-  if (reason) {
-    url.searchParams.set("reason", reason);
-  }
-  return Response.redirect(url.toString(), 302);
-}
+export { parseBoardOrigin, resolveReturnTo } from "./helpers";
 
 export function oauthConnect(provider: ProviderId) {
   return httpAction(async (ctx, request) => {

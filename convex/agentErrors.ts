@@ -23,7 +23,7 @@ export const agentErrorCodeValidator = v.union(
 export const APP_UNAVAILABLE_ERROR =
   "This app is not available on this passport";
 
-export const UNAUTHORIZED_ERROR = "Unknown passport or invoke key";
+export const UNAUTHORIZED_ERROR = "Unknown passport token or passport secret";
 
 export const denyResultValidator = v.object({
   ok: v.literal(false),

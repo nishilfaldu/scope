@@ -70,13 +70,13 @@ export const handleCredentials = httpAction(async (ctx, request) => {
     return body;
   }
 
-  const passportId = requiredString(body, "passportId");
-  if (passportId instanceof Response) {
-    return passportId;
+  const passportToken = requiredString(body, "passportToken");
+  if (passportToken instanceof Response) {
+    return passportToken;
   }
-  const invokeKey = requiredString(body, "invokeKey");
-  if (invokeKey instanceof Response) {
-    return invokeKey;
+  const passportSecret = requiredString(body, "passportSecret");
+  if (passportSecret instanceof Response) {
+    return passportSecret;
   }
   const app = requiredString(body, "app");
   if (app instanceof Response) {
@@ -88,8 +88,8 @@ export const handleCredentials = httpAction(async (ctx, request) => {
   const refresh = body.refresh === true;
 
   const decision = await ctx.runMutation(internal.tables.passports.credentials.authorizeCreate, {
-    passportToken: passportId,
-    invokeKey,
+    passportToken,
+    passportSecret,
     app,
     refresh,
   });
@@ -126,18 +126,18 @@ export const handleCredentials = httpAction(async (ctx, request) => {
 });
 
 export const handleApps = httpAction(async (ctx, request) => {
-  const passportId = requiredHeader(request, "passportId");
-  if (passportId instanceof Response) {
-    return passportId;
+  const passportToken = requiredHeader(request, "passportToken");
+  if (passportToken instanceof Response) {
+    return passportToken;
   }
-  const invokeKey = requiredHeader(request, "invokeKey");
-  if (invokeKey instanceof Response) {
-    return invokeKey;
+  const passportSecret = requiredHeader(request, "passportSecret");
+  if (passportSecret instanceof Response) {
+    return passportSecret;
   }
 
   const decision = await ctx.runQuery(internal.tables.passports.queries.discoverApps, {
-    token: passportId,
-    invokeKey,
+    passportToken,
+    passportSecret,
     now: Date.now(),
   });
   if (!decision.ok) {

@@ -30,7 +30,7 @@ export function CreatePassportDialog({
       title={createdPassport ? "Passport created" : "Create a passport"}
       description={
         createdPassport
-          ? "Copy these credentials now. The invoke key will not be shown again."
+          ? "Copy these credentials now. The passport secret will not be shown again."
           : "Create a time-boxed identity for one job and choose which connected apps it can request."
       }
       content={

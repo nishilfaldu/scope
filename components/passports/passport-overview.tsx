@@ -41,7 +41,7 @@ export function PassportOverview({ passportId }: { passportId: string }) {
             variant="outline"
             size="sm"
             disabled={isRevoking}
-            onClick={() => void revoke({ passportId: passport.token })}
+            onClick={() => void revoke({ passportToken: passport.token })}
           >
             <HugeiconsIcon
               icon={Delete02Icon}
@@ -53,7 +53,7 @@ export function PassportOverview({ passportId }: { passportId: string }) {
         ) : null
       }
     >
-      <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <p className="text-xs text-muted-foreground">Status</p>
           <Badge
@@ -75,11 +75,6 @@ export function PassportOverview({ passportId }: { passportId: string }) {
             {formatRemaining(passport.expiresAt, now)}
           </p>
         </div>
-        <CopyableField
-          label="Passport id"
-          value={passport._id}
-          successMessage="Passport id copied"
-        />
         <CopyableField
           label="Passport token"
           value={passport.token}

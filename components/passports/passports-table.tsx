@@ -61,7 +61,7 @@ export function PassportsTable() {
   async function handleRevoke(passportToken: string) {
     setRevokingId(passportToken);
     try {
-      await revoke({ passportId: passportToken });
+      await revoke({ passportToken });
     } finally {
       setRevokingId(null);
     }
@@ -131,16 +131,10 @@ export function PassportsTable() {
             onSelect: () => router.push(`/passports/${passport._id}`),
           },
           {
-            id: "copy-id",
-            label: "Copy passport id",
-            icon: Copy01Icon,
-            onSelect: () => void handleCopy("Passport id", passport._id),
-          },
-          {
             id: "copy-token",
-            label: "Copy token",
+            label: "Copy passport token",
             icon: Copy01Icon,
-            onSelect: () => void handleCopy("Token", passport.token),
+            onSelect: () => void handleCopy("Passport token", passport.token),
           },
         ];
         if (passport.status === "active") {

@@ -10,29 +10,16 @@ import {
   denyResultValidator,
   APP_UNAVAILABLE_ERROR,
   UNAUTHORIZED_ERROR,
-  type AgentErrorCode,
 } from "../../agentErrors";
 import { hashesEqual, sha256Hex } from "../../secrets";
+import { denyCreate } from "./helpers";
 
 export const APP_TOKEN_TTL_MS = 15 * 60 * 1000;
-
-function denyCreate(
-  status: number,
-  reason: string,
-  code: AgentErrorCode,
-): {
-  ok: false;
-  status: number;
-  reason: string;
-  code: AgentErrorCode;
-} {
-  return { ok: false, status, reason, code };
-}
 
 export const authorizeCreate = internalMutation({
   args: {
     passportToken: v.string(),
-    invokeKey: v.string(),
+    passportSecret: v.string(),
     app: v.string(),
     refresh: v.boolean(),
   },
@@ -61,11 +48,11 @@ export const authorizeCreate = internalMutation({
       };
     }
 
-    if (!passport.invokeKeyHash) {
+    if (!passport.passportSecretHash) {
       return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
     }
-    const invokeHash = await sha256Hex(args.invokeKey);
-    if (!hashesEqual(invokeHash, passport.invokeKeyHash)) {
+    const secretHash = await sha256Hex(args.passportSecret);
+    if (!hashesEqual(secretHash, passport.passportSecretHash)) {
       return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
     }
 

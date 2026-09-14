@@ -6,7 +6,7 @@ import {
   handleApps,
   optionsOk,
 } from "./httpAgent";
-import { oauthCallback, oauthConnect } from "./httpOauth";
+import { oauthCallback, oauthConnect } from "./http/oauth";
 import { PROVIDERS } from "./permissions";
 
 const http = httpRouter();

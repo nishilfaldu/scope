@@ -23,7 +23,7 @@ export function PassportApps({ passportId }: { passportId: string }) {
   function handleToggle(app: AppId, enabled: boolean) {
     if (!passport) return;
     void setApp({
-      passportId: passport.token,
+      passportToken: passport.token,
       app,
       enabled,
     });

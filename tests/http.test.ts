@@ -3,7 +3,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { resolveReturnTo } from "../convex/httpOauth";
+import { resolveReturnTo } from "../convex/http/helpers";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -39,10 +39,10 @@ describe("GET /api/credentials", () => {
       method: "POST",
       body: {
         type: "object",
-        required: ["passportId", "invokeKey", "app"],
+        required: ["passportToken", "passportSecret", "app"],
         properties: {
-          passportId: { type: "string" },
-          invokeKey: { type: "string" },
+          passportToken: { type: "string" },
+          passportSecret: { type: "string" },
           app: {
             type: "string",
             enum: [
@@ -123,8 +123,8 @@ describe("POST /api/credentials denials", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        passportId: created.passportId,
-        invokeKey: created.invokeKey,
+        passportToken: created.passportToken,
+        passportSecret: created.passportSecret,
         app: "slack",
         refresh: "yes",
       }),
@@ -151,8 +151,8 @@ describe("POST /api/credentials denials", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        passportId: created.passportId,
-        invokeKey: created.invokeKey,
+        passportToken: created.passportToken,
+        passportSecret: created.passportSecret,
         app: "dropbox",
       }),
     });
@@ -162,8 +162,8 @@ describe("POST /api/credentials denials", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        passportId: created.passportId,
-        invokeKey: created.invokeKey,
+        passportToken: created.passportToken,
+        passportSecret: created.passportSecret,
         app: "github",
       }),
     });
@@ -171,7 +171,7 @@ describe("POST /api/credentials denials", () => {
     expect(await off.json()).toEqual(unavailable);
   });
 
-  test("wrong invoke key is unauthorized and does not name the app", async () => {
+  test("wrong passport secret is unauthorized and does not name the app", async () => {
     const test = t();
     const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Keyed",
@@ -182,21 +182,21 @@ describe("POST /api/credentials denials", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        passportId: created.passportId,
-        invokeKey: "ik_wrong",
+        passportToken: created.passportToken,
+        passportSecret: "ps_wrong",
         app: "github",
       }),
     });
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({
-      error: "Unknown passport or invoke key",
+      error: "Unknown passport token or passport secret",
       code: "UNAUTHORIZED",
     });
   });
 });
 
 describe("GET /api/apps", () => {
-  test("wrong or missing invoke key does not leak apps", async () => {
+  test("wrong or missing passport secret does not leak apps", async () => {
     const test = t();
     const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Secret",
@@ -206,14 +206,14 @@ describe("GET /api/apps", () => {
     const wrong = await test.fetch("/api/apps", {
       method: "GET",
       headers: {
-        passportId: created.passportId,
-        invokeKey: "ik_wrong",
+        passportToken: created.passportToken,
+        passportSecret: "ps_wrong",
       },
     });
     expect(wrong.status).toBe(401);
     const wrongBody = await wrong.json();
     expect(wrongBody).toEqual({
-      error: "Unknown passport or invoke key",
+      error: "Unknown passport token or passport secret",
       code: "UNAUTHORIZED",
     });
     expect(wrongBody).not.toHaveProperty("apps");
@@ -221,12 +221,12 @@ describe("GET /api/apps", () => {
 
     const missing = await test.fetch("/api/apps", {
       method: "GET",
-      headers: { passportId: created.passportId },
+      headers: { passportToken: created.passportToken },
     });
     expect(missing.status).toBe(400);
     const missingBody = await missing.json();
     expect(missingBody).toEqual({
-      error: "invokeKey must be a string",
+      error: "passportSecret must be a string",
       code: "INVALID_REQUEST",
     });
     expect(missingBody).not.toHaveProperty("apps");
@@ -247,8 +247,8 @@ describe("GET /api/apps", () => {
     const response = await test.fetch("/api/apps", {
       method: "GET",
       headers: {
-        passportId: created.passportId,
-        invokeKey: created.invokeKey,
+        passportToken: created.passportToken,
+        passportSecret: created.passportSecret,
       },
     });
     expect(response.status).toBe(200);
@@ -268,10 +268,10 @@ describe("GET /api/apps", () => {
 });
 
 describe("OAuth returnTo", () => {
-  test("localhost stays allowed and BOARD_ORIGIN is the deployed board", () => {
-    expect(resolveReturnTo("https://evil.example/phish", null)).toBe(
-      "http://localhost:3000/connections",
-    );
+  test("returnTo must match BOARD_ORIGIN; path stays allowlisted", () => {
+    expect(
+      resolveReturnTo("https://evil.example/phish", "http://localhost:3000"),
+    ).toBe("http://localhost:3000/connections");
     expect(
       resolveReturnTo("https://evil.example/phish", "https://board.example"),
     ).toBe("https://board.example/connections");
@@ -281,8 +281,14 @@ describe("OAuth returnTo", () => {
         "https://board.example",
       ),
     ).toBe("https://board.example/connections");
-    expect(resolveReturnTo("http://localhost:3000/", null)).toBe(
-      "http://localhost:3000/",
+    expect(
+      resolveReturnTo("http://localhost:3000/", "http://localhost:3000"),
+    ).toBe("http://localhost:3000/");
+    expect(
+      resolveReturnTo("http://localhost:3000/", "https://board.example"),
+    ).toBe("https://board.example/connections");
+    expect(resolveReturnTo(null, "https://board.example")).toBe(
+      "https://board.example/connections",
     );
   });
 });

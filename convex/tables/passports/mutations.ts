@@ -1,19 +1,11 @@
 import { v } from "convex/values";
-import type { Doc } from "../../_generated/dataModel";
-import { internalMutation, mutation, type MutationCtx } from "../../_generated/server";
+import { internalMutation, mutation } from "../../_generated/server";
 import { appValidator } from "../../permissions";
 import { randomSecret, sha256Hex } from "../../secrets";
+import { markExpired } from "./helpers";
 
 export const MAX_PASSPORT_NAME = 80;
 export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-async function markExpired(
-  ctx: MutationCtx,
-  passport: Doc<"passports">,
-): Promise<void> {
-  if (passport.status !== "active") return;
-  await ctx.db.patch("passports", passport._id, { status: "expired" });
-}
 
 export const expireDue = internalMutation({
   args: {},
@@ -41,8 +33,8 @@ export const create = mutation({
   },
   returns: v.object({
     id: v.id("passports"),
-    passportId: v.string(),
-    invokeKey: v.string(),
+    passportToken: v.string(),
+    passportSecret: v.string(),
     expiresAt: v.number(),
     name: v.string(),
     apps: v.array(appValidator),
@@ -67,13 +59,13 @@ export const create = mutation({
     }
 
     const token = randomSecret("pp_");
-    const invokeKey = randomSecret("ik_");
-    const invokeKeyHash = await sha256Hex(invokeKey);
+    const passportSecret = randomSecret("ps_");
+    const passportSecretHash = await sha256Hex(passportSecret);
     const expiresAt = Date.now() + args.ttlMs;
     const id = await ctx.db.insert("passports", {
       name,
       token,
-      invokeKeyHash,
+      passportSecretHash,
       status: "active",
       expiresAt,
       apps: uniqueApps,
@@ -81,8 +73,8 @@ export const create = mutation({
 
     return {
       id,
-      passportId: token,
-      invokeKey,
+      passportToken: token,
+      passportSecret,
       expiresAt,
       name,
       apps: uniqueApps,
@@ -92,7 +84,7 @@ export const create = mutation({
 
 export const setApp = mutation({
   args: {
-    passportId: v.string(),
+    passportToken: v.string(),
     app: appValidator,
     enabled: v.boolean(),
   },
@@ -100,7 +92,7 @@ export const setApp = mutation({
   handler: async (ctx, args) => {
     const passport = await ctx.db
       .query("passports")
-      .withIndex("by_token", (q) => q.eq("token", args.passportId))
+      .withIndex("by_token", (q) => q.eq("token", args.passportToken))
       .unique();
     if (!passport) {
       throw new Error("Passport not found");
@@ -126,12 +118,12 @@ export const setApp = mutation({
 });
 
 export const revoke = mutation({
-  args: { passportId: v.string() },
+  args: { passportToken: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
     const passport = await ctx.db
       .query("passports")
-      .withIndex("by_token", (q) => q.eq("token", args.passportId))
+      .withIndex("by_token", (q) => q.eq("token", args.passportToken))
       .unique();
     if (!passport) {
       throw new Error("Passport not found");
