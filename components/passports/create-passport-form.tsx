@@ -23,8 +23,8 @@ const APP_OPTIONS = ALL_APPS.map((app) => ({
 }));
 
 export type CreatedPassport = {
-  passportId: string;
-  invokeKey: string;
+  passportToken: string;
+  passportSecret: string;
   name: string;
 };
 
@@ -52,8 +52,8 @@ export function CreatePassportForm({
       });
       if (result === undefined) return;
       onCreated({
-        passportId: result.passportId,
-        invokeKey: result.invokeKey,
+        passportToken: result.passportToken,
+        passportSecret: result.passportSecret,
         name: result.name,
       });
       formApi.reset();

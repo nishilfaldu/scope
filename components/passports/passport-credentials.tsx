@@ -36,13 +36,13 @@ export function PassportCredentials({ passport }: { passport: CreatedPassport })
         <div className="min-w-0 flex-1">
           <p className="font-medium">Created {passport.name}</p>
           <p className="mt-0.5 text-muted-foreground">
-            Give the agent this passport token and invoke key. The invoke key is
-            shown once. Never share standing account tokens.
+            Give the agent this passport token and passport secret. The passport
+            secret is shown once. Never share standing account tokens.
           </p>
           <div className="mt-3 flex min-w-0 flex-col gap-2">
             {[
-              { label: "Passport token", value: passport.passportId },
-              { label: "Invoke key", value: passport.invokeKey },
+              { label: "Passport token", value: passport.passportToken },
+              { label: "Passport secret", value: passport.passportSecret },
             ].map((credential) => (
               <div
                 key={credential.label}
