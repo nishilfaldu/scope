@@ -9,10 +9,56 @@ import schema from "../../schema";
 import {
   actorTypeValidator,
   auditKindValidator,
+  hashAuditEvent,
   outcomeValidator,
 } from "./fields";
+import { passportDocForHash } from "./helpers";
 
 const auditEventDoc = schema.doc("auditEvents");
+
+export const chainStatus = query({
+  args: { passportId: v.string() },
+  returns: v.object({
+    eventCount: v.number(),
+    expectedSeq: v.number(),
+    intact: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const id = ctx.db.normalizeId("passports", args.passportId);
+    if (!id) {
+      return { eventCount: 0, expectedSeq: 0, intact: true };
+    }
+    const passport = await ctx.db.get("passports", id);
+    if (!passport) {
+      return { eventCount: 0, expectedSeq: 0, intact: true };
+    }
+    const events = await ctx.db
+      .query("auditEvents")
+      .withIndex("by_passport", (q) => q.eq("passportId", id))
+      .order("asc")
+      .take(500);
+    const expectedSeq = passport.auditSeq ?? 0;
+    let intact = expectedSeq === events.length || events.length === 500;
+    let prevHash: string | null = null;
+    for (let i = 0; i < events.length; i += 1) {
+      const event = events[i];
+      if (event.seq !== i + 1 || event.prevHash !== prevHash) {
+        intact = false;
+        break;
+      }
+      const expectedHash = await hashAuditEvent(passportDocForHash(event));
+      if (event.hash !== expectedHash) {
+        intact = false;
+        break;
+      }
+      prevHash = event.hash;
+    }
+    if (events.length > 0 && passport.auditHeadHash !== prevHash) {
+      intact = false;
+    }
+    return { eventCount: events.length, expectedSeq, intact };
+  },
+});
 
 export const listHistory = query({
   args: {

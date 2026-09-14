@@ -132,6 +132,27 @@ export function asHashInput(
   };
 }
 
+export function passportDocForHash(event: Doc<"auditEvents">): HashInput {
+  return asHashInput(
+    {
+      kind: event.kind,
+      actorType: event.actorType,
+      actorId: event.actorId,
+      scopes: event.scopes,
+      outcome: event.outcome,
+      reason: event.reason,
+      service: event.service,
+      action: event.action,
+      argsPreview: event.argsPreview,
+      httpStatus: event.httpStatus,
+      app: event.app ?? event.platform ?? null,
+      occurredAt: event.occurredAt,
+    },
+    event.seq,
+    event.prevHash,
+  );
+}
+
 export async function appendAuditEvent(
   ctx: MutationCtx,
   input: AppendInput,
