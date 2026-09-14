@@ -22,7 +22,6 @@ import { ConvexPagination } from "@/components/shared/convex-pagination";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { APP_LABELS, formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
@@ -34,11 +33,7 @@ type Passport = FunctionReturnType<
 
 const PAGE_SIZE = 10;
 
-export function PassportsTable({
-  onRequestCreate,
-}: {
-  onRequestCreate: () => void;
-}) {
+export function PassportsTable() {
   const router = useRouter();
   const { paginationOpts, canPrevious, goNext, goPrevious } =
     useCursorPagination(PAGE_SIZE);
@@ -189,13 +184,8 @@ export function PassportsTable({
       empty={
         <EmptyState
           title="No passports"
-          description="Create a virtual card for a job. Agents receive a passport id and an invoke key—never standing account tokens."
+          description="Create a virtual card for a job from the button above. Agents receive a passport id and an invoke key—never standing account tokens."
           icon={<HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />}
-          action={
-            <Button type="button" onClick={onRequestCreate}>
-              Create passport
-            </Button>
-          }
         />
       }
     />
