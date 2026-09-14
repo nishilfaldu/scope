@@ -1,7 +1,7 @@
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
-  PLATFORM_UNAVAILABLE_ERROR,
+  APP_UNAVAILABLE_ERROR,
   type AgentErrorCode,
 } from "./agentErrors";
 import { corsNoContent, jsonResponse } from "./httpCors";
@@ -78,9 +78,9 @@ export const handleCredentials = httpAction(async (ctx, request) => {
   if (invokeKey instanceof Response) {
     return invokeKey;
   }
-  const platform = requiredString(body, "platform");
-  if (platform instanceof Response) {
-    return platform;
+  const app = requiredString(body, "app");
+  if (app instanceof Response) {
+    return app;
   }
   if (body.refresh !== undefined && typeof body.refresh !== "boolean") {
     return errorResponse(400, "refresh must be a boolean", "INVALID_REQUEST");
@@ -90,7 +90,7 @@ export const handleCredentials = httpAction(async (ctx, request) => {
   const decision = await ctx.runMutation(internal.tables.passports.credentials.authorizeCreate, {
     passportToken: passportId,
     invokeKey,
-    platform,
+    app,
     refresh,
   });
   if (!decision.ok) {
@@ -101,28 +101,22 @@ export const handleCredentials = httpAction(async (ctx, request) => {
   if ("error" in issued) {
     const status = issued.error.endsWith("is not connected") ? 403 : 503;
     const code =
-      status === 403 ? "PLATFORM_UNAVAILABLE" : "PROVIDER_ERROR";
+      status === 403 ? "APP_UNAVAILABLE" : "PROVIDER_ERROR";
     const error =
-      status === 403 ? PLATFORM_UNAVAILABLE_ERROR : issued.error;
-    await ctx.runMutation(internal.tables.passports.credentials.logCreateDenied, {
-      passportId: decision.passportId,
-      platform: decision.platform,
-      reason: issued.error,
-      httpStatus: status,
-    });
+      status === 403 ? APP_UNAVAILABLE_ERROR : issued.error;
     return errorResponse(status, error, code);
   }
 
   const committed = await ctx.runMutation(internal.tables.passports.credentials.commitCreate, {
     passportId: decision.passportId,
-    platform: decision.platform,
+    app: decision.app,
     expiresAt: issued.expiresAt,
     refresh,
   });
   return jsonResponse(200, {
     accessToken: issued.accessToken,
     tokenType: "Bearer",
-    platform: decision.platform,
+    app: decision.app,
     expiresAt: committed.expiresAt,
     expiresIn: Math.max(
       0,
@@ -131,7 +125,7 @@ export const handleCredentials = httpAction(async (ctx, request) => {
   });
 });
 
-export const handlePlatforms = httpAction(async (ctx, request) => {
+export const handleApps = httpAction(async (ctx, request) => {
   const passportId = requiredHeader(request, "passportId");
   if (passportId instanceof Response) {
     return passportId;
@@ -141,7 +135,7 @@ export const handlePlatforms = httpAction(async (ctx, request) => {
     return invokeKey;
   }
 
-  const decision = await ctx.runQuery(internal.tables.passports.queries.discoverPlatforms, {
+  const decision = await ctx.runQuery(internal.tables.passports.queries.discoverApps, {
     token: passportId,
     invokeKey,
     now: Date.now(),
@@ -151,6 +145,6 @@ export const handlePlatforms = httpAction(async (ctx, request) => {
   }
   return jsonResponse(200, {
     expiresAt: decision.expiresAt,
-    platforms: decision.platforms,
+    apps: decision.apps,
   });
 });

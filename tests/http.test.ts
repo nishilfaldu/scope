@@ -39,11 +39,11 @@ describe("GET /api/credentials", () => {
       method: "POST",
       body: {
         type: "object",
-        required: ["passportId", "invokeKey", "platform"],
+        required: ["passportId", "invokeKey", "app"],
         properties: {
           passportId: { type: "string" },
           invokeKey: { type: "string" },
-          platform: {
+          app: {
             type: "string",
             enum: [
               "github",
@@ -63,14 +63,14 @@ describe("GET /api/credentials", () => {
         required: [
           "accessToken",
           "tokenType",
-          "platform",
+          "app",
           "expiresAt",
           "expiresIn",
         ],
         properties: {
           accessToken: { type: "string" },
           tokenType: { type: "string", const: "Bearer" },
-          platform: {
+          app: {
             type: "string",
             enum: [
               "github",
@@ -91,7 +91,7 @@ describe("GET /api/credentials", () => {
 });
 
 describe("OPTIONS", () => {
-  test.each(["/api/credentials", "/api/platforms"])(
+  test.each(["/api/credentials", "/api/apps"])(
     "%s returns 204 with an empty body",
     async (path) => {
       const response = await t().fetch(path, { method: "OPTIONS" });
@@ -125,7 +125,7 @@ describe("POST /api/credentials denials", () => {
       body: JSON.stringify({
         passportId: created.passportId,
         invokeKey: created.invokeKey,
-        platform: "slack",
+        app: "slack",
         refresh: "yes",
       }),
     });
@@ -136,7 +136,7 @@ describe("POST /api/credentials denials", () => {
     });
   });
 
-  test("unknown and off platforms share one code and error text", async () => {
+  test("unknown and off apps share one code and error text", async () => {
     const test = t();
     const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Keyed",
@@ -144,8 +144,8 @@ describe("POST /api/credentials denials", () => {
       apps: ["slack"],
     });
     const unavailable = {
-      error: "This platform is not available on this passport",
-      code: "PLATFORM_UNAVAILABLE",
+      error: "This app is not available on this passport",
+      code: "APP_UNAVAILABLE",
     };
     const unknown = await test.fetch("/api/credentials", {
       method: "POST",
@@ -153,7 +153,7 @@ describe("POST /api/credentials denials", () => {
       body: JSON.stringify({
         passportId: created.passportId,
         invokeKey: created.invokeKey,
-        platform: "dropbox",
+        app: "dropbox",
       }),
     });
     expect(unknown.status).toBe(403);
@@ -164,14 +164,14 @@ describe("POST /api/credentials denials", () => {
       body: JSON.stringify({
         passportId: created.passportId,
         invokeKey: created.invokeKey,
-        platform: "github",
+        app: "github",
       }),
     });
     expect(off.status).toBe(403);
     expect(await off.json()).toEqual(unavailable);
   });
 
-  test("wrong invoke key is unauthorized and does not name the platform", async () => {
+  test("wrong invoke key is unauthorized and does not name the app", async () => {
     const test = t();
     const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Keyed",
@@ -184,7 +184,7 @@ describe("POST /api/credentials denials", () => {
       body: JSON.stringify({
         passportId: created.passportId,
         invokeKey: "ik_wrong",
-        platform: "github",
+        app: "github",
       }),
     });
     expect(response.status).toBe(401);
@@ -195,15 +195,15 @@ describe("POST /api/credentials denials", () => {
   });
 });
 
-describe("GET /api/platforms", () => {
-  test("wrong or missing invoke key does not leak platforms", async () => {
+describe("GET /api/apps", () => {
+  test("wrong or missing invoke key does not leak apps", async () => {
     const test = t();
     const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Secret",
       ttlMs: 60_000,
       apps: ["github", "slack"],
     });
-    const wrong = await test.fetch("/api/platforms", {
+    const wrong = await test.fetch("/api/apps", {
       method: "GET",
       headers: {
         passportId: created.passportId,
@@ -216,10 +216,10 @@ describe("GET /api/platforms", () => {
       error: "Unknown passport or invoke key",
       code: "UNAUTHORIZED",
     });
-    expect(wrongBody).not.toHaveProperty("platforms");
+    expect(wrongBody).not.toHaveProperty("apps");
     expect(JSON.stringify(wrongBody)).not.toMatch(/github|slack/);
 
-    const missing = await test.fetch("/api/platforms", {
+    const missing = await test.fetch("/api/apps", {
       method: "GET",
       headers: { passportId: created.passportId },
     });
@@ -229,11 +229,11 @@ describe("GET /api/platforms", () => {
       error: "invokeKey must be a string",
       code: "INVALID_REQUEST",
     });
-    expect(missingBody).not.toHaveProperty("platforms");
+    expect(missingBody).not.toHaveProperty("apps");
     expect(JSON.stringify(missingBody)).not.toMatch(/github|slack/);
   });
 
-  test("returns on vs off for each platform and the passport expiry", async () => {
+  test("returns on vs off for each app and the passport expiry", async () => {
     const test = t();
     const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Mix",
@@ -244,7 +244,7 @@ describe("GET /api/platforms", () => {
       passportId: created.id,
     });
     expect(passport).not.toBeNull();
-    const response = await test.fetch("/api/platforms", {
+    const response = await test.fetch("/api/apps", {
       method: "GET",
       headers: {
         passportId: created.passportId,
@@ -254,14 +254,14 @@ describe("GET /api/platforms", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       expiresAt: passport!.expiresAt,
-      platforms: [
-        { platform: "github", status: "on" },
-        { platform: "gmail", status: "off" },
-        { platform: "calendar", status: "off" },
-        { platform: "drive", status: "off" },
-        { platform: "docs", status: "off" },
-        { platform: "sheets", status: "off" },
-        { platform: "slack", status: "off" },
+      apps: [
+        { app: "github", status: "on" },
+        { app: "gmail", status: "off" },
+        { app: "calendar", status: "off" },
+        { app: "drive", status: "off" },
+        { app: "docs", status: "off" },
+        { app: "sheets", status: "off" },
+        { app: "slack", status: "off" },
       ],
     });
   });

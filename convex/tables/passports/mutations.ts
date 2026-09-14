@@ -1,15 +1,37 @@
 import { v } from "convex/values";
-import { mutation } from "../../_generated/server";
+import type { Doc } from "../../_generated/dataModel";
+import { internalMutation, mutation, type MutationCtx } from "../../_generated/server";
 import { appValidator } from "../../permissions";
-import {
-  appendAuditEvent,
-  boardActorId,
-  markExpired,
-} from "../auditEvents/helpers";
 import { randomSecret, sha256Hex } from "../../secrets";
 
 export const MAX_PASSPORT_NAME = 80;
 export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function markExpired(
+  ctx: MutationCtx,
+  passport: Doc<"passports">,
+): Promise<void> {
+  if (passport.status !== "active") return;
+  await ctx.db.patch("passports", passport._id, { status: "expired" });
+}
+
+export const expireDue = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const now = Date.now();
+    const due = await ctx.db
+      .query("passports")
+      .withIndex("by_status_and_expiresAt", (q) =>
+        q.eq("status", "active").lte("expiresAt", now),
+      )
+      .take(25);
+    for (const passport of due) {
+      await markExpired(ctx, passport);
+    }
+    return due.length;
+  },
+});
 
 export const create = mutation({
   args: {
@@ -55,23 +77,6 @@ export const create = mutation({
       status: "active",
       expiresAt,
       apps: uniqueApps,
-      auditSeq: 0,
-    });
-    const actorId = await boardActorId(ctx);
-    await appendAuditEvent(ctx, {
-      passportId: id,
-      kind: "issued",
-      actorType: "board",
-      actorId,
-      scopes: uniqueApps,
-      outcome: "allowed",
-      reason: "Passport created",
-      service: "board",
-      action: null,
-      argsPreview: null,
-      httpStatus: null,
-      platform: null,
-      occurredAt: Date.now(),
     });
 
     return {
@@ -85,10 +90,10 @@ export const create = mutation({
   },
 });
 
-export const setPlatform = mutation({
+export const setApp = mutation({
   args: {
     passportId: v.string(),
-    platform: appValidator,
+    app: appValidator,
     enabled: v.boolean(),
   },
   returns: v.null(),
@@ -102,38 +107,20 @@ export const setPlatform = mutation({
     }
     const now = Date.now();
     if (passport.status === "active" && passport.expiresAt <= now) {
-      await markExpired(ctx, passport, now);
+      await markExpired(ctx, passport);
       throw new Error("Passport expired");
     }
     if (passport.status !== "active") {
       throw new Error("Passport is not live");
     }
-    const enabled = passport.apps.includes(args.platform);
+    const enabled = passport.apps.includes(args.app);
     if (enabled === args.enabled) {
       return null;
     }
     const apps = args.enabled
-      ? [...passport.apps, args.platform]
-      : passport.apps.filter((app) => app !== args.platform);
+      ? [...passport.apps, args.app]
+      : passport.apps.filter((app) => app !== args.app);
     await ctx.db.patch("passports", passport._id, { apps });
-    const actorId = await boardActorId(ctx);
-    await appendAuditEvent(ctx, {
-      passportId: passport._id,
-      kind: "platform_toggled",
-      actorType: "board",
-      actorId,
-      scopes: [args.platform],
-      outcome: "allowed",
-      reason: args.enabled
-        ? `Enabled ${args.platform}`
-        : `Disabled ${args.platform}`,
-      service: "board",
-      action: args.platform,
-      argsPreview: null,
-      httpStatus: null,
-      platform: args.platform,
-      occurredAt: Date.now(),
-    });
     return null;
   },
 });
@@ -154,25 +141,9 @@ export const revoke = mutation({
     }
     const now = Date.now();
     if (passport.status === "active" && passport.expiresAt <= now) {
-      await markExpired(ctx, passport, now);
+      await markExpired(ctx, passport);
     }
-    const actorId = await boardActorId(ctx);
     await ctx.db.patch("passports", passport._id, { status: "revoked" });
-    await appendAuditEvent(ctx, {
-      passportId: passport._id,
-      kind: "revoked",
-      actorType: "board",
-      actorId,
-      scopes: [...passport.apps],
-      outcome: "allowed",
-      reason: "Revoked by board",
-      service: "board",
-      action: null,
-      argsPreview: null,
-      httpStatus: null,
-      platform: null,
-      occurredAt: Date.now(),
-    });
     return null;
   },
 });

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { ConvexClientProvider } from "./ConvexClientProvider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { Toaster } from "@/components/ui/toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import "./globals.css";
@@ -42,9 +43,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           enableSystem
           disableTransitionOnChange
         >
-          <TooltipProvider>
-            <ConvexClientProvider>{children}</ConvexClientProvider>
-          </TooltipProvider>
+          <Toaster>
+            <TooltipProvider>
+              <ConvexClientProvider>{children}</ConvexClientProvider>
+            </TooltipProvider>
+          </Toaster>
         </ThemeProvider>
       </body>
     </html>

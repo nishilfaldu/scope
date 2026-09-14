@@ -29,10 +29,12 @@ describe("accounts and passports", () => {
     });
     expect(created.passportId.startsWith("pp_")).toBe(true);
     expect(created.invokeKey.startsWith("ik_")).toBe(true);
-    const listed = await test.query(api.tables.passports.queries.list, {});
-    expect(listed).toHaveLength(1);
-    expect(listed[0]).not.toHaveProperty("invokeKey");
-    expect(listed[0]).not.toHaveProperty("invokeKeyHash");
+    const listed = await test.query(api.tables.passports.queries.list, {
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+    expect(listed.page).toHaveLength(1);
+    expect(listed.page[0]).not.toHaveProperty("invokeKey");
+    expect(listed.page[0]).not.toHaveProperty("invokeKeyHash");
   });
 
   test("create validates its name and TTL", async () => {
@@ -54,28 +56,21 @@ describe("accounts and passports", () => {
     ).rejects.toThrow(/7 days/);
   });
 
-  test("setPlatform updates only the selected platform and records it", async () => {
+  test("setApp updates only the selected app", async () => {
     const test = t();
     const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Multi", ttlMs: 60_000, apps: ["github", "gmail", "slack"],
     });
-    await test.mutation(api.tables.passports.mutations.setPlatform, {
-      passportId: created.passportId, platform: "gmail", enabled: false,
+    await test.mutation(api.tables.passports.mutations.setApp, {
+      passportId: created.passportId, app: "gmail", enabled: false,
     });
     const passport = await test.query(api.tables.passports.queries.get, {
       passportId: created.id,
     });
     expect(passport?.apps.sort()).toEqual(["github", "slack"]);
-    const toggled = await test.query(api.tables.auditEvents.queries.listHistory, {
-      passportId: created.id,
-      kind: "platform_toggled",
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(toggled.page).toHaveLength(1);
-    expect(toggled.page[0]?.reason).toBe("Disabled gmail");
   });
 
-  test("disconnecting an account leaves passports and logs intact", async () => {
+  test("disconnecting an account leaves passports intact", async () => {
     const test = t();
     await seedGithub(test);
     const created = await test.mutation(api.tables.passports.mutations.create, {
@@ -86,16 +81,11 @@ describe("accounts and passports", () => {
       passportId: created.id,
     });
     expect(passport?.name).toBe("Keep me");
-    const history = await test.query(api.tables.auditEvents.queries.listHistory, {
-      passportId: created.id,
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(history.page[0]?.kind).toBe("issued");
   });
 });
 
 describe("credential authorization", () => {
-  test("an enabled connected platform is authorized and issuance is audited without its secret", async () => {
+  test("an enabled connected app is authorized without leaking the standing token", async () => {
     const test = t();
     await seedGithub(test);
     const created = await test.mutation(api.tables.passports.mutations.create, {
@@ -104,45 +94,41 @@ describe("credential authorization", () => {
     const allowed = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
       passportToken: created.passportId,
       invokeKey: created.invokeKey,
-      platform: "github",
+      app: "github",
       refresh: false,
     });
     expect(allowed).toMatchObject({
-      ok: true, passportId: created.id, platform: "github", provider: "github",
+      ok: true, passportId: created.id, app: "github", provider: "github",
     });
     if (!allowed.ok) throw new Error("expected authorization");
     const committed = await test.mutation(internal.tables.passports.credentials.commitCreate, {
       passportId: allowed.passportId,
-      platform: allowed.platform,
+      app: allowed.app,
       expiresAt: Date.now() + 60_000,
       refresh: false,
     });
     expect(committed.expiresAt).toBeGreaterThan(Date.now());
-    const history = await test.query(api.tables.auditEvents.queries.listHistory, {
-      passportId: created.id,
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(history.page.map((row) => row.kind)).toEqual(["token_issued", "issued"]);
-    expect(JSON.stringify(history.page)).not.toMatch(/ghs_/);
+    expect(JSON.stringify(allowed)).not.toMatch(/ghs_/);
+    expect(JSON.stringify(committed)).not.toMatch(/ghs_/);
   });
 
-  test("a disabled platform is denied server-side", async () => {
+  test("a disabled app is denied server-side", async () => {
     const test = t();
     await seedGithub(test);
     const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
     });
-    await test.mutation(api.tables.passports.mutations.setPlatform, {
-      passportId: created.passportId, platform: "github", enabled: false,
+    await test.mutation(api.tables.passports.mutations.setApp, {
+      passportId: created.passportId, app: "github", enabled: false,
     });
     const denied = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
       passportToken: created.passportId,
       invokeKey: created.invokeKey,
-      platform: "github",
+      app: "github",
       refresh: false,
     });
     expect(denied).toMatchObject({
-      ok: false, status: 403, code: "PLATFORM_UNAVAILABLE",
+      ok: false, status: 403, code: "APP_UNAVAILABLE",
     });
   });
 
@@ -158,7 +144,7 @@ describe("credential authorization", () => {
     const revoked = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
       passportToken: revokedPassport.passportId,
       invokeKey: revokedPassport.invokeKey,
-      platform: "github",
+      app: "github",
       refresh: false,
     });
     expect(revoked).toMatchObject({ ok: false, code: "REVOKED" });
@@ -174,13 +160,13 @@ describe("credential authorization", () => {
     const expired = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
       passportToken: expiredPassport.passportId,
       invokeKey: expiredPassport.invokeKey,
-      platform: "github",
+      app: "github",
       refresh: false,
     });
     expect(expired).toMatchObject({ ok: false, code: "EXPIRED" });
   });
 
-  test("unknown and unconnected platforms share the unavailable denial", async () => {
+  test("unknown and unconnected apps share the unavailable denial", async () => {
     const test = t();
     const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "GitHub only", ttlMs: 60_000, apps: ["github"],
@@ -188,20 +174,20 @@ describe("credential authorization", () => {
     const unavailable = {
       ok: false,
       status: 403,
-      reason: "This platform is not available on this passport",
-      code: "PLATFORM_UNAVAILABLE",
+      reason: "This app is not available on this passport",
+      code: "APP_UNAVAILABLE",
     };
     const unknown = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
       passportToken: created.passportId,
       invokeKey: created.invokeKey,
-      platform: "dropbox",
+      app: "dropbox",
       refresh: false,
     });
     expect(unknown).toMatchObject(unavailable);
     const unconnected = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
       passportToken: created.passportId,
       invokeKey: created.invokeKey,
-      platform: "github",
+      app: "github",
       refresh: false,
     });
     expect(unconnected).toMatchObject(unavailable);
@@ -216,13 +202,13 @@ describe("credential authorization", () => {
     const denied = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
       passportToken: created.passportId,
       invokeKey: "ik_wrong",
-      platform: "github",
+      app: "github",
       refresh: false,
     });
     expect(denied).toMatchObject({ ok: false, status: 401, code: "UNAUTHORIZED" });
   });
 
-  test("one Google connection covers every Google platform", async () => {
+  test("one Google connection covers every Google app", async () => {
     const test = t();
     await test.mutation(internal.tables.connections.mutations.saveConnection, {
       provider: "google",
@@ -230,18 +216,18 @@ describe("credential authorization", () => {
       login: "user@gmail.com",
       providerUserId: "sub",
     });
-    const platforms = ["gmail", "calendar", "drive", "docs", "sheets"] as const;
+    const apps = ["gmail", "calendar", "drive", "docs", "sheets"] as const;
     const created = await test.mutation(api.tables.passports.mutations.create, {
-      name: "Workspace", ttlMs: 60_000, apps: [...platforms],
+      name: "Workspace", ttlMs: 60_000, apps: [...apps],
     });
-    for (const platform of platforms) {
+    for (const app of apps) {
       const allowed = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
         passportToken: created.passportId,
         invokeKey: created.invokeKey,
-        platform,
+        app,
         refresh: false,
       });
-      expect(allowed).toMatchObject({ ok: true, provider: "google", platform });
+      expect(allowed).toMatchObject({ ok: true, provider: "google", app });
     }
   });
 });

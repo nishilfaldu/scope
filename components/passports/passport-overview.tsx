@@ -1,44 +1,27 @@
 "use client";
 
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { useState } from "react";
-import {
-  Copy01Icon,
-  Delete02Icon,
-  Tick02Icon,
-} from "@hugeicons/core-free-icons";
+import { Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { api } from "@/convex/_generated/api";
-import { PassportPlatforms } from "@/components/passports/passport-platforms";
+import { PassportApps } from "@/components/passports/passport-apps";
 import { ContentCard } from "@/components/shared/content-card";
+import { CopyableField } from "@/components/shared/copyable-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { STATUS_LABELS } from "@/lib/audit";
-import { formatRemaining } from "@/lib/capabilities";
+import { formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
+import { useErrorCatchingMutation } from "@/lib/errors";
 
 export function PassportOverview({ passportId }: { passportId: string }) {
   const passport = useQuery(api.tables.passports.queries.get, { passportId });
-  const revoke = useMutation(api.tables.passports.mutations.revoke);
-  const [copied, setCopied] = useState(false);
-  const [revoking, setRevoking] = useState(false);
+  const [revoke, isRevoking] = useErrorCatchingMutation(
+    api.tables.passports.mutations.revoke,
+    { successMessage: "Passport revoked" },
+  );
   const [now] = useState(() => Date.now());
-
-  async function copyToken(token: string) {
-    await navigator.clipboard.writeText(token);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
-  }
-
-  async function handleRevoke(token: string) {
-    setRevoking(true);
-    try {
-      await revoke({ passportId: token });
-    } finally {
-      setRevoking(false);
-    }
-  }
 
   if (passport === undefined) {
     return <Skeleton className="h-28 w-full" />;
@@ -51,21 +34,21 @@ export function PassportOverview({ passportId }: { passportId: string }) {
   return (
     <ContentCard
       title={passport.name}
-      description="Complete history of this passport's activity."
+      description="Status, credentials, and apps for this passport."
       action={
-        passport.lifetimeStatus === "active" ? (
+        passport.status === "active" ? (
           <Button
             variant="outline"
             size="sm"
-            disabled={revoking}
-            onClick={() => void handleRevoke(passport.token)}
+            disabled={isRevoking}
+            onClick={() => void revoke({ passportId: passport.token })}
           >
             <HugeiconsIcon
               icon={Delete02Icon}
               strokeWidth={2}
               data-icon="inline-start"
             />
-            {revoking ? "Revoking…" : "Revoke"}
+            {isRevoking ? "Revoking…" : "Revoke"}
           </Button>
         ) : null
       }
@@ -76,14 +59,14 @@ export function PassportOverview({ passportId }: { passportId: string }) {
           <Badge
             className="mt-1"
             variant={
-              passport.lifetimeStatus === "active"
+              passport.status === "active"
                 ? "secondary"
-                : passport.lifetimeStatus === "revoked"
+                : passport.status === "revoked"
                   ? "destructive"
                   : "outline"
             }
           >
-            {STATUS_LABELS[passport.lifetimeStatus]}
+            {STATUS_LABELS[passport.status]}
           </Badge>
         </div>
         <div>
@@ -92,28 +75,18 @@ export function PassportOverview({ passportId }: { passportId: string }) {
             {formatRemaining(passport.expiresAt, now)}
           </p>
         </div>
-        <div>
-          <p className="text-xs text-muted-foreground">Passport id</p>
-          <div className="mt-1 flex min-w-0 items-center gap-1">
-            <code className="max-w-36 truncate font-mono text-xs">
-              {passport.token}
-            </code>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => void copyToken(passport.token)}
-            >
-              <HugeiconsIcon
-                icon={copied ? Tick02Icon : Copy01Icon}
-                strokeWidth={2}
-              />
-              <span className="sr-only">Copy token</span>
-            </Button>
-          </div>
-        </div>
+        <CopyableField
+          label="Passport id"
+          value={passport._id}
+          successMessage="Passport id copied"
+        />
+        <CopyableField
+          label="Passport token"
+          value={passport.token}
+          successMessage="Passport token copied"
+        />
       </div>
-      <PassportPlatforms passportId={passportId} />
+      <PassportApps passportId={passportId} />
     </ContentCard>
   );
 }

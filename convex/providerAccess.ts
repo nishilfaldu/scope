@@ -7,7 +7,7 @@ import {
   type RefreshedTokens,
 } from "./oauth";
 import type { ProviderId } from "./permissions";
-import { PLATFORM_TOKEN_TTL_MS } from "./tables/passports/credentials";
+import { APP_TOKEN_TTL_MS } from "./tables/passports/credentials";
 
 function secretsChanged(
   connection: ConnectionSecrets,
@@ -55,13 +55,13 @@ export async function issueShortLivedAccess(
   }
   const refreshed = await refreshProviderTokens(provider, connection);
   if (!refreshed) {
-    return { error: "Could not refresh platform token" };
+    return { error: "Could not refresh provider token" };
   }
   await persistIfChanged(ctx, provider, connection, refreshed);
   const providerExpiry = refreshed.tokenExpiresAt ?? connection.tokenExpiresAt;
   const expiresAt = Math.min(
-    Date.now() + PLATFORM_TOKEN_TTL_MS,
-    providerExpiry ?? Date.now() + PLATFORM_TOKEN_TTL_MS,
+    Date.now() + APP_TOKEN_TTL_MS,
+    providerExpiry ?? Date.now() + APP_TOKEN_TTL_MS,
   );
   return { accessToken: refreshed.accessToken, expiresAt };
 }
