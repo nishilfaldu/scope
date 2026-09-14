@@ -10,12 +10,12 @@ import { Button } from "@/components/ui/button";
 
 export function PassportListCard() {
   return (
-    <ContentCard
-      title="Passports"
-      description="Create a time-boxed identity for one job and choose which connected apps it can request."
-      action={
-        <CreatePassportDialog>
-          {({ openModal }) => (
+    <CreatePassportDialog>
+      {({ openModal }) => (
+        <ContentCard
+          title="Passports"
+          description="Create a time-boxed identity for one job and choose which connected apps it can request."
+          action={
             <Button size="sm" onClick={openModal}>
               <HugeiconsIcon
                 icon={PlusSignIcon}
@@ -24,11 +24,11 @@ export function PassportListCard() {
               />
               Create passport
             </Button>
-          )}
-        </CreatePassportDialog>
-      }
-    >
-      <PassportsTable />
-    </ContentCard>
+          }
+        >
+          <PassportsTable onRequestCreate={openModal} />
+        </ContentCard>
+      )}
+    </CreatePassportDialog>
   );
 }

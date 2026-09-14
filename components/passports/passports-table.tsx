@@ -14,7 +14,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import type { FunctionReturnType } from "convex/server";
 
 import { api } from "@/convex/_generated/api";
-import { CreatePassportDialog } from "@/components/passports/create-passport-dialog";
 import {
   ActionsMenu,
   type ActionsMenuItem,
@@ -35,7 +34,11 @@ type Passport = FunctionReturnType<
 
 const PAGE_SIZE = 10;
 
-export function PassportsTable() {
+export function PassportsTable({
+  onRequestCreate,
+}: {
+  onRequestCreate: () => void;
+}) {
   const router = useRouter();
   const { paginationOpts, canPrevious, goNext, goPrevious } =
     useCursorPagination(PAGE_SIZE);
@@ -162,6 +165,7 @@ export function PassportsTable() {
   ];
 
   const canNext = result !== undefined && !result.isDone;
+  const showPagination = canPrevious || canNext;
 
   return (
     <DataTable
@@ -169,16 +173,18 @@ export function PassportsTable() {
       columns={columns}
       getRowKey={(passport) => passport._id}
       pagination={
-        <ConvexPagination
-          canPrevious={canPrevious}
-          canNext={canNext}
-          onPrevious={goPrevious}
-          onNext={() => {
-            if (result && !result.isDone) {
-              goNext(result.continueCursor);
-            }
-          }}
-        />
+        showPagination ? (
+          <ConvexPagination
+            canPrevious={canPrevious}
+            canNext={canNext}
+            onPrevious={goPrevious}
+            onNext={() => {
+              if (result && !result.isDone) {
+                goNext(result.continueCursor);
+              }
+            }}
+          />
+        ) : undefined
       }
       empty={
         <EmptyState
@@ -186,13 +192,9 @@ export function PassportsTable() {
           description="Create a virtual card for a job. Agents receive a passport id and an invoke key—never standing account tokens."
           icon={<HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />}
           action={
-            <CreatePassportDialog>
-              {({ openModal }) => (
-                <Button type="button" onClick={openModal}>
-                  Create passport
-                </Button>
-              )}
-            </CreatePassportDialog>
+            <Button type="button" onClick={onRequestCreate}>
+              Create passport
+            </Button>
           }
         />
       }
