@@ -20,21 +20,21 @@ async function seedGithub(test: ReturnType<typeof t>) {
 }
 
 describe("accounts and passports", () => {
-  test("create returns credentials without exposing the key hash", async () => {
+  test("create returns credentials without exposing the secret hash", async () => {
     const test = t();
     const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "PR agent",
       ttlMs: 60_000,
       apps: ["github", "gmail", "slack"],
     });
-    expect(created.passportId.startsWith("pp_")).toBe(true);
-    expect(created.invokeKey.startsWith("ik_")).toBe(true);
+    expect(created.passportToken.startsWith("pp_")).toBe(true);
+    expect(created.passportSecret.startsWith("ps_")).toBe(true);
     const listed = await test.query(api.tables.passports.queries.list, {
       paginationOpts: { numItems: 10, cursor: null },
     });
     expect(listed.page).toHaveLength(1);
-    expect(listed.page[0]).not.toHaveProperty("invokeKey");
-    expect(listed.page[0]).not.toHaveProperty("invokeKeyHash");
+    expect(listed.page[0]).not.toHaveProperty("passportSecret");
+    expect(listed.page[0]).not.toHaveProperty("passportSecretHash");
   });
 
   test("create validates its name and TTL", async () => {
@@ -62,7 +62,7 @@ describe("accounts and passports", () => {
       name: "Multi", ttlMs: 60_000, apps: ["github", "gmail", "slack"],
     });
     await test.mutation(api.tables.passports.mutations.setApp, {
-      passportId: created.passportId, app: "gmail", enabled: false,
+      passportToken: created.passportToken, app: "gmail", enabled: false,
     });
     const passport = await test.query(api.tables.passports.queries.get, {
       passportId: created.id,
@@ -92,8 +92,8 @@ describe("credential authorization", () => {
       name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
     });
     const allowed = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
-      passportToken: created.passportId,
-      invokeKey: created.invokeKey,
+      passportToken: created.passportToken,
+      passportSecret: created.passportSecret,
       app: "github",
       refresh: false,
     });
@@ -119,11 +119,11 @@ describe("credential authorization", () => {
       name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
     });
     await test.mutation(api.tables.passports.mutations.setApp, {
-      passportId: created.passportId, app: "github", enabled: false,
+      passportToken: created.passportToken, app: "github", enabled: false,
     });
     const denied = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
-      passportToken: created.passportId,
-      invokeKey: created.invokeKey,
+      passportToken: created.passportToken,
+      passportSecret: created.passportSecret,
       app: "github",
       refresh: false,
     });
@@ -139,11 +139,11 @@ describe("credential authorization", () => {
       name: "Revoked", ttlMs: 60_000, apps: ["github"],
     });
     await test.mutation(api.tables.passports.mutations.revoke, {
-      passportId: revokedPassport.passportId,
+      passportToken: revokedPassport.passportToken,
     });
     const revoked = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
-      passportToken: revokedPassport.passportId,
-      invokeKey: revokedPassport.invokeKey,
+      passportToken: revokedPassport.passportToken,
+      passportSecret: revokedPassport.passportSecret,
       app: "github",
       refresh: false,
     });
@@ -158,8 +158,8 @@ describe("credential authorization", () => {
       });
     });
     const expired = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
-      passportToken: expiredPassport.passportId,
-      invokeKey: expiredPassport.invokeKey,
+      passportToken: expiredPassport.passportToken,
+      passportSecret: expiredPassport.passportSecret,
       app: "github",
       refresh: false,
     });
@@ -178,30 +178,30 @@ describe("credential authorization", () => {
       code: "APP_UNAVAILABLE",
     };
     const unknown = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
-      passportToken: created.passportId,
-      invokeKey: created.invokeKey,
+      passportToken: created.passportToken,
+      passportSecret: created.passportSecret,
       app: "dropbox",
       refresh: false,
     });
     expect(unknown).toMatchObject(unavailable);
     const unconnected = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
-      passportToken: created.passportId,
-      invokeKey: created.invokeKey,
+      passportToken: created.passportToken,
+      passportSecret: created.passportSecret,
       app: "github",
       refresh: false,
     });
     expect(unconnected).toMatchObject(unavailable);
   });
 
-  test("an invalid invoke key is refused", async () => {
+  test("an invalid passport secret is refused", async () => {
     const test = t();
     await seedGithub(test);
     const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Keyed", ttlMs: 60_000, apps: ["github"],
     });
     const denied = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
-      passportToken: created.passportId,
-      invokeKey: "ik_wrong",
+      passportToken: created.passportToken,
+      passportSecret: "ps_wrong",
       app: "github",
       refresh: false,
     });
@@ -222,8 +222,8 @@ describe("credential authorization", () => {
     });
     for (const app of apps) {
       const allowed = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
-        passportToken: created.passportId,
-        invokeKey: created.invokeKey,
+        passportToken: created.passportToken,
+        passportSecret: created.passportSecret,
         app,
         refresh: false,
       });
