@@ -33,8 +33,8 @@ export const create = mutation({
   },
   returns: v.object({
     id: v.id("passports"),
-    passportId: v.string(),
-    invokeKey: v.string(),
+    passportToken: v.string(),
+    passportSecret: v.string(),
     expiresAt: v.number(),
     name: v.string(),
     apps: v.array(appValidator),
@@ -59,13 +59,13 @@ export const create = mutation({
     }
 
     const token = randomSecret("pp_");
-    const invokeKey = randomSecret("ik_");
-    const invokeKeyHash = await sha256Hex(invokeKey);
+    const passportSecret = randomSecret("ps_");
+    const passportSecretHash = await sha256Hex(passportSecret);
     const expiresAt = Date.now() + args.ttlMs;
     const id = await ctx.db.insert("passports", {
       name,
       token,
-      invokeKeyHash,
+      passportSecretHash,
       status: "active",
       expiresAt,
       apps: uniqueApps,
@@ -73,8 +73,8 @@ export const create = mutation({
 
     return {
       id,
-      passportId: token,
-      invokeKey,
+      passportToken: token,
+      passportSecret,
       expiresAt,
       name,
       apps: uniqueApps,
@@ -84,7 +84,7 @@ export const create = mutation({
 
 export const setApp = mutation({
   args: {
-    passportId: v.string(),
+    passportToken: v.string(),
     app: appValidator,
     enabled: v.boolean(),
   },
@@ -92,7 +92,7 @@ export const setApp = mutation({
   handler: async (ctx, args) => {
     const passport = await ctx.db
       .query("passports")
-      .withIndex("by_token", (q) => q.eq("token", args.passportId))
+      .withIndex("by_token", (q) => q.eq("token", args.passportToken))
       .unique();
     if (!passport) {
       throw new Error("Passport not found");
@@ -118,12 +118,12 @@ export const setApp = mutation({
 });
 
 export const revoke = mutation({
-  args: { passportId: v.string() },
+  args: { passportToken: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
     const passport = await ctx.db
       .query("passports")
-      .withIndex("by_token", (q) => q.eq("token", args.passportId))
+      .withIndex("by_token", (q) => q.eq("token", args.passportToken))
       .unique();
     if (!passport) {
       throw new Error("Passport not found");

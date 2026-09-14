@@ -10,10 +10,10 @@ import {
   denyResultValidator,
   UNAUTHORIZED_ERROR,
 } from "../../agentErrors";
-import { passportByInvokeKey, withoutInvokeKey } from "./helpers";
+import { passportBySecret, withoutPassportSecretHash } from "./helpers";
 
 const passportDoc = schema.doc("passports");
-const boardPassport = passportDoc.omit("invokeKeyHash");
+const boardPassport = passportDoc.omit("passportSecretHash");
 
 export const list = query({
   args: { paginationOpts: paginationOptsValidator },
@@ -25,7 +25,7 @@ export const list = query({
       .paginate(args.paginationOpts);
     return {
       ...results,
-      page: results.page.map(withoutInvokeKey),
+      page: results.page.map(withoutPassportSecretHash),
     };
   },
 });
@@ -42,14 +42,14 @@ export const get = query({
     if (!passport) {
       return null;
     }
-    return withoutInvokeKey(passport);
+    return withoutPassportSecretHash(passport);
   },
 });
 
 export const discoverApps = internalQuery({
   args: {
-    token: v.string(),
-    invokeKey: v.string(),
+    passportToken: v.string(),
+    passportSecret: v.string(),
     now: v.number(),
   },
   returns: v.union(
@@ -66,7 +66,7 @@ export const discoverApps = internalQuery({
     denyResultValidator,
   ),
   handler: async (ctx, args) => {
-    const passport = await passportByInvokeKey(ctx, args);
+    const passport = await passportBySecret(ctx, args);
     if (!passport) {
       return {
         ok: false as const,
