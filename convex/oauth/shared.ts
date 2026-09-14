@@ -5,6 +5,19 @@ import type { OAuthGrant, RefreshedTokens } from "./types";
 
 export const REFRESH_SKEW_MS = 2 * 60 * 1000;
 
+/** Missing/empty env (vitest/CI) must never throw on .trim(). */
+export function envTrimmed(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+export function envConfigured(value: unknown): boolean {
+  return envTrimmed(value) !== undefined;
+}
+
 export function oauthErrorReason(raw: unknown): string {
   if (isPlainObject(raw) && typeof raw.error === "string") {
     const error = raw.error.slice(0, 80);

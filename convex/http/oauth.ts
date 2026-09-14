@@ -13,6 +13,12 @@ export function oauthConnect(provider: ProviderId) {
     );
     const state = crypto.randomUUID();
     const started = startAuthorize(provider, state);
+    if ("error" in started) {
+      return new Response(started.error, {
+        status: 503,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
     await ctx.runMutation(internal.tables.oauthStates.mutations.put, {
       provider,
       state,

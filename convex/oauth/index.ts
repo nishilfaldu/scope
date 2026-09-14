@@ -1,5 +1,6 @@
 import { env } from "../_generated/server";
 import type { ProviderId } from "../permissions";
+import { envConfigured } from "./shared";
 import { PROVIDER_OAUTH } from "./providers";
 import type {
   AuthorizeStart,
@@ -9,11 +10,6 @@ import type {
 } from "./types";
 
 export type { ConnectionSecrets, OAuthGrant, RefreshedTokens };
-
-/** Missing/empty env (e.g. vitest/CI) counts as not configured — never throw. */
-function envConfigured(value: unknown): boolean {
-  return typeof value === "string" && value.trim().length > 0;
-}
 
 export function oauthConfigured(): Record<ProviderId, boolean> {
   return {
