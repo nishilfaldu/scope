@@ -7,6 +7,10 @@ import { internalQuery, query, type QueryCtx } from "../../_generated/server";
 import type { Doc } from "../../_generated/dataModel";
 import { appValidator, ALL_APPS } from "../../permissions";
 import schema from "../../schema";
+import {
+  lastEventValidator,
+  latestEvent,
+} from "../auditEvents/helpers";
 import { hashesEqual, sha256Hex } from "../../secrets";
 import {
   denyResultValidator,
@@ -14,7 +18,9 @@ import {
 } from "../../agentErrors";
 
 const passportDoc = schema.doc("passports");
-const boardPassport = passportDoc.omit("invokeKeyHash");
+const boardPassport = passportDoc.omit("invokeKeyHash").extend({
+  lastEvent: v.union(lastEventValidator, v.null()),
+});
 
 function withoutInvokeKey(passport: Doc<"passports">) {
   return {
@@ -25,6 +31,8 @@ function withoutInvokeKey(passport: Doc<"passports">) {
     status: passport.status,
     expiresAt: passport.expiresAt,
     apps: passport.apps,
+    auditSeq: passport.auditSeq,
+    auditHeadHash: passport.auditHeadHash,
   };
 }
 
@@ -36,10 +44,14 @@ export const list = query({
       .query("passports")
       .order("desc")
       .paginate(args.paginationOpts);
-    return {
-      ...results,
-      page: results.page.map(withoutInvokeKey),
-    };
+    const page = [];
+    for (const passport of results.page) {
+      page.push({
+        ...withoutInvokeKey(passport),
+        lastEvent: await latestEvent(ctx, passport._id),
+      });
+    }
+    return { ...results, page };
   },
 });
 
@@ -55,7 +67,10 @@ export const get = query({
     if (!passport) {
       return null;
     }
-    return withoutInvokeKey(passport);
+    return {
+      ...withoutInvokeKey(passport),
+      lastEvent: await latestEvent(ctx, passport._id),
+    };
   },
 });
 
