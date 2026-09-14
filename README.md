@@ -27,7 +27,7 @@ Set OAuth client ids and secrets on the Convex deployment. Set `BOARD_ORIGIN` to
 
 `GET /api/health` reports which OAuth providers have both a client id and a secret. It does not return the values.
 
-If schema deploy fails because `tokenLogs` still has rows, delete those documents in the Convex dashboard, then deploy again. Wipe leftover `auditEvents` there too if old chains look broken after the hash payload change. Do not add a wipe mutation.
+If schema deploy fails because `tokenLogs` still has rows, delete those documents in the Convex dashboard, then deploy again. Do not add a wipe mutation.
 
 ## Test
 

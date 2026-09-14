@@ -26,8 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
-import { STATUS_LABELS } from "@/lib/audit";
-import { APP_LABELS, formatRemaining } from "@/lib/capabilities";
+import { APP_LABELS, formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
 type Passport = FunctionReturnType<
@@ -129,7 +128,7 @@ export function PassportsTable() {
         const items: ActionsMenuItem[] = [
           {
             id: "view",
-            label: "View history",
+            label: "View",
             icon: File01Icon,
             onSelect: () => router.push(`/passports/${passport._id}`),
           },

@@ -7,7 +7,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@/convex/_generated/api";
 import { BoardShell } from "@/components/layout/board-shell";
 import { EmptyState } from "@/components/shared/empty-state";
-import { PassportHistory } from "@/components/passports/passport-history";
 import { PassportOverview } from "@/components/passports/passport-overview";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -51,9 +50,6 @@ export function PassportDetail({ passportId }: { passportId: string }) {
       <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
         <div className="px-4 lg:px-6">
           <PassportOverview passportId={passportId} />
-        </div>
-        <div className="px-4 lg:px-6">
-          <PassportHistory passportId={passportId} />
         </div>
       </div>
     </BoardShell>

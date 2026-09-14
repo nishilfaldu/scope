@@ -12,8 +12,7 @@ import { CopyableField } from "@/components/shared/copyable-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { STATUS_LABELS } from "@/lib/audit";
-import { formatRemaining } from "@/lib/capabilities";
+import { formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
 export function PassportOverview({ passportId }: { passportId: string }) {
@@ -35,7 +34,7 @@ export function PassportOverview({ passportId }: { passportId: string }) {
   return (
     <ContentCard
       title={passport.name}
-      description="Complete history of this passport's activity."
+      description="Status, credentials, and apps for this passport."
       action={
         passport.status === "active" ? (
           <Button
