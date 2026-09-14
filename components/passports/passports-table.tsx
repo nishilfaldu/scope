@@ -131,12 +131,6 @@ export function PassportsTable() {
             onSelect: () => router.push(`/passports/${passport._id}`),
           },
           {
-            id: "copy-id",
-            label: "Copy passport id",
-            icon: Copy01Icon,
-            onSelect: () => void handleCopy("Passport id", passport._id),
-          },
-          {
             id: "copy-token",
             label: "Copy token",
             icon: Copy01Icon,
