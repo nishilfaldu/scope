@@ -10,24 +10,11 @@ import {
   denyResultValidator,
   APP_UNAVAILABLE_ERROR,
   UNAUTHORIZED_ERROR,
-  type AgentErrorCode,
 } from "../../agentErrors";
 import { hashesEqual, sha256Hex } from "../../secrets";
+import { denyCreate } from "./helpers";
 
 export const APP_TOKEN_TTL_MS = 15 * 60 * 1000;
-
-function denyCreate(
-  status: number,
-  reason: string,
-  code: AgentErrorCode,
-): {
-  ok: false;
-  status: number;
-  reason: string;
-  code: AgentErrorCode;
-} {
-  return { ok: false, status, reason, code };
-}
 
 export const authorizeCreate = internalMutation({
   args: {

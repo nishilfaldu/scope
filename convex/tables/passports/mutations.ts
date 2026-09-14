@@ -1,19 +1,11 @@
 import { v } from "convex/values";
-import type { Doc } from "../../_generated/dataModel";
-import { internalMutation, mutation, type MutationCtx } from "../../_generated/server";
+import { internalMutation, mutation } from "../../_generated/server";
 import { appValidator } from "../../permissions";
 import { randomSecret, sha256Hex } from "../../secrets";
+import { markExpired } from "./helpers";
 
 export const MAX_PASSPORT_NAME = 80;
 export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-async function markExpired(
-  ctx: MutationCtx,
-  passport: Doc<"passports">,
-): Promise<void> {
-  if (passport.status !== "active") return;
-  await ctx.db.patch("passports", passport._id, { status: "expired" });
-}
 
 export const expireDue = internalMutation({
   args: {},
