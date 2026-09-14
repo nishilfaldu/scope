@@ -104,12 +104,6 @@ export const handleCredentials = httpAction(async (ctx, request) => {
       status === 403 ? "APP_UNAVAILABLE" : "PROVIDER_ERROR";
     const error =
       status === 403 ? APP_UNAVAILABLE_ERROR : issued.error;
-    await ctx.runMutation(internal.tables.passports.credentials.logCreateDenied, {
-      passportId: decision.passportId,
-      app: decision.app,
-      reason: issued.error,
-      httpStatus: status,
-    });
     return errorResponse(status, error, code);
   }
 
