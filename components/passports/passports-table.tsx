@@ -184,7 +184,7 @@ export function PassportsTable() {
       empty={
         <EmptyState
           title="No passports"
-          description="Create a virtual card for a job from the button above. Agents receive a passport id and an invoke key—never standing account tokens."
+          description="Create a virtual passport for an agent."
           icon={<HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />}
         />
       }
