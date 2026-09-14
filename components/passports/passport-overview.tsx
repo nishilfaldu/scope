@@ -41,7 +41,7 @@ export function PassportOverview({ passportId }: { passportId: string }) {
             variant="outline"
             size="sm"
             disabled={isRevoking}
-            onClick={() => void revoke({ passportId: passport.token })}
+            onClick={() => void revoke({ passportToken: passport.token })}
           >
             <HugeiconsIcon
               icon={Delete02Icon}
