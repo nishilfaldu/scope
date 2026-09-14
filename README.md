@@ -8,7 +8,7 @@ This board is a single-operator console. It has no login.
 
 ```bash
 pnpm install
-pnm dev
+pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Convex HTTP routes live on your deployment's `.convex.site` origin.
