@@ -1,5 +1,7 @@
 import { v } from "convex/values";
-import { internalMutation } from "../../_generated/server";
+import type { Id } from "../../_generated/dataModel";
+import { internalMutation, type MutationCtx } from "../../_generated/server";
+import { appendAuditEvent } from "../auditEvents/helpers";
 import {
   accountAppValidator,
   isAccountAppId,
@@ -16,16 +18,37 @@ import { hashesEqual, sha256Hex } from "../../secrets";
 
 export const APP_TOKEN_TTL_MS = 15 * 60 * 1000;
 
-function denyCreate(
+async function denyCreate(
+  ctx: MutationCtx,
+  passportId: Id<"passports"> | null,
+  app: string,
   status: number,
   reason: string,
   code: AgentErrorCode,
-): {
+  now: number,
+): Promise<{
   ok: false;
   status: number;
   reason: string;
   code: AgentErrorCode;
-} {
+}> {
+  if (passportId) {
+    await appendAuditEvent(ctx, {
+      passportId,
+      kind: "create_denied",
+      actorType: "agent",
+      actorId: "credentials",
+      scopes: [app],
+      outcome: "denied",
+      reason,
+      service: "credentials",
+      action: null,
+      argsPreview: null,
+      httpStatus: status,
+      app,
+      occurredAt: now,
+    });
+  }
   return { ok: false, status, reason, code };
 }
 
@@ -62,27 +85,75 @@ export const authorizeCreate = internalMutation({
     }
 
     if (!passport.invokeKeyHash) {
-      return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
+      return await denyCreate(
+        ctx,
+        passport._id,
+        args.app,
+        401,
+        UNAUTHORIZED_ERROR,
+        "UNAUTHORIZED",
+        now,
+      );
     }
     const invokeHash = await sha256Hex(args.invokeKey);
     if (!hashesEqual(invokeHash, passport.invokeKeyHash)) {
-      return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
+      return await denyCreate(
+        ctx,
+        passport._id,
+        args.app,
+        401,
+        UNAUTHORIZED_ERROR,
+        "UNAUTHORIZED",
+        now,
+      );
     }
 
     if (!isAccountAppId(args.app)) {
-      return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
+      return await denyCreate(
+        ctx,
+        passport._id,
+        args.app,
+        403,
+        APP_UNAVAILABLE_ERROR,
+        "APP_UNAVAILABLE",
+        now,
+      );
     }
     const app = args.app;
     const provider = providerForApp(app);
 
     if (passport.status === "revoked") {
-      return denyCreate(403, "Passport revoked", "REVOKED");
+      return await denyCreate(
+        ctx,
+        passport._id,
+        app,
+        403,
+        "Passport revoked",
+        "REVOKED",
+        now,
+      );
     }
     if (passport.status === "expired" || passport.expiresAt <= now) {
-      return denyCreate(403, "Passport expired", "EXPIRED");
+      return await denyCreate(
+        ctx,
+        passport._id,
+        app,
+        403,
+        "Passport expired",
+        "EXPIRED",
+        now,
+      );
     }
     if (!passport.apps.includes(app)) {
-      return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
+      return await denyCreate(
+        ctx,
+        passport._id,
+        app,
+        403,
+        APP_UNAVAILABLE_ERROR,
+        "APP_UNAVAILABLE",
+        now,
+      );
     }
 
     const connection = await ctx.db
@@ -90,7 +161,15 @@ export const authorizeCreate = internalMutation({
       .withIndex("by_provider", (q) => q.eq("provider", provider))
       .unique();
     if (!connection) {
-      return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
+      return await denyCreate(
+        ctx,
+        passport._id,
+        app,
+        403,
+        APP_UNAVAILABLE_ERROR,
+        "APP_UNAVAILABLE",
+        now,
+      );
     }
 
     return {
@@ -113,9 +192,54 @@ export const commitCreate = internalMutation({
   returns: v.object({
     expiresAt: v.number(),
   }),
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
     const now = Date.now();
     const expiresAt = Math.min(args.expiresAt, now + APP_TOKEN_TTL_MS);
+    await appendAuditEvent(ctx, {
+      passportId: args.passportId,
+      kind: args.refresh ? "token_refreshed" : "token_issued",
+      actorType: "agent",
+      actorId: "credentials",
+      scopes: [args.app],
+      outcome: "allowed",
+      reason: args.refresh
+        ? "Short-lived token refreshed"
+        : "Short-lived token issued",
+      service: "credentials",
+      action: null,
+      argsPreview: null,
+      httpStatus: 200,
+      app: args.app,
+      occurredAt: now,
+    });
     return { expiresAt };
+  },
+});
+
+export const logCreateDenied = internalMutation({
+  args: {
+    passportId: v.id("passports"),
+    app: v.string(),
+    reason: v.string(),
+    httpStatus: v.union(v.number(), v.null()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await appendAuditEvent(ctx, {
+      passportId: args.passportId,
+      app: args.app,
+      kind: "create_denied",
+      actorType: "agent",
+      actorId: "credentials",
+      scopes: [args.app],
+      outcome: "denied",
+      reason: args.reason,
+      service: "credentials",
+      action: null,
+      argsPreview: null,
+      httpStatus: args.httpStatus,
+      occurredAt: Date.now(),
+    });
+    return null;
   },
 });
