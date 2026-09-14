@@ -1,6 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { appValidator, providerValidator } from "./permissions";
+import { appValidator, providerValidator } from "./domain/apps";
 
 export default defineSchema({
   passports: defineTable({

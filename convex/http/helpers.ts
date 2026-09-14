@@ -1,5 +1,5 @@
 import { env } from "../_generated/server";
-import type { ProviderId } from "../permissions";
+import type { ProviderId } from "../domain/apps";
 
 const ALLOWED_RETURN_PATHS = new Set(["/", "/connections"]);
 

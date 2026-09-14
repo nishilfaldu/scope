@@ -1,5 +1,5 @@
 import { env } from "../../_generated/server";
-import { isPlainObject } from "../../json";
+import { isPlainObject } from "../../lib/json";
 import {
   envTrimmed,
   grantFromTokenPayload,

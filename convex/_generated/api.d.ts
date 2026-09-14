@@ -8,23 +8,33 @@
  * @module
  */
 
-import type * as agentErrors from "../agentErrors.js";
 import type * as crons from "../crons.js";
+import type * as domain_apps from "../domain/apps.js";
 import type * as http from "../http.js";
-import type * as httpAgent from "../httpAgent.js";
-import type * as httpContracts from "../httpContracts.js";
-import type * as httpCors from "../httpCors.js";
-import type * as httpOauth from "../httpOauth.js";
-import type * as json from "../json.js";
-import type * as oauth from "../oauth.js";
-import type * as permissions from "../permissions.js";
-import type * as providerAccess from "../providerAccess.js";
-import type * as secrets from "../secrets.js";
+import type * as http_contracts from "../http/contracts.js";
+import type * as http_helpers from "../http/helpers.js";
+import type * as http_httpAppsHandler from "../http/httpAppsHandler.js";
+import type * as http_httpCredentialsHandler from "../http/httpCredentialsHandler.js";
+import type * as http_oauth from "../http/oauth.js";
+import type * as lib_errors from "../lib/errors.js";
+import type * as lib_json from "../lib/json.js";
+import type * as lib_requests from "../lib/requests.js";
+import type * as lib_responses from "../lib/responses.js";
+import type * as lib_secrets from "../lib/secrets.js";
+import type * as oauth_access from "../oauth/access.js";
+import type * as oauth_index from "../oauth/index.js";
+import type * as oauth_providers_github from "../oauth/providers/github.js";
+import type * as oauth_providers_google from "../oauth/providers/google.js";
+import type * as oauth_providers_index from "../oauth/providers/index.js";
+import type * as oauth_providers_slack from "../oauth/providers/slack.js";
+import type * as oauth_shared from "../oauth/shared.js";
+import type * as oauth_types from "../oauth/types.js";
 import type * as tables_connections_actions from "../tables/connections/actions.js";
 import type * as tables_connections_mutations from "../tables/connections/mutations.js";
 import type * as tables_connections_queries from "../tables/connections/queries.js";
 import type * as tables_oauthStates_mutations from "../tables/oauthStates/mutations.js";
 import type * as tables_passports_credentials from "../tables/passports/credentials.js";
+import type * as tables_passports_helpers from "../tables/passports/helpers.js";
 import type * as tables_passports_mutations from "../tables/passports/mutations.js";
 import type * as tables_passports_queries from "../tables/passports/queries.js";
 
@@ -35,23 +45,33 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  agentErrors: typeof agentErrors;
   crons: typeof crons;
+  "domain/apps": typeof domain_apps;
   http: typeof http;
-  httpAgent: typeof httpAgent;
-  httpContracts: typeof httpContracts;
-  httpCors: typeof httpCors;
-  httpOauth: typeof httpOauth;
-  json: typeof json;
-  oauth: typeof oauth;
-  permissions: typeof permissions;
-  providerAccess: typeof providerAccess;
-  secrets: typeof secrets;
+  "http/contracts": typeof http_contracts;
+  "http/helpers": typeof http_helpers;
+  "http/httpAppsHandler": typeof http_httpAppsHandler;
+  "http/httpCredentialsHandler": typeof http_httpCredentialsHandler;
+  "http/oauth": typeof http_oauth;
+  "lib/errors": typeof lib_errors;
+  "lib/json": typeof lib_json;
+  "lib/requests": typeof lib_requests;
+  "lib/responses": typeof lib_responses;
+  "lib/secrets": typeof lib_secrets;
+  "oauth/access": typeof oauth_access;
+  "oauth/index": typeof oauth_index;
+  "oauth/providers/github": typeof oauth_providers_github;
+  "oauth/providers/google": typeof oauth_providers_google;
+  "oauth/providers/index": typeof oauth_providers_index;
+  "oauth/providers/slack": typeof oauth_providers_slack;
+  "oauth/shared": typeof oauth_shared;
+  "oauth/types": typeof oauth_types;
   "tables/connections/actions": typeof tables_connections_actions;
   "tables/connections/mutations": typeof tables_connections_mutations;
   "tables/connections/queries": typeof tables_connections_queries;
   "tables/oauthStates/mutations": typeof tables_oauthStates_mutations;
   "tables/passports/credentials": typeof tables_passports_credentials;
+  "tables/passports/helpers": typeof tables_passports_helpers;
   "tables/passports/mutations": typeof tables_passports_mutations;
   "tables/passports/queries": typeof tables_passports_queries;
 }>;

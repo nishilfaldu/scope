@@ -1,7 +1,7 @@
 import type { Doc } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
-import type { AgentErrorCode } from "../../agentErrors";
-import { hashesEqual, sha256Hex } from "../../secrets";
+import type { AgentErrorCode } from "../../lib/errors";
+import { hashesEqual, sha256Hex } from "../../lib/secrets";
 
 export function withoutPassportSecretHash(passport: Doc<"passports">) {
   return {

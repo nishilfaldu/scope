@@ -1,4 +1,4 @@
-import type { ProviderId } from "../../permissions";
+import type { ProviderId } from "../../domain/apps";
 import type { ProviderOAuth } from "../types";
 import { github } from "./github";
 import { google } from "./google";

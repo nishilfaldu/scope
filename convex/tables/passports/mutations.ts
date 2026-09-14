@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation, mutation } from "../../_generated/server";
-import { appValidator } from "../../permissions";
-import { randomSecret, sha256Hex } from "../../secrets";
+import { appValidator } from "../../domain/apps";
+import { randomSecret, sha256Hex } from "../../lib/secrets";
 import { markExpired } from "./helpers";
 
 export const MAX_PASSPORT_NAME = 80;

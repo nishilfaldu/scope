@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalQuery, query } from "../../_generated/server";
-import { PROVIDERS, providerValidator } from "../../permissions";
+import { PROVIDERS, providerValidator } from "../../domain/apps";
 
 const connectionValidator = v.object({
   accessToken: v.string(),

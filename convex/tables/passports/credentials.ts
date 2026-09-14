@@ -1,17 +1,17 @@
 import { v } from "convex/values";
 import { internalMutation } from "../../_generated/server";
 import {
-  accountAppValidator,
-  isAccountAppId,
+  isAppId,
+  appValidator,
   providerForApp,
   providerValidator,
-} from "../../permissions";
+} from "../../domain/apps";
 import {
   denyResultValidator,
   APP_UNAVAILABLE_ERROR,
   UNAUTHORIZED_ERROR,
-} from "../../agentErrors";
-import { hashesEqual, sha256Hex } from "../../secrets";
+} from "../../lib/errors";
+import { hashesEqual, sha256Hex } from "../../lib/secrets";
 import { denyCreate } from "./helpers";
 
 export const APP_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -27,7 +27,7 @@ export const authorizeCreate = internalMutation({
     v.object({
       ok: v.literal(true),
       passportId: v.id("passports"),
-      app: accountAppValidator,
+      app: appValidator,
       provider: providerValidator,
       refresh: v.boolean(),
     }),
@@ -56,7 +56,7 @@ export const authorizeCreate = internalMutation({
       return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
     }
 
-    if (!isAccountAppId(args.app)) {
+    if (!isAppId(args.app)) {
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
     }
     const app = args.app;
@@ -93,7 +93,7 @@ export const authorizeCreate = internalMutation({
 export const commitCreate = internalMutation({
   args: {
     passportId: v.id("passports"),
-    app: accountAppValidator,
+    app: appValidator,
     expiresAt: v.number(),
     refresh: v.boolean(),
   },

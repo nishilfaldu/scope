@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "../../_generated/server";
-import { providerValidator } from "../../permissions";
+import { providerValidator } from "../../domain/apps";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 

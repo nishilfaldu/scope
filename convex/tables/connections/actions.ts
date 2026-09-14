@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internal } from "../../_generated/api";
 import { action } from "../../_generated/server";
 import { revokeProviderGrant } from "../../oauth";
-import { providerValidator } from "../../permissions";
+import { providerValidator } from "../../domain/apps";
 
 export const disconnect = action({
   args: { provider: providerValidator },

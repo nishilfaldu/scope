@@ -1,13 +1,13 @@
 import type { GenericActionCtx } from "convex/server";
-import { internal } from "./_generated/api";
-import type { DataModel } from "./_generated/dataModel";
+import { internal } from "../_generated/api";
+import type { DataModel } from "../_generated/dataModel";
 import {
   refreshProviderTokens,
   type ConnectionSecrets,
   type RefreshedTokens,
-} from "./oauth";
-import type { ProviderId } from "./permissions";
-import { APP_TOKEN_TTL_MS } from "./tables/passports/credentials";
+} from "./index";
+import type { ProviderId } from "../domain/apps";
+import { APP_TOKEN_TTL_MS } from "../tables/passports/credentials";
 
 function secretsChanged(
   connection: ConnectionSecrets,

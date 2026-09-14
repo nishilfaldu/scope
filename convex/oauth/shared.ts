@@ -1,6 +1,6 @@
 import { env } from "../_generated/server";
-import { asFiniteNumber, isPlainObject } from "../json";
-import type { ProviderId } from "../permissions";
+import { asFiniteNumber, isPlainObject } from "../lib/json";
+import type { ProviderId } from "../domain/apps";
 import type { OAuthGrant, RefreshedTokens } from "./types";
 
 export const REFRESH_SKEW_MS = 2 * 60 * 1000;

@@ -48,29 +48,25 @@ export function PassportApps({ passportId }: { passportId: string }) {
   return (
     <div className="border-t px-6 py-4">
       <p className="text-xs text-muted-foreground">Apps</p>
-      {ALL_APPS.length === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">No apps available.</p>
-      ) : (
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {ALL_APPS.map((app) => {
-            const on = passport.apps.includes(app);
-            return (
-              <label
-                key={app}
-                className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
-              >
-                <span className="text-sm">{APP_LABELS[app]}</span>
-                <Switch
-                  checked={on}
-                  disabled={passport.status !== "active" || isToggling}
-                  onCheckedChange={(checked) => handleToggle(app, checked)}
-                  aria-label={`${APP_LABELS[app]} on this passport`}
-                />
-              </label>
-            );
-          })}
-        </div>
-      )}
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {ALL_APPS.map((app) => {
+          const on = passport.apps.includes(app);
+          return (
+            <label
+              key={app}
+              className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
+            >
+              <span className="text-sm">{APP_LABELS[app]}</span>
+              <Switch
+                checked={on}
+                disabled={passport.status !== "active" || isToggling}
+                onCheckedChange={(checked) => handleToggle(app, checked)}
+                aria-label={`${APP_LABELS[app]} on this passport`}
+              />
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }

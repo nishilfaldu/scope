@@ -1,4 +1,4 @@
-import { ACCOUNT_APPS } from "./permissions";
+import { ALL_APPS } from "../domain/apps";
 
 type JsonSchema = {
   type: "object";
@@ -27,7 +27,7 @@ export const credentialsContract: PostContract = {
     properties: {
       passportToken: { type: "string" },
       passportSecret: { type: "string" },
-      app: { type: "string", enum: ACCOUNT_APPS },
+      app: { type: "string", enum: ALL_APPS },
       refresh: { type: "boolean" },
     },
   },
@@ -43,7 +43,7 @@ export const credentialsContract: PostContract = {
     properties: {
       accessToken: { type: "string" },
       tokenType: { type: "string", const: "Bearer" },
-      app: { type: "string", enum: ACCOUNT_APPS },
+      app: { type: "string", enum: ALL_APPS },
       expiresAt: { type: "number" },
       expiresIn: { type: "number" },
     },

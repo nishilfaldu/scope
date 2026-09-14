@@ -1,12 +1,12 @@
 import { httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { exchangeAuthorizationCode, startAuthorize } from "../oauth";
-import type { ProviderId } from "../permissions";
+import type { ProviderId } from "../domain/apps";
 import { allowedReturnTo, redirectTo } from "./helpers";
 
 export { parseBoardOrigin, resolveReturnTo } from "./helpers";
 
-export function oauthConnect(provider: ProviderId) {
+export function httpOAuthConnect(provider: ProviderId) {
   return httpAction(async (ctx, request) => {
     const returnTo = allowedReturnTo(
       new URL(request.url).searchParams.get("returnTo"),
@@ -28,7 +28,7 @@ export function oauthConnect(provider: ProviderId) {
   });
 }
 
-export function oauthCallback(provider: ProviderId) {
+export function httpOAuthCallback(provider: ProviderId) {
   return httpAction(async (ctx, request) => {
     const requestUrl = new URL(request.url);
     const returnFallback = allowedReturnTo(null);

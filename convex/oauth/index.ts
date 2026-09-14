@@ -1,5 +1,5 @@
 import { env } from "../_generated/server";
-import type { ProviderId } from "../permissions";
+import type { ProviderId } from "../domain/apps";
 import { envConfigured } from "./shared";
 import { PROVIDER_OAUTH } from "./providers";
 import type {

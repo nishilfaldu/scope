@@ -1,4 +1,4 @@
-import { PROVIDERS, type ProviderId } from "../convex/permissions";
+import { PROVIDERS, type ProviderId } from "../convex/domain/apps";
 
 export { PROVIDERS, type ProviderId };
 

@@ -4,12 +4,12 @@ import {
 } from "convex/server";
 import { v } from "convex/values";
 import { internalQuery, query } from "../../_generated/server";
-import { appValidator, ALL_APPS } from "../../permissions";
+import { appValidator, ALL_APPS } from "../../domain/apps";
 import schema from "../../schema";
 import {
   denyResultValidator,
   UNAUTHORIZED_ERROR,
-} from "../../agentErrors";
+} from "../../lib/errors";
 import { passportBySecret, withoutPassportSecretHash } from "./helpers";
 
 const passportDoc = schema.doc("passports");

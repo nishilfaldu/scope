@@ -12,10 +12,6 @@ export const ALL_APPS = [
 
 export type AppId = (typeof ALL_APPS)[number];
 
-export const ACCOUNT_APPS = ALL_APPS;
-
-export type AccountAppId = AppId;
-
 export const PROVIDERS = ["github", "google", "slack"] as const;
 
 export type ProviderId = (typeof PROVIDERS)[number];
@@ -30,16 +26,14 @@ export const appValidator = v.union(
   v.literal("slack"),
 );
 
-export const accountAppValidator = appValidator;
-
 export const providerValidator = v.union(
   v.literal("github"),
   v.literal("google"),
   v.literal("slack"),
 );
 
-export function isAccountAppId(value: string): value is AccountAppId {
-  return (ACCOUNT_APPS as readonly string[]).includes(value);
+export function isAppId(value: string): value is AppId {
+  return (ALL_APPS as readonly string[]).includes(value);
 }
 
 export function providerForApp(app: AppId): ProviderId {
@@ -61,6 +55,6 @@ export function providerForApp(app: AppId): ProviderId {
   }
 }
 
-export function appsForProvider(provider: ProviderId): AccountAppId[] {
-  return ACCOUNT_APPS.filter((app) => providerForApp(app) === provider);
+export function appsForProvider(provider: ProviderId): AppId[] {
+  return ALL_APPS.filter((app) => providerForApp(app) === provider);
 }

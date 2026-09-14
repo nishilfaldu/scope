@@ -1,7 +1,7 @@
 import {
   ALL_APPS,
   type AppId,
-} from "../convex/permissions";
+} from "../convex/domain/apps";
 
 export { ALL_APPS, type AppId };
 

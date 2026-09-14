@@ -1,17 +1,20 @@
 import { httpRouter } from "convex/server";
+import { httpAction } from "./_generated/server";
+import { httpAppsHandler } from "./http/httpAppsHandler";
+import { httpCredentialsHandler } from "./http/httpCredentialsHandler";
+import { credentialsContract } from "./http/contracts";
 import {
-  describeCredentials,
-  handleCredentials,
-  handleHealth,
-  handleApps,
-  optionsOk,
-} from "./httpAgent";
-import { oauthCallback, oauthConnect } from "./http/oauth";
-import { PROVIDERS } from "./permissions";
+  httpOAuthCallback,
+  httpOAuthConnect,
+} from "./http/oauth";
+import { corsNoContent, jsonResponse } from "./lib/responses";
+import { PROVIDERS } from "./domain/apps";
+import { oauthConfigured } from "./oauth";
 
 const http = httpRouter();
+const optionsOk = httpAction(async () => corsNoContent());
 
-// /api/credentials
+// Credential issuance
 http.route({
   path: "/api/credentials",
   method: "OPTIONS",
@@ -20,15 +23,15 @@ http.route({
 http.route({
   path: "/api/credentials",
   method: "GET",
-  handler: describeCredentials,
+  handler: httpAction(async () => jsonResponse(200, credentialsContract)),
 });
 http.route({
   path: "/api/credentials",
   method: "POST",
-  handler: handleCredentials,
+  handler: httpCredentialsHandler,
 });
 
-// /api/apps
+// Passport app discovery
 http.route({
   path: "/api/apps",
   method: "OPTIONS",
@@ -37,26 +40,29 @@ http.route({
 http.route({
   path: "/api/apps",
   method: "GET",
-  handler: handleApps,
+  handler: httpAppsHandler,
 });
+
+// Health check
 http.route({
   path: "/api/health",
   method: "GET",
-  handler: handleHealth,
+  handler: httpAction(async () =>
+    jsonResponse(200, { ok: true, oauth: oauthConfigured() }),
+  ),
 });
 
-// /api/provider/connect
-// /api/provider/callback
+// OAuth provider connection
 for (const provider of PROVIDERS) {
   http.route({
     path: `/api/${provider}/connect`,
     method: "GET",
-    handler: oauthConnect(provider),
+    handler: httpOAuthConnect(provider),
   });
   http.route({
     path: `/api/${provider}/callback`,
     method: "GET",
-    handler: oauthCallback(provider),
+    handler: httpOAuthCallback(provider),
   });
 }
 
