@@ -2,7 +2,7 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { httpAppsHandler } from "./http/httpAppsHandler";
 import { httpCredentialsHandler } from "./http/httpCredentialsHandler";
-import { credentialsContract } from "./http/contracts";
+import { discoverySpec } from "./http/contracts";
 import {
   httpOAuthCallback,
   httpOAuthConnect,
@@ -14,16 +14,18 @@ import { oauthConfigured } from "./oauth";
 const http = httpRouter();
 const optionsOk = httpAction(async () => corsNoContent());
 
+// API discovery
+http.route({
+  path: "/",
+  method: "GET",
+  handler: httpAction(async () => jsonResponse(200, discoverySpec)),
+});
+
 // Credential issuance
 http.route({
   path: "/api/credentials",
   method: "OPTIONS",
   handler: optionsOk,
-});
-http.route({
-  path: "/api/credentials",
-  method: "GET",
-  handler: httpAction(async () => jsonResponse(200, credentialsContract)),
 });
 http.route({
   path: "/api/credentials",
