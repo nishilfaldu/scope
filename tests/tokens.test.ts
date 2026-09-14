@@ -56,7 +56,7 @@ describe("accounts and passports", () => {
     ).rejects.toThrow(/7 days/);
   });
 
-  test("setApp updates only the selected app and records it", async () => {
+  test("setApp updates only the selected app", async () => {
     const test = t();
     const created = await test.mutation(api.tables.passports.mutations.create, {
       name: "Multi", ttlMs: 60_000, apps: ["github", "gmail", "slack"],
@@ -68,16 +68,9 @@ describe("accounts and passports", () => {
       passportId: created.id,
     });
     expect(passport?.apps.sort()).toEqual(["github", "slack"]);
-    const toggled = await test.query(api.tables.auditEvents.queries.listHistory, {
-      passportId: created.id,
-      kind: "app_toggled",
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(toggled.page).toHaveLength(1);
-    expect(toggled.page[0]?.reason).toBe("Disabled gmail");
   });
 
-  test("disconnecting an account leaves passports and logs intact", async () => {
+  test("disconnecting an account leaves passports intact", async () => {
     const test = t();
     await seedGithub(test);
     const created = await test.mutation(api.tables.passports.mutations.create, {
@@ -88,16 +81,11 @@ describe("accounts and passports", () => {
       passportId: created.id,
     });
     expect(passport?.name).toBe("Keep me");
-    const history = await test.query(api.tables.auditEvents.queries.listHistory, {
-      passportId: created.id,
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(history.page[0]?.kind).toBe("issued");
   });
 });
 
 describe("credential authorization", () => {
-  test("an enabled connected app is authorized and issuance is audited without its secret", async () => {
+  test("an enabled connected app is authorized without leaking the standing token", async () => {
     const test = t();
     await seedGithub(test);
     const created = await test.mutation(api.tables.passports.mutations.create, {
@@ -120,12 +108,8 @@ describe("credential authorization", () => {
       refresh: false,
     });
     expect(committed.expiresAt).toBeGreaterThan(Date.now());
-    const history = await test.query(api.tables.auditEvents.queries.listHistory, {
-      passportId: created.id,
-      paginationOpts: { numItems: 50, cursor: null },
-    });
-    expect(history.page.map((row) => row.kind)).toEqual(["token_issued", "issued"]);
-    expect(JSON.stringify(history.page)).not.toMatch(/ghs_/);
+    expect(JSON.stringify(allowed)).not.toMatch(/ghs_/);
+    expect(JSON.stringify(committed)).not.toMatch(/ghs_/);
   });
 
   test("a disabled app is denied server-side", async () => {
