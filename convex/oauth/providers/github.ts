@@ -12,13 +12,11 @@ import type { ProviderOAuth } from "../types";
 const GITHUB_OAUTH_SCOPES =
   "repo workflow user gist notifications delete_repo write:packages codespace project admin:public_key admin:repo_hook";
 
-function githubClient(): { clientId: string; clientSecret: string } | null {
-  const clientId = env.GITHUB_CLIENT_ID?.trim();
-  const clientSecret = env.GITHUB_CLIENT_SECRET?.trim();
-  if (!clientId || !clientSecret) {
-    return null;
-  }
-  return { clientId, clientSecret };
+function githubClient(): { clientId: string; clientSecret: string } {
+  return {
+    clientId: env.GITHUB_CLIENT_ID.trim(),
+    clientSecret: env.GITHUB_CLIENT_SECRET.trim(),
+  };
 }
 
 async function githubIdentity(
@@ -67,9 +65,6 @@ async function githubIdentity(
 export const github: ProviderOAuth = {
   authorize(state) {
     const client = githubClient();
-    if (!client) {
-      return { error: "GitHub App is not configured." };
-    }
     const authorize = new URL("https://github.com/login/oauth/authorize");
     authorize.searchParams.set("client_id", client.clientId);
     authorize.searchParams.set("redirect_uri", oauthCallbackUrl("github"));
@@ -83,9 +78,6 @@ export const github: ProviderOAuth = {
 
   async exchange(code) {
     const client = githubClient();
-    if (!client) {
-      return { error: "config" };
-    }
     const redirectUri = oauthCallbackUrl("github");
     const attempts: Array<{ params: Record<string, string>; mode: "body" | "query" }> = [
       {
@@ -144,9 +136,6 @@ export const github: ProviderOAuth = {
       return { accessToken: connection.accessToken };
     }
     const client = githubClient();
-    if (!client) {
-      return { accessToken: connection.accessToken };
-    }
     if (
       connection.tokenExpiresAt !== null &&
       connection.tokenExpiresAt > Date.now() + REFRESH_SKEW_MS
@@ -178,9 +167,6 @@ export const github: ProviderOAuth = {
 
   async revoke(accessToken) {
     const client = githubClient();
-    if (!client) {
-      return;
-    }
     const basic = btoa(`${client.clientId}:${client.clientSecret}`);
     await fetch(`https://api.github.com/applications/${client.clientId}/grant`, {
       method: "DELETE",

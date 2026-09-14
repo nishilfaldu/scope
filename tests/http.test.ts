@@ -268,10 +268,10 @@ describe("GET /api/apps", () => {
 });
 
 describe("OAuth returnTo", () => {
-  test("localhost stays allowed and BOARD_ORIGIN is the deployed board", () => {
-    expect(resolveReturnTo("https://evil.example/phish", null)).toBe(
-      "http://localhost:3000/connections",
-    );
+  test("returnTo must match BOARD_ORIGIN; path stays allowlisted", () => {
+    expect(
+      resolveReturnTo("https://evil.example/phish", "http://localhost:3000"),
+    ).toBe("http://localhost:3000/connections");
     expect(
       resolveReturnTo("https://evil.example/phish", "https://board.example"),
     ).toBe("https://board.example/connections");
@@ -281,8 +281,14 @@ describe("OAuth returnTo", () => {
         "https://board.example",
       ),
     ).toBe("https://board.example/connections");
-    expect(resolveReturnTo("http://localhost:3000/", null)).toBe(
-      "http://localhost:3000/",
+    expect(
+      resolveReturnTo("http://localhost:3000/", "http://localhost:3000"),
+    ).toBe("http://localhost:3000/");
+    expect(
+      resolveReturnTo("http://localhost:3000/", "https://board.example"),
+    ).toBe("https://board.example/connections");
+    expect(resolveReturnTo(null, "https://board.example")).toBe(
+      "https://board.example/connections",
     );
   });
 });

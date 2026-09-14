@@ -17,7 +17,7 @@ export type OAuthGrant = RefreshedTokens & {
   providerUserId: string;
 };
 
-export type AuthorizeStart = { url: string } | { error: string };
+export type AuthorizeStart = { url: string };
 
 export type ProviderOAuth = {
   authorize: (state: string) => AuthorizeStart;

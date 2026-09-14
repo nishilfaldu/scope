@@ -5,28 +5,27 @@ import type { ProviderId } from "../permissions";
 
 const ALLOWED_RETURN_PATHS = new Set(["/", "/connections"]);
 
-export function parseBoardOrigin(raw: string | undefined): string | null {
-  const trimmed = raw?.trim();
-  if (!trimmed) {
-    return null;
-  }
+export function parseBoardOrigin(raw: string): string {
+  const trimmed = raw.trim();
   try {
     const url = new URL(trimmed);
     if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return null;
+      throw new Error("BOARD_ORIGIN must use http or https");
     }
     return url.origin;
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("BOARD_ORIGIN")) {
+      throw error;
+    }
+    throw new Error("BOARD_ORIGIN must be a valid http(s) origin");
   }
 }
 
 export function resolveReturnTo(
   value: string | null,
-  boardOrigin: string | null,
+  boardOrigin: string,
 ): string {
-  const fallbackOrigin = boardOrigin ?? "http://localhost:3000";
-  const fallback = `${fallbackOrigin}/connections`;
+  const fallback = `${boardOrigin}/connections`;
   if (!value) {
     return fallback;
   }
@@ -35,10 +34,7 @@ export function resolveReturnTo(
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       return fallback;
     }
-    const local =
-      url.hostname === "localhost" || url.hostname === "127.0.0.1";
-    const configured = boardOrigin !== null && url.origin === boardOrigin;
-    if (!local && !configured) {
+    if (url.origin !== boardOrigin) {
       return fallback;
     }
     const path = ALLOWED_RETURN_PATHS.has(url.pathname)
@@ -75,12 +71,6 @@ export function oauthConnect(provider: ProviderId) {
     );
     const state = crypto.randomUUID();
     const started = startAuthorize(provider, state);
-    if ("error" in started) {
-      return new Response(started.error, {
-        status: 503,
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      });
-    }
     await ctx.runMutation(internal.tables.oauthStates.mutations.put, {
       provider,
       state,

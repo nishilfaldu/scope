@@ -8,7 +8,7 @@ This board is a single-operator console. It has no login.
 
 ```bash
 pnpm install
-pnpm dev
+pnm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Convex HTTP routes live on your deployment's `.convex.site` origin.
@@ -23,9 +23,9 @@ Open [http://localhost:3000](http://localhost:3000). Convex HTTP routes live on 
 
 ## Deploy
 
-Set OAuth client ids and secrets on the Convex deployment. Set `BOARD_ORIGIN` to the board's origin (for example `https://your-app.vercel.app`) so OAuth can return there. Localhost stays allowed.
+Set OAuth client ids and secrets on the Convex deployment (required). Set `BOARD_ORIGIN` to the board's origin — `http://localhost:3000` in development, or for example `https://your-app.vercel.app` in production — so OAuth can return there.
 
-`GET /api/health` reports which OAuth providers have both a client id and a secret. It does not return the values.
+`GET /api/health` reports which OAuth providers have both a non-empty client id and secret. It does not return the values.
 
 If schema deploy fails because `tokenLogs` still has rows, delete those documents in the Convex dashboard, then deploy again. Do not add a wipe mutation.
 

@@ -13,14 +13,14 @@ export type { ConnectionSecrets, OAuthGrant, RefreshedTokens };
 export function oauthConfigured(): Record<ProviderId, boolean> {
   return {
     github:
-      Boolean(env.GITHUB_CLIENT_ID?.trim()) &&
-      Boolean(env.GITHUB_CLIENT_SECRET?.trim()),
+      Boolean(env.GITHUB_CLIENT_ID.trim()) &&
+      Boolean(env.GITHUB_CLIENT_SECRET.trim()),
     google:
-      Boolean(env.GOOGLE_CLIENT_ID?.trim()) &&
-      Boolean(env.GOOGLE_CLIENT_SECRET?.trim()),
+      Boolean(env.GOOGLE_CLIENT_ID.trim()) &&
+      Boolean(env.GOOGLE_CLIENT_SECRET.trim()),
     slack:
-      Boolean(env.SLACK_CLIENT_ID?.trim()) &&
-      Boolean(env.SLACK_CLIENT_SECRET?.trim()),
+      Boolean(env.SLACK_CLIENT_ID.trim()) &&
+      Boolean(env.SLACK_CLIENT_SECRET.trim()),
   };
 }
 

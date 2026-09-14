@@ -21,10 +21,7 @@ const GOOGLE_OAUTH_SCOPES = [
 
 export const google: ProviderOAuth = {
   authorize(state) {
-    const clientId = env.GOOGLE_CLIENT_ID?.trim();
-    if (!clientId) {
-      return { error: "Google OAuth is not configured." };
-    }
+    const clientId = env.GOOGLE_CLIENT_ID.trim();
     const authorize = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     authorize.searchParams.set("client_id", clientId);
     authorize.searchParams.set("redirect_uri", oauthCallbackUrl("google"));
@@ -38,11 +35,8 @@ export const google: ProviderOAuth = {
   },
 
   async exchange(code) {
-    const clientId = env.GOOGLE_CLIENT_ID?.trim();
-    const clientSecret = env.GOOGLE_CLIENT_SECRET?.trim();
-    if (!clientId || !clientSecret) {
-      return { error: "config" };
-    }
+    const clientId = env.GOOGLE_CLIENT_ID.trim();
+    const clientSecret = env.GOOGLE_CLIENT_SECRET.trim();
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -84,11 +78,8 @@ export const google: ProviderOAuth = {
       }
       return null;
     }
-    const clientId = env.GOOGLE_CLIENT_ID?.trim();
-    const clientSecret = env.GOOGLE_CLIENT_SECRET?.trim();
-    if (!clientId || !clientSecret) {
-      return { accessToken: connection.accessToken };
-    }
+    const clientId = env.GOOGLE_CLIENT_ID.trim();
+    const clientSecret = env.GOOGLE_CLIENT_SECRET.trim();
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
