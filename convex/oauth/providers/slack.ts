@@ -1,6 +1,7 @@
 import { env } from "../../_generated/server";
 import { isPlainObject } from "../../json";
 import {
+  envTrimmed,
   grantFromTokenPayload,
   oauthCallbackUrl,
   oauthErrorReason,
@@ -13,7 +14,10 @@ const SLACK_USER_SCOPES =
 
 export const slack: ProviderOAuth = {
   authorize(state) {
-    const clientId = env.SLACK_CLIENT_ID.trim();
+    const clientId = envTrimmed(env.SLACK_CLIENT_ID);
+    if (!clientId) {
+      return { error: "Slack OAuth is not configured." };
+    }
     const authorize = new URL("https://slack.com/oauth/v2/authorize");
     authorize.searchParams.set("client_id", clientId);
     authorize.searchParams.set("redirect_uri", oauthCallbackUrl("slack"));
@@ -23,8 +27,11 @@ export const slack: ProviderOAuth = {
   },
 
   async exchange(code) {
-    const clientId = env.SLACK_CLIENT_ID.trim();
-    const clientSecret = env.SLACK_CLIENT_SECRET.trim();
+    const clientId = envTrimmed(env.SLACK_CLIENT_ID);
+    const clientSecret = envTrimmed(env.SLACK_CLIENT_SECRET);
+    if (!clientId || !clientSecret) {
+      return { error: "config" };
+    }
     const tokenResponse = await fetch("https://slack.com/api/oauth.v2.access", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -71,8 +78,11 @@ export const slack: ProviderOAuth = {
     if (connection.refreshToken === null) {
       return { accessToken: connection.accessToken };
     }
-    const clientId = env.SLACK_CLIENT_ID.trim();
-    const clientSecret = env.SLACK_CLIENT_SECRET.trim();
+    const clientId = envTrimmed(env.SLACK_CLIENT_ID);
+    const clientSecret = envTrimmed(env.SLACK_CLIENT_SECRET);
+    if (!clientId || !clientSecret) {
+      return { accessToken: connection.accessToken };
+    }
     const tokenResponse = await fetch("https://slack.com/api/oauth.v2.access", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
