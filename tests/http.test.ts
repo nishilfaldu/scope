@@ -31,62 +31,35 @@ describe("removed routes", () => {
   });
 });
 
-describe("GET /api/credentials", () => {
-  test("returns the POST body schema and success shape", async () => {
-    const response = await t().fetch("/api/credentials", { method: "GET" });
+describe("GET /", () => {
+  test("returns the discovery spec for every public route", async () => {
+    const response = await t().fetch("/", { method: "GET" });
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      method: "POST",
-      body: {
-        type: "object",
-        required: ["passportToken", "passportSecret", "app"],
-        properties: {
-          passportToken: { type: "string" },
-          passportSecret: { type: "string" },
-          app: {
-            type: "string",
-            enum: [
-              "github",
-              "gmail",
-              "calendar",
-              "drive",
-              "docs",
-              "sheets",
-              "slack",
-            ],
-          },
-          refresh: { type: "boolean" },
-        },
-      },
-      success: {
-        type: "object",
-        required: [
-          "accessToken",
-          "tokenType",
-          "app",
-          "expiresAt",
-          "expiresIn",
-        ],
-        properties: {
-          accessToken: { type: "string" },
-          tokenType: { type: "string", const: "Bearer" },
-          app: {
-            type: "string",
-            enum: [
-              "github",
-              "gmail",
-              "calendar",
-              "drive",
-              "docs",
-              "sheets",
-              "slack",
-            ],
-          },
-          expiresAt: { type: "number" },
-          expiresIn: { type: "number" },
-        },
-      },
-    });
+    const body = await response.json();
+    const paths = body.routes.map(
+      (route: { method: string; path: string }) =>
+        `${route.method} ${route.path}`,
+    );
+    expect(paths).toContain("GET /");
+    expect(paths).toContain("GET /api/health");
+    expect(paths).toContain("POST /api/credentials");
+    expect(paths).toContain("GET /api/apps");
+    const credentials = body.routes.find(
+      (route: { path: string }) => route.path === "/api/credentials",
+    );
+    expect(credentials.body.required).toEqual([
+      "passportToken",
+      "passportSecret",
+      "app",
+    ]);
+    expect(body.errors.APP_UNAVAILABLE.hint).toContain("dashboard");
+  });
+});
+
+describe("GET /api/credentials", () => {
+  test("is gone; the root spec replaced it", async () => {
+    const response = await t().fetch("/api/credentials", { method: "GET" });
+    expect(response.status).toBe(404);
   });
 });
 
