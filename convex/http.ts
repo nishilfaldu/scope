@@ -11,6 +11,7 @@ import { PROVIDERS } from "./permissions";
 
 const http = httpRouter();
 
+// /api/credentials
 http.route({
   path: "/api/credentials",
   method: "OPTIONS",
@@ -26,6 +27,8 @@ http.route({
   method: "POST",
   handler: handleCredentials,
 });
+
+// /api/apps
 http.route({
   path: "/api/apps",
   method: "OPTIONS",
@@ -42,6 +45,8 @@ http.route({
   handler: handleHealth,
 });
 
+// /api/provider/connect
+// /api/provider/callback
 for (const provider of PROVIDERS) {
   http.route({
     path: `/api/${provider}/connect`,
