@@ -41,10 +41,17 @@ export function CreatePassportDialog({
         )
       }
       maxWidth="sm:max-w-lg"
-      showFooter={false}
+      showFooter={createdPassport != null}
       onClose={handleClose}
     >
-      {children}
+      {({ openModal }) =>
+        children({
+          openModal: () => {
+            setCreatedPassport(null);
+            openModal();
+          },
+        })
+      }
     </BaseModal>
   );
 }
