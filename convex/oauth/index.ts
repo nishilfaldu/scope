@@ -10,17 +10,22 @@ import type {
 
 export type { ConnectionSecrets, OAuthGrant, RefreshedTokens };
 
+/** Missing/empty env (e.g. vitest/CI) counts as not configured — never throw. */
+function envConfigured(value: unknown): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 export function oauthConfigured(): Record<ProviderId, boolean> {
   return {
     github:
-      Boolean(env.GITHUB_CLIENT_ID.trim()) &&
-      Boolean(env.GITHUB_CLIENT_SECRET.trim()),
+      envConfigured(env.GITHUB_CLIENT_ID) &&
+      envConfigured(env.GITHUB_CLIENT_SECRET),
     google:
-      Boolean(env.GOOGLE_CLIENT_ID.trim()) &&
-      Boolean(env.GOOGLE_CLIENT_SECRET.trim()),
+      envConfigured(env.GOOGLE_CLIENT_ID) &&
+      envConfigured(env.GOOGLE_CLIENT_SECRET),
     slack:
-      Boolean(env.SLACK_CLIENT_ID.trim()) &&
-      Boolean(env.SLACK_CLIENT_SECRET.trim()),
+      envConfigured(env.SLACK_CLIENT_ID) &&
+      envConfigured(env.SLACK_CLIENT_SECRET),
   };
 }
 
