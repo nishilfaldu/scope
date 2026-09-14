@@ -3,7 +3,7 @@ import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { AgentErrorCode } from "../../agentErrors";
 import { hashesEqual, sha256Hex } from "../../secrets";
 
-export function withoutInvokeKey(passport: Doc<"passports">) {
+export function withoutPassportSecretHash(passport: Doc<"passports">) {
   return {
     _id: passport._id,
     _creationTime: passport._creationTime,
@@ -15,19 +15,19 @@ export function withoutInvokeKey(passport: Doc<"passports">) {
   };
 }
 
-export async function passportByInvokeKey(
+export async function passportBySecret(
   ctx: QueryCtx,
-  args: { token: string; invokeKey: string },
+  args: { passportToken: string; passportSecret: string },
 ): Promise<Doc<"passports"> | null> {
   const passport = await ctx.db
     .query("passports")
-    .withIndex("by_token", (q) => q.eq("token", args.token))
+    .withIndex("by_token", (q) => q.eq("token", args.passportToken))
     .unique();
-  if (!passport?.invokeKeyHash) {
+  if (!passport?.passportSecretHash) {
     return null;
   }
-  const invokeHash = await sha256Hex(args.invokeKey);
-  if (!hashesEqual(invokeHash, passport.invokeKeyHash)) {
+  const secretHash = await sha256Hex(args.passportSecret);
+  if (!hashesEqual(secretHash, passport.passportSecretHash)) {
     return null;
   }
   return passport;
