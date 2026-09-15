@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { ensurePassport } from "../convex/tables/passports";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -16,6 +17,9 @@ async function signedIn(test: ReturnType<typeof t>) {
       name: "Nishil Faldu",
       email: "nishil@example.com",
     });
+  });
+  await test.run(async (ctx) => {
+    await ensurePassport(ctx, userId);
   });
   await test.run(async (ctx) => {
     await ctx.db.insert("connections", {
@@ -78,6 +82,9 @@ describe("slice ownership", () => {
         email: "none@example.com",
       }),
     );
+    await test.run(async (ctx) => {
+      await ensurePassport(ctx, userId);
+    });
     const backend = test.withIdentity({ subject: `${userId}|session-1` });
     await expect(
       backend.mutation(api.tables.slices.mutations.create, {
@@ -104,31 +111,37 @@ describe("slice ownership", () => {
     ).rejects.toThrow("Connect slack before allowing slack");
   });
 
-  test("create refuses a second passport for the same account", async () => {
+  test("create reuses the existing passport for later slices", async () => {
     const test = t();
     const { backend } = await signedIn(test);
-    await backend.mutation(api.tables.slices.mutations.create, {
+    const first = await backend.mutation(api.tables.slices.mutations.create, {
       name: "One",
       ttlMs: 60_000,
       apps: ["github"],
     });
+    const second = await backend.mutation(api.tables.slices.mutations.create, {
+      name: "Two",
+      ttlMs: 60_000,
+      apps: ["github"],
+    });
 
-    await expect(
-      backend.mutation(api.tables.slices.mutations.create, {
-        name: "Two",
-        ttlMs: 60_000,
-        apps: ["github"],
-      }),
-    ).rejects.toThrow(
-      "This account already has a passport. Only one passport is supported right now.",
-    );
-
-    const counts = await test.run(async (ctx) => ({
-      passports: (await ctx.db.query("passports").collect()).length,
-      slices: (await ctx.db.query("slices").collect()).length,
-      grants: (await ctx.db.query("grants").collect()).length,
+    const stored = await test.run(async (ctx) => ({
+      passports: await ctx.db.query("passports").collect(),
+      slices: await ctx.db.query("slices").collect(),
+      grants: await ctx.db.query("grants").collect(),
     }));
-    expect(counts).toEqual({ passports: 1, slices: 1, grants: 1 });
+    expect(stored.passports).toHaveLength(1);
+    expect(stored.slices).toHaveLength(2);
+    expect(stored.grants).toHaveLength(2);
+    expect(first.id).not.toEqual(second.id);
+    expect(stored.slices.map((slice) => slice.passportId)).toEqual([
+      stored.passports[0]?._id,
+      stored.passports[0]?._id,
+    ]);
+    expect(stored.grants.map((grant) => grant.passportId)).toEqual([
+      stored.passports[0]?._id,
+      stored.passports[0]?._id,
+    ]);
   });
 
   test("create refuses a signed-out caller", async () => {

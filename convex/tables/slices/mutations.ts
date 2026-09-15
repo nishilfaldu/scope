@@ -80,19 +80,14 @@ export const create = authenticatedMutation({
       );
     }
 
-    const existingPassport = await ctx.db
+    const passport = await ctx.db
       .query("passports")
       .withIndex("by_user", (q) => q.eq("userId", userId))
-      .first();
-    if (existingPassport) {
-      throw new Error(
-        "This account already has a passport. Only one passport is supported right now.",
-      );
+      .unique();
+    if (!passport) {
+      throw new Error("Passport not found for this account");
     }
-    const passportId = await ctx.db.insert("passports", {
-      userId,
-      name: "Default passport",
-    });
+    const passportId = passport._id;
     const expiresAt = Date.now() + args.ttlMs;
     const grantId = await ctx.db.insert("grants", {
       passportId,
