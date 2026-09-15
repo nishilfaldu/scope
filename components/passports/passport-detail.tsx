@@ -11,7 +11,7 @@ import { PassportOverview } from "@/components/passports/passport-overview";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function PassportDetail({ passportId }: { passportId: string }) {
-  const passport = useQuery(api.tables.passports.queries.get, { passportId });
+  const passport = useQuery(api.tables.slices.queries.get, { sliceId: passportId });
 
   if (passport === undefined) {
     return (

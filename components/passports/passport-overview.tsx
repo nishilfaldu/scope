@@ -16,9 +16,9 @@ import { formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
 export function PassportOverview({ passportId }: { passportId: string }) {
-  const passport = useQuery(api.tables.passports.queries.get, { passportId });
+  const passport = useQuery(api.tables.slices.queries.get, { sliceId: passportId });
   const [revoke, isRevoking] = useErrorCatchingMutation(
-    api.tables.passports.mutations.revoke,
+    api.tables.slices.mutations.revoke,
     { successMessage: "Passport revoked" },
   );
   const [now] = useState(() => Date.now());

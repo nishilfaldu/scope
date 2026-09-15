@@ -10,6 +10,16 @@ function t() {
   return convexTest(schema, modules);
 }
 
+async function signedIn(test: ReturnType<typeof t>) {
+  const userId = await test.run(async (ctx) => {
+    return await ctx.db.insert("users", {
+      name: "Nishil Faldu",
+      email: "nishil@example.com",
+    });
+  });
+  return { backend: test.withIdentity({ subject: `${userId}|session-1` }), userId };
+}
+
 async function seedGithub(test: ReturnType<typeof t>) {
   await test.mutation(internal.tables.connections.mutations.saveConnection, {
     provider: "github",
@@ -22,14 +32,15 @@ async function seedGithub(test: ReturnType<typeof t>) {
 describe("accounts and passports", () => {
   test("create returns credentials without exposing the secret hash", async () => {
     const test = t();
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const { backend } = await signedIn(test);
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "PR agent",
       ttlMs: 60_000,
       apps: ["github", "gmail", "slack"],
     });
     expect(created.passportToken.startsWith("pp_")).toBe(true);
     expect(created.passportSecret.startsWith("ps_")).toBe(true);
-    const listed = await test.query(api.tables.passports.queries.list, {
+    const listed = await test.query(api.tables.slices.queries.list, {
       paginationOpts: { numItems: 10, cursor: null },
     });
     expect(listed.page).toHaveLength(1);
@@ -39,18 +50,19 @@ describe("accounts and passports", () => {
 
   test("create validates its name and TTL", async () => {
     const test = t();
+    const { backend } = await signedIn(test);
     await expect(
-      test.mutation(api.tables.passports.mutations.create, {
+      backend.mutation(api.tables.slices.mutations.create, {
         name: "   ", ttlMs: 60_000, apps: ["github"],
       }),
     ).rejects.toThrow(/Name must be non-empty/);
     await expect(
-      test.mutation(api.tables.passports.mutations.create, {
+      backend.mutation(api.tables.slices.mutations.create, {
         name: "n".repeat(81), ttlMs: 60_000, apps: ["github"],
       }),
     ).rejects.toThrow(/80 characters/);
     await expect(
-      test.mutation(api.tables.passports.mutations.create, {
+      backend.mutation(api.tables.slices.mutations.create, {
         name: "Long", ttlMs: 8 * 24 * 60 * 60 * 1000, apps: ["github"],
       }),
     ).rejects.toThrow(/7 days/);
@@ -58,14 +70,15 @@ describe("accounts and passports", () => {
 
   test("setApp updates only the selected app", async () => {
     const test = t();
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const { backend } = await signedIn(test);
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Multi", ttlMs: 60_000, apps: ["github", "gmail", "slack"],
     });
-    await test.mutation(api.tables.passports.mutations.setApp, {
+    await test.mutation(api.tables.slices.mutations.setApp, {
       passportToken: created.passportToken, app: "gmail", enabled: false,
     });
-    const passport = await test.query(api.tables.passports.queries.get, {
-      passportId: created.id,
+    const passport = await test.query(api.tables.slices.queries.get, {
+      sliceId: created.id,
     });
     expect(passport?.apps.sort()).toEqual(["github", "slack"]);
   });
@@ -73,12 +86,13 @@ describe("accounts and passports", () => {
   test("disconnecting an account leaves passports intact", async () => {
     const test = t();
     await seedGithub(test);
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const { backend } = await signedIn(test);
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Keep me", ttlMs: 60_000, apps: ["github"],
     });
     await test.action(api.tables.connections.actions.disconnect, { provider: "github" });
-    const passport = await test.query(api.tables.passports.queries.get, {
-      passportId: created.id,
+    const passport = await test.query(api.tables.slices.queries.get, {
+      sliceId: created.id,
     });
     expect(passport?.name).toBe("Keep me");
   });
@@ -88,21 +102,22 @@ describe("credential authorization", () => {
   test("an enabled connected app is authorized without leaking the standing token", async () => {
     const test = t();
     await seedGithub(test);
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const { backend } = await signedIn(test);
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
     });
-    const allowed = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+    const allowed = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
       passportToken: created.passportToken,
       passportSecret: created.passportSecret,
       app: "github",
       refresh: false,
     });
     expect(allowed).toMatchObject({
-      ok: true, passportId: created.id, app: "github", provider: "github",
+      ok: true, sliceId: created.id, app: "github", provider: "github",
     });
     if (!allowed.ok) throw new Error("expected authorization");
-    const committed = await test.mutation(internal.tables.passports.credentials.commitCreate, {
-      passportId: allowed.passportId,
+    const committed = await test.mutation(internal.tables.slices.credentials.commitCreate, {
+      sliceId: allowed.sliceId,
       app: allowed.app,
       expiresAt: Date.now() + 60_000,
       refresh: false,
@@ -115,13 +130,14 @@ describe("credential authorization", () => {
   test("a disabled app is denied server-side", async () => {
     const test = t();
     await seedGithub(test);
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const { backend } = await signedIn(test);
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
     });
-    await test.mutation(api.tables.passports.mutations.setApp, {
+    await test.mutation(api.tables.slices.mutations.setApp, {
       passportToken: created.passportToken, app: "github", enabled: false,
     });
-    const denied = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+    const denied = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
       passportToken: created.passportToken,
       passportSecret: created.passportSecret,
       app: "github",
@@ -135,13 +151,14 @@ describe("credential authorization", () => {
   test("revoked and expired passports are denied", async () => {
     const test = t();
     await seedGithub(test);
-    const revokedPassport = await test.mutation(api.tables.passports.mutations.create, {
+    const { backend } = await signedIn(test);
+    const revokedPassport = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Revoked", ttlMs: 60_000, apps: ["github"],
     });
-    await test.mutation(api.tables.passports.mutations.revoke, {
+    await test.mutation(api.tables.slices.mutations.revoke, {
       passportToken: revokedPassport.passportToken,
     });
-    const revoked = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+    const revoked = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
       passportToken: revokedPassport.passportToken,
       passportSecret: revokedPassport.passportSecret,
       app: "github",
@@ -149,15 +166,15 @@ describe("credential authorization", () => {
     });
     expect(revoked).toMatchObject({ ok: false, code: "REVOKED" });
 
-    const expiredPassport = await test.mutation(api.tables.passports.mutations.create, {
+    const expiredPassport = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Expired", ttlMs: 60_000, apps: ["github"],
     });
     await test.run(async (ctx) => {
-      await ctx.db.patch("passports", expiredPassport.id, {
+      await ctx.db.patch("slices", expiredPassport.id, {
         expiresAt: Date.now() - 1_000,
       });
     });
-    const expired = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+    const expired = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
       passportToken: expiredPassport.passportToken,
       passportSecret: expiredPassport.passportSecret,
       app: "github",
@@ -168,7 +185,8 @@ describe("credential authorization", () => {
 
   test("unknown and unconnected apps share the unavailable denial", async () => {
     const test = t();
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const { backend } = await signedIn(test);
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "GitHub only", ttlMs: 60_000, apps: ["github"],
     });
     const unavailable = {
@@ -177,14 +195,14 @@ describe("credential authorization", () => {
       reason: "This app is not available on this passport",
       code: "APP_UNAVAILABLE",
     };
-    const unknown = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+    const unknown = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
       passportToken: created.passportToken,
       passportSecret: created.passportSecret,
       app: "dropbox",
       refresh: false,
     });
     expect(unknown).toMatchObject(unavailable);
-    const unconnected = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+    const unconnected = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
       passportToken: created.passportToken,
       passportSecret: created.passportSecret,
       app: "github",
@@ -196,10 +214,11 @@ describe("credential authorization", () => {
   test("an invalid passport secret is refused", async () => {
     const test = t();
     await seedGithub(test);
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const { backend } = await signedIn(test);
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Keyed", ttlMs: 60_000, apps: ["github"],
     });
-    const denied = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+    const denied = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
       passportToken: created.passportToken,
       passportSecret: "ps_wrong",
       app: "github",
@@ -217,11 +236,12 @@ describe("credential authorization", () => {
       providerUserId: "sub",
     });
     const apps = ["gmail", "calendar", "drive", "docs", "sheets"] as const;
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const { backend } = await signedIn(test);
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Workspace", ttlMs: 60_000, apps: [...apps],
     });
     for (const app of apps) {
-      const allowed = await test.mutation(internal.tables.passports.credentials.authorizeCreate, {
+      const allowed = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
         passportToken: created.passportToken,
         passportSecret: created.passportSecret,
         app,

@@ -1,7 +1,10 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internalMutation, mutation } from "../../_generated/server";
 import { appValidator } from "../../domain/apps";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
+import { ensurePassport } from "../passports/helpers";
+import { insertGrant } from "../grants/helpers";
 import { markExpired } from "./helpers";
 
 export const MAX_PASSPORT_NAME = 80;
@@ -13,13 +16,13 @@ export const expireDue = internalMutation({
   handler: async (ctx) => {
     const now = Date.now();
     const due = await ctx.db
-      .query("passports")
+      .query("slices")
       .withIndex("by_status_and_expiresAt", (q) =>
         q.eq("status", "active").lte("expiresAt", now),
       )
       .take(25);
-    for (const passport of due) {
-      await markExpired(ctx, passport);
+    for (const slice of due) {
+      await markExpired(ctx, slice);
     }
     return due.length;
   },
@@ -32,7 +35,7 @@ export const create = mutation({
     apps: v.array(appValidator),
   },
   returns: v.object({
-    id: v.id("passports"),
+    id: v.id("slices"),
     passportToken: v.string(),
     passportSecret: v.string(),
     expiresAt: v.number(),
@@ -40,6 +43,10 @@ export const create = mutation({
     apps: v.array(appValidator),
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Sign in to create a passport");
+    }
     const name = args.name.trim();
     if (name.length === 0) {
       throw new Error("Name must be non-empty");
@@ -58,14 +65,26 @@ export const create = mutation({
       throw new Error("Turn on at least one app");
     }
 
+    const passportId = await ensurePassport(ctx, userId);
+    const expiresAt = Date.now() + args.ttlMs;
+    const grantId = await insertGrant(ctx, {
+      passportId,
+      userId,
+      agent: name,
+      apps: uniqueApps,
+      expiresAt,
+    });
+
     const token = randomSecret("pp_");
     const passportSecret = randomSecret("ps_");
-    const passportSecretHash = await sha256Hex(passportSecret);
-    const expiresAt = Date.now() + args.ttlMs;
-    const id = await ctx.db.insert("passports", {
+    const secretHash = await sha256Hex(passportSecret);
+    const id = await ctx.db.insert("slices", {
+      passportId,
+      grantId,
+      userId,
       name,
       token,
-      passportSecretHash,
+      secretHash,
       status: "active",
       expiresAt,
       apps: uniqueApps,
@@ -90,29 +109,29 @@ export const setApp = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const passport = await ctx.db
-      .query("passports")
+    const slice = await ctx.db
+      .query("slices")
       .withIndex("by_token", (q) => q.eq("token", args.passportToken))
       .unique();
-    if (!passport) {
+    if (!slice) {
       throw new Error("Passport not found");
     }
     const now = Date.now();
-    if (passport.status === "active" && passport.expiresAt <= now) {
-      await markExpired(ctx, passport);
+    if (slice.status === "active" && slice.expiresAt <= now) {
+      await markExpired(ctx, slice);
       throw new Error("Passport expired");
     }
-    if (passport.status !== "active") {
+    if (slice.status !== "active") {
       throw new Error("Passport is not live");
     }
-    const enabled = passport.apps.includes(args.app);
+    const enabled = slice.apps.includes(args.app);
     if (enabled === args.enabled) {
       return null;
     }
     const apps = args.enabled
-      ? [...passport.apps, args.app]
-      : passport.apps.filter((app) => app !== args.app);
-    await ctx.db.patch("passports", passport._id, { apps });
+      ? [...slice.apps, args.app]
+      : slice.apps.filter((app) => app !== args.app);
+    await ctx.db.patch("slices", slice._id, { apps });
     return null;
   },
 });
@@ -121,21 +140,21 @@ export const revoke = mutation({
   args: { passportToken: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const passport = await ctx.db
-      .query("passports")
+    const slice = await ctx.db
+      .query("slices")
       .withIndex("by_token", (q) => q.eq("token", args.passportToken))
       .unique();
-    if (!passport) {
+    if (!slice) {
       throw new Error("Passport not found");
     }
-    if (passport.status === "revoked") {
+    if (slice.status === "revoked") {
       return null;
     }
     const now = Date.now();
-    if (passport.status === "active" && passport.expiresAt <= now) {
-      await markExpired(ctx, passport);
+    if (slice.status === "active" && slice.expiresAt <= now) {
+      await markExpired(ctx, slice);
     }
-    await ctx.db.patch("passports", passport._id, { status: "revoked" });
+    await ctx.db.patch("slices", slice._id, { status: "revoked" });
     return null;
   },
 });

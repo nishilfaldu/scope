@@ -3,33 +3,73 @@ import { v } from "convex/values";
 import { appValidator, providerValidator } from "./domain/apps";
 import { authTables } from "@convex-dev/auth/server";
 
+const sliceStatusValidator = v.union(
+  v.literal("active"),
+  v.literal("revoked"),
+  v.literal("expired"),
+);
+
 export default defineSchema({
   ...authTables,
 
-  passports: defineTable({
+  // A passport is the user-owned vault: it holds connected services and the
+  // slices created from it. It has no external credential of its own.
+  // The legacy member keeps pre-slice rows (the old pp_/ps_ passports) valid
+  // until migrations.toSlices moves them; drop the union once that has run.
+  passports: defineTable(
+    v.union(
+      v.object({
+        userId: v.optional(v.id("users")),
+        name: v.string(),
+      }),
+      v.object({
+        name: v.string(),
+        token: v.string(),
+        passportSecretHash: v.optional(v.string()),
+        status: sliceStatusValidator,
+        expiresAt: v.number(),
+        apps: v.array(appValidator),
+      }),
+    ),
+  ).index("by_user", ["userId"]),
+
+  // A slice is one agent's scoped, expiring grant from one passport.
+  slices: defineTable({
+    passportId: v.id("passports"),
+    grantId: v.id("grants"),
+    userId: v.optional(v.id("users")),
     name: v.string(),
     token: v.string(),
-    passportSecretHash: v.optional(v.string()),
-    status: v.union(
-      v.literal("active"),
-      v.literal("revoked"),
-      v.literal("expired"),
-    ),
-    expiresAt: v.number(),
+    secretHash: v.optional(v.string()),
+    status: sliceStatusValidator,
     apps: v.array(appValidator),
+    expiresAt: v.number(),
   })
     .index("by_token", ["token"])
-    .index("by_status", ["status"])
+    .index("by_passport", ["passportId"])
     .index("by_status_and_expiresAt", ["status", "expiresAt"]),
 
+  // A grant is the approved policy behind a slice: who it is for, what it
+  // covers, and when it ends.
+  grants: defineTable({
+    passportId: v.id("passports"),
+    userId: v.optional(v.id("users")),
+    agent: v.string(),
+    apps: v.array(appValidator),
+    expiresAt: v.number(),
+  }).index("by_passport", ["passportId"]),
+
   connections: defineTable({
+    passportId: v.optional(v.id("passports")),
     provider: providerValidator,
     accessToken: v.string(),
     login: v.string(),
     providerUserId: v.string(),
     refreshToken: v.optional(v.string()),
     tokenExpiresAt: v.optional(v.number()),
-  }).index("by_provider", ["provider"]),
+  })
+    .index("by_provider", ["provider"])
+    .index("by_passport_and_provider", ["passportId", "provider"]),
 
   oauthStates: defineTable({
     provider: providerValidator,

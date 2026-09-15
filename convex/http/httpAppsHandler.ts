@@ -14,7 +14,7 @@ export const httpAppsHandler = httpAction(async (ctx, request) => {
   }
 
   const decision = await ctx.runQuery(
-    internal.tables.passports.queries.discoverApps,
+    internal.tables.slices.queries.discoverApps,
     { passportToken, passportSecret, now: Date.now() },
   );
   if (!decision.ok) {

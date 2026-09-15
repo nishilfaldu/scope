@@ -28,7 +28,7 @@ import { APP_LABELS, formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
 type Passport = FunctionReturnType<
-  typeof api.tables.passports.queries.list
+  typeof api.tables.slices.queries.list
 >["page"][number];
 
 const PAGE_SIZE = 10;
@@ -37,11 +37,11 @@ export function PassportsTable() {
   const router = useRouter();
   const { paginationOpts, canPrevious, goNext, goPrevious } =
     useCursorPagination(PAGE_SIZE);
-  const result = useQuery(api.tables.passports.queries.list, {
+  const result = useQuery(api.tables.slices.queries.list, {
     paginationOpts,
   });
   const [revoke] = useErrorCatchingMutation(
-    api.tables.passports.mutations.revoke,
+    api.tables.slices.mutations.revoke,
     { successMessage: "Passport revoked" },
   );
   const [revokingId, setRevokingId] = useState<string | null>(null);

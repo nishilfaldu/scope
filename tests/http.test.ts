@@ -11,6 +11,21 @@ function t() {
   return convexTest(schema, modules);
 }
 
+async function createSlice(
+  test: ReturnType<typeof t>,
+  args: { name: string; ttlMs: number; apps: ("github" | "gmail" | "calendar" | "drive" | "docs" | "sheets" | "slack")[] },
+) {
+  const userId = await test.run(async (ctx) => {
+    return await ctx.db.insert("users", {
+      name: "Nishil Faldu",
+      email: "nishil@example.com",
+    });
+  });
+  return await test
+    .withIdentity({ subject: `${userId}|session-1` })
+    .mutation(api.tables.slices.mutations.create, args);
+}
+
 describe("GET /api/health", () => {
   test("returns ok without secrets", async () => {
     const response = await t().fetch("/api/health", { method: "GET" });
@@ -77,7 +92,7 @@ describe("OPTIONS", () => {
 describe("POST /api/credentials denials", () => {
   test("invalid JSON and a non-boolean refresh are invalid_request", async () => {
     const test = t();
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const created = await createSlice(test, {
       name: "Keyed",
       ttlMs: 60_000,
       apps: ["slack"],
@@ -111,7 +126,7 @@ describe("POST /api/credentials denials", () => {
 
   test("unknown and off apps share one code and error text", async () => {
     const test = t();
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const created = await createSlice(test, {
       name: "Keyed",
       ttlMs: 60_000,
       apps: ["slack"],
@@ -146,7 +161,7 @@ describe("POST /api/credentials denials", () => {
 
   test("wrong passport secret is unauthorized and does not name the app", async () => {
     const test = t();
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const created = await createSlice(test, {
       name: "Keyed",
       ttlMs: 60_000,
       apps: ["github"],
@@ -171,7 +186,7 @@ describe("POST /api/credentials denials", () => {
 describe("GET /api/apps", () => {
   test("wrong or missing passport secret does not leak apps", async () => {
     const test = t();
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const created = await createSlice(test, {
       name: "Secret",
       ttlMs: 60_000,
       apps: ["github", "slack"],
@@ -208,13 +223,13 @@ describe("GET /api/apps", () => {
 
   test("returns on vs off for each app and the passport expiry", async () => {
     const test = t();
-    const created = await test.mutation(api.tables.passports.mutations.create, {
+    const created = await createSlice(test, {
       name: "Mix",
       ttlMs: 60_000,
       apps: ["github"],
     });
-    const passport = await test.query(api.tables.passports.queries.get, {
-      passportId: created.id,
+    const passport = await test.query(api.tables.slices.queries.get, {
+      sliceId: created.id,
     });
     expect(passport).not.toBeNull();
     const response = await test.fetch("/api/apps", {

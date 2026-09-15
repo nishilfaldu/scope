@@ -32,7 +32,7 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
   const refresh = body.refresh === true;
 
   const decision = await ctx.runMutation(
-    internal.tables.passports.credentials.authorizeCreate,
+    internal.tables.slices.credentials.authorizeCreate,
     { passportToken, passportSecret, app, refresh },
   );
   if (!decision.ok) {
@@ -49,9 +49,9 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
   }
 
   const committed = await ctx.runMutation(
-    internal.tables.passports.credentials.commitCreate,
+    internal.tables.slices.credentials.commitCreate,
     {
-      passportId: decision.passportId,
+      sliceId: decision.sliceId,
       app: decision.app,
       expiresAt: issued.expiresAt,
       refresh,

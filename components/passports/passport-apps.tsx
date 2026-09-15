@@ -9,9 +9,9 @@ import { ALL_APPS, APP_LABELS, type AppId } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
 export function PassportApps({ passportId }: { passportId: string }) {
-  const passport = useQuery(api.tables.passports.queries.get, { passportId });
+  const passport = useQuery(api.tables.slices.queries.get, { sliceId: passportId });
   const [setApp, isToggling] = useErrorCatchingMutation(
-    api.tables.passports.mutations.setApp,
+    api.tables.slices.mutations.setApp,
     {
       successMessage: (args) =>
         args.enabled

@@ -34,7 +34,7 @@ export function CreatePassportForm({
   onCreated: (result: CreatedPassport) => void;
 }) {
   const [createPassport] = useErrorCatchingMutation(
-    api.tables.passports.mutations.create,
+    api.tables.slices.mutations.create,
     { successMessage: "Passport created" },
   );
 
