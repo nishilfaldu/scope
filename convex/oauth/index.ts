@@ -34,6 +34,9 @@ export function oauthConfigured(): Record<ProviderId, boolean> {
     vercel:
       envConfigured(env.VERCEL_CLIENT_ID) &&
       envConfigured(env.VERCEL_CLIENT_SECRET),
+    zoom:
+      envConfigured(env.ZOOM_CLIENT_ID) &&
+      envConfigured(env.ZOOM_CLIENT_SECRET),
   };
 }
 

@@ -45,6 +45,8 @@ type Env = {
   readonly LINEAR_CLIENT_SECRET: string;
   readonly VERCEL_CLIENT_ID: string;
   readonly VERCEL_CLIENT_SECRET: string;
+  readonly ZOOM_CLIENT_ID: string;
+  readonly ZOOM_CLIENT_SECRET: string;
 };
 
 /**

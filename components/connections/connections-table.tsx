@@ -35,6 +35,8 @@ function providerIcon(id: ProviderId) {
       return Chart01Icon;
     case "vercel":
       return CloudIcon;
+    case "zoom":
+      return DatabaseIcon;
     default: {
       const _exhaustive: never = id;
       return _exhaustive;

@@ -17,6 +17,7 @@ export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
   notion: `${siteUrl}/api/notion/connect`,
   linear: `${siteUrl}/api/linear/connect`,
   vercel: `${siteUrl}/api/vercel/connect`,
+  zoom: `${siteUrl}/api/zoom/connect`,
 };
 
 export const CONNECT_ERRORS: Record<string, string> = {
@@ -69,5 +70,10 @@ export const CONNECTION_PROVIDERS = [
     id: "vercel" as const,
     name: "Vercel",
     description: "Projects, deployments, domains, and team profile.",
+  },
+  {
+    id: "zoom" as const,
+    name: "Zoom",
+    description: "Meetings, webinars, recordings, and account profile.",
   },
 ] as const;

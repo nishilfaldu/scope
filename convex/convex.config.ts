@@ -17,6 +17,8 @@ const app = defineApp({
     LINEAR_CLIENT_SECRET: v.string(),
     VERCEL_CLIENT_ID: v.string(),
     VERCEL_CLIENT_SECRET: v.string(),
+    ZOOM_CLIENT_ID: v.string(),
+    ZOOM_CLIENT_SECRET: v.string(),
     BOARD_ORIGIN: v.string(),
   },
 });

@@ -166,3 +166,20 @@ Create an OAuth application in Linear settings, register `https://<deployment>.c
 ### Vercel OAuth setup
 
 Create a Sign in with Vercel application, register `https://<deployment>.convex.site/api/vercel/callback`, enable the required OpenID scopes, and set `VERCEL_CLIENT_ID` and `VERCEL_CLIENT_SECRET` on the Convex deployment. Deploy, then connect from `/connections`.
+
+### Zoom OAuth setup
+
+1. Create a user-managed OAuth app in the [Zoom App Marketplace](https://marketplace.zoom.us/develop/create).
+2. Register `https://<deployment>.convex.site/api/zoom/callback` as both the redirect URL and the allow-list URL.
+3. Add the smallest scopes required by the product, including `user:read:user` so Agent Passport can identify the connection. Zoom issues refresh tokens with the authorization-code grant.
+4. Set the confidential client credentials and deploy:
+
+   ```bash
+   npx convex env set ZOOM_CLIENT_ID <client-id>
+   npx convex env set ZOOM_CLIENT_SECRET <client-secret>
+   npx convex deploy
+   ```
+
+5. Connect Zoom from `/connections`. Disconnecting revokes the current access token through Zoom's OAuth revoke endpoint.
+
+Official references: [Zoom OAuth](https://developers.zoom.us/docs/integrations/oauth/) and [Zoom API reference](https://developers.zoom.us/docs/api/).

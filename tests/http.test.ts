@@ -18,7 +18,7 @@ async function createSlice(
     name: string;
     ttlMs: number;
     apps: (
-      "github" | "gmail" | "calendar" | "drive" | "docs" | "sheets" | "slack" | "airtable" | "notion" | "linear" | "vercel"
+      "github" | "gmail" | "calendar" | "drive" | "docs" | "sheets" | "slack" | "airtable" | "notion" | "linear" | "vercel" | "zoom"
     )[];
   },
 ) {
@@ -34,7 +34,7 @@ async function createSlice(
   await test.run(async (ctx) => {
     const providers = new Set(
       args.apps.map((app) =>
-        app === "github" ? "github" : app === "slack" ? "slack" : app === "airtable" ? "airtable" : app === "notion" ? "notion" : app === "linear" ? "linear" : app === "vercel" ? "vercel" : "google",
+        app === "github" ? "github" : app === "slack" ? "slack" : app === "airtable" ? "airtable" : app === "notion" ? "notion" : app === "linear" ? "linear" : app === "vercel" ? "vercel" : app === "zoom" ? "zoom" : "google",
       ),
     );
     for (const provider of providers) {
@@ -59,7 +59,7 @@ describe("GET /api/health", () => {
     const body = await response.json();
     expect(body).toEqual({
       ok: true,
-      oauth: { github: false, google: false, slack: false, airtable: false, notion: false, linear: false, vercel: false },
+      oauth: { github: false, google: false, slack: false, airtable: false, notion: false, linear: false, vercel: false, zoom: false },
     });
     expect(JSON.stringify(body)).not.toMatch(/ghs_|ya29|xoxp|CLIENT_SECRET/);
   });
@@ -285,6 +285,7 @@ describe("GET /api/apps", () => {
         { app: "notion", allowed: false, connected: false },
         { app: "linear", allowed: false, connected: false },
         { app: "vercel", allowed: false, connected: false },
+        { app: "zoom", allowed: false, connected: false },
       ],
     });
   });

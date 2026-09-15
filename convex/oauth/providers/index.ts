@@ -7,6 +7,7 @@ import { airtable } from "./airtable";
 import { notion } from "./notion";
 import { linear } from "./linear";
 import { vercel } from "./vercel";
+import { zoom } from "./zoom";
 
 export const PROVIDER_OAUTH: Record<ProviderId, ProviderOAuth> = {
   github,
@@ -16,4 +17,5 @@ export const PROVIDER_OAUTH: Record<ProviderId, ProviderOAuth> = {
   notion,
   linear,
   vercel,
+  zoom,
 };
