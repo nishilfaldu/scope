@@ -42,7 +42,7 @@ export function SlicesTable() {
   });
   const [revoke] = useErrorCatchingMutation(
     api.tables.slices.mutations.revoke,
-    { successMessage: "Passport revoked" },
+    { successMessage: "Slice revoked" },
   );
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
@@ -132,9 +132,9 @@ export function SlicesTable() {
           },
           {
             id: "copy-token",
-            label: "Copy passport token",
+            label: "Copy slice token",
             icon: Copy01Icon,
-            onSelect: () => void handleCopy("Passport token", slice.token),
+            onSelect: () => void handleCopy("Slice token", slice.token),
           },
         ];
         if (slice.status === "active") {
@@ -177,8 +177,8 @@ export function SlicesTable() {
       }
       empty={
         <EmptyState
-          title="No passports"
-          description="Create a virtual passport for an agent."
+          title="No slices"
+          description="Create a slice for an agent."
           icon={<HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />}
         />
       }

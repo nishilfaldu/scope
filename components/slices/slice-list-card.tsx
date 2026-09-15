@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 export function SliceListCard() {
   return (
     <ContentCard
-      title="Passports"
+      title="Slices"
       description="Create a time-boxed identity for one job and choose which connected apps it can request."
       action={
         <CreateSliceDialog>
@@ -22,7 +22,7 @@ export function SliceListCard() {
                 strokeWidth={2}
                 data-icon="inline-start"
               />
-              Create passport
+              Create slice
             </Button>
           )}
         </CreateSliceDialog>

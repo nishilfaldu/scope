@@ -30,7 +30,7 @@ export function SignIn() {
           <div className="flex flex-col gap-1">
             <CardTitle className="text-xl">Agent Passport</CardTitle>
             <CardDescription>
-              Sign in to manage your passports
+              Sign in to manage your slices
             </CardDescription>
           </div>
         </CardHeader>

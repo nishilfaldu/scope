@@ -22,7 +22,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Agent Passport",
-  description: "Create and revoke virtual passports for agents",
+  description: "Create and revoke slices for agents",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

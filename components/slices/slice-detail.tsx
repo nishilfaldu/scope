@@ -15,7 +15,7 @@ export function SliceDetail({ sliceId }: { sliceId: string }) {
 
   if (slice === undefined) {
     return (
-      <BoardShell title="Passport" crumbs={[{ label: "Passports", href: "/" }]}>
+      <BoardShell title="Slice" crumbs={[{ label: "Slices", href: "/" }]}>
         <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
           <div className="flex flex-col gap-3 px-4 lg:px-6">
             <Skeleton className="h-28 w-full" />
@@ -28,11 +28,11 @@ export function SliceDetail({ sliceId }: { sliceId: string }) {
 
   if (slice === null) {
     return (
-      <BoardShell title="Not found" crumbs={[{ label: "Passports", href: "/" }]}>
+      <BoardShell title="Not found" crumbs={[{ label: "Slices", href: "/" }]}>
         <div className="@container/main flex flex-1 flex-col py-4 md:py-6">
           <div className="px-4 lg:px-6">
             <EmptyState
-              title="Passport not found"
+              title="Slice not found"
               description="This card may have been deleted from the deployment, or the link is invalid."
               icon={<HugeiconsIcon icon={PassportIcon} strokeWidth={2} />}
             />
@@ -45,7 +45,7 @@ export function SliceDetail({ sliceId }: { sliceId: string }) {
   return (
     <BoardShell
       title={slice.name}
-      crumbs={[{ label: "Passports", href: "/" }]}
+      crumbs={[{ label: "Slices", href: "/" }]}
     >
       <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
         <div className="px-4 lg:px-6">

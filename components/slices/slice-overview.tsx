@@ -19,7 +19,7 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
   const slice = useQuery(api.tables.slices.queries.get, { sliceId: sliceId });
   const [revoke, isRevoking] = useErrorCatchingMutation(
     api.tables.slices.mutations.revoke,
-    { successMessage: "Passport revoked" },
+    { successMessage: "Slice revoked" },
   );
   const [now] = useState(() => Date.now());
 
@@ -34,7 +34,7 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
   return (
     <ContentCard
       title={slice.name}
-      description="Status, credentials, and apps for this passport."
+      description="Status, credentials, and apps for this slice."
       action={
         slice.status === "active" ? (
           <Button
@@ -76,9 +76,9 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
           </p>
         </div>
         <CopyableField
-          label="Passport token"
+          label="Slice token"
           value={slice.token}
-          successMessage="Passport token copied"
+          successMessage="Slice token copied"
         />
       </div>
       <SliceApps sliceId={sliceId} />

@@ -36,13 +36,13 @@ export function SliceCredentials({ slice }: { slice: CreatedSlice }) {
         <div className="min-w-0 flex-1">
           <p className="font-medium">Created {slice.name}</p>
           <p className="mt-0.5 text-muted-foreground">
-            Give the agent this passport token and passport secret. The passport
-            secret is shown once. Never share standing account tokens.
+            Give the agent this slice token and slice secret. The slice secret is
+            shown once. Never share standing account tokens.
           </p>
           <div className="mt-3 flex min-w-0 flex-col gap-2">
             {[
-              { label: "Passport token", value: slice.sliceToken },
-              { label: "Passport secret", value: slice.sliceSecret },
+              { label: "Slice token", value: slice.sliceToken },
+              { label: "Slice secret", value: slice.sliceSecret },
             ].map((credential) => (
               <div
                 key={credential.label}

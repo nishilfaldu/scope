@@ -61,7 +61,7 @@ export function SliceApps({ sliceId }: { sliceId: string }) {
                 checked={on}
                 disabled={slice.status !== "active" || isToggling}
                 onCheckedChange={(checked) => handleToggle(app, checked)}
-                aria-label={`${APP_LABELS[app]} on this passport`}
+                aria-label={`${APP_LABELS[app]} on this slice`}
               />
             </label>
           );

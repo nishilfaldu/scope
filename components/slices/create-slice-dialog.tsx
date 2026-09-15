@@ -27,10 +27,10 @@ export function CreateSliceDialog({
 
   return (
     <BaseModal
-      title={createdSlice ? "Passport created" : "Create a passport"}
+      title={createdSlice ? "Slice created" : "Create a slice"}
       description={
         createdSlice
-          ? "Copy these credentials now. The passport secret will not be shown again."
+          ? "Copy these credentials now. The slice secret will not be shown again."
           : "Create a time-boxed identity for one job and choose which connected apps it can request."
       }
       content={

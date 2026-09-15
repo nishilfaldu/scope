@@ -35,7 +35,7 @@ export function CreateSliceForm({
 }) {
   const [createSlice] = useErrorCatchingMutation(
     api.tables.slices.mutations.create,
-    { successMessage: "Passport created" },
+    { successMessage: "Slice created" },
   );
 
   const form = useAppForm({
@@ -88,7 +88,7 @@ export function CreateSliceForm({
           )}
         </form.AppField>
         <form.SubmitButton pendingLabel="Creating…">
-          Create passport
+          Create slice
         </form.SubmitButton>
       </form.Form>
     </form.AppForm>
