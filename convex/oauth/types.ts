@@ -20,8 +20,8 @@ export type OAuthGrant = RefreshedTokens & {
 export type AuthorizeStart = { url: string } | { error: string };
 
 export type ProviderOAuth = {
-  authorize: (state: string) => AuthorizeStart;
-  exchange: (code: string) => Promise<OAuthGrant | { error: string }>;
+  authorize: (state: string) => AuthorizeStart | Promise<AuthorizeStart>;
+  exchange: (code: string, state?: string) => Promise<OAuthGrant | { error: string }>;
   refresh: (connection: ConnectionSecrets) => Promise<RefreshedTokens | null>;
   revoke: (accessToken: string) => Promise<void>;
 };

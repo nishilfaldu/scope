@@ -3,9 +3,11 @@ import type { ProviderOAuth } from "../types";
 import { github } from "./github";
 import { google } from "./google";
 import { slack } from "./slack";
+import { airtable } from "./airtable";
 
 export const PROVIDER_OAUTH: Record<ProviderId, ProviderOAuth> = {
   github,
   google,
   slack,
+  airtable,
 };

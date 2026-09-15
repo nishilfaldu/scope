@@ -13,6 +13,7 @@ export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
   github: `${siteUrl}/api/github/connect`,
   google: `${siteUrl}/api/google/connect`,
   slack: `${siteUrl}/api/slack/connect`,
+  airtable: `${siteUrl}/api/airtable/connect`,
 };
 
 export const CONNECT_ERRORS: Record<string, string> = {
@@ -45,5 +46,10 @@ export const CONNECTION_PROVIDERS = [
     id: "slack" as const,
     name: "Slack",
     description: "One login. Passports can attach Slack after you connect.",
+  },
+  {
+    id: "airtable" as const,
+    name: "Airtable",
+    description: "Bases, schemas, records, and comments.",
   },
 ] as const;
