@@ -40,7 +40,7 @@ describe("accounts and passports", () => {
     });
     expect(created.sliceToken.startsWith("st_")).toBe(true);
     expect(created.sliceSecret.startsWith("ss_")).toBe(true);
-    const listed = await test.query(api.tables.slices.queries.list, {
+    const listed = await backend.query(api.tables.slices.queries.list, {
       paginationOpts: { numItems: 10, cursor: null },
     });
     expect(listed.page).toHaveLength(1);
@@ -73,10 +73,10 @@ describe("accounts and passports", () => {
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Multi", ttlMs: 60_000, apps: ["github", "gmail", "slack"],
     });
-    await test.mutation(api.tables.slices.mutations.setApp, {
+    await backend.mutation(api.tables.slices.mutations.setApp, {
       sliceToken: created.sliceToken, app: "gmail", enabled: false,
     });
-    const slice = await test.query(api.tables.slices.queries.get, {
+    const slice = await backend.query(api.tables.slices.queries.get, {
       sliceId: created.id,
     });
     expect(slice?.grantApps.sort()).toEqual(["github", "slack"]);
@@ -99,7 +99,7 @@ describe("accounts and passports", () => {
       name: "Keep me", ttlMs: 60_000, apps: ["github"],
     });
     await test.action(api.tables.connections.actions.disconnect, { provider: "github" });
-    const slice = await test.query(api.tables.slices.queries.get, {
+    const slice = await backend.query(api.tables.slices.queries.get, {
       sliceId: created.id,
     });
     expect(slice?.name).toBe("Keep me");
@@ -142,7 +142,7 @@ describe("credential authorization", () => {
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
     });
-    await test.mutation(api.tables.slices.mutations.setApp, {
+    await backend.mutation(api.tables.slices.mutations.setApp, {
       sliceToken: created.sliceToken, app: "github", enabled: false,
     });
     const denied = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
@@ -163,7 +163,7 @@ describe("credential authorization", () => {
     const revokedSlice = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Revoked", ttlMs: 60_000, apps: ["github"],
     });
-    await test.mutation(api.tables.slices.mutations.revoke, {
+    await backend.mutation(api.tables.slices.mutations.revoke, {
       sliceToken: revokedSlice.sliceToken,
     });
     const revoked = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {

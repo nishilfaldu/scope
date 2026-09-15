@@ -3,25 +3,28 @@ import {
   paginationResultValidator,
 } from "convex/server";
 import { v } from "convex/values";
-import { internalQuery, query } from "../../_generated/server";
+import { internalQuery } from "../../_generated/server";
+import { authenticatedQuery } from "../../functions";
 import { appValidator, ALL_APPS } from "../../domain/apps";
 import schema from "../../schema";
-import {
-  denyResultValidator,
-  UNAUTHORIZED_ERROR,
-} from "../../lib/errors";
+import { denyResultValidator, UNAUTHORIZED_ERROR } from "../../lib/errors";
 import { sliceBySecret, withoutSecretHash } from "./helpers";
 
-const boardSlice = schema.doc("slices").omit("secretHash").extend({
-  grantApps: v.array(appValidator),
-});
+const boardSlice = schema
+  .doc("slices")
+  .omit("secretHash")
+  .extend({
+    grantApps: v.array(appValidator),
+  });
 
-export const list = query({
+export const list = authenticatedQuery({
   args: { paginationOpts: paginationOptsValidator },
   returns: paginationResultValidator(boardSlice),
   handler: async (ctx, args) => {
+    const { userId } = ctx;
     const results = await ctx.db
       .query("slices")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
       .paginate(args.paginationOpts);
     return {
@@ -36,16 +39,17 @@ export const list = query({
   },
 });
 
-export const get = query({
+export const get = authenticatedQuery({
   args: { sliceId: v.string() },
   returns: v.union(boardSlice, v.null()),
   handler: async (ctx, args) => {
+    const { userId } = ctx;
     const id = ctx.db.normalizeId("slices", args.sliceId);
     if (!id) {
       return null;
     }
     const slice = await ctx.db.get("slices", id);
-    if (!slice) {
+    if (!slice || slice.userId !== userId) {
       return null;
     }
     const grant = await ctx.db.get("grants", slice.grantId);

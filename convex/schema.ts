@@ -31,6 +31,7 @@ export default defineSchema({
     expiresAt: v.number(),
   })
     .index("by_token", ["token"])
+    .index("by_user", ["userId"])
     .index("by_passport", ["passportId"])
     .index("by_status_and_expiresAt", ["status", "expiresAt"]),
 
