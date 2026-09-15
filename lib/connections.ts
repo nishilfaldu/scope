@@ -13,6 +13,9 @@ export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
   github: `${siteUrl}/api/github/connect`,
   google: `${siteUrl}/api/google/connect`,
   slack: `${siteUrl}/api/slack/connect`,
+  airtable: `${siteUrl}/api/airtable/connect`,
+  notion: `${siteUrl}/api/notion/connect`,
+  linear: `${siteUrl}/api/linear/connect`,
   vercel: `${siteUrl}/api/vercel/connect`,
 };
 
@@ -48,8 +51,23 @@ export const CONNECTION_PROVIDERS = [
     description: "One login. Passports can attach Slack after you connect.",
   },
   {
+    id: "airtable" as const,
+    name: "Airtable",
+    description: "Bases, schemas, records, and comments.",
+  },
+  {
+    id: "notion" as const,
+    name: "Notion",
+    description: "Connect pages and databases shared with Agent Passport.",
+  },
+  {
+    id: "linear" as const,
+    name: "Linear",
+    description: "Issues, projects, teams, and workflow updates.",
+  },
+  {
     id: "vercel" as const,
     name: "Vercel",
-    description: "Projects, deployments, and account resources.",
+    description: "Projects, deployments, domains, and team profile.",
   },
 ] as const;
