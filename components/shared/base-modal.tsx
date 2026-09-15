@@ -133,14 +133,14 @@ export function BaseModal({
       {children?.({ openModal })}
       
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className={maxWidth}>
+        <DialogContent className={`min-w-0 ${maxWidth}`}>
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
             {description && (
               <DialogDescription>{description}</DialogDescription>
             )}
           </DialogHeader>
-          <div>{content}</div>
+          <div className="min-w-0 max-w-full">{content}</div>
           {showFooter ? (
             <DialogFooter>
               <Button variant="outline" onClick={closeModal} disabled={isLoading}>
