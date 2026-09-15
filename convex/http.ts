@@ -10,9 +10,13 @@ import {
 import { corsNoContent, jsonResponse } from "./lib/responses";
 import { PROVIDERS } from "./domain/apps";
 import { oauthConfigured } from "./oauth";
+import { auth } from "./auth";
 
 const http = httpRouter();
 const optionsOk = httpAction(async () => corsNoContent());
+
+// Auth routes
+auth.addHttpRoutes(http);
 
 // API discovery
 http.route({

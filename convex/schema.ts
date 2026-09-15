@@ -1,8 +1,11 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { appValidator, providerValidator } from "./domain/apps";
+import { authTables } from "@convex-dev/auth/server";
 
 export default defineSchema({
+  ...authTables,
+
   passports: defineTable({
     name: v.string(),
     token: v.string(),
