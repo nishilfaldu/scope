@@ -1,6 +1,6 @@
 import type { GenericActionCtx } from "convex/server";
 import { internal } from "../_generated/api";
-import type { DataModel } from "../_generated/dataModel";
+import type { DataModel, Id } from "../_generated/dataModel";
 import {
   refreshProviderTokens,
   type ConnectionSecrets,
@@ -14,8 +14,7 @@ function secretsChanged(
   refreshed: RefreshedTokens,
 ): boolean {
   const refreshToken = refreshed.refreshToken ?? connection.refreshToken;
-  const tokenExpiresAt =
-    refreshed.tokenExpiresAt ?? connection.tokenExpiresAt;
+  const tokenExpiresAt = refreshed.tokenExpiresAt ?? connection.tokenExpiresAt;
   return (
     refreshed.accessToken !== connection.accessToken ||
     refreshToken !== connection.refreshToken ||
@@ -25,6 +24,7 @@ function secretsChanged(
 
 async function persistIfChanged(
   ctx: GenericActionCtx<DataModel>,
+  userId: Id<"users">,
   provider: ProviderId,
   connection: ConnectionSecrets,
   refreshed: RefreshedTokens,
@@ -33,11 +33,13 @@ async function persistIfChanged(
     return;
   }
   await ctx.runMutation(internal.tables.connections.mutations.saveConnection, {
+    userId,
     provider,
     accessToken: refreshed.accessToken,
     login: connection.login,
     providerUserId: connection.providerUserId,
-    refreshToken: refreshed.refreshToken ?? connection.refreshToken ?? undefined,
+    refreshToken:
+      refreshed.refreshToken ?? connection.refreshToken ?? undefined,
     tokenExpiresAt:
       refreshed.tokenExpiresAt ?? connection.tokenExpiresAt ?? undefined,
   });
@@ -45,11 +47,16 @@ async function persistIfChanged(
 
 export async function issueShortLivedAccess(
   ctx: GenericActionCtx<DataModel>,
+  userId: Id<"users">,
   provider: ProviderId,
 ): Promise<{ accessToken: string; expiresAt: number } | { error: string }> {
-  const connection = await ctx.runQuery(internal.tables.connections.queries.getConnection, {
-    provider,
-  });
+  const connection = await ctx.runQuery(
+    internal.tables.connections.queries.getConnection,
+    {
+      userId,
+      provider,
+    },
+  );
   if (!connection) {
     return { error: `${provider} is not connected` };
   }
@@ -57,7 +64,7 @@ export async function issueShortLivedAccess(
   if (!refreshed) {
     return { error: "Could not refresh provider token" };
   }
-  await persistIfChanged(ctx, provider, connection, refreshed);
+  await persistIfChanged(ctx, userId, provider, connection, refreshed);
   const providerExpiry = refreshed.tokenExpiresAt ?? connection.tokenExpiresAt;
   const expiresAt = Math.min(
     Date.now() + APP_TOKEN_TTL_MS,

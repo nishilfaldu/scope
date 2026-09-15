@@ -1,9 +1,6 @@
 import { httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
-import {
-  APP_UNAVAILABLE_ERROR,
-  type AgentErrorCode,
-} from "../lib/errors";
+import { APP_UNAVAILABLE_ERROR, type AgentErrorCode } from "../lib/errors";
 import { issueShortLivedAccess } from "../oauth/access";
 import { readObjectBody, requiredString } from "../lib/requests";
 import { errorResponse, jsonResponse } from "../lib/responses";
@@ -39,7 +36,11 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
     return errorResponse(decision.status, decision.reason, decision.code);
   }
 
-  const issued = await issueShortLivedAccess(ctx, decision.provider);
+  const issued = await issueShortLivedAccess(
+    ctx,
+    decision.userId,
+    decision.provider,
+  );
   if ("error" in issued) {
     const status = issued.error.endsWith("is not connected") ? 403 : 503;
     const code: AgentErrorCode =

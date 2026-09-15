@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { internalQuery, query } from "../../_generated/server";
+import { internalQuery } from "../../_generated/server";
+import { authenticatedQuery } from "../../functions";
 import { PROVIDERS, providerValidator } from "../../domain/apps";
 
 const connectionValidator = v.object({
@@ -10,7 +11,7 @@ const connectionValidator = v.object({
   tokenExpiresAt: v.union(v.number(), v.null()),
 });
 
-export const listStatuses = query({
+export const listStatuses = authenticatedQuery({
   args: {},
   returns: v.array(
     v.object({
@@ -24,7 +25,9 @@ export const listStatuses = query({
     for (const provider of PROVIDERS) {
       const row = await ctx.db
         .query("connections")
-        .withIndex("by_provider", (q) => q.eq("provider", provider))
+        .withIndex("by_user_and_provider", (q) =>
+          q.eq("userId", ctx.userId).eq("provider", provider),
+        )
         .unique();
       rows.push({
         provider,
@@ -37,16 +40,16 @@ export const listStatuses = query({
 });
 
 export const getConnection = internalQuery({
-  args: { provider: providerValidator },
+  args: { userId: v.id("users"), provider: providerValidator },
   returns: v.union(connectionValidator, v.null()),
   handler: async (ctx, args) => {
     const row = await ctx.db
       .query("connections")
-      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
+      .withIndex("by_user_and_provider", (q) =>
+        q.eq("userId", args.userId).eq("provider", args.provider),
+      )
       .unique();
-    if (!row) {
-      return null;
-    }
+    if (!row) return null;
     return {
       accessToken: row.accessToken,
       login: row.login,

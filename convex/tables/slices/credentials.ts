@@ -27,6 +27,7 @@ export const authorizeCreate = internalMutation({
     v.object({
       ok: v.literal(true),
       sliceId: v.id("slices"),
+      userId: v.id("users"),
       app: appValidator,
       provider: providerValidator,
       refresh: v.boolean(),
@@ -72,7 +73,9 @@ export const authorizeCreate = internalMutation({
 
     const connection = await ctx.db
       .query("connections")
-      .withIndex("by_provider", (q) => q.eq("provider", provider))
+      .withIndex("by_user_and_provider", (q) =>
+        q.eq("userId", slice.userId).eq("provider", provider),
+      )
       .unique();
 
     if (!connection) {
@@ -82,6 +85,7 @@ export const authorizeCreate = internalMutation({
     return {
       ok: true as const,
       sliceId: slice._id,
+      userId: slice.userId,
       app,
       provider,
       refresh: args.refresh,
