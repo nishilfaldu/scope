@@ -11,6 +11,7 @@
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as domain_apps from "../domain/apps.js";
+import type * as functions from "../functions.js";
 import type * as http from "../http.js";
 import type * as http_contracts from "../http/contracts.js";
 import type * as http_helpers from "../http/helpers.js";
@@ -50,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   crons: typeof crons;
   "domain/apps": typeof domain_apps;
+  functions: typeof functions;
   http: typeof http;
   "http/contracts": typeof http_contracts;
   "http/helpers": typeof http_helpers;
