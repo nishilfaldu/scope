@@ -19,7 +19,7 @@ export function httpOAuthConnect(provider: ProviderId) {
     if (!pending || pending.provider !== provider) {
       return new Response("Invalid or expired OAuth state", { status: 400 });
     }
-    const started = startAuthorize(provider, state);
+    const started = await startAuthorize(provider, state);
     if ("error" in started) {
       return new Response(started.error, {
         status: 503,
@@ -55,7 +55,7 @@ export function httpOAuthCallback(provider: ProviderId) {
       return redirectTo(returnFallback, provider, "error", "state");
     }
 
-    const grant = await exchangeAuthorizationCode(provider, code);
+    const grant = await exchangeAuthorizationCode(provider, code, state);
     if ("error" in grant) {
       return redirectTo(origin.returnTo, provider, "error", grant.error);
     }

@@ -127,3 +127,20 @@ If schema deploy fails because `tokenLogs` still has rows, delete those document
 ```bash
 pnpm test
 ```
+
+### Airtable OAuth setup
+
+1. Create an OAuth integration at [Airtable's integration management page](https://airtable.com/create/oauth).
+2. Register `https://<deployment>.convex.site/api/airtable/callback` as its redirect URI.
+3. Select `data.records:read`, `data.records:write`, `schema.bases:read`, `schema.bases:write`, and `user.email:read`. Add the required support email, privacy policy, and terms URLs.
+4. Set the confidential client credentials and deploy:
+
+   ```bash
+   npx convex env set AIRTABLE_CLIENT_ID <client-id>
+   npx convex env set AIRTABLE_CLIENT_SECRET <client-secret>
+   npx convex deploy
+   ```
+
+5. Connect Airtable from `/connections`. The user chooses which bases and workspaces the token may access.
+
+Official references: [Airtable OAuth](https://airtable.com/developers/web/api/oauth-reference) and [token identity](https://airtable.com/developers/web/api/get-user-id-scopes).
