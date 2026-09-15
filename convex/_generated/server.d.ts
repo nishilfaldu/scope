@@ -37,6 +37,8 @@ type Env = {
   readonly GOOGLE_CLIENT_SECRET: string;
   readonly SLACK_CLIENT_ID: string;
   readonly SLACK_CLIENT_SECRET: string;
+  readonly LINEAR_CLIENT_ID: string;
+  readonly LINEAR_CLIENT_SECRET: string;
 };
 
 /**

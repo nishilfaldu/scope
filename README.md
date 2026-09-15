@@ -7,7 +7,7 @@ The system has two layers:
 1. A **passport** belongs to the user. It is the long-lived vault that holds the user's connected services and their real upstream tokens.
 2. A **slice** belongs to one agent. It is a scoped, expiring grant created from one passport.
 
-Connect once, give many agents access. A user can connect GitHub, Google, or Slack once, then give each agent its own slice of that access.
+Connect once, give many agents access. A user can connect GitHub, Google, Slack, or Linear once, then give each agent its own slice of that access.
 
 ## Passport
 
@@ -127,3 +127,21 @@ If schema deploy fails because `tokenLogs` still has rows, delete those document
 ```bash
 pnpm test
 ```
+
+### Linear OAuth setup
+
+1. Open [Linear OAuth applications](https://linear.app/settings/api/applications/new)
+   and create an Agent Passport app with the authorization-code grant.
+2. Register `https://<deployment>.convex.site/api/linear/callback` as its redirect URI.
+3. Enable `read` and `write` scopes. Agent Passport connects with the user actor.
+4. Set the client credentials and deploy:
+
+   ```bash
+   npx convex env set LINEAR_CLIENT_ID '<client-id>'
+   npx convex env set LINEAR_CLIENT_SECRET '<client-secret>'
+   ```
+
+5. Connect Linear from `/connections`. Live OAuth remains unverified until this
+   account-owned app and its secrets exist.
+
+Official reference: [Linear OAuth 2.0](https://linear.app/developers/oauth-2-0-authentication).

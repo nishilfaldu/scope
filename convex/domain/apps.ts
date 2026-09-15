@@ -8,11 +8,12 @@ export const ALL_APPS = [
   "docs",
   "sheets",
   "slack",
+  "linear",
 ] as const;
 
 export type AppId = (typeof ALL_APPS)[number];
 
-export const PROVIDERS = ["github", "google", "slack"] as const;
+export const PROVIDERS = ["github", "google", "slack", "linear"] as const;
 
 export type ProviderId = (typeof PROVIDERS)[number];
 
@@ -24,12 +25,14 @@ export const appValidator = v.union(
   v.literal("docs"),
   v.literal("sheets"),
   v.literal("slack"),
+  v.literal("linear"),
 );
 
 export const providerValidator = v.union(
   v.literal("github"),
   v.literal("google"),
   v.literal("slack"),
+  v.literal("linear"),
 );
 
 export function isAppId(value: string): value is AppId {
@@ -40,6 +43,8 @@ export function providerForApp(app: AppId): ProviderId {
   switch (app) {
     case "github":
       return "github";
+    case "linear":
+      return "linear";
     case "gmail":
     case "calendar":
     case "drive":
