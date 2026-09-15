@@ -16,6 +16,7 @@ export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
   airtable: `${siteUrl}/api/airtable/connect`,
   notion: `${siteUrl}/api/notion/connect`,
   linear: `${siteUrl}/api/linear/connect`,
+  vercel: `${siteUrl}/api/vercel/connect`,
 };
 
 export const CONNECT_ERRORS: Record<string, string> = {
@@ -63,5 +64,10 @@ export const CONNECTION_PROVIDERS = [
     id: "linear" as const,
     name: "Linear",
     description: "Issues, projects, teams, and workflow updates.",
+  },
+  {
+    id: "vercel" as const,
+    name: "Vercel",
+    description: "Projects, deployments, domains, and team profile.",
   },
 ] as const;

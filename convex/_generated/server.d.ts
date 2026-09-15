@@ -43,6 +43,8 @@ type Env = {
   readonly NOTION_CLIENT_SECRET: string;
   readonly LINEAR_CLIENT_ID: string;
   readonly LINEAR_CLIENT_SECRET: string;
+  readonly VERCEL_CLIENT_ID: string;
+  readonly VERCEL_CLIENT_SECRET: string;
 };
 
 /**

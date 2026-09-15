@@ -15,6 +15,8 @@ const app = defineApp({
     NOTION_CLIENT_SECRET: v.string(),
     LINEAR_CLIENT_ID: v.string(),
     LINEAR_CLIENT_SECRET: v.string(),
+    VERCEL_CLIENT_ID: v.string(),
+    VERCEL_CLIENT_SECRET: v.string(),
     BOARD_ORIGIN: v.string(),
   },
 });

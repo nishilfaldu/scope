@@ -31,6 +31,9 @@ export function oauthConfigured(): Record<ProviderId, boolean> {
     linear:
       envConfigured(env.LINEAR_CLIENT_ID) &&
       envConfigured(env.LINEAR_CLIENT_SECRET),
+    vercel:
+      envConfigured(env.VERCEL_CLIENT_ID) &&
+      envConfigured(env.VERCEL_CLIENT_SECRET),
   };
 }
 

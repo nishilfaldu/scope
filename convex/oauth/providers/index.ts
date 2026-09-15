@@ -6,6 +6,7 @@ import { slack } from "./slack";
 import { airtable } from "./airtable";
 import { notion } from "./notion";
 import { linear } from "./linear";
+import { vercel } from "./vercel";
 
 export const PROVIDER_OAUTH: Record<ProviderId, ProviderOAuth> = {
   github,
@@ -14,4 +15,5 @@ export const PROVIDER_OAUTH: Record<ProviderId, ProviderOAuth> = {
   airtable,
   notion,
   linear,
+  vercel,
 };

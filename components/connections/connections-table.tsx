@@ -2,7 +2,7 @@
 
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
-import { DatabaseIcon, GithubIcon, GoogleIcon, SlackIcon, Notion01Icon, Chart01Icon } from "@hugeicons/core-free-icons";
+import { DatabaseIcon, GithubIcon, GoogleIcon, SlackIcon, Notion01Icon, Chart01Icon, CloudIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { api } from "@/convex/_generated/api";
@@ -33,6 +33,8 @@ function providerIcon(id: ProviderId) {
       return Notion01Icon;
     case "linear":
       return Chart01Icon;
+    case "vercel":
+      return CloudIcon;
     default: {
       const _exhaustive: never = id;
       return _exhaustive;
