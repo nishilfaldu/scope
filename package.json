@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "convex dev --start 'next dev'",
     "dev:frontend": "next dev",
-    "build": "next build",
+    "build": "convex deploy --cmd 'next build'",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run"
@@ -34,17 +34,3 @@
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "babel-plugin-react-compiler": "1.0.0",
-    "convex-test": "^0.0.57",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.4",
-    "tailwindcss": "^4",
-    "typescript": "^5",
-    "vitest": "^5.0.0"
-  },
-  "packageManager": "pnpm@11.3.0",
-  "engines": {
-    "node": ">=22.13.0"
-  }
-}
