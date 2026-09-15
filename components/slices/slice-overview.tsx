@@ -41,7 +41,7 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
             variant="outline"
             size="sm"
             disabled={isRevoking}
-            onClick={() => void revoke({ passportToken: slice.token })}
+            onClick={() => void revoke({ sliceToken: slice.token })}
           >
             <HugeiconsIcon
               icon={Delete02Icon}

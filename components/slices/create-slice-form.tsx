@@ -52,8 +52,8 @@ export function CreateSliceForm({
       });
       if (result === undefined) return;
       onCreated({
-        sliceToken: result.passportToken,
-        sliceSecret: result.passportSecret,
+        sliceToken: result.sliceToken,
+        sliceSecret: result.sliceSecret,
         name: result.name,
       });
       formApi.reset();

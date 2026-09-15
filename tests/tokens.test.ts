@@ -38,13 +38,13 @@ describe("accounts and passports", () => {
       ttlMs: 60_000,
       apps: ["github", "gmail", "slack"],
     });
-    expect(created.passportToken.startsWith("pp_")).toBe(true);
-    expect(created.passportSecret.startsWith("ps_")).toBe(true);
+    expect(created.sliceToken.startsWith("st_")).toBe(true);
+    expect(created.sliceSecret.startsWith("ss_")).toBe(true);
     const listed = await test.query(api.tables.slices.queries.list, {
       paginationOpts: { numItems: 10, cursor: null },
     });
     expect(listed.page).toHaveLength(1);
-    expect(listed.page[0]).not.toHaveProperty("passportSecret");
+    expect(listed.page[0]).not.toHaveProperty("sliceSecret");
   });
 
   test("create validates its name and TTL", async () => {
@@ -74,7 +74,7 @@ describe("accounts and passports", () => {
       name: "Multi", ttlMs: 60_000, apps: ["github", "gmail", "slack"],
     });
     await test.mutation(api.tables.slices.mutations.setApp, {
-      passportToken: created.passportToken, app: "gmail", enabled: false,
+      sliceToken: created.sliceToken, app: "gmail", enabled: false,
     });
     const slice = await test.query(api.tables.slices.queries.get, {
       sliceId: created.id,
@@ -115,8 +115,8 @@ describe("credential authorization", () => {
       name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
     });
     const allowed = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      passportToken: created.passportToken,
-      passportSecret: created.passportSecret,
+      sliceToken: created.sliceToken,
+      sliceSecret: created.sliceSecret,
       app: "github",
       refresh: false,
     });
@@ -143,11 +143,11 @@ describe("credential authorization", () => {
       name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
     });
     await test.mutation(api.tables.slices.mutations.setApp, {
-      passportToken: created.passportToken, app: "github", enabled: false,
+      sliceToken: created.sliceToken, app: "github", enabled: false,
     });
     const denied = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      passportToken: created.passportToken,
-      passportSecret: created.passportSecret,
+      sliceToken: created.sliceToken,
+      sliceSecret: created.sliceSecret,
       app: "github",
       refresh: false,
     });
@@ -156,35 +156,35 @@ describe("credential authorization", () => {
     });
   });
 
-  test("revoked and expired passports are denied", async () => {
+  test("revoked and expired slices are denied", async () => {
     const test = t();
     await seedGithub(test);
     const { backend } = await signedIn(test);
-    const revokedPassport = await backend.mutation(api.tables.slices.mutations.create, {
+    const revokedSlice = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Revoked", ttlMs: 60_000, apps: ["github"],
     });
     await test.mutation(api.tables.slices.mutations.revoke, {
-      passportToken: revokedPassport.passportToken,
+      sliceToken: revokedSlice.sliceToken,
     });
     const revoked = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      passportToken: revokedPassport.passportToken,
-      passportSecret: revokedPassport.passportSecret,
+      sliceToken: revokedSlice.sliceToken,
+      sliceSecret: revokedSlice.sliceSecret,
       app: "github",
       refresh: false,
     });
     expect(revoked).toMatchObject({ ok: false, code: "REVOKED" });
 
-    const expiredPassport = await backend.mutation(api.tables.slices.mutations.create, {
+    const expiredSlice = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Expired", ttlMs: 60_000, apps: ["github"],
     });
     await test.run(async (ctx) => {
-      await ctx.db.patch("slices", expiredPassport.id, {
+      await ctx.db.patch("slices", expiredSlice.id, {
         expiresAt: Date.now() - 1_000,
       });
     });
     const expired = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      passportToken: expiredPassport.passportToken,
-      passportSecret: expiredPassport.passportSecret,
+      sliceToken: expiredSlice.sliceToken,
+      sliceSecret: expiredSlice.sliceSecret,
       app: "github",
       refresh: false,
     });
@@ -200,26 +200,26 @@ describe("credential authorization", () => {
     const unavailable = {
       ok: false,
       status: 403,
-      reason: "This app is not available on this passport",
+      reason: "This app is not available to this slice",
       code: "APP_UNAVAILABLE",
     };
     const unknown = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      passportToken: created.passportToken,
-      passportSecret: created.passportSecret,
+      sliceToken: created.sliceToken,
+      sliceSecret: created.sliceSecret,
       app: "dropbox",
       refresh: false,
     });
     expect(unknown).toMatchObject(unavailable);
     const unconnected = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      passportToken: created.passportToken,
-      passportSecret: created.passportSecret,
+      sliceToken: created.sliceToken,
+      sliceSecret: created.sliceSecret,
       app: "github",
       refresh: false,
     });
     expect(unconnected).toMatchObject(unavailable);
   });
 
-  test("an invalid passport secret is refused", async () => {
+  test("an invalid slice secret is refused", async () => {
     const test = t();
     await seedGithub(test);
     const { backend } = await signedIn(test);
@@ -227,8 +227,8 @@ describe("credential authorization", () => {
       name: "Keyed", ttlMs: 60_000, apps: ["github"],
     });
     const denied = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      passportToken: created.passportToken,
-      passportSecret: "ps_wrong",
+      sliceToken: created.sliceToken,
+      sliceSecret: "ss_wrong",
       app: "github",
       refresh: false,
     });
@@ -250,8 +250,8 @@ describe("credential authorization", () => {
     });
     for (const app of apps) {
       const allowed = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-        passportToken: created.passportToken,
-        passportSecret: created.passportSecret,
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
         app,
         refresh: false,
       });

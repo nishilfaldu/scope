@@ -55,8 +55,8 @@ export const get = query({
 
 export const discoverApps = internalQuery({
   args: {
-    passportToken: v.string(),
-    passportSecret: v.string(),
+    sliceToken: v.string(),
+    sliceSecret: v.string(),
     now: v.number(),
   },
   returns: v.union(

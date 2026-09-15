@@ -29,7 +29,7 @@ A user can have more than one passport when they need separation, such as work a
 
 A slice is created for one agent and one grant. It contains:
 
-- a public token and secret
+- a slice token and slice secret
 - the passport and user it belongs to
 - the agent it was created for
 - allowed services and actions

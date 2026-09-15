@@ -58,10 +58,10 @@ export function SlicesTable() {
     }
   }
 
-  async function handleRevoke(passportToken: string) {
-    setRevokingId(passportToken);
+  async function handleRevoke(sliceToken: string) {
+    setRevokingId(sliceToken);
     try {
-      await revoke({ passportToken });
+      await revoke({ sliceToken });
     } finally {
       setRevokingId(null);
     }

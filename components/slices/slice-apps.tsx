@@ -23,7 +23,7 @@ export function SliceApps({ sliceId }: { sliceId: string }) {
   function handleToggle(app: AppId, enabled: boolean) {
     if (!slice) return;
     void setApp({
-      passportToken: slice.token,
+      sliceToken: slice.token,
       app,
       enabled,
     });

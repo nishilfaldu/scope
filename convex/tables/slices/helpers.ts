@@ -19,16 +19,16 @@ export function withoutSecretHash(slice: Doc<"slices">) {
 
 export async function sliceBySecret(
   ctx: QueryCtx,
-  args: { passportToken: string; passportSecret: string },
+  args: { sliceToken: string; sliceSecret: string },
 ): Promise<Doc<"slices"> | null> {
   const slice = await ctx.db
     .query("slices")
-    .withIndex("by_token", (q) => q.eq("token", args.passportToken))
+    .withIndex("by_token", (q) => q.eq("token", args.sliceToken))
     .unique();
   if (!slice) {
     return null;
   }
-  const secretHash = await sha256Hex(args.passportSecret);
+  const secretHash = await sha256Hex(args.sliceSecret);
   if (!hashesEqual(secretHash, slice.secretHash)) {
     return null;
   }

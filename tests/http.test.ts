@@ -63,8 +63,8 @@ describe("GET /", () => {
       (route: { path: string }) => route.path === "/api/credentials",
     );
     expect(credentials.body.required).toEqual([
-      "passportToken",
-      "passportSecret",
+      "sliceToken",
+      "sliceSecret",
       "app",
     ]);
     expect(body.errors.APP_UNAVAILABLE.hint).toContain("dashboard");
@@ -111,8 +111,8 @@ describe("POST /api/credentials denials", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        passportToken: created.passportToken,
-        passportSecret: created.passportSecret,
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
         app: "slack",
         refresh: "yes",
       }),
@@ -132,15 +132,15 @@ describe("POST /api/credentials denials", () => {
       apps: ["slack"],
     });
     const unavailable = {
-      error: "This app is not available on this passport",
+      error: "This app is not available to this slice",
       code: "APP_UNAVAILABLE",
     };
     const unknown = await test.fetch("/api/credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        passportToken: created.passportToken,
-        passportSecret: created.passportSecret,
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
         app: "dropbox",
       }),
     });
@@ -150,8 +150,8 @@ describe("POST /api/credentials denials", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        passportToken: created.passportToken,
-        passportSecret: created.passportSecret,
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
         app: "github",
       }),
     });
@@ -159,7 +159,7 @@ describe("POST /api/credentials denials", () => {
     expect(await off.json()).toEqual(unavailable);
   });
 
-  test("wrong passport secret is unauthorized and does not name the app", async () => {
+  test("wrong slice secret is unauthorized and does not name the app", async () => {
     const test = t();
     const created = await createSlice(test, {
       name: "Keyed",
@@ -170,21 +170,21 @@ describe("POST /api/credentials denials", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        passportToken: created.passportToken,
-        passportSecret: "ps_wrong",
+        sliceToken: created.sliceToken,
+        sliceSecret: "ss_wrong",
         app: "github",
       }),
     });
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({
-      error: "Unknown passport token or passport secret",
+      error: "Unknown slice token or slice secret",
       code: "UNAUTHORIZED",
     });
   });
 });
 
 describe("GET /api/apps", () => {
-  test("wrong or missing passport secret does not leak apps", async () => {
+  test("wrong or missing slice secret does not leak apps", async () => {
     const test = t();
     const created = await createSlice(test, {
       name: "Secret",
@@ -194,14 +194,14 @@ describe("GET /api/apps", () => {
     const wrong = await test.fetch("/api/apps", {
       method: "GET",
       headers: {
-        passportToken: created.passportToken,
-        passportSecret: "ps_wrong",
+        "x-slice-token": created.sliceToken,
+        "x-slice-secret": "ss_wrong",
       },
     });
     expect(wrong.status).toBe(401);
     const wrongBody = await wrong.json();
     expect(wrongBody).toEqual({
-      error: "Unknown passport token or passport secret",
+      error: "Unknown slice token or slice secret",
       code: "UNAUTHORIZED",
     });
     expect(wrongBody).not.toHaveProperty("apps");
@@ -209,19 +209,19 @@ describe("GET /api/apps", () => {
 
     const missing = await test.fetch("/api/apps", {
       method: "GET",
-      headers: { passportToken: created.passportToken },
+      headers: { "x-slice-token": created.sliceToken },
     });
     expect(missing.status).toBe(400);
     const missingBody = await missing.json();
     expect(missingBody).toEqual({
-      error: "passportSecret must be a string",
+      error: "x-slice-secret must be a string",
       code: "INVALID_REQUEST",
     });
     expect(missingBody).not.toHaveProperty("apps");
     expect(JSON.stringify(missingBody)).not.toMatch(/github|slack/);
   });
 
-  test("returns on vs off for each app and the passport expiry", async () => {
+  test("returns on vs off for each app and the slice expiry", async () => {
     const test = t();
     const created = await createSlice(test, {
       name: "Mix",
@@ -235,8 +235,8 @@ describe("GET /api/apps", () => {
     const response = await test.fetch("/api/apps", {
       method: "GET",
       headers: {
-        passportToken: created.passportToken,
-        passportSecret: created.passportSecret,
+        "x-slice-token": created.sliceToken,
+        "x-slice-secret": created.sliceSecret,
       },
     });
     expect(response.status).toBe(200);

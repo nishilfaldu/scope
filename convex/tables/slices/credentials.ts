@@ -18,8 +18,8 @@ export const APP_TOKEN_TTL_MS = 15 * 60 * 1000;
 
 export const authorizeCreate = internalMutation({
   args: {
-    passportToken: v.string(),
-    passportSecret: v.string(),
+    sliceToken: v.string(),
+    sliceSecret: v.string(),
     app: v.string(),
     refresh: v.boolean(),
   },
@@ -37,7 +37,7 @@ export const authorizeCreate = internalMutation({
     const now = Date.now();
     const slice = await ctx.db
       .query("slices")
-      .withIndex("by_token", (q) => q.eq("token", args.passportToken))
+      .withIndex("by_token", (q) => q.eq("token", args.sliceToken))
       .unique();
     if (!slice) {
       return {
@@ -48,7 +48,7 @@ export const authorizeCreate = internalMutation({
       };
     }
 
-    const secretHash = await sha256Hex(args.passportSecret);
+    const secretHash = await sha256Hex(args.sliceSecret);
     if (!hashesEqual(secretHash, slice.secretHash)) {
       return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
     }

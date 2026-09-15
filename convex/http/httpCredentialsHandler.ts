@@ -14,11 +14,11 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
     return body;
   }
 
-  const sliceToken = requiredString(body, "passportToken");
+  const sliceToken = requiredString(body, "sliceToken");
   if (sliceToken instanceof Response) {
     return sliceToken;
   }
-  const sliceSecret = requiredString(body, "passportSecret");
+  const sliceSecret = requiredString(body, "sliceSecret");
   if (sliceSecret instanceof Response) {
     return sliceSecret;
   }
@@ -33,7 +33,7 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
 
   const decision = await ctx.runMutation(
     internal.tables.slices.credentials.authorizeCreate,
-    { passportToken: sliceToken, passportSecret: sliceSecret, app, refresh },
+    { sliceToken, sliceSecret, app, refresh },
   );
   if (!decision.ok) {
     return errorResponse(decision.status, decision.reason, decision.code);

@@ -34,8 +34,8 @@ export const create = mutation({
   },
   returns: v.object({
     id: v.id("slices"),
-    passportToken: v.string(),
-    passportSecret: v.string(),
+    sliceToken: v.string(),
+    sliceSecret: v.string(),
     expiresAt: v.number(),
     name: v.string(),
     apps: v.array(appValidator),
@@ -80,8 +80,8 @@ export const create = mutation({
       expiresAt,
     });
 
-    const token = randomSecret("pp_");
-    const sliceSecret = randomSecret("ps_");
+    const token = randomSecret("st_");
+    const sliceSecret = randomSecret("ss_");
     const secretHash = await sha256Hex(sliceSecret);
     const id = await ctx.db.insert("slices", {
       passportId,
@@ -96,8 +96,8 @@ export const create = mutation({
 
     return {
       id,
-      passportToken: token,
-      passportSecret: sliceSecret,
+      sliceToken: token,
+      sliceSecret,
       expiresAt,
       name,
       apps: uniqueApps,
@@ -107,7 +107,7 @@ export const create = mutation({
 
 export const setApp = mutation({
   args: {
-    passportToken: v.string(),
+    sliceToken: v.string(),
     app: appValidator,
     enabled: v.boolean(),
   },
@@ -115,7 +115,7 @@ export const setApp = mutation({
   handler: async (ctx, args) => {
     const slice = await ctx.db
       .query("slices")
-      .withIndex("by_token", (q) => q.eq("token", args.passportToken))
+      .withIndex("by_token", (q) => q.eq("token", args.sliceToken))
       .unique();
     if (!slice) {
       throw new Error("Passport not found");
@@ -145,12 +145,12 @@ export const setApp = mutation({
 });
 
 export const revoke = mutation({
-  args: { passportToken: v.string() },
+  args: { sliceToken: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
     const slice = await ctx.db
       .query("slices")
-      .withIndex("by_token", (q) => q.eq("token", args.passportToken))
+      .withIndex("by_token", (q) => q.eq("token", args.sliceToken))
       .unique();
     if (!slice) {
       throw new Error("Passport not found");
