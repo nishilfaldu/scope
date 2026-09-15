@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-import { cn } from "@/lib/utils";
 import {
   Card,
   CardAction,
@@ -17,7 +16,6 @@ export function ContentCard({
   size = "default",
   headerBorder = true,
   titleClassName,
-  headerClassName,
 }: {
   title: ReactNode;
   description?: ReactNode;
@@ -26,13 +24,10 @@ export function ContentCard({
   size?: "default" | "sm";
   headerBorder?: boolean;
   titleClassName?: string;
-  headerClassName?: string;
 }) {
   return (
     <Card size={size}>
-      <CardHeader
-        className={cn(headerBorder && "border-b", headerClassName)}
-      >
+      <CardHeader className={headerBorder ? "border-b" : undefined}>
         <CardTitle className={titleClassName}>{title}</CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}
         {action ? <CardAction>{action}</CardAction> : null}
