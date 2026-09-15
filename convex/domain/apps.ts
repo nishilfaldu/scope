@@ -8,11 +8,12 @@ export const ALL_APPS = [
   "docs",
   "sheets",
   "slack",
+  "vercel",
 ] as const;
 
 export type AppId = (typeof ALL_APPS)[number];
 
-export const PROVIDERS = ["github", "google", "slack"] as const;
+export const PROVIDERS = ["github", "google", "slack", "vercel"] as const;
 
 export type ProviderId = (typeof PROVIDERS)[number];
 
@@ -24,12 +25,14 @@ export const appValidator = v.union(
   v.literal("docs"),
   v.literal("sheets"),
   v.literal("slack"),
+  v.literal("vercel"),
 );
 
 export const providerValidator = v.union(
   v.literal("github"),
   v.literal("google"),
   v.literal("slack"),
+  v.literal("vercel"),
 );
 
 export function isAppId(value: string): value is AppId {
@@ -48,6 +51,8 @@ export function providerForApp(app: AppId): ProviderId {
       return "google";
     case "slack":
       return "slack";
+    case "vercel":
+      return "vercel";
     default: {
       const _exhaustive: never = app;
       return _exhaustive;

@@ -127,3 +127,21 @@ If schema deploy fails because `tokenLogs` still has rows, delete those document
 ```bash
 pnpm test
 ```
+
+### Vercel OAuth setup
+
+1. Open [Vercel Apps](https://vercel.com/dashboard/apps) and create an Agent Passport app.
+2. Choose the confidential `client_secret_basic` or `client_secret_post` authentication method.
+3. Register `https://<deployment>.convex.site/api/vercel/callback` as an authorization callback URL.
+4. Enable `openid`, `email`, `profile`, and `offline_access`. Enable any Vercel API permissions the passport should expose when they are available for the account.
+5. Set the client credentials and deploy:
+
+   ```bash
+   npx convex env set VERCEL_CLIENT_ID <client-id>
+   npx convex env set VERCEL_CLIENT_SECRET <client-secret>
+   npx convex deploy
+   ```
+
+6. Connect Vercel from `/connections`.
+
+Official references: [Vercel Authorization Server API](https://vercel.com/docs/sign-in-with-vercel/authorization-server-api) and [scopes and permissions](https://vercel.com/docs/sign-in-with-vercel/scopes-and-permissions).
