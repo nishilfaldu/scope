@@ -144,3 +144,15 @@ pnpm test
 5. Connect Airtable from `/connections`. The user chooses which bases and workspaces the token may access.
 
 Official references: [Airtable OAuth](https://airtable.com/developers/web/api/oauth-reference) and [token identity](https://airtable.com/developers/web/api/get-user-id-scopes).
+
+
+### Notion OAuth setup
+
+Notion support uses a public OAuth connection. Until the app is registered, the Notion tile is present but connect returns a configuration error.
+
+1. Open [My integrations](https://www.notion.so/profile/integrations) and create a new public integration for Agent Passport.
+2. Enable the content capabilities agents should receive; users select shared pages and databases on Notion's consent screen.
+3. Register `https://<deployment>.convex.site/api/notion/callback`.
+4. Set `NOTION_CLIENT_ID` and `NOTION_CLIENT_SECRET` on the Convex deployment, deploy, then connect from `/connections`.
+
+Notion references: [Authorization](https://developers.notion.com/guides/get-started/authorization), [token exchange](https://developers.notion.com/reference/create-a-token), [refresh](https://developers.notion.com/reference/refresh-a-token), and [revoke](https://developers.notion.com/reference/revoke-token).

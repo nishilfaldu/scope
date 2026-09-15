@@ -4,10 +4,12 @@ import { github } from "./github";
 import { google } from "./google";
 import { slack } from "./slack";
 import { airtable } from "./airtable";
+import { notion } from "./notion";
 
 export const PROVIDER_OAUTH: Record<ProviderId, ProviderOAuth> = {
   github,
   google,
   slack,
   airtable,
+  notion,
 };

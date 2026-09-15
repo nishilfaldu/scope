@@ -25,6 +25,9 @@ export function oauthConfigured(): Record<ProviderId, boolean> {
     airtable:
       envConfigured(env.AIRTABLE_CLIENT_ID) &&
       envConfigured(env.AIRTABLE_CLIENT_SECRET),
+    notion:
+      envConfigured(env.NOTION_CLIENT_ID) &&
+      envConfigured(env.NOTION_CLIENT_SECRET),
   };
 }
 
