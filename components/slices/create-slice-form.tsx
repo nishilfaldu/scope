@@ -1,6 +1,8 @@
 "use client";
 
 import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
+import Link from "next/link";
 import { useAppForm } from "@/components/form";
 import {
   ALL_APPS,
@@ -16,11 +18,11 @@ const TTL_ITEMS = TTL_OPTIONS.map((option) => ({
   value: String(option.ttlMs),
   label: option.label,
 }));
-const APP_OPTIONS = ALL_APPS.map((app) => ({
-  value: app,
-  title: APP_LABELS[app],
-  description: APP_HINTS[app],
-}));
+function providerForApp(app: AppId) {
+  if (app === "github") return "github";
+  if (app === "slack") return "slack";
+  return "google";
+}
 
 export type CreatedSlice = {
   sliceToken: string;
@@ -33,6 +35,23 @@ export function CreateSliceForm({
 }: {
   onCreated: (result: CreatedSlice) => void;
 }) {
+  const statuses = useQuery(api.tables.connections.queries.listStatuses);
+  const connectedProviders = new Set(
+    statuses
+      ?.filter((status) => status.connected)
+      .map((status) => status.provider),
+  );
+  const appOptions = ALL_APPS.map((app) => {
+    const connected = connectedProviders.has(providerForApp(app));
+    return {
+      value: app,
+      title: APP_LABELS[app],
+      description: connected ? APP_HINTS[app] : "Connect this provider first.",
+      disabled: !connected,
+    };
+  });
+  const hasConnections = connectedProviders.size > 0;
+
   const [createSlice] = useErrorCatchingMutation(
     api.tables.slices.mutations.create,
     { successMessage: "Slice created" },
@@ -81,13 +100,18 @@ export function CreateSliceForm({
           }}
         >
           {(field) => (
-            <field.CheckboxGroupField
-              legend="Apps"
-              options={APP_OPTIONS}
-            />
+            <field.CheckboxGroupField legend="Apps" options={appOptions} />
           )}
         </form.AppField>
-        <form.SubmitButton pendingLabel="Creating…">
+        {!hasConnections && statuses !== undefined ? (
+          <p className="text-sm text-muted-foreground">
+            <Link href="/connections" className="underline">
+              Connect an account
+            </Link>{" "}
+            before creating a slice.
+          </p>
+        ) : null}
+        <form.SubmitButton pendingLabel="Creating…" disabled={!hasConnections}>
           Create slice
         </form.SubmitButton>
       </form.Form>

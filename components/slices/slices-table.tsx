@@ -19,12 +19,15 @@ import {
   type ActionsMenuItem,
 } from "@/components/shared/actions-menu";
 import { ConvexPagination } from "@/components/shared/convex-pagination";
-import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toast";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
-import { APP_LABELS, formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
+import { formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
 type Slice = FunctionReturnType<
@@ -95,19 +98,6 @@ export function SlicesTable() {
         >
           {STATUS_LABELS[slice.status]}
         </Badge>
-      ),
-    },
-    {
-      id: "apps",
-      header: "Apps",
-      cell: ({ row: { original: slice } }) => (
-        <div className="flex flex-wrap gap-1">
-          {slice.grantApps.map((app) => (
-            <Badge key={app} variant="secondary">
-              {APP_LABELS[app]}
-            </Badge>
-          ))}
-        </div>
       ),
     },
     {

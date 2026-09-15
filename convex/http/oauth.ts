@@ -1,4 +1,3 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { exchangeAuthorizationCode, startAuthorize } from "../oauth";
@@ -9,14 +8,17 @@ export { parseBoardOrigin, resolveReturnTo } from "./helpers";
 
 export function httpOAuthConnect(provider: ProviderId) {
   return httpAction(async (ctx, request) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      return new Response("Sign in to continue", { status: 401 });
+    const state = new URL(request.url).searchParams.get("state");
+    if (!state) {
+      return new Response("Missing OAuth state", { status: 400 });
     }
-    const returnTo = allowedReturnTo(
-      new URL(request.url).searchParams.get("returnTo"),
+    const pending = await ctx.runQuery(
+      internal.tables.oauthStates.queries.get,
+      { state },
     );
-    const state = crypto.randomUUID();
+    if (!pending || pending.provider !== provider) {
+      return new Response("Invalid or expired OAuth state", { status: 400 });
+    }
     const started = startAuthorize(provider, state);
     if ("error" in started) {
       return new Response(started.error, {
@@ -24,19 +26,12 @@ export function httpOAuthConnect(provider: ProviderId) {
         headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
     }
-    await ctx.runMutation(internal.tables.oauthStates.mutations.put, {
-      userId,
-      provider,
-      state,
-      returnTo,
-    });
     return Response.redirect(started.url, 302);
   });
 }
 
 export function httpOAuthCallback(provider: ProviderId) {
   return httpAction(async (ctx, request) => {
-    const userId = await getAuthUserId(ctx);
     const requestUrl = new URL(request.url);
     const returnFallback = allowedReturnTo(null);
     const errorParam = requestUrl.searchParams.get("error");
@@ -56,7 +51,7 @@ export function httpOAuthCallback(provider: ProviderId) {
       internal.tables.oauthStates.mutations.consume,
       { state },
     );
-    if (!origin || origin.provider !== provider || origin.userId !== userId) {
+    if (!origin || origin.provider !== provider) {
       return redirectTo(returnFallback, provider, "error", "state");
     }
 

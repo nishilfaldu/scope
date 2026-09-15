@@ -26,7 +26,7 @@ export function SliceCredentials({ slice }: { slice: CreatedSlice }) {
   }
 
   return (
-    <div className="rounded-2xl border bg-card px-4 py-3 text-sm">
+    <div className="min-w-0 max-w-full rounded-2xl border bg-card px-4 py-3 text-sm">
       <div className="flex items-start gap-2.5">
         <HugeiconsIcon
           icon={Tick02Icon}
@@ -36,8 +36,8 @@ export function SliceCredentials({ slice }: { slice: CreatedSlice }) {
         <div className="min-w-0 flex-1">
           <p className="font-medium">Created {slice.name}</p>
           <p className="mt-0.5 text-muted-foreground">
-            Give the agent this slice token and slice secret. The slice secret is
-            shown once. Never share standing account tokens.
+            Give the agent this slice token and slice secret. The slice secret
+            is shown once. Never share standing account tokens.
           </p>
           <div className="mt-3 flex min-w-0 flex-col gap-2">
             {[
@@ -46,13 +46,13 @@ export function SliceCredentials({ slice }: { slice: CreatedSlice }) {
             ].map((credential) => (
               <div
                 key={credential.label}
-                className="flex min-w-0 items-center gap-2"
+                className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2"
               >
                 <div className="min-w-0 flex-1">
                   <p className="mb-1 text-xs text-muted-foreground">
                     {credential.label}
                   </p>
-                  <code className="block min-w-0 truncate rounded-xl bg-muted px-3 py-2 font-mono text-xs">
+                  <code className="block max-w-full overflow-x-auto rounded-xl bg-muted px-3 py-2 font-mono text-xs whitespace-nowrap">
                     {credential.value}
                   </code>
                 </div>
@@ -65,9 +65,7 @@ export function SliceCredentials({ slice }: { slice: CreatedSlice }) {
                 >
                   <HugeiconsIcon
                     icon={
-                      copiedValue === credential.value
-                        ? Tick02Icon
-                        : Copy01Icon
+                      copiedValue === credential.value ? Tick02Icon : Copy01Icon
                     }
                     strokeWidth={2}
                     data-icon="inline-start"

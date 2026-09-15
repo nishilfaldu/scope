@@ -17,7 +17,28 @@ async function signedIn(test: ReturnType<typeof t>) {
       email: "nishil@example.com",
     });
   });
-  return { backend: test.withIdentity({ subject: `${userId}|session-1` }), userId };
+  await test.run(async (ctx) => {
+    await ctx.db.insert("connections", {
+      userId,
+      provider: "github",
+      accessToken: "github-token",
+      login: "nishil",
+      providerUserId: "github-1",
+    });
+  });
+  await test.run(async (ctx) => {
+    await ctx.db.insert("connections", {
+      userId,
+      provider: "google",
+      accessToken: "google-token",
+      login: "nishil@example.com",
+      providerUserId: "google-1",
+    });
+  });
+  return {
+    backend: test.withIdentity({ subject: `${userId}|session-1` }),
+    userId,
+  };
 }
 
 describe("slice ownership", () => {
@@ -25,7 +46,9 @@ describe("slice ownership", () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "PR agent", ttlMs: 60_000, apps: ["github"],
+      name: "PR agent",
+      ttlMs: 60_000,
+      apps: ["github"],
     });
     const stored = await test.run(async (ctx) => {
       const slice = await ctx.db.get("slices", created.id);
@@ -47,16 +70,54 @@ describe("slice ownership", () => {
     });
   });
 
+  test("create requires a connection and only accepts connected apps", async () => {
+    const test = t();
+    const userId = await test.run(async (ctx) =>
+      ctx.db.insert("users", {
+        name: "No connections",
+        email: "none@example.com",
+      }),
+    );
+    const backend = test.withIdentity({ subject: `${userId}|session-1` });
+    await expect(
+      backend.mutation(api.tables.slices.mutations.create, {
+        name: "Blocked",
+        ttlMs: 60_000,
+        apps: ["github"],
+      }),
+    ).rejects.toThrow("Connect an account at /connections");
+    await test.run(async (ctx) => {
+      await ctx.db.insert("connections", {
+        userId,
+        provider: "github",
+        accessToken: "github-token",
+        login: "nishil",
+        providerUserId: "github-1",
+      });
+    });
+    await expect(
+      backend.mutation(api.tables.slices.mutations.create, {
+        name: "Blocked",
+        ttlMs: 60_000,
+        apps: ["slack"],
+      }),
+    ).rejects.toThrow("Connect slack before allowing slack");
+  });
+
   test("create refuses a second passport for the same account", async () => {
     const test = t();
     const { backend } = await signedIn(test);
     await backend.mutation(api.tables.slices.mutations.create, {
-      name: "One", ttlMs: 60_000, apps: ["github"],
+      name: "One",
+      ttlMs: 60_000,
+      apps: ["github"],
     });
 
     await expect(
       backend.mutation(api.tables.slices.mutations.create, {
-        name: "Two", ttlMs: 60_000, apps: ["slack"],
+        name: "Two",
+        ttlMs: 60_000,
+        apps: ["github"],
       }),
     ).rejects.toThrow(
       "This account already has a passport. Only one passport is supported right now.",
@@ -74,7 +135,9 @@ describe("slice ownership", () => {
     const test = t();
     await expect(
       test.mutation(api.tables.slices.mutations.create, {
-        name: "Nope", ttlMs: 60_000, apps: ["github"],
+        name: "Nope",
+        ttlMs: 60_000,
+        apps: ["github"],
       }),
     ).rejects.toThrow(/Sign in/);
   });
@@ -83,7 +146,9 @@ describe("slice ownership", () => {
     const test = t();
     const { backend: owner } = await signedIn(test);
     const created = await owner.mutation(api.tables.slices.mutations.create, {
-      name: "Owner agent", ttlMs: 60_000, apps: ["github"],
+      name: "Owner agent",
+      ttlMs: 60_000,
+      apps: ["github"],
     });
     const { backend: otherUser } = await signedIn(test);
 
@@ -96,52 +161,75 @@ describe("slice ownership", () => {
 
     expect(ownerList.page).toHaveLength(1);
     expect(otherList.page).toHaveLength(0);
-    expect(await otherUser.query(api.tables.slices.queries.get, {
-      sliceId: created.id,
-    })).toBeNull();
+    expect(
+      await otherUser.query(api.tables.slices.queries.get, {
+        sliceId: created.id,
+      }),
+    ).toBeNull();
   });
 
   test("another user cannot change or revoke a slice", async () => {
     const test = t();
     const { backend: owner } = await signedIn(test);
     const created = await owner.mutation(api.tables.slices.mutations.create, {
-      name: "Owner agent", ttlMs: 60_000, apps: ["github", "gmail"],
+      name: "Owner agent",
+      ttlMs: 60_000,
+      apps: ["github", "gmail"],
     });
     const { backend: otherUser } = await signedIn(test);
 
-    await expect(otherUser.mutation(api.tables.slices.mutations.setApp, {
-      sliceToken: created.sliceToken, app: "gmail", enabled: false,
-    })).rejects.toThrow("Slice not found");
-    await expect(otherUser.mutation(api.tables.slices.mutations.revoke, {
-      sliceToken: created.sliceToken,
-    })).rejects.toThrow("Slice not found");
+    await expect(
+      otherUser.mutation(api.tables.slices.mutations.setApp, {
+        sliceToken: created.sliceToken,
+        app: "gmail",
+        enabled: false,
+      }),
+    ).rejects.toThrow("Slice not found");
+    await expect(
+      otherUser.mutation(api.tables.slices.mutations.revoke, {
+        sliceToken: created.sliceToken,
+      }),
+    ).rejects.toThrow("Slice not found");
 
     const slice = await owner.query(api.tables.slices.queries.get, {
       sliceId: created.id,
     });
-    expect(slice).toMatchObject({ status: "active", grantApps: ["github", "gmail"] });
+    expect(slice).toMatchObject({
+      status: "active",
+      grantApps: ["github", "gmail"],
+    });
   });
 
   test("signed-out callers cannot read or mutate slices", async () => {
     const test = t();
     const { backend: owner } = await signedIn(test);
     const created = await owner.mutation(api.tables.slices.mutations.create, {
-      name: "Owner agent", ttlMs: 60_000, apps: ["github"],
+      name: "Owner agent",
+      ttlMs: 60_000,
+      apps: ["github"],
     });
 
-    await expect(test.query(api.tables.slices.queries.list, {
-      paginationOpts: { numItems: 10, cursor: null },
-    })).rejects.toThrow("Sign in to continue");
-    await expect(test.query(api.tables.slices.queries.get, {
-      sliceId: created.id,
-    })).rejects.toThrow("Sign in to continue");
-    await expect(test.mutation(api.tables.slices.mutations.setApp, {
-      sliceToken: created.sliceToken, app: "github", enabled: false,
-    })).rejects.toThrow("Sign in to continue");
-    await expect(test.mutation(api.tables.slices.mutations.revoke, {
-      sliceToken: created.sliceToken,
-    })).rejects.toThrow("Sign in to continue");
+    await expect(
+      test.query(api.tables.slices.queries.list, {
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+    ).rejects.toThrow("Sign in to continue");
+    await expect(
+      test.query(api.tables.slices.queries.get, {
+        sliceId: created.id,
+      }),
+    ).rejects.toThrow("Sign in to continue");
+    await expect(
+      test.mutation(api.tables.slices.mutations.setApp, {
+        sliceToken: created.sliceToken,
+        app: "github",
+        enabled: false,
+      }),
+    ).rejects.toThrow("Sign in to continue");
+    await expect(
+      test.mutation(api.tables.slices.mutations.revoke, {
+        sliceToken: created.sliceToken,
+      }),
+    ).rejects.toThrow("Sign in to continue");
   });
-
-
 });
