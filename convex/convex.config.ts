@@ -9,6 +9,8 @@ const app = defineApp({
     GOOGLE_CLIENT_SECRET: v.string(),
     SLACK_CLIENT_ID: v.string(),
     SLACK_CLIENT_SECRET: v.string(),
+    AIRTABLE_CLIENT_ID: v.string(),
+    AIRTABLE_CLIENT_SECRET: v.string(),
     NOTION_CLIENT_ID: v.string(),
     NOTION_CLIENT_SECRET: v.string(),
     BOARD_ORIGIN: v.string(),

@@ -7,7 +7,7 @@ The system has two layers:
 1. A **passport** belongs to the user. It is the long-lived vault that holds the user's connected services and their real upstream tokens.
 2. A **slice** belongs to one agent. It is a scoped, expiring grant created from one passport.
 
-Connect once, give many agents access. A user can connect GitHub, Google, Slack, or Notion once, then give each agent its own slice of that access.
+Connect once, give many agents access. A user can connect GitHub, Google, or Slack once, then give each agent its own slice of that access.
 
 ## Passport
 
@@ -128,29 +128,31 @@ If schema deploy fails because `tokenLogs` still has rows, delete those document
 pnpm test
 ```
 
-### Notion OAuth setup
+### Airtable OAuth setup
 
-Notion support uses a public OAuth connection. Until the app is registered, the
-Notion tile is present but connect returns a configuration error.
-
-1. Open [My integrations](https://www.notion.so/profile/integrations) and create
-   a new integration for Agent Passport.
-2. Choose `Public` distribution and enable the content capabilities the agents
-   should receive. Notion only exposes pages and databases a user selects on its
-   consent screen.
-3. Add this redirect URI, replacing the host with the deployed Convex site:
-   `https://<deployment>.convex.site/api/notion/callback`.
-4. Copy the OAuth client ID and client secret into the Convex deployment:
+1. Create an OAuth integration at [Airtable's integration management page](https://airtable.com/create/oauth).
+2. Register `https://<deployment>.convex.site/api/airtable/callback` as its redirect URI.
+3. Select `data.records:read`, `data.records:write`, `schema.bases:read`, `schema.bases:write`, and `user.email:read`. Add the required support email, privacy policy, and terms URLs.
+4. Set the confidential client credentials and deploy:
 
    ```bash
-   npx convex env set NOTION_CLIENT_ID '<client-id>'
-   npx convex env set NOTION_CLIENT_SECRET '<client-secret>'
+   npx convex env set AIRTABLE_CLIENT_ID <client-id>
+   npx convex env set AIRTABLE_CLIENT_SECRET <client-secret>
+   npx convex deploy
    ```
 
-5. Deploy, then connect Notion from `/connections`. The connection has not been
-   verified against a live Notion app until these account-owned values exist.
+5. Connect Airtable from `/connections`. The user chooses which bases and workspaces the token may access.
 
-Notion OAuth reference: [Authorization](https://developers.notion.com/guides/get-started/authorization),
-[token exchange](https://developers.notion.com/reference/create-a-token),
-[refresh](https://developers.notion.com/reference/refresh-a-token), and
-[revoke](https://developers.notion.com/reference/revoke-token).
+Official references: [Airtable OAuth](https://airtable.com/developers/web/api/oauth-reference) and [token identity](https://airtable.com/developers/web/api/get-user-id-scopes).
+
+
+### Notion OAuth setup
+
+Notion support uses a public OAuth connection. Until the app is registered, the Notion tile is present but connect returns a configuration error.
+
+1. Open [My integrations](https://www.notion.so/profile/integrations) and create a new public integration for Agent Passport.
+2. Enable the content capabilities agents should receive; users select shared pages and databases on Notion's consent screen.
+3. Register `https://<deployment>.convex.site/api/notion/callback`.
+4. Set `NOTION_CLIENT_ID` and `NOTION_CLIENT_SECRET` on the Convex deployment, deploy, then connect from `/connections`.
+
+Notion references: [Authorization](https://developers.notion.com/guides/get-started/authorization), [token exchange](https://developers.notion.com/reference/create-a-token), [refresh](https://developers.notion.com/reference/refresh-a-token), and [revoke](https://developers.notion.com/reference/revoke-token).

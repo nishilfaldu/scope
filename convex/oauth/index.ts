@@ -22,24 +22,28 @@ export function oauthConfigured(): Record<ProviderId, boolean> {
     slack:
       envConfigured(env.SLACK_CLIENT_ID) &&
       envConfigured(env.SLACK_CLIENT_SECRET),
+    airtable:
+      envConfigured(env.AIRTABLE_CLIENT_ID) &&
+      envConfigured(env.AIRTABLE_CLIENT_SECRET),
     notion:
       envConfigured(env.NOTION_CLIENT_ID) &&
       envConfigured(env.NOTION_CLIENT_SECRET),
   };
 }
 
-export function startAuthorize(
+export async function startAuthorize(
   provider: ProviderId,
   state: string,
-): AuthorizeStart {
-  return PROVIDER_OAUTH[provider].authorize(state);
+): Promise<AuthorizeStart> {
+  return await PROVIDER_OAUTH[provider].authorize(state);
 }
 
 export async function exchangeAuthorizationCode(
   provider: ProviderId,
   code: string,
+  state?: string,
 ): Promise<OAuthGrant | { error: string }> {
-  return await PROVIDER_OAUTH[provider].exchange(code);
+  return await PROVIDER_OAUTH[provider].exchange(code, state);
 }
 
 export async function refreshProviderTokens(

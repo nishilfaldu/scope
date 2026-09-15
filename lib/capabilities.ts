@@ -1,4 +1,7 @@
-import { ALL_APPS, type AppId } from "../convex/domain/apps";
+import {
+  ALL_APPS,
+  type AppId,
+} from "../convex/domain/apps";
 
 export { ALL_APPS, type AppId };
 
@@ -10,6 +13,7 @@ export const APP_LABELS: Record<AppId, string> = {
   docs: "Docs",
   sheets: "Sheets",
   slack: "Slack",
+  airtable: "Airtable",
   notion: "Notion",
 };
 
@@ -21,6 +25,7 @@ export const APP_HINTS: Record<AppId, string> = {
   docs: "Docs via the Google login.",
   sheets: "Sheets via the Google login.",
   slack: "Create a short-lived Slack token. The agent calls Slack directly.",
+  airtable: "Bases, schemas, records, and comments.",
   notion: "Pages and databases shared with the Notion connection.",
 };
 

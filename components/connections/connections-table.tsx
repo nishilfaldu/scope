@@ -2,12 +2,7 @@
 
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
-import {
-  GithubIcon,
-  GoogleIcon,
-  SlackIcon,
-  Notion01Icon,
-} from "@hugeicons/core-free-icons";
+import { DatabaseIcon, GithubIcon, GoogleIcon, SlackIcon, Notion01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { api } from "@/convex/_generated/api";
@@ -32,6 +27,8 @@ function providerIcon(id: ProviderId) {
       return GoogleIcon;
     case "slack":
       return SlackIcon;
+    case "airtable":
+      return DatabaseIcon;
     case "notion":
       return Notion01Icon;
     default: {
