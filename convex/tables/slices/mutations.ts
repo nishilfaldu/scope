@@ -1,6 +1,6 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
-import { internalMutation, mutation } from "../../_generated/server";
+import { internalMutation } from "../../_generated/server";
+import { authenticatedMutation } from "../../functions";
 import { appValidator } from "../../domain/apps";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
 import { markExpired } from "./helpers";
@@ -26,7 +26,7 @@ export const expireDue = internalMutation({
   },
 });
 
-export const create = mutation({
+export const create = authenticatedMutation({
   args: {
     name: v.string(),
     ttlMs: v.number(),
@@ -41,10 +41,7 @@ export const create = mutation({
     apps: v.array(appValidator),
   }),
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Sign in to create a passport");
-    }
+    const { userId } = ctx;
     const name = args.name.trim();
     if (name.length === 0) {
       throw new Error("Name must be non-empty");
@@ -110,7 +107,7 @@ export const create = mutation({
   },
 });
 
-export const setApp = mutation({
+export const setApp = authenticatedMutation({
   args: {
     sliceToken: v.string(),
     app: appValidator,
@@ -118,12 +115,13 @@ export const setApp = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const { userId } = ctx;
     const slice = await ctx.db
       .query("slices")
       .withIndex("by_token", (q) => q.eq("token", args.sliceToken))
       .unique();
-    if (!slice) {
-      throw new Error("Passport not found");
+    if (!slice || slice.userId !== userId) {
+      throw new Error("Slice not found");
     }
     const now = Date.now();
     if (slice.status === "active" && slice.expiresAt <= now) {
@@ -149,16 +147,17 @@ export const setApp = mutation({
   },
 });
 
-export const revoke = mutation({
+export const revoke = authenticatedMutation({
   args: { sliceToken: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const { userId } = ctx;
     const slice = await ctx.db
       .query("slices")
       .withIndex("by_token", (q) => q.eq("token", args.sliceToken))
       .unique();
-    if (!slice) {
-      throw new Error("Passport not found");
+    if (!slice || slice.userId !== userId) {
+      throw new Error("Slice not found");
     }
     if (slice.status === "revoked") {
       return null;

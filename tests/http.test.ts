@@ -228,9 +228,14 @@ describe("GET /api/apps", () => {
       ttlMs: 60_000,
       apps: ["github"],
     });
-    const slice = await test.query(api.tables.slices.queries.get, {
-      sliceId: created.id,
+    const userId = await test.run(async (ctx) => {
+      const slice = await ctx.db.get("slices", created.id);
+      if (!slice) throw new Error("slice missing");
+      return slice.userId;
     });
+    const slice = await test
+      .withIdentity({ subject: `${userId}|session-1` })
+      .query(api.tables.slices.queries.get, { sliceId: created.id });
     expect(slice).not.toBeNull();
     const response = await test.fetch("/api/apps", {
       method: "GET",

@@ -79,5 +79,69 @@ describe("slice ownership", () => {
     ).rejects.toThrow(/Sign in/);
   });
 
+  test("list and get only return the signed-in user's slices", async () => {
+    const test = t();
+    const { backend: owner } = await signedIn(test);
+    const created = await owner.mutation(api.tables.slices.mutations.create, {
+      name: "Owner agent", ttlMs: 60_000, apps: ["github"],
+    });
+    const { backend: otherUser } = await signedIn(test);
+
+    const ownerList = await owner.query(api.tables.slices.queries.list, {
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+    const otherList = await otherUser.query(api.tables.slices.queries.list, {
+      paginationOpts: { numItems: 10, cursor: null },
+    });
+
+    expect(ownerList.page).toHaveLength(1);
+    expect(otherList.page).toHaveLength(0);
+    expect(await otherUser.query(api.tables.slices.queries.get, {
+      sliceId: created.id,
+    })).toBeNull();
+  });
+
+  test("another user cannot change or revoke a slice", async () => {
+    const test = t();
+    const { backend: owner } = await signedIn(test);
+    const created = await owner.mutation(api.tables.slices.mutations.create, {
+      name: "Owner agent", ttlMs: 60_000, apps: ["github", "gmail"],
+    });
+    const { backend: otherUser } = await signedIn(test);
+
+    await expect(otherUser.mutation(api.tables.slices.mutations.setApp, {
+      sliceToken: created.sliceToken, app: "gmail", enabled: false,
+    })).rejects.toThrow("Slice not found");
+    await expect(otherUser.mutation(api.tables.slices.mutations.revoke, {
+      sliceToken: created.sliceToken,
+    })).rejects.toThrow("Slice not found");
+
+    const slice = await owner.query(api.tables.slices.queries.get, {
+      sliceId: created.id,
+    });
+    expect(slice).toMatchObject({ status: "active", grantApps: ["github", "gmail"] });
+  });
+
+  test("signed-out callers cannot read or mutate slices", async () => {
+    const test = t();
+    const { backend: owner } = await signedIn(test);
+    const created = await owner.mutation(api.tables.slices.mutations.create, {
+      name: "Owner agent", ttlMs: 60_000, apps: ["github"],
+    });
+
+    await expect(test.query(api.tables.slices.queries.list, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })).rejects.toThrow("Sign in to continue");
+    await expect(test.query(api.tables.slices.queries.get, {
+      sliceId: created.id,
+    })).rejects.toThrow("Sign in to continue");
+    await expect(test.mutation(api.tables.slices.mutations.setApp, {
+      sliceToken: created.sliceToken, app: "github", enabled: false,
+    })).rejects.toThrow("Sign in to continue");
+    await expect(test.mutation(api.tables.slices.mutations.revoke, {
+      sliceToken: created.sliceToken,
+    })).rejects.toThrow("Sign in to continue");
+  });
+
 
 });
