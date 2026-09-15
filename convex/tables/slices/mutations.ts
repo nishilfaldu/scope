@@ -67,7 +67,12 @@ export const create = mutation({
       .query("passports")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
-    const passportId = existingPassport?._id ?? await ctx.db.insert("passports", {
+    if (existingPassport) {
+      throw new Error(
+        "This account already has a passport. Only one passport is supported right now.",
+      );
+    }
+    const passportId = await ctx.db.insert("passports", {
       userId,
       name: "Default passport",
     });

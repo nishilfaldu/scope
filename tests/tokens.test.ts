@@ -174,7 +174,8 @@ describe("credential authorization", () => {
     });
     expect(revoked).toMatchObject({ ok: false, code: "REVOKED" });
 
-    const expiredSlice = await backend.mutation(api.tables.slices.mutations.create, {
+    const { backend: secondAccount } = await signedIn(test);
+    const expiredSlice = await secondAccount.mutation(api.tables.slices.mutations.create, {
       name: "Expired", ttlMs: 60_000, apps: ["github"],
     });
     await test.run(async (ctx) => {

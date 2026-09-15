@@ -47,25 +47,27 @@ describe("slice ownership", () => {
     });
   });
 
-  test("create reuses the same passport for a second slice", async () => {
+  test("create refuses a second passport for the same account", async () => {
     const test = t();
     const { backend } = await signedIn(test);
-    const first = await backend.mutation(api.tables.slices.mutations.create, {
+    await backend.mutation(api.tables.slices.mutations.create, {
       name: "One", ttlMs: 60_000, apps: ["github"],
     });
-    const second = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Two", ttlMs: 60_000, apps: ["slack"],
-    });
-    const passports = await test.run(async (ctx) => {
-      const one = await ctx.db.get("slices", first.id);
-      const two = await ctx.db.get("slices", second.id);
-      return [one?.passportId, two?.passportId];
-    });
-    expect(passports[0]).toEqual(passports[1]);
-    const count = await test.run(
-      async (ctx) => (await ctx.db.query("passports").collect()).length,
+
+    await expect(
+      backend.mutation(api.tables.slices.mutations.create, {
+        name: "Two", ttlMs: 60_000, apps: ["slack"],
+      }),
+    ).rejects.toThrow(
+      "This account already has a passport. Only one passport is supported right now.",
     );
-    expect(count).toBe(1);
+
+    const counts = await test.run(async (ctx) => ({
+      passports: (await ctx.db.query("passports").collect()).length,
+      slices: (await ctx.db.query("slices").collect()).length,
+      grants: (await ctx.db.query("grants").collect()).length,
+    }));
+    expect(counts).toEqual({ passports: 1, slices: 1, grants: 1 });
   });
 
   test("create refuses a signed-out caller", async () => {
