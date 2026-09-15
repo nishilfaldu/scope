@@ -2,12 +2,15 @@
 
 import {
   ComputerIcon,
+  Logout03Icon,
   Moon02Icon,
   Sun01Icon,
   UnfoldMoreIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useTheme } from "next-themes";
+import { useRouter } from "next/navigation";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 import { UserIdentity } from "@/components/layout/user-identity";
 import {
@@ -16,6 +19,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
+  DropdownMenuItem,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -43,6 +47,8 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar();
   const { theme, setTheme } = useTheme();
+  const { signOut } = useAuthActions();
+  const router = useRouter();
 
   return (
     <SidebarMenu>
@@ -99,6 +105,17 @@ export function NavUser({
                 System
               </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem
+                onClick={() =>
+                  void signOut().then(() => router.push("/signin"))
+                }
+              >
+                <HugeiconsIcon icon={Logout03Icon} strokeWidth={2} />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
