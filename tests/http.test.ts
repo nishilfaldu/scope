@@ -13,13 +13,35 @@ function t() {
 
 async function createSlice(
   test: ReturnType<typeof t>,
-  args: { name: string; ttlMs: number; apps: ("github" | "gmail" | "calendar" | "drive" | "docs" | "sheets" | "slack")[] },
+  args: {
+    name: string;
+    ttlMs: number;
+    apps: (
+      "github" | "gmail" | "calendar" | "drive" | "docs" | "sheets" | "slack"
+    )[];
+  },
 ) {
   const userId = await test.run(async (ctx) => {
     return await ctx.db.insert("users", {
       name: "Nishil Faldu",
       email: "nishil@example.com",
     });
+  });
+  await test.run(async (ctx) => {
+    const providers = new Set(
+      args.apps.map((app) =>
+        app === "github" ? "github" : app === "slack" ? "slack" : "google",
+      ),
+    );
+    for (const provider of providers) {
+      await ctx.db.insert("connections", {
+        userId,
+        provider,
+        accessToken: `${provider}-token`,
+        login: "nishil",
+        providerUserId: `${provider}-1`,
+      });
+    }
   });
   return await test
     .withIdentity({ subject: `${userId}|session-1` })
@@ -221,7 +243,7 @@ describe("GET /api/apps", () => {
     expect(JSON.stringify(missingBody)).not.toMatch(/github|slack/);
   });
 
-  test("returns on vs off for each app and the slice expiry", async () => {
+  test("returns grant permission and owned connection state for each app", async () => {
     const test = t();
     const created = await createSlice(test, {
       name: "Mix",
@@ -248,13 +270,13 @@ describe("GET /api/apps", () => {
     expect(await response.json()).toEqual({
       expiresAt: slice!.expiresAt,
       apps: [
-        { app: "github", status: "on" },
-        { app: "gmail", status: "off" },
-        { app: "calendar", status: "off" },
-        { app: "drive", status: "off" },
-        { app: "docs", status: "off" },
-        { app: "sheets", status: "off" },
-        { app: "slack", status: "off" },
+        { app: "github", allowed: true, connected: true },
+        { app: "gmail", allowed: false, connected: false },
+        { app: "calendar", allowed: false, connected: false },
+        { app: "drive", allowed: false, connected: false },
+        { app: "docs", allowed: false, connected: false },
+        { app: "sheets", allowed: false, connected: false },
+        { app: "slack", allowed: false, connected: false },
       ],
     });
   });

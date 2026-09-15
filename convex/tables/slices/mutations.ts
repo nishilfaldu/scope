@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation } from "../../_generated/server";
 import { authenticatedMutation } from "../../functions";
-import { appValidator } from "../../domain/apps";
+import { appValidator, providerForApp } from "../../domain/apps";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
 import { markExpired } from "./helpers";
 
@@ -58,6 +58,26 @@ export const create = authenticatedMutation({
     const uniqueApps = [...new Set(args.apps)];
     if (uniqueApps.length === 0) {
       throw new Error("Turn on at least one app");
+    }
+    const connections = await ctx.db
+      .query("connections")
+      .withIndex("by_user_and_provider", (q) => q.eq("userId", userId))
+      .collect();
+    if (connections.length === 0) {
+      throw new Error(
+        "Connect an account at /connections before creating a slice",
+      );
+    }
+    const connectedProviders = new Set(
+      connections.map((connection) => connection.provider),
+    );
+    const unavailable = uniqueApps.find(
+      (app) => !connectedProviders.has(providerForApp(app)),
+    );
+    if (unavailable) {
+      throw new Error(
+        `Connect ${providerForApp(unavailable)} before allowing ${unavailable}`,
+      );
     }
 
     const existingPassport = await ctx.db
@@ -138,6 +158,18 @@ export const setApp = authenticatedMutation({
     const enabled = grant.apps.includes(args.app);
     if (enabled === args.enabled) {
       return null;
+    }
+    if (args.enabled) {
+      const provider = providerForApp(args.app);
+      const connection = await ctx.db
+        .query("connections")
+        .withIndex("by_user_and_provider", (q) =>
+          q.eq("userId", userId).eq("provider", provider),
+        )
+        .unique();
+      if (!connection) {
+        throw new Error(`Connect ${provider} before allowing ${args.app}`);
+      }
     }
     const apps = args.enabled
       ? [...grant.apps, args.app]

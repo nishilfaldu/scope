@@ -1,16 +1,15 @@
 "use client";
 
-import { useAction, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
-import {
-  GithubIcon,
-  GoogleIcon,
-  SlackIcon,
-} from "@hugeicons/core-free-icons";
+import { GithubIcon, GoogleIcon, SlackIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { api } from "@/convex/_generated/api";
-import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "@/components/shared/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -42,7 +41,9 @@ type ConnectionRow = (typeof CONNECTION_PROVIDERS)[number] & {
 export function ConnectionsTable() {
   const statuses = useQuery(api.tables.connections.queries.listStatuses);
   const disconnect = useAction(api.tables.connections.actions.disconnect);
+  const startOAuth = useMutation(api.tables.oauthStates.mutations.start);
   const [disconnecting, setDisconnecting] = useState<ProviderId | null>(null);
+  const [connecting, setConnecting] = useState<ProviderId | null>(null);
 
   function statusFor(id: ProviderId): ConnectionRow["status"] {
     if (!statuses) return undefined;
@@ -64,12 +65,18 @@ export function ConnectionsTable() {
       }
       return;
     }
-    const connect = new URL(PROVIDER_CONNECT_URL[id]);
-    connect.searchParams.set(
-      "returnTo",
-      `${window.location.origin}/connections`,
-    );
-    window.location.assign(connect.toString());
+    setConnecting(id);
+    try {
+      const { state } = await startOAuth({
+        provider: id,
+        returnTo: `${window.location.origin}/connections`,
+      });
+      const connect = new URL(PROVIDER_CONNECT_URL[id]);
+      connect.searchParams.set("state", state);
+      window.location.assign(connect.toString());
+    } finally {
+      setConnecting(null);
+    }
   }
 
   const rows: ConnectionRow[] = CONNECTION_PROVIDERS.map((provider) => ({
@@ -126,7 +133,11 @@ export function ConnectionsTable() {
       cell: ({ row: { original: row } }) => (
         <Switch
           checked={row.status?.connected === true}
-          disabled={row.status === undefined || disconnecting === row.id}
+          disabled={
+            row.status === undefined ||
+            disconnecting === row.id ||
+            connecting === row.id
+          }
           onCheckedChange={() => void toggle(row.id)}
           aria-label={`${row.name} connection`}
         />

@@ -35,13 +35,7 @@ export const credentialsContract: PostContract = {
   },
   success: {
     type: "object",
-    required: [
-      "accessToken",
-      "tokenType",
-      "app",
-      "expiresAt",
-      "expiresIn",
-    ],
+    required: ["accessToken", "tokenType", "app", "expiresAt", "expiresIn"],
     properties: {
       accessToken: { type: "string" },
       tokenType: { type: "string", const: "Bearer" },
@@ -107,7 +101,8 @@ const appsSuccess: JsonSchema = {
         type: "object",
         properties: {
           app: { type: "string", enum: ALL_APPS },
-          status: { type: "string", enum: ["on", "off"] },
+          allowed: { type: "boolean" },
+          connected: { type: "boolean" },
         },
       },
     },
@@ -155,7 +150,8 @@ export const routes: RouteSpec[] = [
   {
     path: "/api/credentials",
     method: "POST",
-    summary: "Exchange slice credentials for a short-lived access token for one app.",
+    summary:
+      "Exchange slice credentials for a short-lived access token for one app.",
     auth: { type: "body", fields: ["sliceToken", "sliceSecret"] },
     body: credentialsContract.body,
     success: credentialsContract.success,
@@ -163,7 +159,7 @@ export const routes: RouteSpec[] = [
   {
     path: "/api/apps",
     method: "GET",
-    summary: "List the apps available to this slice and whether each is on or off.",
+    summary: "List each app's grant permission and provider connection state.",
     auth: { type: "headers", headers: ["x-slice-token", "x-slice-secret"] },
     success: appsSuccess,
   },

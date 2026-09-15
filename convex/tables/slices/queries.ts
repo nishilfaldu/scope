@@ -3,9 +3,10 @@ import {
   paginationResultValidator,
 } from "convex/server";
 import { v } from "convex/values";
-import { internalQuery } from "../../_generated/server";
+import { internalQuery, type QueryCtx } from "../../_generated/server";
+import type { Id } from "../../_generated/dataModel";
 import { authenticatedQuery } from "../../functions";
-import { appValidator, ALL_APPS } from "../../domain/apps";
+import { appValidator, ALL_APPS, providerForApp } from "../../domain/apps";
 import schema from "../../schema";
 import { denyResultValidator, UNAUTHORIZED_ERROR } from "../../lib/errors";
 import { sliceBySecret, withoutSecretHash } from "./helpers";
@@ -15,7 +16,27 @@ const boardSlice = schema
   .omit("secretHash")
   .extend({
     grantApps: v.array(appValidator),
+    connectedApps: v.array(appValidator),
   });
+
+async function connectedAppsForUser(
+  ctx: Pick<QueryCtx, "db">,
+  userId: Id<"users">,
+) {
+  const connectedProviders = new Set<string>();
+  for (const app of ALL_APPS) {
+    const provider = providerForApp(app);
+    if (connectedProviders.has(provider)) continue;
+    const connection = await ctx.db
+      .query("connections")
+      .withIndex("by_user_and_provider", (q) =>
+        q.eq("userId", userId).eq("provider", provider),
+      )
+      .unique();
+    if (connection) connectedProviders.add(provider);
+  }
+  return ALL_APPS.filter((app) => connectedProviders.has(providerForApp(app)));
+}
 
 export const list = authenticatedQuery({
   args: { paginationOpts: paginationOptsValidator },
@@ -32,7 +53,12 @@ export const list = authenticatedQuery({
       page: await Promise.all(
         results.page.map(async (slice) => {
           const grant = await ctx.db.get("grants", slice.grantId);
-          return { ...withoutSecretHash(slice), grantApps: grant?.apps ?? [] };
+          const connectedApps = await connectedAppsForUser(ctx, slice.userId);
+          return {
+            ...withoutSecretHash(slice),
+            grantApps: grant?.apps ?? [],
+            connectedApps,
+          };
         }),
       ),
     };
@@ -53,7 +79,12 @@ export const get = authenticatedQuery({
       return null;
     }
     const grant = await ctx.db.get("grants", slice.grantId);
-    return { ...withoutSecretHash(slice), grantApps: grant?.apps ?? [] };
+    const connectedApps = await connectedAppsForUser(ctx, slice.userId);
+    return {
+      ...withoutSecretHash(slice),
+      grantApps: grant?.apps ?? [],
+      connectedApps,
+    };
   },
 });
 
@@ -70,7 +101,8 @@ export const discoverApps = internalQuery({
       apps: v.array(
         v.object({
           app: appValidator,
-          status: v.union(v.literal("on"), v.literal("off")),
+          allowed: v.boolean(),
+          connected: v.boolean(),
         }),
       ),
     }),
@@ -111,12 +143,14 @@ export const discoverApps = internalQuery({
         code: "UNAUTHORIZED" as const,
       };
     }
+    const connectedApps = await connectedAppsForUser(ctx, slice.userId);
     return {
       ok: true as const,
       expiresAt: slice.expiresAt,
       apps: ALL_APPS.map((app) => ({
         app,
-        status: grant.apps.includes(app) ? ("on" as const) : ("off" as const),
+        allowed: grant.apps.includes(app),
+        connected: connectedApps.includes(app),
       })),
     };
   },

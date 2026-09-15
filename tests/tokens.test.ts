@@ -10,14 +10,26 @@ function t() {
   return convexTest(schema, modules);
 }
 
-async function signedIn(test: ReturnType<typeof t>) {
+async function signedIn(test: ReturnType<typeof t>, connect = true) {
   const userId = await test.run(async (ctx) => {
     return await ctx.db.insert("users", {
       name: "Nishil Faldu",
       email: "nishil@example.com",
     });
   });
-  return { backend: test.withIdentity({ subject: `${userId}|session-1` }), userId };
+  if (connect) {
+    await test.mutation(internal.tables.connections.mutations.saveConnection, {
+      userId,
+      provider: "github",
+      accessToken: "ghs_standing_token",
+      login: "octocat",
+      providerUserId: "1",
+    });
+  }
+  return {
+    backend: test.withIdentity({ subject: `${userId}|session-1` }),
+    userId,
+  };
 }
 
 async function seedGithub(
@@ -36,7 +48,19 @@ async function seedGithub(
 describe("accounts and passports", () => {
   test("create returns credentials without exposing the secret hash", async () => {
     const test = t();
-    const { backend } = await signedIn(test);
+    const { backend, userId } = await signedIn(test);
+    for (const provider of ["google", "slack"] as const) {
+      await test.mutation(
+        internal.tables.connections.mutations.saveConnection,
+        {
+          userId,
+          provider,
+          accessToken: `${provider}-token`,
+          login: "nishil",
+          providerUserId: `${provider}-1`,
+        },
+      );
+    }
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "PR agent",
       ttlMs: 60_000,
@@ -56,29 +80,51 @@ describe("accounts and passports", () => {
     const { backend } = await signedIn(test);
     await expect(
       backend.mutation(api.tables.slices.mutations.create, {
-        name: "   ", ttlMs: 60_000, apps: ["github"],
+        name: "   ",
+        ttlMs: 60_000,
+        apps: ["github"],
       }),
     ).rejects.toThrow(/Name must be non-empty/);
     await expect(
       backend.mutation(api.tables.slices.mutations.create, {
-        name: "n".repeat(81), ttlMs: 60_000, apps: ["github"],
+        name: "n".repeat(81),
+        ttlMs: 60_000,
+        apps: ["github"],
       }),
     ).rejects.toThrow(/80 characters/);
     await expect(
       backend.mutation(api.tables.slices.mutations.create, {
-        name: "Long", ttlMs: 8 * 24 * 60 * 60 * 1000, apps: ["github"],
+        name: "Long",
+        ttlMs: 8 * 24 * 60 * 60 * 1000,
+        apps: ["github"],
       }),
     ).rejects.toThrow(/7 days/);
   });
 
   test("setApp updates the parent grant and the slice reads through", async () => {
     const test = t();
-    const { backend } = await signedIn(test);
+    const { backend, userId } = await signedIn(test);
+    for (const provider of ["google", "slack"] as const) {
+      await test.mutation(
+        internal.tables.connections.mutations.saveConnection,
+        {
+          userId,
+          provider,
+          accessToken: `${provider}-token`,
+          login: "nishil",
+          providerUserId: `${provider}-1`,
+        },
+      );
+    }
     const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Multi", ttlMs: 60_000, apps: ["github", "gmail", "slack"],
+      name: "Multi",
+      ttlMs: 60_000,
+      apps: ["github", "gmail", "slack"],
     });
     await backend.mutation(api.tables.slices.mutations.setApp, {
-      sliceToken: created.sliceToken, app: "gmail", enabled: false,
+      sliceToken: created.sliceToken,
+      app: "gmail",
+      enabled: false,
     });
     const slice = await backend.query(api.tables.slices.queries.get, {
       sliceId: created.id,
@@ -100,36 +146,57 @@ describe("accounts and passports", () => {
     const { backend, userId } = await signedIn(test);
     await seedGithub(test, userId);
     const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Keep me", ttlMs: 60_000, apps: ["github"],
+      name: "Keep me",
+      ttlMs: 60_000,
+      apps: ["github"],
     });
-    await backend.action(api.tables.connections.actions.disconnect, { provider: "github" });
+    await backend.action(api.tables.connections.actions.disconnect, {
+      provider: "github",
+    });
     const slice = await backend.query(api.tables.slices.queries.get, {
       sliceId: created.id,
     });
     expect(slice?.name).toBe("Keep me");
   });
 
-
   test("connection status and disconnect are scoped to the signed-in user", async () => {
     const test = t();
     const { backend: owner, userId: ownerId } = await signedIn(test);
-    const { backend: other } = await signedIn(test);
+    const { backend: other } = await signedIn(test, false);
     await seedGithub(test, ownerId);
 
-    const ownerStatuses = await owner.query(api.tables.connections.queries.listStatuses, {});
-    const otherStatuses = await other.query(api.tables.connections.queries.listStatuses, {});
-    expect(ownerStatuses.find(({ provider }) => provider === "github")).toMatchObject({
-      connected: true, login: "octocat",
+    const ownerStatuses = await owner.query(
+      api.tables.connections.queries.listStatuses,
+      {},
+    );
+    const otherStatuses = await other.query(
+      api.tables.connections.queries.listStatuses,
+      {},
+    );
+    expect(
+      ownerStatuses.find(({ provider }) => provider === "github"),
+    ).toMatchObject({
+      connected: true,
+      login: "octocat",
     });
-    expect(otherStatuses.find(({ provider }) => provider === "github")).toMatchObject({
-      connected: false, login: null,
+    expect(
+      otherStatuses.find(({ provider }) => provider === "github"),
+    ).toMatchObject({
+      connected: false,
+      login: null,
     });
 
-    await other.action(api.tables.connections.actions.disconnect, { provider: "github" });
-    const stillConnected = await owner.query(api.tables.connections.queries.listStatuses, {});
-    expect(stillConnected.find(({ provider }) => provider === "github")?.connected).toBe(true);
+    await other.action(api.tables.connections.actions.disconnect, {
+      provider: "github",
+    });
+    const stillConnected = await owner.query(
+      api.tables.connections.queries.listStatuses,
+      {},
+    );
+    expect(
+      stillConnected.find(({ provider }) => provider === "github")?.connected,
+    ).toBe(true);
   });
-
 });
 
 describe("credential authorization", () => {
@@ -138,24 +205,35 @@ describe("credential authorization", () => {
     const { backend, userId } = await signedIn(test);
     await seedGithub(test, userId);
     const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
+      name: "GitHub agent",
+      ttlMs: 60_000,
+      apps: ["github"],
     });
-    const allowed = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      sliceToken: created.sliceToken,
-      sliceSecret: created.sliceSecret,
-      app: "github",
-      refresh: false,
-    });
+    const allowed = await test.mutation(
+      internal.tables.slices.credentials.authorizeCreate,
+      {
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        app: "github",
+        refresh: false,
+      },
+    );
     expect(allowed).toMatchObject({
-      ok: true, sliceId: created.id, app: "github", provider: "github",
+      ok: true,
+      sliceId: created.id,
+      app: "github",
+      provider: "github",
     });
     if (!allowed.ok) throw new Error("expected authorization");
-    const committed = await test.mutation(internal.tables.slices.credentials.commitCreate, {
-      sliceId: allowed.sliceId,
-      app: allowed.app,
-      expiresAt: Date.now() + 60_000,
-      refresh: false,
-    });
+    const committed = await test.mutation(
+      internal.tables.slices.credentials.commitCreate,
+      {
+        sliceId: allowed.sliceId,
+        app: allowed.app,
+        expiresAt: Date.now() + 60_000,
+        refresh: false,
+      },
+    );
     expect(committed.expiresAt).toBeGreaterThan(Date.now());
     expect(JSON.stringify(allowed)).not.toMatch(/ghs_/);
     expect(JSON.stringify(committed)).not.toMatch(/ghs_/);
@@ -166,19 +244,28 @@ describe("credential authorization", () => {
     const { backend, userId } = await signedIn(test);
     await seedGithub(test, userId);
     const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
+      name: "GitHub agent",
+      ttlMs: 60_000,
+      apps: ["github"],
     });
     await backend.mutation(api.tables.slices.mutations.setApp, {
-      sliceToken: created.sliceToken, app: "github", enabled: false,
-    });
-    const denied = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
       sliceToken: created.sliceToken,
-      sliceSecret: created.sliceSecret,
       app: "github",
-      refresh: false,
+      enabled: false,
     });
+    const denied = await test.mutation(
+      internal.tables.slices.credentials.authorizeCreate,
+      {
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        app: "github",
+        refresh: false,
+      },
+    );
     expect(denied).toMatchObject({
-      ok: false, status: 403, code: "APP_UNAVAILABLE",
+      ok: false,
+      status: 403,
+      code: "APP_UNAVAILABLE",
     });
   });
 
@@ -186,35 +273,51 @@ describe("credential authorization", () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     await seedGithub(test, userId);
-    const revokedSlice = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Revoked", ttlMs: 60_000, apps: ["github"],
-    });
+    const revokedSlice = await backend.mutation(
+      api.tables.slices.mutations.create,
+      {
+        name: "Revoked",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
     await backend.mutation(api.tables.slices.mutations.revoke, {
       sliceToken: revokedSlice.sliceToken,
     });
-    const revoked = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      sliceToken: revokedSlice.sliceToken,
-      sliceSecret: revokedSlice.sliceSecret,
-      app: "github",
-      refresh: false,
-    });
+    const revoked = await test.mutation(
+      internal.tables.slices.credentials.authorizeCreate,
+      {
+        sliceToken: revokedSlice.sliceToken,
+        sliceSecret: revokedSlice.sliceSecret,
+        app: "github",
+        refresh: false,
+      },
+    );
     expect(revoked).toMatchObject({ ok: false, code: "REVOKED" });
 
     const { backend: secondAccount } = await signedIn(test);
-    const expiredSlice = await secondAccount.mutation(api.tables.slices.mutations.create, {
-      name: "Expired", ttlMs: 60_000, apps: ["github"],
-    });
+    const expiredSlice = await secondAccount.mutation(
+      api.tables.slices.mutations.create,
+      {
+        name: "Expired",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
     await test.run(async (ctx) => {
       await ctx.db.patch("slices", expiredSlice.id, {
         expiresAt: Date.now() - 1_000,
       });
     });
-    const expired = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      sliceToken: expiredSlice.sliceToken,
-      sliceSecret: expiredSlice.sliceSecret,
-      app: "github",
-      refresh: false,
-    });
+    const expired = await test.mutation(
+      internal.tables.slices.credentials.authorizeCreate,
+      {
+        sliceToken: expiredSlice.sliceToken,
+        sliceSecret: expiredSlice.sliceSecret,
+        app: "github",
+        refresh: false,
+      },
+    );
     expect(expired).toMatchObject({ ok: false, code: "EXPIRED" });
   });
 
@@ -222,7 +325,12 @@ describe("credential authorization", () => {
     const test = t();
     const { backend } = await signedIn(test);
     const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "GitHub only", ttlMs: 60_000, apps: ["github"],
+      name: "GitHub only",
+      ttlMs: 60_000,
+      apps: ["github"],
+    });
+    await backend.action(api.tables.connections.actions.disconnect, {
+      provider: "github",
     });
     const unavailable = {
       ok: false,
@@ -230,19 +338,25 @@ describe("credential authorization", () => {
       reason: "This app is not available to this slice",
       code: "APP_UNAVAILABLE",
     };
-    const unknown = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      sliceToken: created.sliceToken,
-      sliceSecret: created.sliceSecret,
-      app: "dropbox",
-      refresh: false,
-    });
+    const unknown = await test.mutation(
+      internal.tables.slices.credentials.authorizeCreate,
+      {
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        app: "dropbox",
+        refresh: false,
+      },
+    );
     expect(unknown).toMatchObject(unavailable);
-    const unconnected = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      sliceToken: created.sliceToken,
-      sliceSecret: created.sliceSecret,
-      app: "github",
-      refresh: false,
-    });
+    const unconnected = await test.mutation(
+      internal.tables.slices.credentials.authorizeCreate,
+      {
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        app: "github",
+        refresh: false,
+      },
+    );
     expect(unconnected).toMatchObject(unavailable);
   });
 
@@ -251,15 +365,24 @@ describe("credential authorization", () => {
     const { backend, userId } = await signedIn(test);
     await seedGithub(test, userId);
     const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Keyed", ttlMs: 60_000, apps: ["github"],
+      name: "Keyed",
+      ttlMs: 60_000,
+      apps: ["github"],
     });
-    const denied = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      sliceToken: created.sliceToken,
-      sliceSecret: "ss_wrong",
-      app: "github",
-      refresh: false,
+    const denied = await test.mutation(
+      internal.tables.slices.credentials.authorizeCreate,
+      {
+        sliceToken: created.sliceToken,
+        sliceSecret: "ss_wrong",
+        app: "github",
+        refresh: false,
+      },
+    );
+    expect(denied).toMatchObject({
+      ok: false,
+      status: 401,
+      code: "UNAUTHORIZED",
     });
-    expect(denied).toMatchObject({ ok: false, status: 401, code: "UNAUTHORIZED" });
   });
 
   test("one Google connection covers every Google app", async () => {
@@ -274,15 +397,20 @@ describe("credential authorization", () => {
     });
     const apps = ["gmail", "calendar", "drive", "docs", "sheets"] as const;
     const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Workspace", ttlMs: 60_000, apps: [...apps],
+      name: "Workspace",
+      ttlMs: 60_000,
+      apps: [...apps],
     });
     for (const app of apps) {
-      const allowed = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-        sliceToken: created.sliceToken,
-        sliceSecret: created.sliceSecret,
-        app,
-        refresh: false,
-      });
+      const allowed = await test.mutation(
+        internal.tables.slices.credentials.authorizeCreate,
+        {
+          sliceToken: created.sliceToken,
+          sliceSecret: created.sliceSecret,
+          app,
+          refresh: false,
+        },
+      );
       expect(allowed).toMatchObject({ ok: true, provider: "google", app });
     }
   });
