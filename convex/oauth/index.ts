@@ -22,6 +22,18 @@ export function oauthConfigured(): Record<ProviderId, boolean> {
     slack:
       envConfigured(env.SLACK_CLIENT_ID) &&
       envConfigured(env.SLACK_CLIENT_SECRET),
+    airtable:
+      envConfigured(env.AIRTABLE_CLIENT_ID) &&
+      envConfigured(env.AIRTABLE_CLIENT_SECRET),
+    notion:
+      envConfigured(env.NOTION_CLIENT_ID) &&
+      envConfigured(env.NOTION_CLIENT_SECRET),
+    linear:
+      envConfigured(env.LINEAR_CLIENT_ID) &&
+      envConfigured(env.LINEAR_CLIENT_SECRET),
+    vercel:
+      envConfigured(env.VERCEL_CLIENT_ID) &&
+      envConfigured(env.VERCEL_CLIENT_SECRET),
     zoom:
       envConfigured(env.ZOOM_CLIENT_ID) &&
       envConfigured(env.ZOOM_CLIENT_SECRET),

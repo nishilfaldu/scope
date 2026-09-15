@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { ensurePassport } from "../convex/tables/passports";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -16,6 +17,9 @@ async function signedIn(test: ReturnType<typeof t>, connect = true) {
       name: "Nishil Faldu",
       email: "nishil@example.com",
     });
+  });
+  await test.run(async (ctx) => {
+    await ensurePassport(ctx, userId);
   });
   if (connect) {
     await test.mutation(internal.tables.connections.mutations.saveConnection, {
