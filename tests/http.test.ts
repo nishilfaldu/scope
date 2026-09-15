@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { ensurePassport } from "../convex/tables/passports";
 import { resolveReturnTo } from "../convex/http/helpers";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -26,6 +27,9 @@ async function createSlice(
       name: "Nishil Faldu",
       email: "nishil@example.com",
     });
+  });
+  await test.run(async (ctx) => {
+    await ensurePassport(ctx, userId);
   });
   await test.run(async (ctx) => {
     const providers = new Set(
