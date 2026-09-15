@@ -1,3 +1,4 @@
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { exchangeAuthorizationCode, startAuthorize } from "../oauth";
@@ -8,6 +9,10 @@ export { parseBoardOrigin, resolveReturnTo } from "./helpers";
 
 export function httpOAuthConnect(provider: ProviderId) {
   return httpAction(async (ctx, request) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return new Response("Sign in to continue", { status: 401 });
+    }
     const returnTo = allowedReturnTo(
       new URL(request.url).searchParams.get("returnTo"),
     );
@@ -20,6 +25,7 @@ export function httpOAuthConnect(provider: ProviderId) {
       });
     }
     await ctx.runMutation(internal.tables.oauthStates.mutations.put, {
+      userId,
       provider,
       state,
       returnTo,
@@ -30,6 +36,7 @@ export function httpOAuthConnect(provider: ProviderId) {
 
 export function httpOAuthCallback(provider: ProviderId) {
   return httpAction(async (ctx, request) => {
+    const userId = await getAuthUserId(ctx);
     const requestUrl = new URL(request.url);
     const returnFallback = allowedReturnTo(null);
     const errorParam = requestUrl.searchParams.get("error");
@@ -49,7 +56,7 @@ export function httpOAuthCallback(provider: ProviderId) {
       internal.tables.oauthStates.mutations.consume,
       { state },
     );
-    if (!origin || origin.provider !== provider) {
+    if (!origin || origin.provider !== provider || origin.userId !== userId) {
       return redirectTo(returnFallback, provider, "error", "state");
     }
 
@@ -57,14 +64,18 @@ export function httpOAuthCallback(provider: ProviderId) {
     if ("error" in grant) {
       return redirectTo(origin.returnTo, provider, "error", grant.error);
     }
-    await ctx.runMutation(internal.tables.connections.mutations.saveConnection, {
-      provider,
-      accessToken: grant.accessToken,
-      login: grant.login,
-      providerUserId: grant.providerUserId,
-      refreshToken: grant.refreshToken,
-      tokenExpiresAt: grant.tokenExpiresAt,
-    });
+    await ctx.runMutation(
+      internal.tables.connections.mutations.saveConnection,
+      {
+        userId: origin.userId,
+        provider,
+        accessToken: grant.accessToken,
+        login: grant.login,
+        providerUserId: grant.providerUserId,
+        refreshToken: grant.refreshToken,
+        tokenExpiresAt: grant.tokenExpiresAt,
+      },
+    );
     return redirectTo(origin.returnTo, provider, "connected");
   });
 }

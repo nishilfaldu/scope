@@ -46,15 +46,17 @@ export default defineSchema({
   }).index("by_passport", ["passportId"]),
 
   connections: defineTable({
+    userId: v.id("users"),
     provider: providerValidator,
     accessToken: v.string(),
     login: v.string(),
     providerUserId: v.string(),
     refreshToken: v.optional(v.string()),
     tokenExpiresAt: v.optional(v.number()),
-  }).index("by_provider", ["provider"]),
+  }).index("by_user_and_provider", ["userId", "provider"]),
 
   oauthStates: defineTable({
+    userId: v.id("users"),
     provider: providerValidator,
     state: v.string(),
     returnTo: v.string(),

@@ -3,22 +3,23 @@ import { internalMutation } from "../../_generated/server";
 import { providerValidator } from "../../domain/apps";
 
 export const clearConnection = internalMutation({
-  args: { provider: providerValidator },
+  args: { userId: v.id("users"), provider: providerValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
     const row = await ctx.db
       .query("connections")
-      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
+      .withIndex("by_user_and_provider", (q) =>
+        q.eq("userId", args.userId).eq("provider", args.provider),
+      )
       .unique();
-    if (row) {
-      await ctx.db.delete("connections", row._id);
-    }
+    if (row) await ctx.db.delete("connections", row._id);
     return null;
   },
 });
 
 export const saveConnection = internalMutation({
   args: {
+    userId: v.id("users"),
     provider: providerValidator,
     accessToken: v.string(),
     login: v.string(),
@@ -30,9 +31,12 @@ export const saveConnection = internalMutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("connections")
-      .withIndex("by_provider", (q) => q.eq("provider", args.provider))
+      .withIndex("by_user_and_provider", (q) =>
+        q.eq("userId", args.userId).eq("provider", args.provider),
+      )
       .unique();
     const doc = {
+      userId: args.userId,
       provider: args.provider,
       accessToken: args.accessToken,
       login: args.login,
@@ -40,11 +44,8 @@ export const saveConnection = internalMutation({
       refreshToken: args.refreshToken,
       tokenExpiresAt: args.tokenExpiresAt,
     };
-    if (existing) {
-      await ctx.db.replace("connections", existing._id, doc);
-    } else {
-      await ctx.db.insert("connections", doc);
-    }
+    if (existing) await ctx.db.replace("connections", existing._id, doc);
+    else await ctx.db.insert("connections", doc);
     return null;
   },
 });

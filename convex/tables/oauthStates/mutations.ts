@@ -6,6 +6,7 @@ const STATE_TTL_MS = 10 * 60 * 1000;
 
 export const put = internalMutation({
   args: {
+    userId: v.id("users"),
     provider: providerValidator,
     state: v.string(),
     returnTo: v.string(),
@@ -13,6 +14,7 @@ export const put = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.insert("oauthStates", {
+      userId: args.userId,
       provider: args.provider,
       state: args.state,
       returnTo: args.returnTo,
@@ -25,7 +27,11 @@ export const put = internalMutation({
 export const consume = internalMutation({
   args: { state: v.string() },
   returns: v.union(
-    v.object({ provider: providerValidator, returnTo: v.string() }),
+    v.object({
+      userId: v.id("users"),
+      provider: providerValidator,
+      returnTo: v.string(),
+    }),
     v.null(),
   ),
   handler: async (ctx, args) => {
@@ -33,13 +39,13 @@ export const consume = internalMutation({
       .query("oauthStates")
       .withIndex("by_state", (q) => q.eq("state", args.state))
       .unique();
-    if (!row) {
-      return null;
-    }
+    if (!row) return null;
     await ctx.db.delete("oauthStates", row._id);
-    if (row.expiresAt <= Date.now()) {
-      return null;
-    }
-    return { provider: row.provider, returnTo: row.returnTo };
+    if (row.expiresAt <= Date.now()) return null;
+    return {
+      userId: row.userId,
+      provider: row.provider,
+      returnTo: row.returnTo,
+    };
   },
 });
