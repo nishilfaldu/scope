@@ -17,14 +17,7 @@ async function createSlice(
     name: string;
     ttlMs: number;
     apps: (
-      | "github"
-      | "gmail"
-      | "calendar"
-      | "drive"
-      | "docs"
-      | "sheets"
-      | "slack"
-      | "linear"
+      "github" | "gmail" | "calendar" | "drive" | "docs" | "sheets" | "slack" | "airtable" | "notion" | "linear"
     )[];
   },
 ) {
@@ -37,13 +30,7 @@ async function createSlice(
   await test.run(async (ctx) => {
     const providers = new Set(
       args.apps.map((app) =>
-        app === "github"
-          ? "github"
-          : app === "slack"
-            ? "slack"
-            : app === "linear"
-              ? "linear"
-              : "google",
+        app === "github" ? "github" : app === "slack" ? "slack" : app === "airtable" ? "airtable" : app === "notion" ? "notion" : app === "linear" ? "linear" : "google",
       ),
     );
     for (const provider of providers) {
@@ -68,7 +55,7 @@ describe("GET /api/health", () => {
     const body = await response.json();
     expect(body).toEqual({
       ok: true,
-      oauth: { github: false, google: false, slack: false, linear: false },
+      oauth: { github: false, google: false, slack: false, airtable: false, notion: false, linear: false },
     });
     expect(JSON.stringify(body)).not.toMatch(/ghs_|ya29|xoxp|CLIENT_SECRET/);
   });
@@ -290,6 +277,8 @@ describe("GET /api/apps", () => {
         { app: "docs", allowed: false, connected: false },
         { app: "sheets", allowed: false, connected: false },
         { app: "slack", allowed: false, connected: false },
+        { app: "airtable", allowed: false, connected: false },
+        { app: "notion", allowed: false, connected: false },
         { app: "linear", allowed: false, connected: false },
       ],
     });
