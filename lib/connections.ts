@@ -13,6 +13,7 @@ export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
   github: `${siteUrl}/api/github/connect`,
   google: `${siteUrl}/api/google/connect`,
   slack: `${siteUrl}/api/slack/connect`,
+  notion: `${siteUrl}/api/notion/connect`,
 };
 
 export const CONNECT_ERRORS: Record<string, string> = {
@@ -45,5 +46,10 @@ export const CONNECTION_PROVIDERS = [
     id: "slack" as const,
     name: "Slack",
     description: "One login. Passports can attach Slack after you connect.",
+  },
+  {
+    id: "notion" as const,
+    name: "Notion",
+    description: "Connect pages and databases shared with Agent Passport.",
   },
 ] as const;

@@ -7,7 +7,7 @@ The system has two layers:
 1. A **passport** belongs to the user. It is the long-lived vault that holds the user's connected services and their real upstream tokens.
 2. A **slice** belongs to one agent. It is a scoped, expiring grant created from one passport.
 
-Connect once, give many agents access. A user can connect GitHub, Google, or Slack once, then give each agent its own slice of that access.
+Connect once, give many agents access. A user can connect GitHub, Google, Slack, or Notion once, then give each agent its own slice of that access.
 
 ## Passport
 
@@ -127,3 +127,30 @@ If schema deploy fails because `tokenLogs` still has rows, delete those document
 ```bash
 pnpm test
 ```
+
+### Notion OAuth setup
+
+Notion support uses a public OAuth connection. Until the app is registered, the
+Notion tile is present but connect returns a configuration error.
+
+1. Open [My integrations](https://www.notion.so/profile/integrations) and create
+   a new integration for Agent Passport.
+2. Choose `Public` distribution and enable the content capabilities the agents
+   should receive. Notion only exposes pages and databases a user selects on its
+   consent screen.
+3. Add this redirect URI, replacing the host with the deployed Convex site:
+   `https://<deployment>.convex.site/api/notion/callback`.
+4. Copy the OAuth client ID and client secret into the Convex deployment:
+
+   ```bash
+   npx convex env set NOTION_CLIENT_ID '<client-id>'
+   npx convex env set NOTION_CLIENT_SECRET '<client-secret>'
+   ```
+
+5. Deploy, then connect Notion from `/connections`. The connection has not been
+   verified against a live Notion app until these account-owned values exist.
+
+Notion OAuth reference: [Authorization](https://developers.notion.com/guides/get-started/authorization),
+[token exchange](https://developers.notion.com/reference/create-a-token),
+[refresh](https://developers.notion.com/reference/refresh-a-token), and
+[revoke](https://developers.notion.com/reference/revoke-token).
