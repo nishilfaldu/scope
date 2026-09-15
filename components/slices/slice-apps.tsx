@@ -47,23 +47,29 @@ export function SliceApps({ sliceId }: { sliceId: string }) {
 
   return (
     <div className="border-t px-6 py-4">
-      <p className="text-xs text-muted-foreground">Apps</p>
+      <p className="text-xs text-muted-foreground">Grant permissions</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {ALL_APPS.map((app) => {
-          const on = slice.grantApps.includes(app);
+          const allowed = slice.grantApps.includes(app);
+          const connected = slice.connectedApps.includes(app);
           return (
-            <label
+            <div
               key={app}
               className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
             >
-              <span className="text-sm">{APP_LABELS[app]}</span>
+              <div>
+                <p className="text-sm">{APP_LABELS[app]}</p>
+                <p className="text-xs text-muted-foreground">
+                  {connected ? "Provider connected" : "Provider not connected"}
+                </p>
+              </div>
               <Switch
-                checked={on}
-                disabled={slice.status !== "active" || isToggling}
+                checked={allowed}
+                disabled={slice.status !== "active" || isToggling || !connected}
                 onCheckedChange={(checked) => handleToggle(app, checked)}
-                aria-label={`${APP_LABELS[app]} on this grant`}
+                aria-label={`Allow ${APP_LABELS[app]} on this grant`}
               />
-            </label>
+            </div>
           );
         })}
       </div>

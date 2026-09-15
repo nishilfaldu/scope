@@ -1,8 +1,42 @@
 import { v } from "convex/values";
-import { internalMutation } from "../../_generated/server";
+import { internalMutation, type MutationCtx } from "../../_generated/server";
+import type { Id } from "../../_generated/dataModel";
+import type { ProviderId } from "../../domain/apps";
 import { providerValidator } from "../../domain/apps";
+import { authenticatedMutation } from "../../functions";
+import { allowedReturnTo } from "../../http/helpers";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
+
+async function insertState(
+  ctx: Pick<MutationCtx, "db">,
+  args: {
+    userId: Id<"users">;
+    provider: ProviderId;
+    state: string;
+    returnTo: string;
+  },
+) {
+  await ctx.db.insert("oauthStates", {
+    ...args,
+    expiresAt: Date.now() + STATE_TTL_MS,
+  });
+}
+
+export const start = authenticatedMutation({
+  args: { provider: providerValidator, returnTo: v.string() },
+  returns: v.object({ state: v.string() }),
+  handler: async (ctx, args) => {
+    const state = crypto.randomUUID();
+    await insertState(ctx, {
+      userId: ctx.userId,
+      provider: args.provider,
+      state,
+      returnTo: allowedReturnTo(args.returnTo),
+    });
+    return { state };
+  },
+});
 
 export const put = internalMutation({
   args: {
@@ -13,13 +47,7 @@ export const put = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await ctx.db.insert("oauthStates", {
-      userId: args.userId,
-      provider: args.provider,
-      state: args.state,
-      returnTo: args.returnTo,
-      expiresAt: Date.now() + STATE_TTL_MS,
-    });
+    await insertState(ctx, args);
     return null;
   },
 });

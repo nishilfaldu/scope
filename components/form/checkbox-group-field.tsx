@@ -1,7 +1,10 @@
 "use client";
 
 import { useFieldContext } from "@/components/form/context";
-import { fieldErrorItems, fieldIsInvalid } from "@/components/form/field-errors";
+import {
+  fieldErrorItems,
+  fieldIsInvalid,
+} from "@/components/form/field-errors";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Field,
@@ -23,6 +26,7 @@ export function CheckboxGroupField<T extends string>({
     value: T;
     title: string;
     description?: string;
+    disabled?: boolean;
   }>;
 }) {
   const field = useFieldContext<T[]>();
@@ -35,12 +39,17 @@ export function CheckboxGroupField<T extends string>({
         {options.map((option) => {
           const id = `${field.name}-${option.value}`;
           return (
-            <Field key={option.value} orientation="horizontal" data-invalid={isInvalid}>
+            <Field
+              key={option.value}
+              orientation="horizontal"
+              data-invalid={isInvalid}
+            >
               <Checkbox
                 id={id}
                 name={field.name}
                 aria-invalid={isInvalid}
                 checked={field.state.value.includes(option.value)}
+                disabled={option.disabled}
                 onCheckedChange={(checked) => {
                   if (checked) {
                     if (!field.state.value.includes(option.value)) {

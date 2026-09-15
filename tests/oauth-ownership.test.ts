@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
-import { internal } from "../convex/_generated/api";
+import { describe, expect, test, vi } from "vitest";
+import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -41,6 +41,45 @@ describe("OAuth ownership", () => {
         state: "state-1",
       }),
     ).resolves.toBeNull();
+  });
+
+  test("signed-in board user creates state for the connect redirect", async () => {
+    vi.stubEnv("BOARD_ORIGIN", "http://localhost:3000");
+    const test = t();
+    const userId = await user(test, "owner@example.com");
+    const result = await test
+      .withIdentity({ subject: `${userId}|session-1` })
+      .mutation(api.tables.oauthStates.mutations.start, {
+        provider: "github",
+        returnTo: "https://board.example/connections",
+      });
+
+    expect(result.state).toEqual(expect.any(String));
+    await expect(
+      test.mutation(internal.tables.oauthStates.mutations.consume, {
+        state: result.state,
+      }),
+    ).resolves.toEqual({
+      userId,
+      provider: "github",
+      returnTo: "http://localhost:3000/connections",
+    });
+  });
+
+  test("connect route accepts state minted by the signed-in board", async () => {
+    vi.stubEnv("BOARD_ORIGIN", "http://localhost:3000");
+    const test = t();
+    const userId = await user(test, "owner@example.com");
+    const { state } = await test
+      .withIdentity({ subject: `${userId}|session-1` })
+      .mutation(api.tables.oauthStates.mutations.start, {
+        provider: "github",
+        returnTo: "http://localhost:3000/connections",
+      });
+
+    const response = await test.fetch(`/api/github/connect?state=${state}`);
+    expect(response.status).toBe(503);
+    expect(await response.text()).toBe("GitHub App is not configured.");
   });
 
   test("the same provider can be connected once per user", async () => {
