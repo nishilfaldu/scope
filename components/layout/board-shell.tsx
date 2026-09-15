@@ -6,11 +6,6 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { SiteHeader, type HeaderCrumb } from "@/components/layout/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
-const PLACEHOLDER_USER = {
-  name: "Demo User",
-  email: "demo@example.com",
-};
-
 export function BoardShell({
   title,
   crumbs,
@@ -29,7 +24,7 @@ export function BoardShell({
         } as CSSProperties
       }
     >
-      <AppSidebar variant="inset" user={PLACEHOLDER_USER} />
+      <AppSidebar variant="inset" />
       <SidebarInset>
         <SiteHeader title={title} crumbs={crumbs} />
         <div className="flex flex-1 flex-col">{children}</div>

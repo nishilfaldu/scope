@@ -38,6 +38,7 @@ import type * as tables_passports_credentials from "../tables/passports/credenti
 import type * as tables_passports_helpers from "../tables/passports/helpers.js";
 import type * as tables_passports_mutations from "../tables/passports/mutations.js";
 import type * as tables_passports_queries from "../tables/passports/queries.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -76,6 +77,7 @@ declare const fullApi: ApiFromModules<{
   "tables/passports/helpers": typeof tables_passports_helpers;
   "tables/passports/mutations": typeof tables_passports_mutations;
   "tables/passports/queries": typeof tables_passports_queries;
+  users: typeof users;
 }>;
 
 /**
