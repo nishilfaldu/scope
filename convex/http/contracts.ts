@@ -25,10 +25,10 @@ export const credentialsContract: PostContract = {
   method: "POST",
   body: {
     type: "object",
-    required: ["passportToken", "passportSecret", "app"],
+    required: ["sliceToken", "sliceSecret", "app"],
     properties: {
-      passportToken: { type: "string" },
-      passportSecret: { type: "string" },
+      sliceToken: { type: "string" },
+      sliceSecret: { type: "string" },
       app: { type: "string", enum: ALL_APPS },
       refresh: { type: "boolean" },
     },
@@ -71,20 +71,20 @@ export const errorCatalog: Record<
   { meaning: string; hint: string }
 > = {
   UNAUTHORIZED: {
-    meaning: "The passportToken or passportSecret is wrong.",
-    hint: "Check the pair for typos, or issue a new passport in the dashboard.",
+    meaning: "The sliceToken or sliceSecret is wrong.",
+    hint: "Check the pair for typos, or create a new slice in the dashboard.",
   },
   REVOKED: {
-    meaning: "This passport was revoked.",
-    hint: "Issue a new passport. A revoked passport cannot be restored.",
+    meaning: "This slice was revoked.",
+    hint: "Create a new slice. A revoked slice cannot be restored.",
   },
   EXPIRED: {
-    meaning: "This passport has expired.",
-    hint: "Issue a new passport with a later expiry.",
+    meaning: "This slice has expired.",
+    hint: "Create a new slice with a later expiry.",
   },
   APP_UNAVAILABLE: {
-    meaning: "This app is not attached to this passport.",
-    hint: "Attach the app to this passport in the dashboard first.",
+    meaning: "This app is not available to this slice.",
+    hint: "Turn on the app in this slice's grant in the dashboard first.",
   },
   INVALID_REQUEST: {
     meaning: "The request is malformed.",
@@ -155,16 +155,16 @@ export const routes: RouteSpec[] = [
   {
     path: "/api/credentials",
     method: "POST",
-    summary: "Exchange a passport for a short-lived access token for one app.",
-    auth: { type: "body", fields: ["passportToken", "passportSecret"] },
+    summary: "Exchange slice credentials for a short-lived access token for one app.",
+    auth: { type: "body", fields: ["sliceToken", "sliceSecret"] },
     body: credentialsContract.body,
     success: credentialsContract.success,
   },
   {
     path: "/api/apps",
     method: "GET",
-    summary: "List the apps on this passport and whether each is on or off.",
-    auth: { type: "headers", headers: ["passportToken", "passportSecret"] },
+    summary: "List the apps available to this slice and whether each is on or off.",
+    auth: { type: "headers", headers: ["x-slice-token", "x-slice-secret"] },
     success: appsSuccess,
   },
   ...oauthRoutes,

@@ -7,15 +7,15 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@/convex/_generated/api";
 import { BoardShell } from "@/components/layout/board-shell";
 import { EmptyState } from "@/components/shared/empty-state";
-import { PassportOverview } from "@/components/passports/passport-overview";
+import { SliceOverview } from "@/components/slices/slice-overview";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export function PassportDetail({ passportId }: { passportId: string }) {
-  const passport = useQuery(api.tables.passports.queries.get, { passportId });
+export function SliceDetail({ sliceId }: { sliceId: string }) {
+  const slice = useQuery(api.tables.slices.queries.get, { sliceId: sliceId });
 
-  if (passport === undefined) {
+  if (slice === undefined) {
     return (
-      <BoardShell title="Passport" crumbs={[{ label: "Passports", href: "/" }]}>
+      <BoardShell title="Slice" crumbs={[{ label: "Slices", href: "/" }]}>
         <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
           <div className="flex flex-col gap-3 px-4 lg:px-6">
             <Skeleton className="h-28 w-full" />
@@ -26,13 +26,13 @@ export function PassportDetail({ passportId }: { passportId: string }) {
     );
   }
 
-  if (passport === null) {
+  if (slice === null) {
     return (
-      <BoardShell title="Not found" crumbs={[{ label: "Passports", href: "/" }]}>
+      <BoardShell title="Not found" crumbs={[{ label: "Slices", href: "/" }]}>
         <div className="@container/main flex flex-1 flex-col py-4 md:py-6">
           <div className="px-4 lg:px-6">
             <EmptyState
-              title="Passport not found"
+              title="Slice not found"
               description="This card may have been deleted from the deployment, or the link is invalid."
               icon={<HugeiconsIcon icon={PassportIcon} strokeWidth={2} />}
             />
@@ -44,12 +44,12 @@ export function PassportDetail({ passportId }: { passportId: string }) {
 
   return (
     <BoardShell
-      title={passport.name}
-      crumbs={[{ label: "Passports", href: "/" }]}
+      title={slice.name}
+      crumbs={[{ label: "Slices", href: "/" }]}
     >
       <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
         <div className="px-4 lg:px-6">
-          <PassportOverview passportId={passportId} />
+          <SliceOverview sliceId={sliceId} />
         </div>
       </div>
     </BoardShell>

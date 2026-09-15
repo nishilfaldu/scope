@@ -21,9 +21,9 @@ export const agentErrorCodeValidator = v.union(
 );
 
 export const APP_UNAVAILABLE_ERROR =
-  "This app is not available on this passport";
+  "This app is not available to this slice";
 
-export const UNAUTHORIZED_ERROR = "Unknown passport token or passport secret";
+export const UNAUTHORIZED_ERROR = "Unknown slice token or slice secret";
 
 export const denyResultValidator = v.object({
   ok: v.literal(false),

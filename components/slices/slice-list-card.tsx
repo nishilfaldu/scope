@@ -3,18 +3,18 @@
 import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-import { CreatePassportDialog } from "@/components/passports/create-passport-dialog";
+import { CreateSliceDialog } from "@/components/slices/create-slice-dialog";
 import { ContentCard } from "@/components/shared/content-card";
-import { PassportsTable } from "@/components/passports/passports-table";
+import { SlicesTable } from "@/components/slices/slices-table";
 import { Button } from "@/components/ui/button";
 
-export function PassportListCard() {
+export function SliceListCard() {
   return (
     <ContentCard
-      title="Passports"
-      description="Create a time-boxed identity for one job and choose which connected apps it can request."
+      title="Slices"
+      description="Create one time-boxed identity. Each account can have one passport for now, and its grant controls which connected apps it can request."
       action={
-        <CreatePassportDialog>
+        <CreateSliceDialog>
           {({ openModal }) => (
             <Button size="sm" onClick={openModal}>
               <HugeiconsIcon
@@ -22,13 +22,13 @@ export function PassportListCard() {
                 strokeWidth={2}
                 data-icon="inline-start"
               />
-              Create passport
+              Create slice
             </Button>
           )}
-        </CreatePassportDialog>
+        </CreateSliceDialog>
       }
     >
-      <PassportsTable />
+      <SlicesTable />
     </ContentCard>
   );
 }

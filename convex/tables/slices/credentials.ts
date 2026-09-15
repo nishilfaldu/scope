@@ -18,15 +18,15 @@ export const APP_TOKEN_TTL_MS = 15 * 60 * 1000;
 
 export const authorizeCreate = internalMutation({
   args: {
-    passportToken: v.string(),
-    passportSecret: v.string(),
+    sliceToken: v.string(),
+    sliceSecret: v.string(),
     app: v.string(),
     refresh: v.boolean(),
   },
   returns: v.union(
     v.object({
       ok: v.literal(true),
-      passportId: v.id("passports"),
+      sliceId: v.id("slices"),
       app: appValidator,
       provider: providerValidator,
       refresh: v.boolean(),
@@ -35,11 +35,11 @@ export const authorizeCreate = internalMutation({
   ),
   handler: async (ctx, args) => {
     const now = Date.now();
-    const passport = await ctx.db
-      .query("passports")
-      .withIndex("by_token", (q) => q.eq("token", args.passportToken))
+    const slice = await ctx.db
+      .query("slices")
+      .withIndex("by_token", (q) => q.eq("token", args.sliceToken))
       .unique();
-    if (!passport) {
+    if (!slice) {
       return {
         ok: false as const,
         status: 401,
@@ -48,11 +48,8 @@ export const authorizeCreate = internalMutation({
       };
     }
 
-    if (!passport.passportSecretHash) {
-      return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
-    }
-    const secretHash = await sha256Hex(args.passportSecret);
-    if (!hashesEqual(secretHash, passport.passportSecretHash)) {
+    const secretHash = await sha256Hex(args.sliceSecret);
+    if (!hashesEqual(secretHash, slice.secretHash)) {
       return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
     }
 
@@ -62,13 +59,14 @@ export const authorizeCreate = internalMutation({
     const app = args.app;
     const provider = providerForApp(app);
 
-    if (passport.status === "revoked") {
+    if (slice.status === "revoked") {
       return denyCreate(403, "Passport revoked", "REVOKED");
     }
-    if (passport.status === "expired" || passport.expiresAt <= now) {
+    if (slice.status === "expired" || slice.expiresAt <= now) {
       return denyCreate(403, "Passport expired", "EXPIRED");
     }
-    if (!passport.apps.includes(app)) {
+    const grant = await ctx.db.get("grants", slice.grantId);
+    if (!grant || !grant.apps.includes(app)) {
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
     }
 
@@ -76,13 +74,14 @@ export const authorizeCreate = internalMutation({
       .query("connections")
       .withIndex("by_provider", (q) => q.eq("provider", provider))
       .unique();
+
     if (!connection) {
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
     }
 
     return {
       ok: true as const,
-      passportId: passport._id,
+      sliceId: slice._id,
       app,
       provider,
       refresh: args.refresh,
@@ -92,7 +91,7 @@ export const authorizeCreate = internalMutation({
 
 export const commitCreate = internalMutation({
   args: {
-    passportId: v.id("passports"),
+    sliceId: v.id("slices"),
     app: appValidator,
     expiresAt: v.number(),
     refresh: v.boolean(),

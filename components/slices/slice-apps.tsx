@@ -8,10 +8,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ALL_APPS, APP_LABELS, type AppId } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
-export function PassportApps({ passportId }: { passportId: string }) {
-  const passport = useQuery(api.tables.passports.queries.get, { passportId });
+export function SliceApps({ sliceId }: { sliceId: string }) {
+  const slice = useQuery(api.tables.slices.queries.get, { sliceId: sliceId });
   const [setApp, isToggling] = useErrorCatchingMutation(
-    api.tables.passports.mutations.setApp,
+    api.tables.slices.mutations.setApp,
     {
       successMessage: (args) =>
         args.enabled
@@ -21,15 +21,15 @@ export function PassportApps({ passportId }: { passportId: string }) {
   );
 
   function handleToggle(app: AppId, enabled: boolean) {
-    if (!passport) return;
+    if (!slice) return;
     void setApp({
-      passportToken: passport.token,
+      sliceToken: slice.token,
       app,
       enabled,
     });
   }
 
-  if (passport === undefined) {
+  if (slice === undefined) {
     return (
       <div className="border-t px-6 py-4">
         <Skeleton className="h-4 w-20" />
@@ -41,7 +41,7 @@ export function PassportApps({ passportId }: { passportId: string }) {
     );
   }
 
-  if (passport === null) {
+  if (slice === null) {
     return null;
   }
 
@@ -50,7 +50,7 @@ export function PassportApps({ passportId }: { passportId: string }) {
       <p className="text-xs text-muted-foreground">Apps</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {ALL_APPS.map((app) => {
-          const on = passport.apps.includes(app);
+          const on = slice.grantApps.includes(app);
           return (
             <label
               key={app}
@@ -59,9 +59,9 @@ export function PassportApps({ passportId }: { passportId: string }) {
               <span className="text-sm">{APP_LABELS[app]}</span>
               <Switch
                 checked={on}
-                disabled={passport.status !== "active" || isToggling}
+                disabled={slice.status !== "active" || isToggling}
                 onCheckedChange={(checked) => handleToggle(app, checked)}
-                aria-label={`${APP_LABELS[app]} on this passport`}
+                aria-label={`${APP_LABELS[app]} on this grant`}
               />
             </label>
           );

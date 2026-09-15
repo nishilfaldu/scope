@@ -14,13 +14,13 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
     return body;
   }
 
-  const passportToken = requiredString(body, "passportToken");
-  if (passportToken instanceof Response) {
-    return passportToken;
+  const sliceToken = requiredString(body, "sliceToken");
+  if (sliceToken instanceof Response) {
+    return sliceToken;
   }
-  const passportSecret = requiredString(body, "passportSecret");
-  if (passportSecret instanceof Response) {
-    return passportSecret;
+  const sliceSecret = requiredString(body, "sliceSecret");
+  if (sliceSecret instanceof Response) {
+    return sliceSecret;
   }
   const app = requiredString(body, "app");
   if (app instanceof Response) {
@@ -32,8 +32,8 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
   const refresh = body.refresh === true;
 
   const decision = await ctx.runMutation(
-    internal.tables.passports.credentials.authorizeCreate,
-    { passportToken, passportSecret, app, refresh },
+    internal.tables.slices.credentials.authorizeCreate,
+    { sliceToken, sliceSecret, app, refresh },
   );
   if (!decision.ok) {
     return errorResponse(decision.status, decision.reason, decision.code);
@@ -49,9 +49,9 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
   }
 
   const committed = await ctx.runMutation(
-    internal.tables.passports.credentials.commitCreate,
+    internal.tables.slices.credentials.commitCreate,
     {
-      passportId: decision.passportId,
+      sliceId: decision.sliceId,
       app: decision.app,
       expiresAt: issued.expiresAt,
       refresh,

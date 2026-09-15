@@ -29,14 +29,14 @@ A user can have more than one passport when they need separation, such as work a
 
 A slice is created for one agent and one grant. It contains:
 
-- a public token and secret
+- a slice token and slice secret
 - the passport and user it belongs to
 - the agent it was created for
 - allowed services and actions
 - an expiry
 - revocation state
 
-A slice never contains an upstream OAuth token. It only proves that a specific grant exists.
+A slice never contains an upstream OAuth token or a copy of the grant's apps. It points to the grant, which remains the single source of truth for allowed apps, so grant changes apply to live slices immediately.
 
 When an agent calls the API, Agent Passport finds the slice and checks that it is valid, not expired, not revoked, and allowed to perform the requested action. The agent gets exactly the power in that grant and nothing else from the user's account.
 

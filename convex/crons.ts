@@ -4,9 +4,9 @@ import { internal } from "./_generated/api";
 const crons = cronJobs();
 
 crons.interval(
-  "expire passports",
+  "expire slices",
   { minutes: 1 },
-  internal.tables.passports.mutations.expireDue,
+  internal.tables.slices.mutations.expireDue,
   {},
 );
 

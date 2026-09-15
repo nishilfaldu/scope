@@ -7,7 +7,7 @@ import {
   type RefreshedTokens,
 } from "./index";
 import type { ProviderId } from "../domain/apps";
-import { APP_TOKEN_TTL_MS } from "../tables/passports/credentials";
+import { APP_TOKEN_TTL_MS } from "../tables/slices/credentials";
 
 function secretsChanged(
   connection: ConnectionSecrets,

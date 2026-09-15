@@ -1,4 +1,4 @@
-import { PassportDetail } from "@/components/passports/passport-detail";
+import { SliceDetail } from "@/components/slices/slice-detail";
 
 export default async function Page({
   params,
@@ -6,5 +6,5 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <PassportDetail passportId={id} />;
+  return <SliceDetail sliceId={id} />;
 }

@@ -3,7 +3,7 @@ import type { AgentErrorCode } from "./errors";
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, passportToken, passportSecret",
+  "Access-Control-Allow-Headers": "Content-Type, x-slice-token, x-slice-secret",
   "Content-Type": "application/json",
 };
 

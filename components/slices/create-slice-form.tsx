@@ -22,20 +22,20 @@ const APP_OPTIONS = ALL_APPS.map((app) => ({
   description: APP_HINTS[app],
 }));
 
-export type CreatedPassport = {
-  passportToken: string;
-  passportSecret: string;
+export type CreatedSlice = {
+  sliceToken: string;
+  sliceSecret: string;
   name: string;
 };
 
-export function CreatePassportForm({
+export function CreateSliceForm({
   onCreated,
 }: {
-  onCreated: (result: CreatedPassport) => void;
+  onCreated: (result: CreatedSlice) => void;
 }) {
-  const [createPassport] = useErrorCatchingMutation(
-    api.tables.passports.mutations.create,
-    { successMessage: "Passport created" },
+  const [createSlice] = useErrorCatchingMutation(
+    api.tables.slices.mutations.create,
+    { successMessage: "Slice created" },
   );
 
   const form = useAppForm({
@@ -45,15 +45,15 @@ export function CreatePassportForm({
       apps: [] as AppId[],
     },
     onSubmit: async ({ value, formApi }) => {
-      const result = await createPassport({
+      const result = await createSlice({
         name: value.name.trim() || "Untitled agent",
         ttlMs: Number(value.ttlMs),
         apps: value.apps,
       });
       if (result === undefined) return;
       onCreated({
-        passportToken: result.passportToken,
-        passportSecret: result.passportSecret,
+        sliceToken: result.sliceToken,
+        sliceSecret: result.sliceSecret,
         name: result.name,
       });
       formApi.reset();
@@ -88,7 +88,7 @@ export function CreatePassportForm({
           )}
         </form.AppField>
         <form.SubmitButton pendingLabel="Creating…">
-          Create passport
+          Create slice
         </form.SubmitButton>
       </form.Form>
     </form.AppForm>

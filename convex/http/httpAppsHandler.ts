@@ -4,18 +4,18 @@ import { errorResponse, jsonResponse } from "../lib/responses";
 import { requiredHeader } from "../lib/requests";
 
 export const httpAppsHandler = httpAction(async (ctx, request) => {
-  const passportToken = requiredHeader(request, "passportToken");
-  if (passportToken instanceof Response) {
-    return passportToken;
+  const sliceToken = requiredHeader(request, "x-slice-token");
+  if (sliceToken instanceof Response) {
+    return sliceToken;
   }
-  const passportSecret = requiredHeader(request, "passportSecret");
-  if (passportSecret instanceof Response) {
-    return passportSecret;
+  const sliceSecret = requiredHeader(request, "x-slice-secret");
+  if (sliceSecret instanceof Response) {
+    return sliceSecret;
   }
 
   const decision = await ctx.runQuery(
-    internal.tables.passports.queries.discoverApps,
-    { passportToken, passportSecret, now: Date.now() },
+    internal.tables.slices.queries.discoverApps,
+    { sliceToken, sliceSecret, now: Date.now() },
   );
   if (!decision.ok) {
     return errorResponse(decision.status, decision.reason, decision.code);

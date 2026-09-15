@@ -34,10 +34,10 @@ import type * as tables_connections_actions from "../tables/connections/actions.
 import type * as tables_connections_mutations from "../tables/connections/mutations.js";
 import type * as tables_connections_queries from "../tables/connections/queries.js";
 import type * as tables_oauthStates_mutations from "../tables/oauthStates/mutations.js";
-import type * as tables_passports_credentials from "../tables/passports/credentials.js";
-import type * as tables_passports_helpers from "../tables/passports/helpers.js";
-import type * as tables_passports_mutations from "../tables/passports/mutations.js";
-import type * as tables_passports_queries from "../tables/passports/queries.js";
+import type * as tables_slices_credentials from "../tables/slices/credentials.js";
+import type * as tables_slices_helpers from "../tables/slices/helpers.js";
+import type * as tables_slices_mutations from "../tables/slices/mutations.js";
+import type * as tables_slices_queries from "../tables/slices/queries.js";
 import type * as users from "../users.js";
 
 import type {
@@ -73,10 +73,10 @@ declare const fullApi: ApiFromModules<{
   "tables/connections/mutations": typeof tables_connections_mutations;
   "tables/connections/queries": typeof tables_connections_queries;
   "tables/oauthStates/mutations": typeof tables_oauthStates_mutations;
-  "tables/passports/credentials": typeof tables_passports_credentials;
-  "tables/passports/helpers": typeof tables_passports_helpers;
-  "tables/passports/mutations": typeof tables_passports_mutations;
-  "tables/passports/queries": typeof tables_passports_queries;
+  "tables/slices/credentials": typeof tables_slices_credentials;
+  "tables/slices/helpers": typeof tables_slices_helpers;
+  "tables/slices/mutations": typeof tables_slices_mutations;
+  "tables/slices/queries": typeof tables_slices_queries;
   users: typeof users;
 }>;
 

@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const NAV = [
-  { title: "Passports", href: "/", icon: CreditCardIcon },
+  { title: "Slices", href: "/", icon: CreditCardIcon },
   { title: "Connections", href: "/connections", icon: Plug01Icon },
 ] as const;
 

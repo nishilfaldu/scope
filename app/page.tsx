@@ -1,5 +1,5 @@
-import { PassportDashboard } from "@/components/passports/passport-dashboard";
+import { SliceDashboard } from "@/components/slices/slice-dashboard";
 
 export default function Page() {
-  return <PassportDashboard />;
+  return <SliceDashboard />;
 }

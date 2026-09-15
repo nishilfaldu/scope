@@ -27,22 +27,22 @@ import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { APP_LABELS, formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
-type Passport = FunctionReturnType<
-  typeof api.tables.passports.queries.list
+type Slice = FunctionReturnType<
+  typeof api.tables.slices.queries.list
 >["page"][number];
 
 const PAGE_SIZE = 10;
 
-export function PassportsTable() {
+export function SlicesTable() {
   const router = useRouter();
   const { paginationOpts, canPrevious, goNext, goPrevious } =
     useCursorPagination(PAGE_SIZE);
-  const result = useQuery(api.tables.passports.queries.list, {
+  const result = useQuery(api.tables.slices.queries.list, {
     paginationOpts,
   });
   const [revoke] = useErrorCatchingMutation(
-    api.tables.passports.mutations.revoke,
-    { successMessage: "Passport revoked" },
+    api.tables.slices.mutations.revoke,
+    { successMessage: "Slice revoked" },
   );
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
@@ -58,51 +58,51 @@ export function PassportsTable() {
     }
   }
 
-  async function handleRevoke(passportToken: string) {
-    setRevokingId(passportToken);
+  async function handleRevoke(sliceToken: string) {
+    setRevokingId(sliceToken);
     try {
-      await revoke({ passportToken });
+      await revoke({ sliceToken });
     } finally {
       setRevokingId(null);
     }
   }
 
-  const columns: DataTableColumn<Passport>[] = [
+  const columns: DataTableColumn<Slice>[] = [
     {
       id: "name",
       header: "Name",
-      cell: ({ row: { original: passport } }) => (
+      cell: ({ row: { original: slice } }) => (
         <Link
-          href={`/passports/${passport._id}`}
+          href={`/passports/${slice._id}`}
           className="font-medium hover:underline"
         >
-          {passport.name}
+          {slice.name}
         </Link>
       ),
     },
     {
       id: "status",
       header: "Status",
-      cell: ({ row: { original: passport } }) => (
+      cell: ({ row: { original: slice } }) => (
         <Badge
           variant={
-            passport.status === "active"
+            slice.status === "active"
               ? "secondary"
-              : passport.status === "revoked"
+              : slice.status === "revoked"
                 ? "destructive"
                 : "outline"
           }
         >
-          {STATUS_LABELS[passport.status]}
+          {STATUS_LABELS[slice.status]}
         </Badge>
       ),
     },
     {
       id: "apps",
       header: "Apps",
-      cell: ({ row: { original: passport } }) => (
+      cell: ({ row: { original: slice } }) => (
         <div className="flex flex-wrap gap-1">
-          {passport.apps.map((app) => (
+          {slice.grantApps.map((app) => (
             <Badge key={app} variant="secondary">
               {APP_LABELS[app]}
             </Badge>
@@ -113,39 +113,39 @@ export function PassportsTable() {
     {
       id: "expires",
       header: "Expires",
-      cell: ({ row: { original: passport } }) => (
+      cell: ({ row: { original: slice } }) => (
         <Badge variant="outline">
-          {formatRemaining(passport.expiresAt, Date.now())}
+          {formatRemaining(slice.expiresAt, Date.now())}
         </Badge>
       ),
     },
     {
       id: "actions",
       header: () => <span className="sr-only">Actions</span>,
-      cell: ({ row: { original: passport } }) => {
+      cell: ({ row: { original: slice } }) => {
         const items: ActionsMenuItem[] = [
           {
             id: "view",
             label: "View",
             icon: File01Icon,
-            onSelect: () => router.push(`/passports/${passport._id}`),
+            onSelect: () => router.push(`/passports/${slice._id}`),
           },
           {
             id: "copy-token",
-            label: "Copy passport token",
+            label: "Copy slice token",
             icon: Copy01Icon,
-            onSelect: () => void handleCopy("Passport token", passport.token),
+            onSelect: () => void handleCopy("Slice token", slice.token),
           },
         ];
-        if (passport.status === "active") {
+        if (slice.status === "active") {
           items.push({
             id: "revoke",
-            label: revokingId === passport.token ? "Revoking…" : "Revoke",
+            label: revokingId === slice.token ? "Revoking…" : "Revoke",
             icon: Delete02Icon,
             variant: "destructive",
-            disabled: revokingId === passport.token,
+            disabled: revokingId === slice.token,
             separatorBefore: true,
-            onSelect: () => void handleRevoke(passport.token),
+            onSelect: () => void handleRevoke(slice.token),
           });
         }
         return <ActionsMenu items={items} />;
@@ -160,7 +160,7 @@ export function PassportsTable() {
     <DataTable
       data={result === undefined ? undefined : result.page}
       columns={columns}
-      getRowKey={(passport) => passport._id}
+      getRowKey={(slice) => slice._id}
       pagination={
         showPagination ? (
           <ConvexPagination
@@ -177,8 +177,8 @@ export function PassportsTable() {
       }
       empty={
         <EmptyState
-          title="No passports"
-          description="Create a virtual passport for an agent."
+          title="No slices"
+          description="Create a slice for an agent."
           icon={<HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />}
         />
       }

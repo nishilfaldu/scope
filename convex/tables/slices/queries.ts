@@ -10,46 +10,53 @@ import {
   denyResultValidator,
   UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
-import { passportBySecret, withoutPassportSecretHash } from "./helpers";
+import { sliceBySecret, withoutSecretHash } from "./helpers";
 
-const passportDoc = schema.doc("passports");
-const boardPassport = passportDoc.omit("passportSecretHash");
+const boardSlice = schema.doc("slices").omit("secretHash").extend({
+  grantApps: v.array(appValidator),
+});
 
 export const list = query({
   args: { paginationOpts: paginationOptsValidator },
-  returns: paginationResultValidator(boardPassport),
+  returns: paginationResultValidator(boardSlice),
   handler: async (ctx, args) => {
     const results = await ctx.db
-      .query("passports")
+      .query("slices")
       .order("desc")
       .paginate(args.paginationOpts);
     return {
       ...results,
-      page: results.page.map(withoutPassportSecretHash),
+      page: await Promise.all(
+        results.page.map(async (slice) => {
+          const grant = await ctx.db.get("grants", slice.grantId);
+          return { ...withoutSecretHash(slice), grantApps: grant?.apps ?? [] };
+        }),
+      ),
     };
   },
 });
 
 export const get = query({
-  args: { passportId: v.string() },
-  returns: v.union(boardPassport, v.null()),
+  args: { sliceId: v.string() },
+  returns: v.union(boardSlice, v.null()),
   handler: async (ctx, args) => {
-    const id = ctx.db.normalizeId("passports", args.passportId);
+    const id = ctx.db.normalizeId("slices", args.sliceId);
     if (!id) {
       return null;
     }
-    const passport = await ctx.db.get("passports", id);
-    if (!passport) {
+    const slice = await ctx.db.get("slices", id);
+    if (!slice) {
       return null;
     }
-    return withoutPassportSecretHash(passport);
+    const grant = await ctx.db.get("grants", slice.grantId);
+    return { ...withoutSecretHash(slice), grantApps: grant?.apps ?? [] };
   },
 });
 
 export const discoverApps = internalQuery({
   args: {
-    passportToken: v.string(),
-    passportSecret: v.string(),
+    sliceToken: v.string(),
+    sliceSecret: v.string(),
     now: v.number(),
   },
   returns: v.union(
@@ -66,8 +73,8 @@ export const discoverApps = internalQuery({
     denyResultValidator,
   ),
   handler: async (ctx, args) => {
-    const passport = await passportBySecret(ctx, args);
-    if (!passport) {
+    const slice = await sliceBySecret(ctx, args);
+    if (!slice) {
       return {
         ok: false as const,
         status: 401,
@@ -75,7 +82,7 @@ export const discoverApps = internalQuery({
         code: "UNAUTHORIZED" as const,
       };
     }
-    if (passport.status === "revoked") {
+    if (slice.status === "revoked") {
       return {
         ok: false as const,
         status: 403,
@@ -83,7 +90,7 @@ export const discoverApps = internalQuery({
         code: "REVOKED" as const,
       };
     }
-    if (passport.status === "expired" || passport.expiresAt <= args.now) {
+    if (slice.status === "expired" || slice.expiresAt <= args.now) {
       return {
         ok: false as const,
         status: 403,
@@ -91,12 +98,21 @@ export const discoverApps = internalQuery({
         code: "EXPIRED" as const,
       };
     }
+    const grant = await ctx.db.get("grants", slice.grantId);
+    if (!grant) {
+      return {
+        ok: false as const,
+        status: 401,
+        reason: UNAUTHORIZED_ERROR,
+        code: "UNAUTHORIZED" as const,
+      };
+    }
     return {
       ok: true as const,
-      expiresAt: passport.expiresAt,
+      expiresAt: slice.expiresAt,
       apps: ALL_APPS.map((app) => ({
         app,
-        status: passport.apps.includes(app) ? ("on" as const) : ("off" as const),
+        status: grant.apps.includes(app) ? ("on" as const) : ("off" as const),
       })),
     };
   },
