@@ -102,7 +102,7 @@ export function SlicesTable() {
       header: "Apps",
       cell: ({ row: { original: slice } }) => (
         <div className="flex flex-wrap gap-1">
-          {slice.apps.map((app) => (
+          {slice.grantApps.map((app) => (
             <Badge key={app} variant="secondary">
               {APP_LABELS[app]}
             </Badge>

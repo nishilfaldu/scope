@@ -67,7 +67,7 @@ describe("accounts and passports", () => {
     ).rejects.toThrow(/7 days/);
   });
 
-  test("setApp updates only the selected app", async () => {
+  test("setApp updates the parent grant and the slice reads through", async () => {
     const test = t();
     const { backend } = await signedIn(test);
     const created = await backend.mutation(api.tables.slices.mutations.create, {
@@ -79,7 +79,16 @@ describe("accounts and passports", () => {
     const slice = await test.query(api.tables.slices.queries.get, {
       sliceId: created.id,
     });
-    expect(slice?.apps.sort()).toEqual(["github", "slack"]);
+    expect(slice?.grantApps.sort()).toEqual(["github", "slack"]);
+    const stored = await test.run(async (ctx) => {
+      const storedSlice = await ctx.db.get("slices", created.id);
+      const grant = storedSlice
+        ? await ctx.db.get("grants", storedSlice.grantId)
+        : null;
+      return { storedSlice, grant };
+    });
+    expect(stored.storedSlice).not.toHaveProperty("apps");
+    expect(stored.grant?.apps.sort()).toEqual(["github", "slack"]);
   });
 
   test("disconnecting an account leaves passports intact", async () => {
@@ -126,7 +135,7 @@ describe("credential authorization", () => {
     expect(JSON.stringify(committed)).not.toMatch(/ghs_/);
   });
 
-  test("a disabled app is denied server-side", async () => {
+  test("a grant app removal immediately denies a live slice", async () => {
     const test = t();
     await seedGithub(test);
     const { backend } = await signedIn(test);

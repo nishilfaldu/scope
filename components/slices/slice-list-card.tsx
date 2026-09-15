@@ -12,7 +12,7 @@ export function SliceListCard() {
   return (
     <ContentCard
       title="Slices"
-      description="Create a time-boxed identity for one job and choose which connected apps it can request."
+      description="Create one time-boxed identity per agent. Its grant controls which connected apps it can request."
       action={
         <CreateSliceDialog>
           {({ openModal }) => (

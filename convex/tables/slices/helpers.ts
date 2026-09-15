@@ -14,7 +14,6 @@ export function withoutSecretHash(slice: Doc<"slices">) {
     token: slice.token,
     status: slice.status,
     expiresAt: slice.expiresAt,
-    apps: slice.apps,
   };
 }
 

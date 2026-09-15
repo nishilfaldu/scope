@@ -12,7 +12,9 @@ import {
 } from "../../lib/errors";
 import { sliceBySecret, withoutSecretHash } from "./helpers";
 
-const boardSlice = schema.doc("slices").omit("secretHash");
+const boardSlice = schema.doc("slices").omit("secretHash").extend({
+  grantApps: v.array(appValidator),
+});
 
 export const list = query({
   args: { paginationOpts: paginationOptsValidator },
@@ -24,7 +26,12 @@ export const list = query({
       .paginate(args.paginationOpts);
     return {
       ...results,
-      page: results.page.map(withoutSecretHash),
+      page: await Promise.all(
+        results.page.map(async (slice) => {
+          const grant = await ctx.db.get("grants", slice.grantId);
+          return { ...withoutSecretHash(slice), grantApps: grant?.apps ?? [] };
+        }),
+      ),
     };
   },
 });
@@ -41,7 +48,8 @@ export const get = query({
     if (!slice) {
       return null;
     }
-    return withoutSecretHash(slice);
+    const grant = await ctx.db.get("grants", slice.grantId);
+    return { ...withoutSecretHash(slice), grantApps: grant?.apps ?? [] };
   },
 });
 
@@ -90,12 +98,21 @@ export const discoverApps = internalQuery({
         code: "EXPIRED" as const,
       };
     }
+    const grant = await ctx.db.get("grants", slice.grantId);
+    if (!grant) {
+      return {
+        ok: false as const,
+        status: 401,
+        reason: UNAUTHORIZED_ERROR,
+        code: "UNAUTHORIZED" as const,
+      };
+    }
     return {
       ok: true as const,
       expiresAt: slice.expiresAt,
       apps: ALL_APPS.map((app) => ({
         app,
-        status: slice.apps.includes(app) ? ("on" as const) : ("off" as const),
+        status: grant.apps.includes(app) ? ("on" as const) : ("off" as const),
       })),
     };
   },

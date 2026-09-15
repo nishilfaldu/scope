@@ -34,7 +34,7 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
   return (
     <ContentCard
       title={slice.name}
-      description="Status, credentials, and apps for this slice."
+      description="Status, credentials, and apps from this slice's grant."
       action={
         slice.status === "active" ? (
           <Button

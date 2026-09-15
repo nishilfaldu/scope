@@ -65,7 +65,8 @@ export const authorizeCreate = internalMutation({
     if (slice.status === "expired" || slice.expiresAt <= now) {
       return denyCreate(403, "Passport expired", "EXPIRED");
     }
-    if (!slice.apps.includes(app)) {
+    const grant = await ctx.db.get("grants", slice.grantId);
+    if (!grant || !grant.apps.includes(app)) {
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
     }
 

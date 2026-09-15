@@ -92,7 +92,6 @@ export const create = mutation({
       secretHash,
       status: "active",
       expiresAt,
-      apps: uniqueApps,
     });
 
     return {
@@ -129,14 +128,18 @@ export const setApp = mutation({
     if (slice.status !== "active") {
       throw new Error("Passport is not live");
     }
-    const enabled = slice.apps.includes(args.app);
+    const grant = await ctx.db.get("grants", slice.grantId);
+    if (!grant) {
+      throw new Error("Grant not found");
+    }
+    const enabled = grant.apps.includes(args.app);
     if (enabled === args.enabled) {
       return null;
     }
     const apps = args.enabled
-      ? [...slice.apps, args.app]
-      : slice.apps.filter((app) => app !== args.app);
-    await ctx.db.patch("slices", slice._id, { apps });
+      ? [...grant.apps, args.app]
+      : grant.apps.filter((app) => app !== args.app);
+    await ctx.db.patch("grants", grant._id, { apps });
     return null;
   },
 });

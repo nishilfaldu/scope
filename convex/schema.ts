@@ -28,7 +28,6 @@ export default defineSchema({
     token: v.string(),
     secretHash: v.string(),
     status: sliceStatusValidator,
-    apps: v.array(appValidator),
     expiresAt: v.number(),
   })
     .index("by_token", ["token"])

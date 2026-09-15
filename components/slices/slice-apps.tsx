@@ -50,7 +50,7 @@ export function SliceApps({ sliceId }: { sliceId: string }) {
       <p className="text-xs text-muted-foreground">Apps</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {ALL_APPS.map((app) => {
-          const on = slice.apps.includes(app);
+          const on = slice.grantApps.includes(app);
           return (
             <label
               key={app}
@@ -61,7 +61,7 @@ export function SliceApps({ sliceId }: { sliceId: string }) {
                 checked={on}
                 disabled={slice.status !== "active" || isToggling}
                 onCheckedChange={(checked) => handleToggle(app, checked)}
-                aria-label={`${APP_LABELS[app]} on this slice`}
+                aria-label={`${APP_LABELS[app]} on this grant`}
               />
             </label>
           );

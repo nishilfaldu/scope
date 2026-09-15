@@ -35,6 +35,7 @@ describe("slice ownership", () => {
       return { slice, passport, grant };
     });
     expect(stored.slice.userId).toEqual(userId);
+    expect(stored.slice).not.toHaveProperty("apps");
     expect(stored.passport).toMatchObject({ userId, name: "Default passport" });
     expect(stored.passport).not.toHaveProperty("token");
     expect(stored.grant).toMatchObject({
