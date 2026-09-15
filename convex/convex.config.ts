@@ -13,6 +13,8 @@ const app = defineApp({
     AIRTABLE_CLIENT_SECRET: v.string(),
     NOTION_CLIENT_ID: v.string(),
     NOTION_CLIENT_SECRET: v.string(),
+    LINEAR_CLIENT_ID: v.string(),
+    LINEAR_CLIENT_SECRET: v.string(),
     BOARD_ORIGIN: v.string(),
   },
 });

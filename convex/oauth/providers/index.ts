@@ -5,6 +5,7 @@ import { google } from "./google";
 import { slack } from "./slack";
 import { airtable } from "./airtable";
 import { notion } from "./notion";
+import { linear } from "./linear";
 
 export const PROVIDER_OAUTH: Record<ProviderId, ProviderOAuth> = {
   github,
@@ -12,4 +13,5 @@ export const PROVIDER_OAUTH: Record<ProviderId, ProviderOAuth> = {
   slack,
   airtable,
   notion,
+  linear,
 };

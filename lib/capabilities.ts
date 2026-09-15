@@ -15,6 +15,7 @@ export const APP_LABELS: Record<AppId, string> = {
   slack: "Slack",
   airtable: "Airtable",
   notion: "Notion",
+  linear: "Linear",
 };
 
 export const APP_HINTS: Record<AppId, string> = {
@@ -27,6 +28,7 @@ export const APP_HINTS: Record<AppId, string> = {
   slack: "Create a short-lived Slack token. The agent calls Slack directly.",
   airtable: "Bases, schemas, records, and comments.",
   notion: "Pages and databases shared with the Notion connection.",
+  linear: "Issues, projects, teams, and workflow updates.",
 };
 
 export const TTL_OPTIONS = [

@@ -41,6 +41,8 @@ type Env = {
   readonly AIRTABLE_CLIENT_SECRET: string;
   readonly NOTION_CLIENT_ID: string;
   readonly NOTION_CLIENT_SECRET: string;
+  readonly LINEAR_CLIENT_ID: string;
+  readonly LINEAR_CLIENT_SECRET: string;
 };
 
 /**

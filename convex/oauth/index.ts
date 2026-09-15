@@ -28,6 +28,9 @@ export function oauthConfigured(): Record<ProviderId, boolean> {
     notion:
       envConfigured(env.NOTION_CLIENT_ID) &&
       envConfigured(env.NOTION_CLIENT_SECRET),
+    linear:
+      envConfigured(env.LINEAR_CLIENT_ID) &&
+      envConfigured(env.LINEAR_CLIENT_SECRET),
   };
 }
 

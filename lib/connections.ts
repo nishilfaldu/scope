@@ -15,6 +15,7 @@ export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
   slack: `${siteUrl}/api/slack/connect`,
   airtable: `${siteUrl}/api/airtable/connect`,
   notion: `${siteUrl}/api/notion/connect`,
+  linear: `${siteUrl}/api/linear/connect`,
 };
 
 export const CONNECT_ERRORS: Record<string, string> = {
@@ -57,5 +58,10 @@ export const CONNECTION_PROVIDERS = [
     id: "notion" as const,
     name: "Notion",
     description: "Connect pages and databases shared with Agent Passport.",
+  },
+  {
+    id: "linear" as const,
+    name: "Linear",
+    description: "Issues, projects, teams, and workflow updates.",
   },
 ] as const;
