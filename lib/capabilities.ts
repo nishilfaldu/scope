@@ -13,6 +13,7 @@ export const APP_LABELS: Record<AppId, string> = {
   docs: "Docs",
   sheets: "Sheets",
   slack: "Slack",
+  zoom: "Zoom",
 };
 
 export const APP_HINTS: Record<AppId, string> = {
@@ -23,6 +24,7 @@ export const APP_HINTS: Record<AppId, string> = {
   docs: "Docs via the Google login.",
   sheets: "Sheets via the Google login.",
   slack: "Create a short-lived Slack token. The agent calls Slack directly.",
+  zoom: "Meetings, webinars, recordings, and account profile.",
 };
 
 export const TTL_OPTIONS = [

@@ -17,7 +17,7 @@ async function createSlice(
     name: string;
     ttlMs: number;
     apps: (
-      "github" | "gmail" | "calendar" | "drive" | "docs" | "sheets" | "slack"
+      "github" | "gmail" | "calendar" | "drive" | "docs" | "sheets" | "slack" | "zoom"
     )[];
   },
 ) {
@@ -30,7 +30,7 @@ async function createSlice(
   await test.run(async (ctx) => {
     const providers = new Set(
       args.apps.map((app) =>
-        app === "github" ? "github" : app === "slack" ? "slack" : "google",
+        app === "github" ? "github" : app === "slack" ? "slack" : app === "zoom" ? "zoom" : "google",
       ),
     );
     for (const provider of providers) {
@@ -55,7 +55,7 @@ describe("GET /api/health", () => {
     const body = await response.json();
     expect(body).toEqual({
       ok: true,
-      oauth: { github: false, google: false, slack: false },
+      oauth: { github: false, google: false, slack: false, zoom: false },
     });
     expect(JSON.stringify(body)).not.toMatch(/ghs_|ya29|xoxp|CLIENT_SECRET/);
   });
@@ -277,6 +277,7 @@ describe("GET /api/apps", () => {
         { app: "docs", allowed: false, connected: false },
         { app: "sheets", allowed: false, connected: false },
         { app: "slack", allowed: false, connected: false },
+        { app: "zoom", allowed: false, connected: false },
       ],
     });
   });
