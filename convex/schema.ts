@@ -26,7 +26,7 @@ export default defineSchema({
     userId: v.id("users"),
     name: v.string(),
     token: v.string(),
-    secretHash: v.optional(v.string()),
+    secretHash: v.string(),
     status: sliceStatusValidator,
     apps: v.array(appValidator),
     expiresAt: v.number(),
@@ -46,16 +46,13 @@ export default defineSchema({
   }).index("by_passport", ["passportId"]),
 
   connections: defineTable({
-    passportId: v.optional(v.id("passports")),
     provider: providerValidator,
     accessToken: v.string(),
     login: v.string(),
     providerUserId: v.string(),
     refreshToken: v.optional(v.string()),
     tokenExpiresAt: v.optional(v.number()),
-  })
-    .index("by_provider", ["provider"])
-    .index("by_passport_and_provider", ["passportId", "provider"]),
+  }).index("by_provider", ["provider"]),
 
   oauthStates: defineTable({
     provider: providerValidator,

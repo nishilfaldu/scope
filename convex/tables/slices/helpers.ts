@@ -26,7 +26,7 @@ export async function sliceBySecret(
     .query("slices")
     .withIndex("by_token", (q) => q.eq("token", args.passportToken))
     .unique();
-  if (!slice?.secretHash) {
+  if (!slice) {
     return null;
   }
   const secretHash = await sha256Hex(args.passportSecret);

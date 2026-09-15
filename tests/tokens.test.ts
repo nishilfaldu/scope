@@ -29,27 +29,6 @@ async function seedGithub(test: ReturnType<typeof t>) {
   });
 }
 
-async function bindConnectionToSlice(
-  test: ReturnType<typeof t>,
-  sliceId: string,
-  provider: "github" | "google",
-) {
-  await test.run(async (ctx) => {
-    const sliceIdValue = ctx.db.normalizeId("slices", sliceId);
-    if (!sliceIdValue) throw new Error("slice missing");
-    const slice = await ctx.db.get("slices", sliceIdValue);
-    if (!slice) throw new Error("slice missing");
-    const connection = await ctx.db
-      .query("connections")
-      .withIndex("by_provider", (q) => q.eq("provider", provider))
-      .unique();
-    if (!connection) throw new Error("connection missing");
-    await ctx.db.patch("connections", connection._id, {
-      passportId: slice.passportId,
-    });
-  });
-}
-
 describe("accounts and passports", () => {
   test("create returns credentials without exposing the secret hash", async () => {
     const test = t();
@@ -126,7 +105,6 @@ describe("credential authorization", () => {
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
     });
-    await bindConnectionToSlice(test, created.id, "github");
     const allowed = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
       passportToken: created.passportToken,
       passportSecret: created.passportSecret,
@@ -261,7 +239,6 @@ describe("credential authorization", () => {
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Workspace", ttlMs: 60_000, apps: [...apps],
     });
-    await bindConnectionToSlice(test, created.id, "google");
     for (const app of apps) {
       const allowed = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
         passportToken: created.passportToken,

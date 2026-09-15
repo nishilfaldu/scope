@@ -48,9 +48,6 @@ export const authorizeCreate = internalMutation({
       };
     }
 
-    if (!slice.secretHash) {
-      return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
-    }
     const secretHash = await sha256Hex(args.passportSecret);
     if (!hashesEqual(secretHash, slice.secretHash)) {
       return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
@@ -74,9 +71,7 @@ export const authorizeCreate = internalMutation({
 
     const connection = await ctx.db
       .query("connections")
-      .withIndex("by_passport_and_provider", (q) =>
-        q.eq("passportId", slice.passportId).eq("provider", provider),
-      )
+      .withIndex("by_provider", (q) => q.eq("provider", provider))
       .unique();
 
     if (!connection) {
