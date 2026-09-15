@@ -29,6 +29,27 @@ async function seedGithub(test: ReturnType<typeof t>) {
   });
 }
 
+async function bindConnectionToSlice(
+  test: ReturnType<typeof t>,
+  sliceId: string,
+  provider: "github" | "google",
+) {
+  await test.run(async (ctx) => {
+    const sliceIdValue = ctx.db.normalizeId("slices", sliceId);
+    if (!sliceIdValue) throw new Error("slice missing");
+    const slice = await ctx.db.get("slices", sliceIdValue);
+    if (!slice) throw new Error("slice missing");
+    const connection = await ctx.db
+      .query("connections")
+      .withIndex("by_provider", (q) => q.eq("provider", provider))
+      .unique();
+    if (!connection) throw new Error("connection missing");
+    await ctx.db.patch("connections", connection._id, {
+      passportId: slice.passportId,
+    });
+  });
+}
+
 describe("accounts and passports", () => {
   test("create returns credentials without exposing the secret hash", async () => {
     const test = t();
@@ -45,7 +66,6 @@ describe("accounts and passports", () => {
     });
     expect(listed.page).toHaveLength(1);
     expect(listed.page[0]).not.toHaveProperty("passportSecret");
-    expect(listed.page[0]).not.toHaveProperty("passportSecretHash");
   });
 
   test("create validates its name and TTL", async () => {
@@ -77,10 +97,10 @@ describe("accounts and passports", () => {
     await test.mutation(api.tables.slices.mutations.setApp, {
       passportToken: created.passportToken, app: "gmail", enabled: false,
     });
-    const passport = await test.query(api.tables.slices.queries.get, {
+    const slice = await test.query(api.tables.slices.queries.get, {
       sliceId: created.id,
     });
-    expect(passport?.apps.sort()).toEqual(["github", "slack"]);
+    expect(slice?.apps.sort()).toEqual(["github", "slack"]);
   });
 
   test("disconnecting an account leaves passports intact", async () => {
@@ -91,10 +111,10 @@ describe("accounts and passports", () => {
       name: "Keep me", ttlMs: 60_000, apps: ["github"],
     });
     await test.action(api.tables.connections.actions.disconnect, { provider: "github" });
-    const passport = await test.query(api.tables.slices.queries.get, {
+    const slice = await test.query(api.tables.slices.queries.get, {
       sliceId: created.id,
     });
-    expect(passport?.name).toBe("Keep me");
+    expect(slice?.name).toBe("Keep me");
   });
 });
 
@@ -106,6 +126,7 @@ describe("credential authorization", () => {
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "GitHub agent", ttlMs: 60_000, apps: ["github"],
     });
+    await bindConnectionToSlice(test, created.id, "github");
     const allowed = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
       passportToken: created.passportToken,
       passportSecret: created.passportSecret,
@@ -240,6 +261,7 @@ describe("credential authorization", () => {
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Workspace", ttlMs: 60_000, apps: [...apps],
     });
+    await bindConnectionToSlice(test, created.id, "google");
     for (const app of apps) {
       const allowed = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
         passportToken: created.passportToken,

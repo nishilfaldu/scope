@@ -14,30 +14,16 @@ export default defineSchema({
 
   // A passport is the user-owned vault: it holds connected services and the
   // slices created from it. It has no external credential of its own.
-  // The legacy member keeps pre-slice rows (the old pp_/ps_ passports) valid
-  // until migrations.toSlices moves them; drop the union once that has run.
-  passports: defineTable(
-    v.union(
-      v.object({
-        userId: v.optional(v.id("users")),
-        name: v.string(),
-      }),
-      v.object({
-        name: v.string(),
-        token: v.string(),
-        passportSecretHash: v.optional(v.string()),
-        status: sliceStatusValidator,
-        expiresAt: v.number(),
-        apps: v.array(appValidator),
-      }),
-    ),
-  ).index("by_user", ["userId"]),
+  passports: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+  }).index("by_user", ["userId"]),
 
   // A slice is one agent's scoped, expiring grant from one passport.
   slices: defineTable({
     passportId: v.id("passports"),
     grantId: v.id("grants"),
-    userId: v.optional(v.id("users")),
+    userId: v.id("users"),
     name: v.string(),
     token: v.string(),
     secretHash: v.optional(v.string()),
@@ -53,7 +39,7 @@ export default defineSchema({
   // covers, and when it ends.
   grants: defineTable({
     passportId: v.id("passports"),
-    userId: v.optional(v.id("users")),
+    userId: v.id("users"),
     agent: v.string(),
     apps: v.array(appValidator),
     expiresAt: v.number(),

@@ -72,26 +72,13 @@ export const authorizeCreate = internalMutation({
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
     }
 
-    let connection = await ctx.db
+    const connection = await ctx.db
       .query("connections")
       .withIndex("by_passport_and_provider", (q) =>
         q.eq("passportId", slice.passportId).eq("provider", provider),
       )
       .unique();
-    if (!connection) {
-      // Connections saved before passports existed have no owner. The first
-      // slice to use one claims it for its passport.
-      const legacy = await ctx.db
-        .query("connections")
-        .withIndex("by_provider", (q) => q.eq("provider", provider))
-        .unique();
-      if (legacy) {
-        await ctx.db.patch("connections", legacy._id, {
-          passportId: slice.passportId,
-        });
-        connection = legacy;
-      }
-    }
+
     if (!connection) {
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
     }

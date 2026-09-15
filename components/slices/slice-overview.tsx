@@ -6,7 +6,7 @@ import { Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { api } from "@/convex/_generated/api";
-import { PassportApps } from "@/components/passports/passport-apps";
+import { SliceApps } from "@/components/slices/slice-apps";
 import { ContentCard } from "@/components/shared/content-card";
 import { CopyableField } from "@/components/shared/copyable-field";
 import { Badge } from "@/components/ui/badge";
@@ -15,33 +15,33 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
-export function PassportOverview({ passportId }: { passportId: string }) {
-  const passport = useQuery(api.tables.slices.queries.get, { sliceId: passportId });
+export function SliceOverview({ sliceId }: { sliceId: string }) {
+  const slice = useQuery(api.tables.slices.queries.get, { sliceId: sliceId });
   const [revoke, isRevoking] = useErrorCatchingMutation(
     api.tables.slices.mutations.revoke,
     { successMessage: "Passport revoked" },
   );
   const [now] = useState(() => Date.now());
 
-  if (passport === undefined) {
+  if (slice === undefined) {
     return <Skeleton className="h-28 w-full" />;
   }
 
-  if (passport === null) {
+  if (slice === null) {
     return null;
   }
 
   return (
     <ContentCard
-      title={passport.name}
+      title={slice.name}
       description="Status, credentials, and apps for this passport."
       action={
-        passport.status === "active" ? (
+        slice.status === "active" ? (
           <Button
             variant="outline"
             size="sm"
             disabled={isRevoking}
-            onClick={() => void revoke({ passportToken: passport.token })}
+            onClick={() => void revoke({ passportToken: slice.token })}
           >
             <HugeiconsIcon
               icon={Delete02Icon}
@@ -59,29 +59,29 @@ export function PassportOverview({ passportId }: { passportId: string }) {
           <Badge
             className="mt-1"
             variant={
-              passport.status === "active"
+              slice.status === "active"
                 ? "secondary"
-                : passport.status === "revoked"
+                : slice.status === "revoked"
                   ? "destructive"
                   : "outline"
             }
           >
-            {STATUS_LABELS[passport.status]}
+            {STATUS_LABELS[slice.status]}
           </Badge>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">Expires</p>
           <p className="mt-1 text-sm">
-            {formatRemaining(passport.expiresAt, now)}
+            {formatRemaining(slice.expiresAt, now)}
           </p>
         </div>
         <CopyableField
           label="Passport token"
-          value={passport.token}
+          value={slice.token}
           successMessage="Passport token copied"
         />
       </div>
-      <PassportApps passportId={passportId} />
+      <SliceApps sliceId={sliceId} />
     </ContentCard>
   );
 }

@@ -228,10 +228,10 @@ describe("GET /api/apps", () => {
       ttlMs: 60_000,
       apps: ["github"],
     });
-    const passport = await test.query(api.tables.slices.queries.get, {
+    const slice = await test.query(api.tables.slices.queries.get, {
       sliceId: created.id,
     });
-    expect(passport).not.toBeNull();
+    expect(slice).not.toBeNull();
     const response = await test.fetch("/api/apps", {
       method: "GET",
       headers: {
@@ -241,7 +241,7 @@ describe("GET /api/apps", () => {
     });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      expiresAt: passport!.expiresAt,
+      expiresAt: slice!.expiresAt,
       apps: [
         { app: "github", status: "on" },
         { app: "gmail", status: "off" },

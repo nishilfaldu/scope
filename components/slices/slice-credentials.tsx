@@ -4,11 +4,11 @@ import { useState } from "react";
 import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-import type { CreatedPassport } from "@/components/passports/create-passport-form";
+import type { CreatedSlice } from "@/components/slices/create-slice-form";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 
-export function PassportCredentials({ passport }: { passport: CreatedPassport }) {
+export function SliceCredentials({ slice }: { slice: CreatedSlice }) {
   const [copiedValue, setCopiedValue] = useState<string | null>(null);
 
   async function copy(label: string, value: string) {
@@ -34,15 +34,15 @@ export function PassportCredentials({ passport }: { passport: CreatedPassport })
           className="mt-0.5 size-4 shrink-0"
         />
         <div className="min-w-0 flex-1">
-          <p className="font-medium">Created {passport.name}</p>
+          <p className="font-medium">Created {slice.name}</p>
           <p className="mt-0.5 text-muted-foreground">
             Give the agent this passport token and passport secret. The passport
             secret is shown once. Never share standing account tokens.
           </p>
           <div className="mt-3 flex min-w-0 flex-col gap-2">
             {[
-              { label: "Passport token", value: passport.passportToken },
-              { label: "Passport secret", value: passport.passportSecret },
+              { label: "Passport token", value: slice.sliceToken },
+              { label: "Passport secret", value: slice.sliceSecret },
             ].map((credential) => (
               <div
                 key={credential.label}

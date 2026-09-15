@@ -3,8 +3,6 @@ import { v } from "convex/values";
 import { internalMutation, mutation } from "../../_generated/server";
 import { appValidator } from "../../domain/apps";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
-import { ensurePassport } from "../passports/helpers";
-import { insertGrant } from "../grants/helpers";
 import { markExpired } from "./helpers";
 
 export const MAX_PASSPORT_NAME = 80;
@@ -65,9 +63,16 @@ export const create = mutation({
       throw new Error("Turn on at least one app");
     }
 
-    const passportId = await ensurePassport(ctx, userId);
+    const existingPassport = await ctx.db
+      .query("passports")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first();
+    const passportId = existingPassport?._id ?? await ctx.db.insert("passports", {
+      userId,
+      name: "Default passport",
+    });
     const expiresAt = Date.now() + args.ttlMs;
-    const grantId = await insertGrant(ctx, {
+    const grantId = await ctx.db.insert("grants", {
       passportId,
       userId,
       agent: name,
@@ -76,8 +81,8 @@ export const create = mutation({
     });
 
     const token = randomSecret("pp_");
-    const passportSecret = randomSecret("ps_");
-    const secretHash = await sha256Hex(passportSecret);
+    const sliceSecret = randomSecret("ps_");
+    const secretHash = await sha256Hex(sliceSecret);
     const id = await ctx.db.insert("slices", {
       passportId,
       grantId,
@@ -93,7 +98,7 @@ export const create = mutation({
     return {
       id,
       passportToken: token,
-      passportSecret,
+      passportSecret: sliceSecret,
       expiresAt,
       name,
       apps: uniqueApps,
