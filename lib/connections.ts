@@ -18,6 +18,7 @@ export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
   linear: `${siteUrl}/api/linear/connect`,
   vercel: `${siteUrl}/api/vercel/connect`,
   zoom: `${siteUrl}/api/zoom/connect`,
+  teams: `${siteUrl}/api/teams/connect`,
 };
 
 export const CONNECT_ERRORS: Record<string, string> = {
@@ -75,5 +76,10 @@ export const CONNECTION_PROVIDERS = [
     id: "zoom" as const,
     name: "Zoom",
     description: "Meetings, webinars, recordings, and account profile.",
+  },
+  {
+    id: "teams" as const,
+    name: "Microsoft Teams",
+    description: "Chats, channels, teams, and messages via Microsoft Graph.",
   },
 ] as const;
