@@ -21,6 +21,7 @@ export const APP_LABELS: Record<AppId, string> = {
   linear: "Linear",
   vercel: "Vercel",
   zoom: "Zoom",
+  gitlab: "GitLab",
 };
 
 export const APP_HINTS: Record<AppId, string> = {
@@ -36,6 +37,7 @@ export const APP_HINTS: Record<AppId, string> = {
   linear: "Issues, projects, teams, and workflow updates.",
   vercel: "Projects, deployments, domains, and team profile.",
   zoom: "Meetings, webinars, recordings, and account profile.",
+  gitlab: "Projects, issues, merge requests, and GitLab.com API access.",
 };
 
 export const TTL_OPTIONS = [

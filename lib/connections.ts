@@ -18,6 +18,7 @@ export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
   linear: `${siteUrl}/api/linear/connect`,
   vercel: `${siteUrl}/api/vercel/connect`,
   zoom: `${siteUrl}/api/zoom/connect`,
+  gitlab: `${siteUrl}/api/gitlab/connect`,
 };
 
 export const CONNECT_ERRORS: Record<string, string> = {
@@ -75,5 +76,10 @@ export const CONNECTION_PROVIDERS = [
     id: "zoom" as const,
     name: "Zoom",
     description: "Meetings, webinars, recordings, and account profile.",
+  },
+  {
+    id: "gitlab" as const,
+    name: "GitLab",
+    description: "Projects, issues, merge requests, and GitLab.com API access.",
   },
 ] as const;
