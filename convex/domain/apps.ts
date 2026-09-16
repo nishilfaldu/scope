@@ -13,11 +13,12 @@ export const ALL_APPS = [
   "linear",
   "vercel",
   "zoom",
+  "outlook",
 ] as const;
 
 export type AppId = (typeof ALL_APPS)[number];
 
-export const PROVIDERS = ["github", "google", "slack", "airtable", "notion", "linear", "vercel", "zoom"] as const;
+export const PROVIDERS = ["github", "google", "slack", "airtable", "notion", "linear", "vercel", "zoom", "outlook"] as const;
 
 export type ProviderId = (typeof PROVIDERS)[number];
 
@@ -34,6 +35,7 @@ export const appValidator = v.union(
   v.literal("linear"),
   v.literal("vercel"),
   v.literal("zoom"),
+  v.literal("outlook"),
 );
 
 export const providerValidator = v.union(
@@ -45,6 +47,7 @@ export const providerValidator = v.union(
   v.literal("linear"),
   v.literal("vercel"),
   v.literal("zoom"),
+  v.literal("outlook"),
 );
 
 export function isAppId(value: string): value is AppId {
@@ -73,6 +76,8 @@ export function providerForApp(app: AppId): ProviderId {
       return "vercel";
     case "zoom":
       return "zoom";
+    case "outlook":
+      return "outlook";
     default: {
       const _exhaustive: never = app;
       return _exhaustive;
