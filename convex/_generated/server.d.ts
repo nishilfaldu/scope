@@ -30,24 +30,24 @@ import type { DataModel } from "./dataModel.js";
 type Env = {
   readonly CONVEX_CLOUD_URL: string;
   readonly CONVEX_SITE_URL: string;
+  readonly AIRTABLE_CLIENT_ID: string;
+  readonly AIRTABLE_CLIENT_SECRET: string;
   readonly BOARD_ORIGIN: string;
   readonly GITHUB_CLIENT_ID: string;
   readonly GITHUB_CLIENT_SECRET: string;
   readonly GOOGLE_CLIENT_ID: string;
   readonly GOOGLE_CLIENT_SECRET: string;
-  readonly SLACK_CLIENT_ID: string;
-  readonly SLACK_CLIENT_SECRET: string;
-  readonly AIRTABLE_CLIENT_ID: string;
-  readonly AIRTABLE_CLIENT_SECRET: string;
-  readonly NOTION_CLIENT_ID: string;
-  readonly NOTION_CLIENT_SECRET: string;
   readonly LINEAR_CLIENT_ID: string;
   readonly LINEAR_CLIENT_SECRET: string;
+  readonly NOTION_CLIENT_ID: string;
+  readonly NOTION_CLIENT_SECRET: string;
+  readonly SLACK_CLIENT_ID: string;
+  readonly SLACK_CLIENT_SECRET: string;
+  readonly TOKEN_ENCRYPTION_KEY: string;
   readonly VERCEL_CLIENT_ID: string;
   readonly VERCEL_CLIENT_SECRET: string;
   readonly ZOOM_CLIENT_ID: string;
   readonly ZOOM_CLIENT_SECRET: string;
-  readonly TOKEN_ENCRYPTION_KEY: string;
 };
 
 /**

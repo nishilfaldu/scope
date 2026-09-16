@@ -59,7 +59,8 @@ export const create = authenticatedMutation({
     if (args.ttlMs > MAX_TTL_MS) {
       throw new Error("ttlMs must be 7 days or fewer");
     }
-    const mintPolicy = args.mintPolicy === "approve" ? "approve" : "auto";
+    const mintPolicy: "auto" | "approve" =
+      args.mintPolicy === "approve" ? "approve" : "auto";
     const uniqueApps = [...new Set(args.apps)];
     if (uniqueApps.length === 0) {
       throw new Error("Turn on at least one app");

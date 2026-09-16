@@ -109,9 +109,10 @@ export async function decryptToken(stored: string): Promise<string> {
   const key = await importAesKey();
   try {
     const plain = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv },
+      // subarray() yields Uint8Array<ArrayBufferLike>; WebCrypto wants ArrayBuffer views.
+      { name: "AES-GCM", iv: iv as BufferSource },
       key,
-      ciphertext,
+      ciphertext as BufferSource,
     );
     return new TextDecoder().decode(plain);
   } catch {
