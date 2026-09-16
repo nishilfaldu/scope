@@ -3,10 +3,9 @@ import { internalMutation } from "../../_generated/server";
 import { authenticatedMutation } from "../../functions";
 import { appValidator, providerForApp } from "../../domain/apps";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
-import { markExpired } from "./helpers";
+import { markExpired, MAX_SLICE_NAME, MAX_TTL_MS } from "./helpers";
 
-export const MAX_SLICE_NAME = 80;
-export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export { MAX_SLICE_NAME, MAX_TTL_MS };
 
 const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
 

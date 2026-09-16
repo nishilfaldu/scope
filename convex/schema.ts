@@ -19,6 +19,11 @@ const accessRequestStatusValidator = v.union(
   v.literal("claimed"),
 );
 
+const accessRequestKindValidator = v.union(
+  v.literal("onboarding"),
+  v.literal("mint"),
+);
+
 export default defineSchema({
   ...authTables,
 
@@ -57,19 +62,39 @@ export default defineSchema({
     expiresAt: v.number(),
   }).index("by_passport", ["passportId"]),
 
-  // Operator approval queue for credential mint when mintPolicy is "approve".
-  // Token is minted at claim time, not at approve.
+  // Access requests cover two kinds:
+  // - onboarding: agent-initiated grant request before any slice exists.
+  //   Approve creates the slice; claim returns sliceToken/sliceSecret once.
+  // - mint: operator approval for a short-lived credential on an existing slice.
   accessRequests: defineTable({
-    sliceId: v.id("slices"),
-    userId: v.id("users"),
-    app: appValidator,
-    refresh: v.boolean(),
+    kind: accessRequestKindValidator,
+    // Bound when a signed-in user opens the approval URL or decides.
+    userId: v.optional(v.id("users")),
+    // Set for mint immediately; set for onboarding on approve.
+    sliceId: v.optional(v.id("slices")),
+    // Onboarding fields
+    agentName: v.optional(v.string()),
+    apps: v.optional(v.array(appValidator)),
+    ttlMs: v.optional(v.number()),
+    reason: v.optional(v.string()),
+    // Mint fields
+    app: v.optional(appValidator),
+    refresh: v.optional(v.boolean()),
+    // Chat-safe public id used in BOARD_ORIGIN approval URLs.
+    publicToken: v.string(),
+    // Agent-only claim handle (hashed). Never put in chat or the approval URL.
+    claimSecretHash: v.string(),
+    // Onboarding: one-time slice secret ciphertext until claim.
+    issuedSliceToken: v.optional(v.string()),
+    issuedSliceSecretCipher: v.optional(v.string()),
     status: accessRequestStatusValidator,
-    // Pending deadline (~5m) or post-approve claim window (~60s).
+    // Pending deadline or post-approve claim window.
     expiresAt: v.number(),
     decidedAt: v.optional(v.number()),
     claimedAt: v.optional(v.number()),
   })
+    .index("by_public_token", ["publicToken"])
+    .index("by_claim_secret_hash", ["claimSecretHash"])
     .index("by_slice_and_status", ["sliceId", "status"])
     .index("by_user_and_status", ["userId", "status"])
     .index("by_status_and_expiresAt", ["status", "expiresAt"]),

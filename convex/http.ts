@@ -3,6 +3,11 @@ import { httpAction } from "./_generated/server";
 import { httpAppsHandler } from "./http/httpAppsHandler";
 import { httpClaimHandler } from "./http/httpClaimHandler";
 import { httpCredentialsHandler } from "./http/httpCredentialsHandler";
+import {
+  httpAccessRequestClaimHandler,
+  httpAccessRequestStatusHandler,
+  httpCreateAccessRequestHandler,
+} from "./http/httpAccessRequestHandlers";
 import { discoverySpec } from "./http/contracts";
 import {
   httpOAuthCallback,
@@ -26,6 +31,38 @@ http.route({
   handler: httpAction(async () => jsonResponse(200, discoverySpec)),
 });
 
+// Agent-initiated onboarding (approval link)
+http.route({
+  path: "/api/access-requests",
+  method: "OPTIONS",
+  handler: optionsOk,
+});
+http.route({
+  path: "/api/access-requests",
+  method: "POST",
+  handler: httpCreateAccessRequestHandler,
+});
+http.route({
+  path: "/api/access-requests/status",
+  method: "OPTIONS",
+  handler: optionsOk,
+});
+http.route({
+  path: "/api/access-requests/status",
+  method: "POST",
+  handler: httpAccessRequestStatusHandler,
+});
+http.route({
+  path: "/api/access-requests/claim",
+  method: "OPTIONS",
+  handler: optionsOk,
+});
+http.route({
+  path: "/api/access-requests/claim",
+  method: "POST",
+  handler: httpAccessRequestClaimHandler,
+});
+
 // Credential issuance
 http.route({
   path: "/api/credentials",
@@ -38,7 +75,7 @@ http.route({
   handler: httpCredentialsHandler,
 });
 
-// Poll / claim after operator approval
+// Poll / claim after operator approval (mint path)
 http.route({
   path: "/api/credentials/claim",
   method: "OPTIONS",

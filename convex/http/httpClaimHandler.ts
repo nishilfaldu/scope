@@ -29,7 +29,7 @@ export const httpClaimHandler = httpAction(async (ctx, request) => {
   const requestId = requestIdRaw as Id<"accessRequests">;
 
   const decision = await ctx.runMutation(
-    internal.tables.slices.accessRequests.resolveClaim,
+    internal.tables.slices.accessRequestsMint.resolveClaim,
     { sliceToken, sliceSecret, requestId },
   );
   if (!decision.ok) {

@@ -1,22 +1,18 @@
 import { v } from "convex/values";
-import { internalMutation } from "../../_generated/server";
+import type { Doc } from "../../_generated/dataModel";
+import { internalMutation, type QueryCtx } from "../../_generated/server";
 import { authenticatedMutation, authenticatedQuery } from "../../functions";
-import { appValidator, providerForApp, providerValidator } from "../../domain/apps";
 import {
-  APPROVAL_DENIED_ERROR,
-  APPROVAL_EXPIRED_ERROR,
-  APPROVAL_REQUIRED_ERROR,
-  denyResultValidator,
-  EXPIRED_ERROR,
-  REVOKED_ERROR,
-  UNAUTHORIZED_ERROR,
-} from "../../lib/errors";
-import { hashesEqual, sha256Hex } from "../../lib/secrets";
-import { denyCreate } from "./helpers";
+  appValidator,
+  isAppId,
+  providerForApp,
+  type AppId,
+} from "../../domain/apps";
+import { encryptToken } from "../../lib/tokenEncryption";
+import { randomSecret, sha256Hex } from "../../lib/secrets";
+import { ensurePassport } from "../passports";
 
-export const PENDING_TTL_MS = 5 * 60 * 1000;
 export const CLAIM_WINDOW_MS = 60 * 1000;
-export const MAX_PENDING_PER_SLICE = 5;
 
 const requestStatusValidator = v.union(
   v.literal("pending"),
@@ -26,193 +22,29 @@ const requestStatusValidator = v.union(
   v.literal("claimed"),
 );
 
+const requestKindValidator = v.union(
+  v.literal("onboarding"),
+  v.literal("mint"),
+);
+
 const boardRequest = v.object({
   _id: v.id("accessRequests"),
   _creationTime: v.number(),
-  sliceId: v.id("slices"),
+  kind: requestKindValidator,
+  publicToken: v.string(),
+  sliceId: v.optional(v.id("slices")),
   sliceName: v.string(),
-  sliceToken: v.string(),
-  app: appValidator,
-  refresh: v.boolean(),
+  sliceToken: v.optional(v.string()),
+  agentName: v.optional(v.string()),
+  apps: v.optional(v.array(appValidator)),
+  ttlMs: v.optional(v.number()),
+  reason: v.optional(v.string()),
+  app: v.optional(appValidator),
+  refresh: v.optional(v.boolean()),
   status: requestStatusValidator,
   expiresAt: v.number(),
   decidedAt: v.optional(v.number()),
   claimedAt: v.optional(v.number()),
-});
-
-export const createPending = internalMutation({
-  args: {
-    sliceId: v.id("slices"),
-    userId: v.id("users"),
-    app: appValidator,
-    refresh: v.boolean(),
-  },
-  returns: v.union(
-    v.object({
-      ok: v.literal(true),
-      requestId: v.id("accessRequests"),
-      expiresAt: v.number(),
-      status: v.literal("pending"),
-      code: v.literal("APPROVAL_REQUIRED"),
-      reason: v.string(),
-    }),
-    denyResultValidator,
-  ),
-  handler: async (ctx, args) => {
-    const pending = await ctx.db
-      .query("accessRequests")
-      .withIndex("by_slice_and_status", (q) =>
-        q.eq("sliceId", args.sliceId).eq("status", "pending"),
-      )
-      .collect();
-    if (pending.length >= MAX_PENDING_PER_SLICE) {
-      return denyCreate(
-        429,
-        "Too many pending credential requests for this slice",
-        "INVALID_REQUEST",
-      );
-    }
-    const now = Date.now();
-    const expiresAt = now + PENDING_TTL_MS;
-    const requestId = await ctx.db.insert("accessRequests", {
-      sliceId: args.sliceId,
-      userId: args.userId,
-      app: args.app,
-      refresh: args.refresh,
-      status: "pending",
-      expiresAt,
-    });
-    return {
-      ok: true as const,
-      requestId,
-      expiresAt,
-      status: "pending" as const,
-      code: "APPROVAL_REQUIRED" as const,
-      reason: APPROVAL_REQUIRED_ERROR,
-    };
-  },
-});
-
-export const resolveClaim = internalMutation({
-  args: {
-    sliceToken: v.string(),
-    sliceSecret: v.string(),
-    requestId: v.id("accessRequests"),
-  },
-  returns: v.union(
-    v.object({
-      ok: v.literal(true),
-      kind: v.literal("pending"),
-      requestId: v.id("accessRequests"),
-      status: v.literal("pending"),
-      expiresAt: v.number(),
-      app: appValidator,
-    }),
-    v.object({
-      ok: v.literal(true),
-      kind: v.literal("mint"),
-      requestId: v.id("accessRequests"),
-      sliceId: v.id("slices"),
-      userId: v.id("users"),
-      app: appValidator,
-      provider: providerValidator,
-      refresh: v.boolean(),
-    }),
-    denyResultValidator,
-  ),
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const slice = await ctx.db
-      .query("slices")
-      .withIndex("by_token", (q) => q.eq("token", args.sliceToken))
-      .unique();
-    if (!slice) {
-      return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
-    }
-    const secretHash = await sha256Hex(args.sliceSecret);
-    if (!hashesEqual(secretHash, slice.secretHash)) {
-      return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
-    }
-
-    const request = await ctx.db.get("accessRequests", args.requestId);
-    if (!request || request.sliceId !== slice._id) {
-      return denyCreate(404, "Unknown credential request", "INVALID_REQUEST");
-    }
-
-    if (request.status === "pending" && request.expiresAt <= now) {
-      await ctx.db.patch("accessRequests", request._id, { status: "expired" });
-      return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
-    }
-    if (request.status === "approved" && request.expiresAt <= now) {
-      await ctx.db.patch("accessRequests", request._id, { status: "expired" });
-      return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
-    }
-    if (request.status === "denied") {
-      return denyCreate(403, APPROVAL_DENIED_ERROR, "APPROVAL_DENIED");
-    }
-    if (request.status === "expired") {
-      return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
-    }
-    if (request.status === "claimed") {
-      return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
-    }
-    if (request.status === "pending") {
-      return {
-        ok: true as const,
-        kind: "pending" as const,
-        requestId: request._id,
-        status: "pending" as const,
-        expiresAt: request.expiresAt,
-        app: request.app,
-      };
-    }
-
-    // approved -> mint at claim time (single claim)
-    if (slice.status === "revoked") {
-      return denyCreate(403, REVOKED_ERROR, "REVOKED");
-    }
-    if (slice.status === "expired" || slice.expiresAt <= now) {
-      return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
-    }
-    const grant = await ctx.db.get("grants", slice.grantId);
-    if (!grant || !grant.apps.includes(request.app)) {
-      return denyCreate(
-        403,
-        "This app is not available to this slice",
-        "APP_UNAVAILABLE",
-      );
-    }
-    const provider = providerForApp(request.app);
-    const connection = await ctx.db
-      .query("connections")
-      .withIndex("by_user_and_provider", (q) =>
-        q.eq("userId", slice.userId).eq("provider", provider),
-      )
-      .unique();
-    if (!connection) {
-      return denyCreate(
-        403,
-        "This app is not available to this slice",
-        "APP_UNAVAILABLE",
-      );
-    }
-
-    await ctx.db.patch("accessRequests", request._id, {
-      status: "claimed",
-      claimedAt: now,
-    });
-
-    return {
-      ok: true as const,
-      kind: "mint" as const,
-      requestId: request._id,
-      sliceId: slice._id,
-      userId: slice.userId,
-      app: request.app,
-      provider,
-      refresh: request.refresh,
-    };
-  },
 });
 
 export const expireDue = internalMutation({
@@ -239,6 +71,49 @@ export const expireDue = internalMutation({
   },
 });
 
+async function toBoardRequest(
+  ctx: Pick<QueryCtx, "db">,
+  request: Doc<"accessRequests">,
+) {
+  if (request.kind === "onboarding") {
+    return {
+      _id: request._id,
+      _creationTime: request._creationTime,
+      kind: "onboarding" as const,
+      publicToken: request.publicToken,
+      sliceId: request.sliceId,
+      sliceName: request.agentName ?? "Agent request",
+      sliceToken: request.issuedSliceToken,
+      agentName: request.agentName,
+      apps: request.apps,
+      ttlMs: request.ttlMs,
+      reason: request.reason,
+      status: request.status,
+      expiresAt: request.expiresAt,
+      decidedAt: request.decidedAt,
+      claimedAt: request.claimedAt,
+    };
+  }
+  const slice = request.sliceId
+    ? await ctx.db.get("slices", request.sliceId)
+    : null;
+  return {
+    _id: request._id,
+    _creationTime: request._creationTime,
+    kind: "mint" as const,
+    publicToken: request.publicToken,
+    sliceId: request.sliceId,
+    sliceName: slice?.name ?? "Unknown slice",
+    sliceToken: slice?.token,
+    app: request.app,
+    refresh: request.refresh === true,
+    status: request.status,
+    expiresAt: request.expiresAt,
+    decidedAt: request.decidedAt,
+    claimedAt: request.claimedAt,
+  };
+}
+
 export const listPending = authenticatedQuery({
   args: {},
   returns: v.array(boardRequest),
@@ -253,24 +128,7 @@ export const listPending = authenticatedQuery({
     const now = Date.now();
     const live = pending.filter((request) => request.expiresAt > now);
     live.sort((a, b) => b._creationTime - a._creationTime);
-    return await Promise.all(
-      live.map(async (request) => {
-        const slice = await ctx.db.get("slices", request.sliceId);
-        return {
-          _id: request._id,
-          _creationTime: request._creationTime,
-          sliceId: request.sliceId,
-          sliceName: slice?.name ?? "Unknown slice",
-          sliceToken: slice?.token ?? "",
-          app: request.app,
-          refresh: request.refresh,
-          status: request.status,
-          expiresAt: request.expiresAt,
-          decidedAt: request.decidedAt,
-          claimedAt: request.claimedAt,
-        };
-      }),
-    );
+    return await Promise.all(live.map((request) => toBoardRequest(ctx, request)));
   },
 });
 
@@ -299,7 +157,7 @@ export const listForSlice = authenticatedQuery({
     if (!id) return [];
     const slice = await ctx.db.get("slices", id);
     if (!slice || slice.userId !== userId) return [];
-    const all = [];
+    const all: Doc<"accessRequests">[] = [];
     for (const status of [
       "pending",
       "approved",
@@ -316,19 +174,48 @@ export const listForSlice = authenticatedQuery({
       all.push(...rows);
     }
     all.sort((a, b) => b._creationTime - a._creationTime);
-    return all.slice(0, 20).map((request) => ({
-      _id: request._id,
-      _creationTime: request._creationTime,
-      sliceId: request.sliceId,
-      sliceName: slice.name,
-      sliceToken: slice.token,
-      app: request.app,
-      refresh: request.refresh,
-      status: request.status,
-      expiresAt: request.expiresAt,
-      decidedAt: request.decidedAt,
-      claimedAt: request.claimedAt,
-    }));
+    return await Promise.all(
+      all.slice(0, 20).map((request) => toBoardRequest(ctx, request)),
+    );
+  },
+});
+
+export const getByPublicToken = authenticatedQuery({
+  args: { publicToken: v.string() },
+  returns: v.union(boardRequest, v.null()),
+  handler: async (ctx, args) => {
+    const request = await ctx.db
+      .query("accessRequests")
+      .withIndex("by_public_token", (q) => q.eq("publicToken", args.publicToken))
+      .unique();
+    if (!request) return null;
+    if (request.userId && request.userId !== ctx.userId) {
+      return null;
+    }
+    return await toBoardRequest(ctx, request);
+  },
+});
+
+export const bindToViewer = authenticatedMutation({
+  args: { publicToken: v.string() },
+  returns: v.union(boardRequest, v.null()),
+  handler: async (ctx, args) => {
+    const { userId } = ctx;
+    const request = await ctx.db
+      .query("accessRequests")
+      .withIndex("by_public_token", (q) => q.eq("publicToken", args.publicToken))
+      .unique();
+    if (!request) return null;
+    if (request.userId && request.userId !== userId) {
+      return null;
+    }
+    if (!request.userId) {
+      await ctx.db.patch("accessRequests", request._id, { userId });
+      const updated = await ctx.db.get("accessRequests", request._id);
+      if (!updated) return null;
+      return await toBoardRequest(ctx, updated);
+    }
+    return await toBoardRequest(ctx, request);
   },
 });
 
@@ -341,7 +228,10 @@ export const decide = authenticatedMutation({
   handler: async (ctx, args) => {
     const { userId } = ctx;
     const request = await ctx.db.get("accessRequests", args.requestId);
-    if (!request || request.userId !== userId) {
+    if (!request) {
+      throw new Error("Request not found");
+    }
+    if (request.userId && request.userId !== userId) {
       throw new Error("Request not found");
     }
     const now = Date.now();
@@ -352,17 +242,91 @@ export const decide = authenticatedMutation({
     if (request.status !== "pending") {
       throw new Error("Request is no longer pending");
     }
+
+    // Bind unbound onboarding requests to the deciding user.
+    if (!request.userId) {
+      await ctx.db.patch("accessRequests", request._id, { userId });
+    }
+
     if (args.decision === "denied") {
       await ctx.db.patch("accessRequests", request._id, {
         status: "denied",
         decidedAt: now,
+        userId,
       });
       return null;
     }
+
+    if (request.kind === "mint") {
+      await ctx.db.patch("accessRequests", request._id, {
+        status: "approved",
+        decidedAt: now,
+        userId,
+        expiresAt: now + CLAIM_WINDOW_MS,
+      });
+      return null;
+    }
+
+    // Onboarding approve → create live slice; agent claims secrets over HTTPS.
+    const agentName = (request.agentName ?? "agent").trim();
+    const apps = (request.apps ?? []).filter((app): app is AppId => isAppId(app));
+    const ttlMs = request.ttlMs ?? 0;
+    if (apps.length === 0 || ttlMs <= 0) {
+      throw new Error("Onboarding request is incomplete");
+    }
+    const connections = await ctx.db
+      .query("connections")
+      .withIndex("by_user_and_provider", (q) => q.eq("userId", userId))
+      .collect();
+    if (connections.length === 0) {
+      throw new Error(
+        "Connect an account at /connections before approving this request",
+      );
+    }
+    const connectedProviders = new Set(
+      connections.map((connection) => connection.provider),
+    );
+    const unavailable = apps.find(
+      (app) => !connectedProviders.has(providerForApp(app)),
+    );
+    if (unavailable) {
+      throw new Error(
+        `Connect ${providerForApp(unavailable)} before allowing ${unavailable}`,
+      );
+    }
+
+    const passportId = await ensurePassport(ctx, userId);
+    const expiresAt = now + ttlMs;
+    const grantId = await ctx.db.insert("grants", {
+      passportId,
+      userId,
+      agent: agentName,
+      apps,
+      expiresAt,
+    });
+    const token = randomSecret("st_");
+    const sliceSecret = randomSecret("ss_");
+    const secretHash = await sha256Hex(sliceSecret);
+    const sliceId = await ctx.db.insert("slices", {
+      passportId,
+      grantId,
+      userId,
+      name: agentName,
+      token,
+      secretHash,
+      status: "active",
+      expiresAt,
+      // Onboarding already required Approve; subsequent mints use auto.
+      mintPolicy: "auto",
+    });
+    const issuedSliceSecretCipher = await encryptToken(sliceSecret);
     await ctx.db.patch("accessRequests", request._id, {
       status: "approved",
       decidedAt: now,
-      // Mint happens at claim; agent has a short window to claim once.
+      userId,
+      sliceId,
+      issuedSliceToken: token,
+      issuedSliceSecretCipher,
       expiresAt: now + CLAIM_WINDOW_MS,
     });
     return null;

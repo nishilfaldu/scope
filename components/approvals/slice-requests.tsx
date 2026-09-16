@@ -43,7 +43,14 @@ export function SliceRequests({ sliceId }: { sliceId: string }) {
             className="flex items-center justify-between gap-3 px-6 py-3 text-sm"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <span>{APP_LABELS[request.app]}</span>
+              <span>
+                {request.kind === "onboarding"
+                  ? (request.sliceName ?? "Onboarding")
+                  : request.app
+                    ? (APP_LABELS[request.app] ?? request.app)
+                    : "Mint"}
+              </span>
+              <Badge variant="outline">{request.kind}</Badge>
               <Badge variant={STATUS_VARIANT[request.status]}>
                 {request.status}
               </Badge>

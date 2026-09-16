@@ -14,8 +14,24 @@ import {
 import { Button } from "@/components/ui/button";
 import { GoogleMark } from "@/components/auth/google-mark";
 
-export function SignIn() {
+function safeRedirectPath(value: string | undefined): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/";
+  }
+  return value;
+}
+
+export function SignIn({
+  redirectTo = "/",
+  title = "Agent Passport",
+  description = "Sign in to manage your slices",
+}: {
+  redirectTo?: string;
+  title?: string;
+  description?: string;
+}) {
   const { signIn } = useAuthActions();
+  const destination = safeRedirectPath(redirectTo);
   return (
     <div className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-sm">
@@ -28,10 +44,8 @@ export function SignIn() {
             />
           </div>
           <div className="flex flex-col gap-1">
-            <CardTitle className="text-xl">Agent Passport</CardTitle>
-            <CardDescription>
-              Sign in to manage your slices
-            </CardDescription>
+            <CardTitle className="text-xl">{title}</CardTitle>
+            <CardDescription>{description}</CardDescription>
           </div>
         </CardHeader>
         <CardContent>
@@ -39,7 +53,7 @@ export function SignIn() {
             variant="outline"
             size="lg"
             className="w-full"
-            onClick={() => void signIn("google", { redirectTo: "/" })}
+            onClick={() => void signIn("google", { redirectTo: destination })}
           >
             <GoogleMark />
             Continue with Google

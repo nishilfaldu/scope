@@ -1,9 +1,11 @@
 import { httpAction } from "../_generated/server";
+import { env } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { APP_UNAVAILABLE_ERROR, type AgentErrorCode } from "../lib/errors";
 import { issueShortLivedAccess } from "../oauth/access";
 import { readObjectBody, requiredString } from "../lib/requests";
 import { errorResponse, jsonResponse } from "../lib/responses";
+import { parseBoardOrigin } from "./helpers";
 
 export const httpCredentialsHandler = httpAction(async (ctx, request) => {
   const body = await readObjectBody(request);
@@ -38,7 +40,7 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
 
   if (decision.mintPolicy === "approve") {
     const pending = await ctx.runMutation(
-      internal.tables.slices.accessRequests.createPending,
+      internal.tables.slices.accessRequestsMint.createPending,
       {
         sliceId: decision.sliceId,
         userId: decision.userId,
@@ -49,6 +51,7 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
     if (!pending.ok) {
       return errorResponse(pending.status, pending.reason, pending.code);
     }
+    const boardOrigin = parseBoardOrigin(env.BOARD_ORIGIN);
     return jsonResponse(202, {
       error: pending.reason,
       code: pending.code,
@@ -56,6 +59,7 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
       status: pending.status,
       expiresAt: pending.expiresAt,
       app: decision.app,
+      approvalUrl: `${boardOrigin}/approvals/${pending.publicToken}`,
     });
   }
 
