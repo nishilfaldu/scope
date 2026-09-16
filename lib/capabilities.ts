@@ -6,6 +6,8 @@ import {
 
 export { ALL_APPS, providerForApp, type AppId };
 
+export type MintPolicy = "auto" | "approve";
+
 export const APP_LABELS: Record<AppId, string> = {
   github: "GitHub",
   gmail: "Gmail",
@@ -42,6 +44,22 @@ export const TTL_OPTIONS = [
   { label: "8 hours", ttlMs: 8 * 60 * 60 * 1000 },
   { label: "24 hours", ttlMs: 24 * 60 * 60 * 1000 },
   { label: "7 days", ttlMs: 7 * 24 * 60 * 60 * 1000 },
+] as const;
+
+export const MINT_POLICY_LABELS: Record<MintPolicy, string> = {
+  auto: "Auto",
+  approve: "Approve",
+};
+
+export const MINT_POLICY_ITEMS = [
+  {
+    value: "auto",
+    label: "Auto — mint immediately on request",
+  },
+  {
+    value: "approve",
+    label: "Approve — operator must approve on the board first",
+  },
 ] as const;
 
 export const STATUS_LABELS = {

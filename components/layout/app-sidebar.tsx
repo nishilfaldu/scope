@@ -3,13 +3,16 @@
 import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useQuery } from "convex/react";
 import {
   CreditCardIcon,
+  Notification01Icon,
   PassportIcon,
   Plug01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
+import { api } from "@/convex/_generated/api";
 import { SidebarUser } from "@/components/layout/sidebar-user";
 import {
   Sidebar,
@@ -19,12 +22,14 @@ import {
   SidebarGroupContent,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
 const NAV = [
   { title: "Slices", href: "/", icon: CreditCardIcon },
+  { title: "Approvals", href: "/approvals", icon: Notification01Icon },
   { title: "Connections", href: "/connections", icon: Plug01Icon },
 ] as const;
 
@@ -32,6 +37,7 @@ export function AppSidebar({
   ...props
 }: ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const pendingCount = useQuery(api.tables.slices.accessRequests.pendingCount);
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -63,7 +69,7 @@ export function AppSidebar({
                     isActive={
                       item.href === "/"
                         ? pathname === "/" || pathname.startsWith("/passports/")
-                        : pathname === item.href
+                        : pathname === item.href || pathname.startsWith(`${item.href}/`)
                     }
                     tooltip={item.title}
                     render={<Link href={item.href} />}
@@ -71,6 +77,11 @@ export function AppSidebar({
                     <HugeiconsIcon icon={item.icon} strokeWidth={2} />
                     <span>{item.title}</span>
                   </SidebarMenuButton>
+                  {item.href === "/approvals" &&
+                  pendingCount !== undefined &&
+                  pendingCount > 0 ? (
+                    <SidebarMenuBadge>{pendingCount}</SidebarMenuBadge>
+                  ) : null}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
