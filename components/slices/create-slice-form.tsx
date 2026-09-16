@@ -8,9 +8,11 @@ import {
   ALL_APPS,
   APP_HINTS,
   APP_LABELS,
+  MINT_POLICY_ITEMS,
   TTL_OPTIONS,
   providerForApp,
   type AppId,
+  type MintPolicy,
 } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
@@ -57,6 +59,7 @@ export function CreateSliceForm({
     defaultValues: {
       name: "",
       ttlMs: String(DEFAULT_TTL_MS),
+      mintPolicy: "auto" as MintPolicy,
       apps: [] as AppId[],
     },
     onSubmit: async ({ value, formApi }) => {
@@ -64,6 +67,7 @@ export function CreateSliceForm({
         name: value.name.trim() || "Untitled agent",
         ttlMs: Number(value.ttlMs),
         apps: value.apps,
+        mintPolicy: value.mintPolicy,
       });
       if (result === undefined) return;
       onCreated({
@@ -86,6 +90,14 @@ export function CreateSliceForm({
         <form.AppField name="ttlMs">
           {(field) => (
             <field.SelectField label="Time to live" items={TTL_ITEMS} />
+          )}
+        </form.AppField>
+        <form.AppField name="mintPolicy">
+          {(field) => (
+            <field.SelectField
+              label="Mint policy"
+              items={[...MINT_POLICY_ITEMS]}
+            />
           )}
         </form.AppField>
         <form.AppField
