@@ -6,5 +6,5 @@ export default async function ApprovalDeepLinkPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  return <ApprovalDetail publicToken={token} />;
+  return <ApprovalDetail key={token} publicToken={token} />;
 }

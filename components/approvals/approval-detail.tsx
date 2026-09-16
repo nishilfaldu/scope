@@ -23,12 +23,13 @@ export function ApprovalDetail({ publicToken }: { publicToken: string }) {
     api.tables.slices.accessRequests.decide,
   );
   const [now] = useState(() => Date.now());
-  const [binding, setBinding] = useState(false);
+  // Start true so the first paint shows a skeleton; only clear after bind settles.
+  // Avoid setState at the top of useEffect (react-hooks/set-state-in-effect).
+  const [binding, setBinding] = useState(true);
   const [boundRequest, setBoundRequest] = useState<typeof bound>(undefined);
 
   useEffect(() => {
     let cancelled = false;
-    setBinding(true);
     void bindToViewer({ publicToken })
       .then((result) => {
         if (!cancelled) setBoundRequest(result);
