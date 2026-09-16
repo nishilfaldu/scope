@@ -157,7 +157,7 @@ export const listForSlice = authenticatedQuery({
     if (!id) return [];
     const slice = await ctx.db.get("slices", id);
     if (!slice || slice.userId !== userId) return [];
-    const all = [];
+    const all: Doc<"accessRequests">[] = [];
     for (const status of [
       "pending",
       "approved",

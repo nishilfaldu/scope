@@ -3,8 +3,15 @@ import type { ProviderId } from "../domain/apps";
 
 const ALLOWED_RETURN_PATHS = new Set(["/", "/connections"]);
 
-export function parseBoardOrigin(raw: string): string {
+/** Missing/empty BOARD_ORIGIN must never throw on .trim() (vitest/CI). */
+export function parseBoardOrigin(raw: unknown): string {
+  if (typeof raw !== "string") {
+    throw new Error("BOARD_ORIGIN must be a valid http(s) origin");
+  }
   const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    throw new Error("BOARD_ORIGIN must be a valid http(s) origin");
+  }
   try {
     const url = new URL(trimmed);
     if (url.protocol !== "http:" && url.protocol !== "https:") {
