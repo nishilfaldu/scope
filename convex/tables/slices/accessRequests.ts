@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { internalMutation } from "../../_generated/server";
-import type { Doc, Id } from "../../_generated/dataModel";
+import type { Doc } from "../../_generated/dataModel";
+import { internalMutation, type QueryCtx } from "../../_generated/server";
 import { authenticatedMutation, authenticatedQuery } from "../../functions";
 import {
   appValidator,
@@ -72,7 +72,7 @@ export const expireDue = internalMutation({
 });
 
 async function toBoardRequest(
-  ctx: { db: { get: (table: "slices", id: Id<"slices">) => Promise<Doc<"slices"> | null> } },
+  ctx: Pick<QueryCtx, "db">,
   request: Doc<"accessRequests">,
 ) {
   if (request.kind === "onboarding") {
@@ -157,7 +157,7 @@ export const listForSlice = authenticatedQuery({
     if (!id) return [];
     const slice = await ctx.db.get("slices", id);
     if (!slice || slice.userId !== userId) return [];
-    const all: Doc<"accessRequests">[] = [];
+    const all = [];
     for (const status of [
       "pending",
       "approved",
