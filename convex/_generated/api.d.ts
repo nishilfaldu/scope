@@ -15,6 +15,7 @@ import type * as functions from "../functions.js";
 import type * as http from "../http.js";
 import type * as http_contracts from "../http/contracts.js";
 import type * as http_helpers from "../http/helpers.js";
+import type * as http_httpAccessRequestHandlers from "../http/httpAccessRequestHandlers.js";
 import type * as http_httpAppsHandler from "../http/httpAppsHandler.js";
 import type * as http_httpClaimHandler from "../http/httpClaimHandler.js";
 import type * as http_httpCredentialsHandler from "../http/httpCredentialsHandler.js";
@@ -45,9 +46,11 @@ import type * as tables_oauthStates_mutations from "../tables/oauthStates/mutati
 import type * as tables_oauthStates_queries from "../tables/oauthStates/queries.js";
 import type * as tables_passports from "../tables/passports.js";
 import type * as tables_slices_accessRequests from "../tables/slices/accessRequests.js";
+import type * as tables_slices_accessRequestsMint from "../tables/slices/accessRequestsMint.js";
 import type * as tables_slices_credentials from "../tables/slices/credentials.js";
 import type * as tables_slices_helpers from "../tables/slices/helpers.js";
 import type * as tables_slices_mutations from "../tables/slices/mutations.js";
+import type * as tables_slices_onboardingAccess from "../tables/slices/onboardingAccess.js";
 import type * as tables_slices_queries from "../tables/slices/queries.js";
 import type * as users from "../users.js";
 
@@ -65,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "http/contracts": typeof http_contracts;
   "http/helpers": typeof http_helpers;
+  "http/httpAccessRequestHandlers": typeof http_httpAccessRequestHandlers;
   "http/httpAppsHandler": typeof http_httpAppsHandler;
   "http/httpClaimHandler": typeof http_httpClaimHandler;
   "http/httpCredentialsHandler": typeof http_httpCredentialsHandler;
@@ -95,9 +99,11 @@ declare const fullApi: ApiFromModules<{
   "tables/oauthStates/queries": typeof tables_oauthStates_queries;
   "tables/passports": typeof tables_passports;
   "tables/slices/accessRequests": typeof tables_slices_accessRequests;
+  "tables/slices/accessRequestsMint": typeof tables_slices_accessRequestsMint;
   "tables/slices/credentials": typeof tables_slices_credentials;
   "tables/slices/helpers": typeof tables_slices_helpers;
   "tables/slices/mutations": typeof tables_slices_mutations;
+  "tables/slices/onboardingAccess": typeof tables_slices_onboardingAccess;
   "tables/slices/queries": typeof tables_slices_queries;
   users: typeof users;
 }>;
