@@ -71,7 +71,7 @@ The upstream service does not need to know which agent holds the slice.
 3. Response includes:
    - `approvalUrl` — **chat-safe**, always on `BOARD_ORIGIN` (e.g. `https://board.example/approvals/ar_…`)
    - `claimHandle` — **runtime-only**; keep it out of chat
-4. User opens the approval URL (also listed in the **Approvals** inbox after the link is opened while signed in) and clicks **Approve** or **Deny**. This path **always** requires Approve — there is no auto grant.
+4. User opens the approval URL. If they are signed out, the board shows a Stripe Link–style continue card, then Google sign-in / sign-up, and returns them to the same link. Once signed in they **Approve** or **Deny** (also listed in the **Approvals** inbox). This path **always** requires Approve — there is no auto grant.
 5. Agent polls `POST /api/access-requests/status` or `POST /api/access-requests/claim` with `claimHandle`.
    - Pending → **202** `APPROVAL_REQUIRED` (claim) / **200** with `status: "pending"` (status)
    - Denied → **403** `APPROVAL_DENIED`
