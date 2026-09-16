@@ -6,8 +6,8 @@ import {
 
 const isSignInPage = createRouteMatcher(["/signin"]);
 const isAuthApiRoute = createRouteMatcher(["/api/auth(.*)"]);
-/** Deep links must render a Link-style gate before auth — do not bounce away. */
-const isApprovalDeepLink = createRouteMatcher(["/approvals/:token"]);
+/** Deep links render a Link-style gate before auth — do not bounce away. */
+const isApprovalDeepLink = createRouteMatcher(["/approvals(.*)"]);
 
 function safeRedirectPath(value: string | null): string {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
@@ -38,7 +38,10 @@ export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
   if (!isAuthenticated) {
     const next = `${request.nextUrl.pathname}${request.nextUrl.search}`;
     const redirectTo = encodeURIComponent(safeRedirectPath(next));
-    return nextjsMiddlewareRedirect(request, `/signin?redirectTo=${redirectTo}`);
+    return nextjsMiddlewareRedirect(
+      request,
+      `/signin?redirectTo=${redirectTo}`,
+    );
   }
 });
 
