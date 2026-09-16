@@ -16,20 +16,20 @@ flowchart TB
   User([Signed-in user]) --> Board[Web board]
   Board --> Passport[Passport vault]
 
-  Passport --> Connections[Connections\nencrypted upstream OAuth tokens]
-  Passport --> Grants[Grants\napproved apps + expiry]
-  Grants --> Slices[Slices\nper-agent token + secret\nmintPolicy: auto | approve]
+  Passport --> Connections["Connections\nencrypted upstream OAuth tokens"]
+  Passport --> Grants["Grants\napproved apps + expiry"]
+  Grants --> Slices["Slices\nper-agent token + secret\nmintPolicy: auto | approve"]
 
   Agent([Agent]) --> SiteAPI["Agent API (.convex.site)"]
   SiteAPI -->|"POST /api/credentials"| Slices
 
-  Slices -->|mintPolicy auto| Mint[Short-lived mint\nprovider-native access token]
+  Slices -->|mintPolicy auto| Mint["Short-lived mint\nprovider-native access token"]
   Slices -->|mintPolicy approve| Inbox[Approvals inbox]
   Inbox -->|Approve| Claim["POST /api/credentials/claim"]
   Claim --> Mint
 
-  Connections -.->|refresh stays in vault\nno standing handoff| Mint
-  Mint --> Providers[Upstream providers\nGitHub · Google · Slack · …]
+  Connections -.->|"refresh stays in vault\nno standing handoff"| Mint
+  Mint --> Providers["Upstream providers\nGitHub · Google · Slack · …"]
   Agent --> Providers
 ```
 
