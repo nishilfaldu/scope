@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { ensurePassport } from "../convex/tables/passports";
@@ -11,7 +11,15 @@ function t() {
   return convexTest(schema, modules);
 }
 
-async function signedIn(test: ReturnType<typeof t>) {
+const json = (body: unknown) =>
+  new Response(JSON.stringify(body), {
+    headers: { "Content-Type": "application/json" },
+  });
+
+async function signedIn(
+  test: ReturnType<typeof t>,
+  opts: { refreshToken?: string } = {},
+) {
   const userId = await test.run(async (ctx) => {
     return await ctx.db.insert("users", {
       name: "Nishil Faldu",
@@ -27,6 +35,7 @@ async function signedIn(test: ReturnType<typeof t>) {
     accessToken: "ghs_standing_token",
     login: "octocat",
     providerUserId: "1",
+    refreshToken: opts.refreshToken,
   });
   return {
     backend: test.withIdentity({ subject: `${userId}|session-1` }),
@@ -34,10 +43,30 @@ async function signedIn(test: ReturnType<typeof t>) {
   };
 }
 
+function stubGithubRefresh(mintedAccess = "ghu_short_lived_minted") {
+  vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
+  vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
+  return vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    json({
+      access_token: mintedAccess,
+      refresh_token: "ghr_rotated_refresh",
+      expires_in: 28_800,
+      token_type: "bearer",
+    }),
+  );
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
+
 describe("auto mint policy unchanged", () => {
   test("default mintPolicy is auto and authorizeCreate returns auto", async () => {
     const test = t();
-    const { backend } = await signedIn(test);
+    const { backend } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Auto agent",
       ttlMs: 60_000,
@@ -60,9 +89,12 @@ describe("auto mint policy unchanged", () => {
     });
   });
 
-  test("POST /api/credentials still mints immediately for auto", async () => {
+  test("POST /api/credentials mints a short-lived token distinct from standing", async () => {
     const test = t();
-    const { backend } = await signedIn(test);
+    const { backend } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
+    stubGithubRefresh("ghu_auto_minted");
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Auto http",
       ttlMs: 60_000,
@@ -80,17 +112,48 @@ describe("auto mint policy unchanged", () => {
     });
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.accessToken).toBeTruthy();
+    expect(body.accessToken).toBe("ghu_auto_minted");
+    expect(body.accessToken).not.toBe("ghs_standing_token");
     expect(body.tokenType).toBe("Bearer");
     expect(body.app).toBe("github");
     expect(body).not.toHaveProperty("requestId");
+    expect(body).not.toHaveProperty("refreshToken");
+    expect(JSON.stringify(body)).not.toMatch(/ghr_/);
+  });
+
+  test("standing-only GitHub connection hard-fails auto mint", async () => {
+    const test = t();
+    const { backend } = await signedIn(test);
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
+      name: "Standing only",
+      ttlMs: 60_000,
+      apps: ["github"],
+      mintPolicy: "auto",
+    });
+    const response = await test.fetch("/api/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        app: "github",
+      }),
+    });
+    expect(response.status).toBe(503);
+    const body = await response.json();
+    expect(body.code).toBe("SHORT_LIVED_UNAVAILABLE");
+    expect(body).not.toHaveProperty("accessToken");
+    expect(JSON.stringify(body)).not.toMatch(/ghs_standing_token/);
   });
 });
 
 describe("approve-gated mint", () => {
-  test("POST /api/credentials returns 202 APPROVAL_REQUIRED and claim mints after approve", async () => {
+  test("POST /api/credentials returns 202 APPROVAL_REQUIRED and claim mints short-lived after approve", async () => {
     const test = t();
-    const { backend } = await signedIn(test);
+    const { backend } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
+    stubGithubRefresh("ghu_claim_minted");
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Approve agent",
       ttlMs: 60_000,
@@ -149,12 +212,12 @@ describe("approve-gated mint", () => {
     });
     expect(claimed.status).toBe(200);
     const minted = await claimed.json();
-    expect(minted.accessToken).toBeTruthy();
+    expect(minted.accessToken).toBe("ghu_claim_minted");
+    expect(minted.accessToken).not.toBe("ghs_standing_token");
     expect(minted.app).toBe("github");
     expect(minted.requestId).toBe(pendingBody.requestId);
-    // Standing-token handoff is unchanged in this PR: claim still returns the
-    // upstream provider token (ghs_…) via issueShortLivedAccess.
-    expect(minted.accessToken).toBe("ghs_standing_token");
+    expect(minted).not.toHaveProperty("refreshToken");
+    expect(JSON.stringify(minted)).not.toMatch(/ghr_/);
 
     const secondClaim = await test.fetch("/api/credentials/claim", {
       method: "POST",
@@ -173,7 +236,9 @@ describe("approve-gated mint", () => {
 
   test("deny returns APPROVAL_DENIED on claim", async () => {
     const test = t();
-    const { backend } = await signedIn(test);
+    const { backend } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Deny agent",
       ttlMs: 60_000,
@@ -212,7 +277,9 @@ describe("approve-gated mint", () => {
 
   test("pending expiry returns APPROVAL_EXPIRED", async () => {
     const test = t();
-    const { backend } = await signedIn(test);
+    const { backend } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Expire agent",
       ttlMs: 60_000,
@@ -251,7 +318,9 @@ describe("approve-gated mint", () => {
 
   test("post-approve claim window expiry returns APPROVAL_EXPIRED", async () => {
     const test = t();
-    const { backend } = await signedIn(test);
+    const { backend } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Claim window",
       ttlMs: 60_000,
@@ -304,5 +373,6 @@ describe("approve-gated mint", () => {
     expect(body.errors.APPROVAL_REQUIRED).toBeTruthy();
     expect(body.errors.APPROVAL_DENIED).toBeTruthy();
     expect(body.errors.APPROVAL_EXPIRED).toBeTruthy();
+    expect(body.errors.SHORT_LIVED_UNAVAILABLE).toBeTruthy();
   });
 });
