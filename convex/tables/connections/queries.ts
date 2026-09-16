@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalQuery } from "../../_generated/server";
 import { authenticatedQuery } from "../../functions";
 import { PROVIDERS, providerValidator } from "../../domain/apps";
+import { decryptToken } from "../../lib/tokenEncryption";
 
 const connectionValidator = v.object({
   accessToken: v.string(),
@@ -51,10 +52,13 @@ export const getConnection = internalQuery({
       .unique();
     if (!row) return null;
     return {
-      accessToken: row.accessToken,
+      accessToken: await decryptToken(row.accessToken),
       login: row.login,
       providerUserId: row.providerUserId,
-      refreshToken: row.refreshToken ?? null,
+      refreshToken:
+        row.refreshToken === undefined
+          ? null
+          : await decryptToken(row.refreshToken),
       tokenExpiresAt: row.tokenExpiresAt ?? null,
     };
   },

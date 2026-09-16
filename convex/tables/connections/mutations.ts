@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation } from "../../_generated/server";
 import { providerValidator } from "../../domain/apps";
+import { encryptToken } from "../../lib/tokenEncryption";
 
 export const clearConnection = internalMutation({
   args: { userId: v.id("users"), provider: providerValidator },
@@ -35,13 +36,18 @@ export const saveConnection = internalMutation({
         q.eq("userId", args.userId).eq("provider", args.provider),
       )
       .unique();
+    const accessToken = await encryptToken(args.accessToken);
+    const refreshToken =
+      args.refreshToken === undefined
+        ? undefined
+        : await encryptToken(args.refreshToken);
     const doc = {
       userId: args.userId,
       provider: args.provider,
-      accessToken: args.accessToken,
+      accessToken,
       login: args.login,
       providerUserId: args.providerUserId,
-      refreshToken: args.refreshToken,
+      refreshToken,
       tokenExpiresAt: args.tokenExpiresAt,
     };
     if (existing) await ctx.db.replace("connections", existing._id, doc);
