@@ -3,6 +3,9 @@ import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { AgentErrorCode } from "../../lib/errors";
 import { hashesEqual, sha256Hex } from "../../lib/secrets";
 
+export const MAX_SLICE_NAME = 80;
+export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 export type MintPolicy = "auto" | "approve";
 
 export function effectiveMintPolicy(
