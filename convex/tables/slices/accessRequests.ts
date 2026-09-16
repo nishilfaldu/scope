@@ -11,9 +11,9 @@ export {
   listForSlice,
   getByPublicToken,
   bindToViewer,
-  decide,
   CLAIM_WINDOW_MS,
 } from "./accessRequestsBoard";
+export { decide } from "./accessRequestsDecide";
 export {
   createOnboarding,
   resolveOnboardingClaim,
