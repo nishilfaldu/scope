@@ -7,6 +7,7 @@ import {
   type RefreshedTokens,
 } from "./index";
 import type { ProviderId } from "../domain/apps";
+import type { AgentErrorCode } from "../lib/errors";
 import { APP_TOKEN_TTL_MS } from "../tables/slices/credentials";
 
 function secretsChanged(
@@ -45,11 +46,30 @@ async function persistIfChanged(
   });
 }
 
+export type IssueShortLivedAccessResult =
+  | { accessToken: string; expiresAt: number }
+  | { error: string; code: AgentErrorCode };
+
+const SHORT_LIVED_UNAVAILABLE_RESULT = {
+  error:
+    "Provider cannot mint a short-lived access token for agents. Reconnect with a refresh-capable OAuth grant, or this provider hard-fails standing-token handoff.",
+  code: "SHORT_LIVED_UNAVAILABLE" as const satisfies AgentErrorCode,
+};
+
+/**
+ * Mint a provider-native short-lived access token for an agent.
+ *
+ * Never returns `connection.accessToken` or `connection.refreshToken`.
+ * Refresh secrets stay in the vault; agents only receive a freshly minted
+ * access token that differs from the stored standing upstream token.
+ * Providers that cannot mint (standing-only user tokens, missing refresh)
+ * hard-fail with SHORT_LIVED_UNAVAILABLE.
+ */
 export async function issueShortLivedAccess(
   ctx: GenericActionCtx<DataModel>,
   userId: Id<"users">,
   provider: ProviderId,
-): Promise<{ accessToken: string; expiresAt: number } | { error: string }> {
+): Promise<IssueShortLivedAccessResult> {
   const connection = await ctx.runQuery(
     internal.tables.connections.queries.getConnection,
     {
@@ -58,17 +78,43 @@ export async function issueShortLivedAccess(
     },
   );
   if (!connection) {
-    return { error: `${provider} is not connected` };
+    return {
+      error: `${provider} is not connected`,
+      code: "APP_UNAVAILABLE",
+    };
   }
-  const refreshed = await refreshProviderTokens(provider, connection);
-  if (!refreshed) {
-    return { error: "Could not refresh provider token" };
+
+  let minted: RefreshedTokens | null;
+  try {
+    minted = await refreshProviderTokens(provider, connection);
+  } catch {
+    // Network / malformed / unexpected refresh failures must not become 500s.
+    return SHORT_LIVED_UNAVAILABLE_RESULT;
   }
-  await persistIfChanged(ctx, userId, provider, connection, refreshed);
-  const providerExpiry = refreshed.tokenExpiresAt ?? connection.tokenExpiresAt;
+  if (!minted) {
+    return SHORT_LIVED_UNAVAILABLE_RESULT;
+  }
+
+  // Refuse vault standing-token handoff even if a provider regresses.
+  if (
+    minted.accessToken === connection.accessToken ||
+    (connection.refreshToken !== null &&
+      minted.accessToken === connection.refreshToken)
+  ) {
+    return {
+      error:
+        "Refusing to hand off the vault standing upstream token to agents",
+      code: "SHORT_LIVED_UNAVAILABLE",
+    };
+  }
+
+  await persistIfChanged(ctx, userId, provider, connection, minted);
+
+  const providerExpiry = minted.tokenExpiresAt ?? connection.tokenExpiresAt;
   const expiresAt = Math.min(
     Date.now() + APP_TOKEN_TTL_MS,
     providerExpiry ?? Date.now() + APP_TOKEN_TTL_MS,
   );
-  return { accessToken: refreshed.accessToken, expiresAt };
+  // Intentionally omit refreshToken — agents never receive vault refresh secrets.
+  return { accessToken: minted.accessToken, expiresAt };
 }

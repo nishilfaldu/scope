@@ -102,6 +102,11 @@ export const errorCatalog: Record<
     meaning: "The connected app's provider failed.",
     hint: "Retry. If it keeps failing, reconnect the app in the dashboard.",
   },
+  SHORT_LIVED_UNAVAILABLE: {
+    meaning:
+      "The provider cannot mint a short-lived access token without handing off the vault standing upstream token.",
+    hint: "Reconnect the provider with a refresh-capable OAuth grant (offline / token rotation). Standing-only user tokens are never returned to agents.",
+  },
   APPROVAL_REQUIRED: {
     meaning:
       "This slice requires operator approval before a short-lived token is minted.",
@@ -178,7 +183,7 @@ export const routes: RouteSpec[] = [
     path: "/api/credentials",
     method: "POST",
     summary:
-      "Exchange slice credentials for a short-lived access token for one app. With mintPolicy=approve, returns 202 + requestId instead of minting immediately.",
+      "Exchange slice credentials for a short-lived access token for one app. With mintPolicy=approve, returns 202 + requestId instead of minting immediately. Never returns vault standing or refresh tokens.",
     auth: { type: "body", fields: ["sliceToken", "sliceSecret"] },
     body: credentialsContract.body,
     success: credentialsContract.success,
@@ -187,7 +192,7 @@ export const routes: RouteSpec[] = [
     path: "/api/credentials/claim",
     method: "POST",
     summary:
-      "Poll or claim an approval-gated credential request. Pending returns 202; after Approve, a single claim mints the token.",
+      "Poll or claim an approval-gated credential request. Pending returns 202; after Approve, a single claim mints a provider-native short-lived token (never the vault standing token).",
     auth: { type: "body", fields: ["sliceToken", "sliceSecret", "requestId"] },
     body: claimContract.body,
     success: claimContract.success,

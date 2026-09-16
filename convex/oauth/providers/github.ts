@@ -1,7 +1,6 @@
 import { env } from "../../_generated/server";
 import { asFiniteNumber, isPlainObject } from "../../lib/json";
 import {
-  REFRESH_SKEW_MS,
   envTrimmed,
   grantFromTokenPayload,
   oauthCallbackUrl,
@@ -140,19 +139,18 @@ export const github: ProviderOAuth = {
     return { error: lastError };
   },
 
+  /**
+   * Mint a fresh user access token via refresh_token grant.
+   * Classic OAuth Apps / standing-only user tokens (no refresh) hard-fail:
+   * never return the vault standing access token.
+   */
   async refresh(connection) {
     if (connection.refreshToken === null) {
-      return { accessToken: connection.accessToken };
+      return null;
     }
     const client = githubClient();
     if (!client) {
-      return { accessToken: connection.accessToken };
-    }
-    if (
-      connection.tokenExpiresAt !== null &&
-      connection.tokenExpiresAt > Date.now() + REFRESH_SKEW_MS
-    ) {
-      return { accessToken: connection.accessToken };
+      return null;
     }
     const tokenResponse = await fetch(
       "https://github.com/login/oauth/access_token",
@@ -172,7 +170,7 @@ export const github: ProviderOAuth = {
     );
     const tokenRaw: unknown = await tokenResponse.json();
     if (!isPlainObject(tokenRaw) || typeof tokenRaw.access_token !== "string") {
-      return { accessToken: connection.accessToken };
+      return null;
     }
     return refreshedFromPayload(tokenRaw, connection.refreshToken);
   },

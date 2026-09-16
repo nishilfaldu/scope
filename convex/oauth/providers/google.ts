@@ -75,20 +75,18 @@ export const google: ProviderOAuth = {
     return grantFromTokenPayload(tokenRaw, { login: email, providerUserId: sub });
   },
 
+  /**
+   * Always mint via refresh_token. Never return the vault standing access token.
+   * Connections without offline refresh hard-fail.
+   */
   async refresh(connection) {
     if (connection.refreshToken === null) {
-      if (
-        connection.tokenExpiresAt === null ||
-        connection.tokenExpiresAt > Date.now()
-      ) {
-        return { accessToken: connection.accessToken };
-      }
       return null;
     }
     const clientId = envTrimmed(env.GOOGLE_CLIENT_ID);
     const clientSecret = envTrimmed(env.GOOGLE_CLIENT_SECRET);
     if (!clientId || !clientSecret) {
-      return { accessToken: connection.accessToken };
+      return null;
     }
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -102,12 +100,6 @@ export const google: ProviderOAuth = {
     });
     const tokenRaw: unknown = await tokenResponse.json();
     if (!isPlainObject(tokenRaw) || typeof tokenRaw.access_token !== "string") {
-      if (
-        connection.tokenExpiresAt === null ||
-        connection.tokenExpiresAt > Date.now()
-      ) {
-        return { accessToken: connection.accessToken };
-      }
       return null;
     }
     return refreshedFromPayload(tokenRaw, connection.refreshToken);

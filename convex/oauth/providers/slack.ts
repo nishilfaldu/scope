@@ -74,14 +74,18 @@ export const slack: ProviderOAuth = {
     return grantFromTokenPayload(authed, { login, providerUserId: userId });
   },
 
+  /**
+   * Mint via Slack token rotation (refresh_token). Standing xoxp tokens
+   * without rotation hard-fail — never return the vault standing token.
+   */
   async refresh(connection) {
     if (connection.refreshToken === null) {
-      return { accessToken: connection.accessToken };
+      return null;
     }
     const clientId = envTrimmed(env.SLACK_CLIENT_ID);
     const clientSecret = envTrimmed(env.SLACK_CLIENT_SECRET);
     if (!clientId || !clientSecret) {
-      return { accessToken: connection.accessToken };
+      return null;
     }
     const tokenResponse = await fetch("https://slack.com/api/oauth.v2.access", {
       method: "POST",
@@ -95,13 +99,13 @@ export const slack: ProviderOAuth = {
     });
     const tokenRaw: unknown = await tokenResponse.json();
     if (!isPlainObject(tokenRaw) || tokenRaw.ok !== true) {
-      return { accessToken: connection.accessToken };
+      return null;
     }
     const authed = isPlainObject(tokenRaw.authed_user)
       ? tokenRaw.authed_user
       : tokenRaw;
     if (!isPlainObject(authed) || typeof authed.access_token !== "string") {
-      return { accessToken: connection.accessToken };
+      return null;
     }
     return refreshedFromPayload(authed, connection.refreshToken);
   },

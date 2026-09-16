@@ -70,7 +70,7 @@ Onboarding is one sentence: give the agent the Convex `.convex.site` API origin 
 
 1. Create a slice on the board with mint policy **Auto** (the default).
 2. The agent calls `POST /api/credentials` with `sliceToken`, `sliceSecret`, and `app`.
-3. On success it receives a short-lived access token immediately.
+3. On success it receives a **provider-native short-lived access token** — never the vault's standing upstream access or refresh token.
 
 ### Approve-gated mint (board inbox)
 
@@ -84,10 +84,25 @@ Stripe Link–style operator approval on the web board only (no phone, pairing, 
    - Still pending → **202** `APPROVAL_REQUIRED`
    - Denied → **403** `APPROVAL_DENIED`
    - Expired (pending TTL or post-approve claim window) → **403** `APPROVAL_EXPIRED`
-   - Approved → Agent Passport mints the short-lived token **at claim time** (not at approve) and returns **200** once. The claim window is ~60 seconds and single-use.
-6. Standing vs short-lived token **contents** are unchanged by this flow.
+   - Approved → Agent Passport **mints a provider-native short-lived access token at claim time** (not at approve) and returns **200** once. The claim window is ~60 seconds and single-use.
+6. Claim and auto mint both refuse vault standing-token handoff. Agents never receive `connection.accessToken` or `connection.refreshToken`. Refresh secrets stay encrypted in the vault; only a freshly minted access token is returned. If the provider cannot mint (standing-only grant, missing refresh), the API hard-fails with **503** `SHORT_LIVED_UNAVAILABLE`.
 
-There are no plaintext or API compatibility shims beyond the default `auto` policy for existing slices.
+There are no plaintext or API compatibility shims beyond the default `auto` policy for existing slices. Callers that previously relied on receiving the standing upstream token will break — by design, pre-launch.
+
+### Short-lived mint per provider
+
+| Provider | Agent mint behavior | Notes |
+| --- | --- | --- |
+| **Google** | Mint via `refresh_token` → new short-lived access | Requires offline refresh from connect (`access_type=offline`). No refresh → hard-fail. |
+| **Airtable** | Mint via refresh → short-lived access | No refresh → hard-fail. |
+| **Linear** | Mint via refresh → short-lived access | No refresh → hard-fail. |
+| **Vercel** | Mint via refresh → short-lived access | Needs `offline_access` on connect. No refresh → hard-fail. |
+| **Zoom** | Mint via refresh → short-lived access | No refresh → hard-fail. |
+| **Slack** | Mint via token-rotation refresh → new access | Standing `xoxp` without rotation → hard-fail. |
+| **Notion** | Mint via refresh → new access | Legacy non-expiring tokens without refresh → hard-fail. |
+| **GitHub** | Mint via GitHub App user-token refresh → new access | Classic OAuth / standing-only user tokens (no refresh) → **hard-fail**. Use a GitHub App (`Iv…` client) that issues refreshable user access tokens. |
+
+There is **no** request proxy. Agents call providers directly with the minted Bearer.
 
 ## Expiry and renewal
 
@@ -110,7 +125,7 @@ Agents spend power. Users grant power. An agent cannot:
 2. add services, actions, or time to its own slice
 3. create slices for other agents
 4. view, revoke, or change another agent's slice
-5. read an upstream OAuth access or refresh token
+5. read an upstream OAuth access or refresh token (including the vault standing token)
 6. connect or disconnect a service on the user's passport
 7. change grant defaults or expiry policy
 8. change the user's sign-in methods or authentication factors

@@ -53,10 +53,10 @@ export const httpClaimHandler = httpAction(async (ctx, request) => {
     decision.provider,
   );
   if ("error" in issued) {
-    const status = issued.error.endsWith("is not connected") ? 403 : 503;
-    const code: AgentErrorCode =
-      status === 403 ? "APP_UNAVAILABLE" : "PROVIDER_ERROR";
-    const error = status === 403 ? APP_UNAVAILABLE_ERROR : issued.error;
+    const status = issued.code === "APP_UNAVAILABLE" ? 403 : 503;
+    const code: AgentErrorCode = issued.code;
+    const error =
+      issued.code === "APP_UNAVAILABLE" ? APP_UNAVAILABLE_ERROR : issued.error;
     return errorResponse(status, error, code);
   }
 
