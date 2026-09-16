@@ -58,36 +58,51 @@ The user connects a service from the dashboard:
 There are two different consent screens:
 
 - The provider screen grants Agent Passport the upstream connection.
-- The Agent Passport board Approvals inbox grants one agent a short-lived credential when the slice uses mint policy `approve`.
+- The Agent Passport board Approvals inbox (and approval deep links) grants an agent a slice (onboarding) or a short-lived credential (mint policy `approve`).
 
 The upstream service does not need to know which agent holds the slice.
 
 ## Giving an agent access
 
-Onboarding is one sentence: give the agent the Convex `.convex.site` API origin plus the slice token and slice secret from the board.
+**Primary onboarding (option A):** the agent never needs secrets pasted in chat. The user connects OAuth themselves; the agent only needs the public Convex `.convex.site` origin (discovery).
 
-### Auto mint (default)
-
-1. Create a slice on the board with mint policy **Auto** (the default).
-2. The agent calls `POST /api/credentials` with `sliceToken`, `sliceSecret`, and `app`.
-3. On success it receives a **provider-native short-lived access token** — never the vault's standing upstream access or refresh token.
-
-### Approve-gated mint (board inbox)
-
-Stripe Link–style operator approval on the web board only (no phone, pairing, or push):
-
-1. Create a slice with mint policy **Approve** (or switch an active slice to Approve on the detail page).
-2. The agent calls `POST /api/credentials` as usual.
-3. Instead of a token, it receives **202** with `code: "APPROVAL_REQUIRED"`, a `requestId`, and a pending `expiresAt` (~5 minutes).
-4. The request appears in the board **Approvals** inbox (sidebar badge). The operator clicks **Approve** or **Deny**.
-5. The agent polls `POST /api/credentials/claim` with `sliceToken`, `sliceSecret`, and `requestId`.
-   - Still pending → **202** `APPROVAL_REQUIRED`
+1. User connects providers on the board (`/connections`) — OAuth stays user-initiated.
+2. Agent `GET /` on `.convex.site` for the contract, then `POST /api/access-requests` with `agentName`, `apps`, `ttlMs`, and optional `reason`.
+3. Response includes:
+   - `approvalUrl` — **chat-safe**, always on `BOARD_ORIGIN` (e.g. `https://board.example/approvals/ar_…`)
+   - `claimHandle` — **runtime-only**; keep it out of chat
+4. User opens the approval URL (also listed in the **Approvals** inbox after the link is opened while signed in) and clicks **Approve** or **Deny**. This path **always** requires Approve — there is no auto grant.
+5. Agent polls `POST /api/access-requests/status` or `POST /api/access-requests/claim` with `claimHandle`.
+   - Pending → **202** `APPROVAL_REQUIRED` (claim) / **200** with `status: "pending"` (status)
    - Denied → **403** `APPROVAL_DENIED`
-   - Expired (pending TTL or post-approve claim window) → **403** `APPROVAL_EXPIRED`
-   - Approved → Agent Passport **mints a provider-native short-lived access token at claim time** (not at approve) and returns **200** once. The claim window is ~60 seconds and single-use.
-6. Claim and auto mint both refuse vault standing-token handoff. Agents never receive `connection.accessToken` or `connection.refreshToken`. Refresh secrets stay encrypted in the vault; only a freshly minted access token is returned. If the provider cannot mint (standing-only grant, missing refresh), the API hard-fails with **503** `SHORT_LIVED_UNAVAILABLE`.
+   - Expired → **403** `APPROVAL_EXPIRED`
+   - Approved → claim returns **200** once with `sliceToken` + `sliceSecret` over HTTPS
+6. Agent then uses short-lived mint as today: `POST /api/credentials` with those slice credentials. No standing upstream handoff.
 
-There are no plaintext or API compatibility shims beyond the default `auto` policy for existing slices. Callers that previously relied on receiving the standing upstream token will break — by design, pre-launch.
+### Short-lived mint after the slice exists
+
+Once the agent has slice credentials (from claim, or from a board-created slice):
+
+#### Auto mint (default on onboarding-created slices)
+
+1. `POST /api/credentials` with `sliceToken`, `sliceSecret`, and `app`.
+2. On success it receives a **provider-native short-lived access token** — never the vault's standing upstream access or refresh token.
+
+#### Approve-gated mint (board inbox)
+
+For slices with mint policy **Approve**:
+
+1. `POST /api/credentials` returns **202** with `APPROVAL_REQUIRED`, `requestId`, and a board `approvalUrl`.
+2. Operator Approves/Denies in **Approvals** (or the deep link).
+3. Agent polls `POST /api/credentials/claim` with `sliceToken`, `sliceSecret`, and `requestId`.
+   - Pending → **202** `APPROVAL_REQUIRED`
+   - Denied → **403** `APPROVAL_DENIED`
+   - Expired → **403** `APPROVAL_EXPIRED`
+   - Approved → **200** once with a freshly minted short-lived token (minted at claim, not at approve; ~60s claim window)
+
+Claim and auto mint both refuse vault standing-token handoff. Agents never receive `connection.accessToken` or `connection.refreshToken`. If the provider cannot mint, the API hard-fails with **503** `SHORT_LIVED_UNAVAILABLE`.
+
+Pre-launch: no backward-compat shims for standing-token handoff.
 
 ### Short-lived mint per provider
 
