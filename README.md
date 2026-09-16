@@ -7,7 +7,7 @@ The system has two layers:
 1. A **passport** belongs to the user. It is the long-lived vault that holds the user's connected services and their real upstream tokens.
 2. A **slice** belongs to one agent. It is a scoped, expiring grant created from one passport.
 
-Connect once, give many agents access. A user can connect GitHub, Google, or Slack once, then give each agent its own slice of that access.
+Connect once, give many agents access. A user can connect GitHub, Google, Slack, Microsoft Teams, or another service once, then give each agent its own slice of that access.
 
 ## Passport
 
@@ -21,7 +21,7 @@ A passport is owned by a user and stays inside Agent Passport. It holds:
 
 The passport does not have an external key and secret. Nothing outside the backend authenticates as the passport.
 
-The user reaches it through their signed-in dashboard session. The backend uses its upstream OAuth tokens to talk to GitHub, Slack, Google, and other services.
+The user reaches it through their signed-in dashboard session. The backend uses its upstream OAuth tokens to talk to GitHub, Slack, Google, Microsoft Teams, and other services.
 
 A user can have more than one passport when they need separation, such as work and personal accounts.
 
@@ -47,7 +47,7 @@ Every agent gets its own slice. Two agents never share one. That keeps revocatio
 
 The user connects a service from the dashboard:
 
-1. The signed-in user clicks Connect for GitHub, Slack, Google, or another service.
+1. The signed-in user clicks Connect for GitHub, Slack, Google, Microsoft Teams, or another service.
 2. Agent Passport creates a one-time OAuth state value bound to the signed-in user, their passport, the service, and a short expiry.
 3. Agent Passport sends the user to the provider's official OAuth consent screen.
 4. The provider returns an authorization code and the same state value.
@@ -101,6 +101,7 @@ There are no plaintext or API compatibility shims beyond the default `auto` poli
 | **Slack** | Mint via token-rotation refresh → new access | Standing `xoxp` without rotation → hard-fail. |
 | **Notion** | Mint via refresh → new access | Legacy non-expiring tokens without refresh → hard-fail. |
 | **GitHub** | Mint via GitHub App user-token refresh → new access | Classic OAuth / standing-only user tokens (no refresh) → **hard-fail**. Use a GitHub App (`Iv…` client) that issues refreshable user access tokens. |
+| **Microsoft Teams** | Mint via Microsoft identity platform refresh → short-lived Graph access | Needs `offline_access` on connect. No refresh → hard-fail. |
 
 There is **no** request proxy. Agents call providers directly with the minted Bearer.
 
@@ -221,3 +222,26 @@ Create a Sign in with Vercel application, register `https://<deployment>.convex.
 5. Connect Zoom from `/connections`. Disconnecting revokes the current access token through Zoom's OAuth revoke endpoint.
 
 Official references: [Zoom OAuth](https://developers.zoom.us/docs/integrations/oauth/) and [Zoom API reference](https://developers.zoom.us/docs/api/).
+
+### Microsoft Teams OAuth setup
+
+Teams uses the [Microsoft identity platform](https://learn.microsoft.com/en-us/entra/identity-platform/) (Entra ID) with Microsoft Graph. Outlook is a separate provider later — this connection is Teams / Graph only.
+
+1. In the [Azure portal](https://portal.azure.com/) → **Microsoft Entra ID** → **App registrations**, create a new registration (or open an existing one).
+2. Under **Authentication**, add a web redirect URI:
+   `https://<deployment>.convex.site/api/teams/callback`
+3. Under **Certificates & secrets**, create a client secret.
+4. Under **API permissions**, add delegated Microsoft Graph permissions matching the product scopes, including at least:
+   `openid`, `profile`, `email`, `offline_access`, `User.Read`, `Chat.ReadWrite`, `Channel.ReadBasic.All`, `Team.ReadBasic.All`, `ChannelMessage.Send`.
+   Grant admin consent if your tenant requires it. `offline_access` is required so Agent Passport can mint short-lived access tokens for agents.
+5. Copy the **Application (client) ID** and the client secret value. Set them on Convex and deploy:
+
+   ```bash
+   npx convex env set TEAMS_CLIENT_ID <application-client-id>
+   npx convex env set TEAMS_CLIENT_SECRET <client-secret-value>
+   npx convex deploy
+   ```
+
+6. Connect **Microsoft Teams** from `/connections`. The authorize URL uses the `common` tenant so work/school and personal Microsoft accounts can sign in.
+
+Official references: [Microsoft identity platform OAuth 2.0](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-auth-code-flow), [Microsoft Graph permissions](https://learn.microsoft.com/en-us/graph/permissions-reference), and [Get user](https://learn.microsoft.com/en-us/graph/api/user-get).
