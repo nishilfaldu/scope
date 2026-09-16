@@ -35,6 +35,7 @@ A slice is created for one agent and one grant. It contains:
 - allowed services and actions
 - an expiry
 - revocation state
+- a **mint policy** (`auto` or `approve`, default `auto`)
 
 A slice never contains an upstream OAuth token or a copy of the grant's apps. It points to the grant, which remains the single source of truth for allowed apps, so grant changes apply to live slices immediately.
 
@@ -57,23 +58,36 @@ The user connects a service from the dashboard:
 There are two different consent screens:
 
 - The provider screen grants Agent Passport the upstream connection.
-- The Agent Passport screen grants one agent a slice of that connection.
+- The Agent Passport board Approvals inbox grants one agent a short-lived credential when the slice uses mint policy `approve`.
 
 The upstream service does not need to know which agent holds the slice.
 
 ## Giving an agent access
 
-Onboarding is one sentence: give the Agent Passport link to your agent.
+Onboarding is one sentence: give the agent the Convex `.convex.site` API origin plus the slice token and slice secret from the board.
 
-The agent reads the link, requests the services, actions, and duration it needs, then gives the user a short-lived approval link. The user signs in and reviews the request. Approval creates a slice and locks in that policy.
+### Auto mint (default)
 
-The approval link points only to the request. It is one-time or short-lived because anyone holding it could start the connect flow. The grant record, not the link, holds the policy.
+1. Create a slice on the board with mint policy **Auto** (the default).
+2. The agent calls `POST /api/credentials` with `sliceToken`, `sliceSecret`, and `app`.
+3. On success it receives a short-lived access token immediately.
 
-The duration comes from three places:
+### Approve-gated mint (board inbox)
 
-1. The agent may request one.
-2. The user approves or changes it on the consent screen.
-3. Agent Passport uses a product default when no duration was requested.
+Stripe Link–style operator approval on the web board only (no phone, pairing, or push):
+
+1. Create a slice with mint policy **Approve** (or switch an active slice to Approve on the detail page).
+2. The agent calls `POST /api/credentials` as usual.
+3. Instead of a token, it receives **202** with `code: "APPROVAL_REQUIRED"`, a `requestId`, and a pending `expiresAt` (~5 minutes).
+4. The request appears in the board **Approvals** inbox (sidebar badge). The operator clicks **Approve** or **Deny**.
+5. The agent polls `POST /api/credentials/claim` with `sliceToken`, `sliceSecret`, and `requestId`.
+   - Still pending → **202** `APPROVAL_REQUIRED`
+   - Denied → **403** `APPROVAL_DENIED`
+   - Expired (pending TTL or post-approve claim window) → **403** `APPROVAL_EXPIRED`
+   - Approved → Agent Passport mints the short-lived token **at claim time** (not at approve) and returns **200** once. The claim window is ~60 seconds and single-use.
+6. Standing vs short-lived token **contents** are unchanged by this flow.
+
+There are no plaintext or API compatibility shims beyond the default `auto` policy for existing slices.
 
 ## Expiry and renewal
 

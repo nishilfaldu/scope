@@ -46,6 +46,20 @@ export const credentialsContract: PostContract = {
   },
 };
 
+export const claimContract: PostContract = {
+  method: "POST",
+  body: {
+    type: "object",
+    required: ["sliceToken", "sliceSecret", "requestId"],
+    properties: {
+      sliceToken: { type: "string" },
+      sliceSecret: { type: "string" },
+      requestId: { type: "string" },
+    },
+  },
+  success: credentialsContract.success,
+};
+
 type RouteAuth =
   | { type: "none" }
   | { type: "headers"; headers: readonly string[] }
@@ -87,6 +101,19 @@ export const errorCatalog: Record<
   PROVIDER_ERROR: {
     meaning: "The connected app's provider failed.",
     hint: "Retry. If it keeps failing, reconnect the app in the dashboard.",
+  },
+  APPROVAL_REQUIRED: {
+    meaning:
+      "This slice requires operator approval before a short-lived token is minted.",
+    hint: "Poll POST /api/credentials/claim with the requestId until the operator Approves on the board, then claim once within the claim window.",
+  },
+  APPROVAL_DENIED: {
+    meaning: "The operator denied this credential request.",
+    hint: "Ask the operator, or create a new request with POST /api/credentials.",
+  },
+  APPROVAL_EXPIRED: {
+    meaning: "The approval request or claim window expired.",
+    hint: "Create a new request with POST /api/credentials.",
   },
 };
 
@@ -151,10 +178,19 @@ export const routes: RouteSpec[] = [
     path: "/api/credentials",
     method: "POST",
     summary:
-      "Exchange slice credentials for a short-lived access token for one app.",
+      "Exchange slice credentials for a short-lived access token for one app. With mintPolicy=approve, returns 202 + requestId instead of minting immediately.",
     auth: { type: "body", fields: ["sliceToken", "sliceSecret"] },
     body: credentialsContract.body,
     success: credentialsContract.success,
+  },
+  {
+    path: "/api/credentials/claim",
+    method: "POST",
+    summary:
+      "Poll or claim an approval-gated credential request. Pending returns 202; after Approve, a single claim mints the token.",
+    auth: { type: "body", fields: ["sliceToken", "sliceSecret", "requestId"] },
+    body: claimContract.body,
+    success: claimContract.success,
   },
   {
     path: "/api/apps",

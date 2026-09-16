@@ -9,14 +9,17 @@ import { authenticatedQuery } from "../../functions";
 import { appValidator, ALL_APPS, providerForApp } from "../../domain/apps";
 import schema from "../../schema";
 import { denyResultValidator, UNAUTHORIZED_ERROR } from "../../lib/errors";
-import { sliceBySecret, withoutSecretHash } from "./helpers";
+import { effectiveMintPolicy, sliceBySecret, withoutSecretHash } from "./helpers";
+
+const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
 
 const boardSlice = schema
   .doc("slices")
-  .omit("secretHash")
+  .omit("secretHash", "mintPolicy")
   .extend({
     grantApps: v.array(appValidator),
     connectedApps: v.array(appValidator),
+    mintPolicy: mintPolicyValidator,
   });
 
 async function connectedAppsForUser(
@@ -58,6 +61,7 @@ export const list = authenticatedQuery({
             ...withoutSecretHash(slice),
             grantApps: grant?.apps ?? [],
             connectedApps,
+            mintPolicy: effectiveMintPolicy(slice),
           };
         }),
       ),
@@ -84,6 +88,7 @@ export const get = authenticatedQuery({
       ...withoutSecretHash(slice),
       grantApps: grant?.apps ?? [],
       connectedApps,
+      mintPolicy: effectiveMintPolicy(slice),
     };
   },
 });
