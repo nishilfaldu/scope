@@ -43,6 +43,8 @@ type Env = {
   readonly NOTION_CLIENT_SECRET: string;
   readonly SLACK_CLIENT_ID: string;
   readonly SLACK_CLIENT_SECRET: string;
+  readonly TEAMS_CLIENT_ID: string;
+  readonly TEAMS_CLIENT_SECRET: string;
   readonly TOKEN_ENCRYPTION_KEY: string;
   readonly VERCEL_CLIENT_ID: string;
   readonly VERCEL_CLIENT_SECRET: string;
