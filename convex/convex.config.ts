@@ -19,6 +19,9 @@ const app = defineApp({
     VERCEL_CLIENT_SECRET: v.string(),
     ZOOM_CLIENT_ID: v.string(),
     ZOOM_CLIENT_SECRET: v.string(),
+    // GitLab.com OAuth application (self-managed instances out of scope).
+    GITLAB_CLIENT_ID: v.string(),
+    GITLAB_CLIENT_SECRET: v.string(),
     BOARD_ORIGIN: v.string(),
     // Base64-encoded 32-byte AES-256 key for connection token encryption at rest.
     TOKEN_ENCRYPTION_KEY: v.string(),

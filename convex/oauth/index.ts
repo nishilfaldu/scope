@@ -37,6 +37,9 @@ export function oauthConfigured(): Record<ProviderId, boolean> {
     zoom:
       envConfigured(env.ZOOM_CLIENT_ID) &&
       envConfigured(env.ZOOM_CLIENT_SECRET),
+    gitlab:
+      envConfigured(env.GITLAB_CLIENT_ID) &&
+      envConfigured(env.GITLAB_CLIENT_SECRET),
   };
 }
 
