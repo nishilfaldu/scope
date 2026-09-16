@@ -36,6 +36,29 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
     return errorResponse(decision.status, decision.reason, decision.code);
   }
 
+  if (decision.mintPolicy === "approve") {
+    const pending = await ctx.runMutation(
+      internal.tables.slices.accessRequests.createPending,
+      {
+        sliceId: decision.sliceId,
+        userId: decision.userId,
+        app: decision.app,
+        refresh: decision.refresh,
+      },
+    );
+    if (!pending.ok) {
+      return errorResponse(pending.status, pending.reason, pending.code);
+    }
+    return jsonResponse(202, {
+      error: pending.reason,
+      code: pending.code,
+      requestId: pending.requestId,
+      status: pending.status,
+      expiresAt: pending.expiresAt,
+      app: decision.app,
+    });
+  }
+
   const issued = await issueShortLivedAccess(
     ctx,
     decision.userId,
