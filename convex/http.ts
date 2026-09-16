@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { httpAppsHandler } from "./http/httpAppsHandler";
+import { httpClaimHandler } from "./http/httpClaimHandler";
 import { httpCredentialsHandler } from "./http/httpCredentialsHandler";
 import { discoverySpec } from "./http/contracts";
 import {
@@ -35,6 +36,18 @@ http.route({
   path: "/api/credentials",
   method: "POST",
   handler: httpCredentialsHandler,
+});
+
+// Poll / claim after operator approval
+http.route({
+  path: "/api/credentials/claim",
+  method: "OPTIONS",
+  handler: optionsOk,
+});
+http.route({
+  path: "/api/credentials/claim",
+  method: "POST",
+  handler: httpClaimHandler,
 });
 
 // Passport app discovery

@@ -10,4 +10,11 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  "expire access requests",
+  { minutes: 1 },
+  internal.tables.slices.accessRequests.expireDue,
+  {},
+);
+
 export default crons;
