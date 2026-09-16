@@ -25,11 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { APP_LABELS, formatRemaining } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
-function ApprovalGate({
-  publicToken,
-}: {
-  publicToken: string;
-}) {
+function ApprovalGate({ publicToken }: { publicToken: string }) {
   const { signIn } = useAuthActions();
   const summary = useQuery(api.tables.slices.accessRequestPublic.publicSummary, {
     publicToken,
@@ -61,8 +57,7 @@ function ApprovalGate({
     );
   }
 
-  const expired =
-    summary.status === "expired" || summary.expiresAt <= now;
+  const expired = summary.status === "expired" || summary.expiresAt <= now;
   const decided =
     summary.status === "approved" ||
     summary.status === "denied" ||
@@ -74,7 +69,7 @@ function ApprovalGate({
           .map((app) => APP_LABELS[app] ?? app)
           .join(", ") || "apps"
       : summary.app
-        ? APP_LABELS[summary.app] ?? summary.app
+        ? (APP_LABELS[summary.app] ?? summary.app)
         : "an app";
 
   const agentLabel = summary.agentName?.trim() || "An agent";
@@ -297,7 +292,8 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    This request is already <span className="font-medium">{request.status}</span>.
+                    This request is already{" "}
+                    <span className="font-medium">{request.status}</span>.
                     {request.status === "approved"
                       ? " The agent can claim over HTTPS."
                       : null}
