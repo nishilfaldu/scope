@@ -35,6 +35,8 @@ type Env = {
   readonly BOARD_ORIGIN: string;
   readonly GITHUB_CLIENT_ID: string;
   readonly GITHUB_CLIENT_SECRET: string;
+  readonly GITLAB_CLIENT_ID: string;
+  readonly GITLAB_CLIENT_SECRET: string;
   readonly GOOGLE_CLIENT_ID: string;
   readonly GOOGLE_CLIENT_SECRET: string;
   readonly LINEAR_CLIENT_ID: string;
