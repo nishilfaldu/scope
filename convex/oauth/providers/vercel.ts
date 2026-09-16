@@ -20,11 +20,13 @@ async function tokenRequest(body: Record<string, string>) {
   if (!client) return { error: "config" } as const;
   const response = await fetch("https://api.vercel.com/login/oauth/token", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      Authorization: `Basic ${btoa(`${client.clientId}:${client.clientSecret}`)}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
     body: new URLSearchParams({
       ...body,
       client_id: client.clientId,
-      client_secret: client.clientSecret,
     }).toString(),
   });
   const raw: unknown = await response.json();
