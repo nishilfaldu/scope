@@ -9,6 +9,7 @@ import {
   APP_HINTS,
   APP_LABELS,
   TTL_OPTIONS,
+  providerForApp,
   type AppId,
 } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
@@ -18,11 +19,6 @@ const TTL_ITEMS = TTL_OPTIONS.map((option) => ({
   value: String(option.ttlMs),
   label: option.label,
 }));
-function providerForApp(app: AppId) {
-  if (app === "github") return "github";
-  if (app === "slack") return "slack";
-  return "google";
-}
 
 export type CreatedSlice = {
   sliceToken: string;
