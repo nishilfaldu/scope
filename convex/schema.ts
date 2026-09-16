@@ -24,6 +24,11 @@ const accessRequestKindValidator = v.union(
   v.literal("mint"),
 );
 
+const grantBindingValidator = v.object({
+  app: appValidator,
+  connectionId: v.id("connections"),
+});
+
 export default defineSchema({
   ...authTables,
 
@@ -53,12 +58,13 @@ export default defineSchema({
     .index("by_status_and_expiresAt", ["status", "expiresAt"]),
 
   // A grant is the approved policy behind a slice: who it is for, what it
-  // covers, and when it ends.
+  // covers, which connection backs each app, and when it ends.
   grants: defineTable({
     passportId: v.id("passports"),
     userId: v.id("users"),
     agent: v.string(),
     apps: v.array(appValidator),
+    bindings: v.array(grantBindingValidator),
     expiresAt: v.number(),
   }).index("by_passport", ["passportId"]),
 
@@ -99,19 +105,31 @@ export default defineSchema({
     .index("by_user_and_status", ["userId", "status"])
     .index("by_status_and_expiresAt", ["status", "expiresAt"]),
 
+  // One row per (user, provider, app, provider account). Google apps each have
+  // their own connection rows (and may bind different Google accounts).
   connections: defineTable({
     userId: v.id("users"),
     provider: providerValidator,
+    app: appValidator,
     accessToken: v.string(),
     login: v.string(),
     providerUserId: v.string(),
     refreshToken: v.optional(v.string()),
+    scopes: v.optional(v.string()),
     tokenExpiresAt: v.optional(v.number()),
-  }).index("by_user_and_provider", ["userId", "provider"]),
+  })
+    .index("by_user_provider_app_providerUserId", [
+      "userId",
+      "provider",
+      "app",
+      "providerUserId",
+    ])
+    .index("by_user", ["userId"]),
 
   oauthStates: defineTable({
     userId: v.id("users"),
     provider: providerValidator,
+    app: appValidator,
     state: v.string(),
     returnTo: v.string(),
     expiresAt: v.number(),
