@@ -18,6 +18,7 @@ export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
   linear: `${siteUrl}/api/linear/connect`,
   vercel: `${siteUrl}/api/vercel/connect`,
   zoom: `${siteUrl}/api/zoom/connect`,
+  outlook: `${siteUrl}/api/outlook/connect`,
 };
 
 export const CONNECT_ERRORS: Record<string, string> = {
@@ -75,5 +76,10 @@ export const CONNECTION_PROVIDERS = [
     id: "zoom" as const,
     name: "Zoom",
     description: "Meetings, webinars, recordings, and account profile.",
+  },
+  {
+    id: "outlook" as const,
+    name: "Outlook",
+    description: "Read and send mail via Microsoft Graph.",
   },
 ] as const;

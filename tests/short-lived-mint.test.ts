@@ -7,6 +7,7 @@ import { airtable } from "../convex/oauth/providers/airtable";
 import { linear } from "../convex/oauth/providers/linear";
 import { vercel } from "../convex/oauth/providers/vercel";
 import { zoom } from "../convex/oauth/providers/zoom";
+import { outlook } from "../convex/oauth/providers/outlook";
 import type { ConnectionSecrets } from "../convex/oauth/types";
 
 const standing: ConnectionSecrets = {
@@ -37,6 +38,7 @@ describe("provider refresh never returns standing vault token", () => {
     ["linear", linear],
     ["vercel", vercel],
     ["zoom", zoom],
+    ["outlook", outlook],
   ] as const)(
     "%s hard-fails when refresh token is missing",
     async (_name, provider) => {
@@ -77,5 +79,20 @@ describe("provider refresh never returns standing vault token", () => {
     });
     expect(minted).toMatchObject({ accessToken: "ya29.fresh" });
     expect(minted!.accessToken).not.toBe("ya29.standing");
+  });
+
+  test("outlook refresh mints a distinct access token", async () => {
+    vi.stubEnv("OUTLOOK_CLIENT_ID", "outlook-client");
+    vi.stubEnv("OUTLOOK_CLIENT_SECRET", "outlook-secret");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      json({ access_token: "eyJ.fresh", expires_in: 3600 }),
+    );
+    const minted = await outlook.refresh({
+      ...standing,
+      accessToken: "eyJ.standing",
+      refreshToken: "0.refresh",
+    });
+    expect(minted).toMatchObject({ accessToken: "eyJ.fresh" });
+    expect(minted!.accessToken).not.toBe("eyJ.standing");
   });
 });
