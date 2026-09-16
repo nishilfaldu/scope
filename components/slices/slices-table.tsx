@@ -76,7 +76,7 @@ export function SlicesTable() {
       header: "Name",
       cell: ({ row: { original: slice } }) => (
         <Link
-          href={`/passports/${slice._id}`}
+          href={`/slices/${slice._id}`}
           className="font-medium hover:underline"
         >
           {slice.name}
@@ -118,7 +118,7 @@ export function SlicesTable() {
             id: "view",
             label: "View",
             icon: File01Icon,
-            onSelect: () => router.push(`/passports/${slice._id}`),
+            onSelect: () => router.push(`/slices/${slice._id}`),
           },
           {
             id: "copy-token",

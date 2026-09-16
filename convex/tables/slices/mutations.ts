@@ -5,7 +5,7 @@ import { appValidator, providerForApp } from "../../domain/apps";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
 import { markExpired } from "./helpers";
 
-export const MAX_PASSPORT_NAME = 80;
+export const MAX_SLICE_NAME = 80;
 export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
@@ -50,7 +50,7 @@ export const create = authenticatedMutation({
     if (name.length === 0) {
       throw new Error("Name must be non-empty");
     }
-    if (name.length > MAX_PASSPORT_NAME) {
+    if (name.length > MAX_SLICE_NAME) {
       throw new Error("Name must be 80 characters or fewer");
     }
     if (!Number.isFinite(args.ttlMs) || args.ttlMs <= 0) {
@@ -145,7 +145,7 @@ export const setMintPolicy = authenticatedMutation({
       throw new Error("Slice not found");
     }
     if (slice.status !== "active") {
-      throw new Error("Passport is not live");
+      throw new Error("Slice is not live");
     }
     await ctx.db.patch("slices", slice._id, { mintPolicy: args.mintPolicy });
     return null;
@@ -171,10 +171,10 @@ export const setApp = authenticatedMutation({
     const now = Date.now();
     if (slice.status === "active" && slice.expiresAt <= now) {
       await markExpired(ctx, slice);
-      throw new Error("Passport expired");
+      throw new Error("Slice expired");
     }
     if (slice.status !== "active") {
-      throw new Error("Passport is not live");
+      throw new Error("Slice is not live");
     }
     const grant = await ctx.db.get("grants", slice.grantId);
     if (!grant) {

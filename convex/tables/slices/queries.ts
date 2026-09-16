@@ -8,7 +8,12 @@ import type { Id } from "../../_generated/dataModel";
 import { authenticatedQuery } from "../../functions";
 import { appValidator, ALL_APPS, providerForApp } from "../../domain/apps";
 import schema from "../../schema";
-import { denyResultValidator, UNAUTHORIZED_ERROR } from "../../lib/errors";
+import {
+  denyResultValidator,
+  EXPIRED_ERROR,
+  REVOKED_ERROR,
+  UNAUTHORIZED_ERROR,
+} from "../../lib/errors";
 import { effectiveMintPolicy, sliceBySecret, withoutSecretHash } from "./helpers";
 
 const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
@@ -127,7 +132,7 @@ export const discoverApps = internalQuery({
       return {
         ok: false as const,
         status: 403,
-        reason: "Passport revoked",
+        reason: REVOKED_ERROR,
         code: "REVOKED" as const,
       };
     }
@@ -135,7 +140,7 @@ export const discoverApps = internalQuery({
       return {
         ok: false as const,
         status: 403,
-        reason: "Passport expired",
+        reason: EXPIRED_ERROR,
         code: "EXPIRED" as const,
       };
     }
