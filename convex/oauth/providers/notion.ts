@@ -79,15 +79,19 @@ export const notion: ProviderOAuth = {
     return grantFromTokenPayload(raw, { login, providerUserId });
   },
 
+  /**
+   * Mint via Notion refresh_token. Standing non-expiring tokens without
+   * refresh hard-fail — never return the vault standing access token.
+   */
   async refresh(connection) {
     if (connection.refreshToken === null) {
-      return { accessToken: connection.accessToken };
+      return null;
     }
     const raw = await tokenRequest({
       grant_type: "refresh_token",
       refresh_token: connection.refreshToken,
     });
-    if ("error" in raw) return { accessToken: connection.accessToken };
+    if ("error" in raw) return null;
     return refreshedFromPayload(raw, connection.refreshToken);
   },
 
