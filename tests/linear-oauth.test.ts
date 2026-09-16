@@ -51,6 +51,16 @@ describe("Linear OAuth", () => {
       login: "nishil@example.com",
       providerUserId: "user-1",
     });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.linear.app/oauth/token",
+      expect.objectContaining({
+        body: expect.stringContaining("client_id=linear-client"),
+      }),
+    );
+    expect(String(fetchMock.mock.calls[0][1]?.body)).toContain(
+      "client_secret=linear-secret",
+    );
     await expect(
       linear.refresh({
         accessToken: "access-1",
