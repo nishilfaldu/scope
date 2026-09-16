@@ -37,6 +37,8 @@ function providerIcon(id: ProviderId) {
       return CloudIcon;
     case "zoom":
       return DatabaseIcon;
+    case "outlook":
+      return DatabaseIcon;
     default: {
       const _exhaustive: never = id;
       return _exhaustive;
