@@ -7,6 +7,7 @@ import { airtable } from "../convex/oauth/providers/airtable";
 import { linear } from "../convex/oauth/providers/linear";
 import { vercel } from "../convex/oauth/providers/vercel";
 import { zoom } from "../convex/oauth/providers/zoom";
+import { gitlab } from "../convex/oauth/providers/gitlab";
 import type { ConnectionSecrets } from "../convex/oauth/types";
 
 const standing: ConnectionSecrets = {
@@ -37,6 +38,7 @@ describe("provider refresh never returns standing vault token", () => {
     ["linear", linear],
     ["vercel", vercel],
     ["zoom", zoom],
+    ["gitlab", gitlab],
   ] as const)(
     "%s hard-fails when refresh token is missing",
     async (_name, provider) => {
@@ -77,5 +79,21 @@ describe("provider refresh never returns standing vault token", () => {
     });
     expect(minted).toMatchObject({ accessToken: "ya29.fresh" });
     expect(minted!.accessToken).not.toBe("ya29.standing");
+  });
+
+  test("gitlab refresh mints a distinct access token", async () => {
+    vi.stubEnv("GITLAB_CLIENT_ID", "gitlab-client");
+    vi.stubEnv("GITLAB_CLIENT_SECRET", "gitlab-secret");
+    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      json({ access_token: "glpat-fresh", expires_in: 7200 }),
+    );
+    const minted = await gitlab.refresh({
+      ...standing,
+      accessToken: "glpat-standing",
+      refreshToken: "refresh-old",
+    });
+    expect(minted).toMatchObject({ accessToken: "glpat-fresh" });
+    expect(minted!.accessToken).not.toBe("glpat-standing");
   });
 });

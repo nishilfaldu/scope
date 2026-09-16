@@ -19,6 +19,7 @@ const EXPECTED_PROVIDERS: Record<AppId, ProviderId> = {
   linear: "linear",
   vercel: "vercel",
   zoom: "zoom",
+  gitlab: "gitlab",
 };
 
 describe("providerForApp", () => {
