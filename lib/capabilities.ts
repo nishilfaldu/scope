@@ -1,9 +1,10 @@
 import {
   ALL_APPS,
+  providerForApp,
   type AppId,
 } from "../convex/domain/apps";
 
-export { ALL_APPS, type AppId };
+export { ALL_APPS, providerForApp, type AppId };
 
 export const APP_LABELS: Record<AppId, string> = {
   github: "GitHub",
