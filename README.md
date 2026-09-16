@@ -9,6 +9,32 @@ The system has two layers:
 
 Connect once, give many agents access. A user can connect GitHub, Google, or Slack once, then give each agent its own slice of that access.
 
+## Architecture
+
+```mermaid
+flowchart TB
+  User([Signed-in user]) --> Board[Web board]
+  Board --> Passport[Passport vault]
+
+  Passport --> Connections[Connections\nencrypted upstream OAuth tokens]
+  Passport --> Grants[Grants\napproved apps + expiry]
+  Grants --> Slices[Slices\nper-agent token + secret\nmintPolicy: auto | approve]
+
+  Agent([Agent]) --> SiteAPI["Agent API (.convex.site)"]
+  SiteAPI -->|"POST /api/credentials"| Slices
+
+  Slices -->|mintPolicy auto| Mint[Short-lived mint\nprovider-native access token]
+  Slices -->|mintPolicy approve| Inbox[Approvals inbox]
+  Inbox -->|Approve| Claim["POST /api/credentials/claim"]
+  Claim --> Mint
+
+  Connections -.->|refresh stays in vault\nno standing handoff| Mint
+  Mint --> Providers[Upstream providers\nGitHub · Google · Slack · …]
+  Agent --> Providers
+```
+
+*User signs in on the board, connects providers into the passport vault, and creates per-agent slices from grants. Agents call the `.convex.site` API with slice credentials; Agent Passport mints a short-lived provider token (auto, or after board approval) and never hands out vault standing access or refresh tokens. Agents then call providers directly.*
+
 ## Passport
 
 A passport is owned by a user and stays inside Agent Passport. It holds:
