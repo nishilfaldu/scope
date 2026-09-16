@@ -45,6 +45,7 @@ import type * as tables_connections_queries from "../tables/connections/queries.
 import type * as tables_oauthStates_mutations from "../tables/oauthStates/mutations.js";
 import type * as tables_oauthStates_queries from "../tables/oauthStates/queries.js";
 import type * as tables_passports from "../tables/passports.js";
+import type * as tables_slices_accessRequestPublic from "../tables/slices/accessRequestPublic.js";
 import type * as tables_slices_accessRequests from "../tables/slices/accessRequests.js";
 import type * as tables_slices_accessRequestsMint from "../tables/slices/accessRequestsMint.js";
 import type * as tables_slices_credentials from "../tables/slices/credentials.js";
@@ -98,6 +99,7 @@ declare const fullApi: ApiFromModules<{
   "tables/oauthStates/mutations": typeof tables_oauthStates_mutations;
   "tables/oauthStates/queries": typeof tables_oauthStates_queries;
   "tables/passports": typeof tables_passports;
+  "tables/slices/accessRequestPublic": typeof tables_slices_accessRequestPublic;
   "tables/slices/accessRequests": typeof tables_slices_accessRequests;
   "tables/slices/accessRequestsMint": typeof tables_slices_accessRequestsMint;
   "tables/slices/credentials": typeof tables_slices_credentials;
