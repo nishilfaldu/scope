@@ -8,6 +8,8 @@ import { markExpired } from "./helpers";
 export const MAX_PASSPORT_NAME = 80;
 export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
+
 export const expireDue = internalMutation({
   args: {},
   returns: v.number(),
@@ -31,6 +33,7 @@ export const create = authenticatedMutation({
     name: v.string(),
     ttlMs: v.number(),
     apps: v.array(appValidator),
+    mintPolicy: v.optional(mintPolicyValidator),
   },
   returns: v.object({
     id: v.id("slices"),
@@ -39,6 +42,7 @@ export const create = authenticatedMutation({
     expiresAt: v.number(),
     name: v.string(),
     apps: v.array(appValidator),
+    mintPolicy: mintPolicyValidator,
   }),
   handler: async (ctx, args) => {
     const { userId } = ctx;
@@ -55,6 +59,7 @@ export const create = authenticatedMutation({
     if (args.ttlMs > MAX_TTL_MS) {
       throw new Error("ttlMs must be 7 days or fewer");
     }
+    const mintPolicy = args.mintPolicy === "approve" ? "approve" : "auto";
     const uniqueApps = [...new Set(args.apps)];
     if (uniqueApps.length === 0) {
       throw new Error("Turn on at least one app");
@@ -109,6 +114,7 @@ export const create = authenticatedMutation({
       secretHash,
       status: "active",
       expiresAt,
+      mintPolicy,
     });
 
     return {
@@ -118,7 +124,31 @@ export const create = authenticatedMutation({
       expiresAt,
       name,
       apps: uniqueApps,
+      mintPolicy,
     };
+  },
+});
+
+export const setMintPolicy = authenticatedMutation({
+  args: {
+    sliceToken: v.string(),
+    mintPolicy: mintPolicyValidator,
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { userId } = ctx;
+    const slice = await ctx.db
+      .query("slices")
+      .withIndex("by_token", (q) => q.eq("token", args.sliceToken))
+      .unique();
+    if (!slice || slice.userId !== userId) {
+      throw new Error("Slice not found");
+    }
+    if (slice.status !== "active") {
+      throw new Error("Passport is not live");
+    }
+    await ctx.db.patch("slices", slice._id, { mintPolicy: args.mintPolicy });
+    return null;
   },
 });
 
