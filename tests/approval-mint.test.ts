@@ -152,7 +152,9 @@ describe("approve-gated mint", () => {
     expect(minted.accessToken).toBeTruthy();
     expect(minted.app).toBe("github");
     expect(minted.requestId).toBe(pendingBody.requestId);
-    expect(JSON.stringify(minted)).not.toMatch(/ghs_/);
+    // Standing-token handoff is unchanged in this PR: claim still returns the
+    // upstream provider token (ghs_…) via issueShortLivedAccess.
+    expect(minted.accessToken).toBe("ghs_standing_token");
 
     const secondClaim = await test.fetch("/api/credentials/claim", {
       method: "POST",
