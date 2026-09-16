@@ -7,7 +7,7 @@ The system has two layers:
 1. A **passport** belongs to the user. It is the long-lived vault that holds the user's connected services and their real upstream tokens.
 2. A **slice** belongs to one agent. It is a scoped, expiring grant created from one passport.
 
-Connect once, give many agents access. A user can connect GitHub, Google, or Slack once, then give each agent its own slice of that access.
+Connect once, give many agents access. A user can connect GitHub, Google, Slack, GitLab, or another service once, then give each agent its own slice of that access.
 
 ## Passport
 
@@ -21,7 +21,7 @@ A passport is owned by a user and stays inside Agent Passport. It holds:
 
 The passport does not have an external key and secret. Nothing outside the backend authenticates as the passport.
 
-The user reaches it through their signed-in dashboard session. The backend uses its upstream OAuth tokens to talk to GitHub, Slack, Google, and other services.
+The user reaches it through their signed-in dashboard session. The backend uses its upstream OAuth tokens to talk to GitHub, Slack, Google, GitLab, and other services.
 
 A user can have more than one passport when they need separation, such as work and personal accounts.
 
@@ -47,7 +47,7 @@ Every agent gets its own slice. Two agents never share one. That keeps revocatio
 
 The user connects a service from the dashboard:
 
-1. The signed-in user clicks Connect for GitHub, Slack, Google, or another service.
+1. The signed-in user clicks Connect for GitHub, Slack, Google, GitLab, or another service.
 2. Agent Passport creates a one-time OAuth state value bound to the signed-in user, their passport, the service, and a short expiry.
 3. Agent Passport sends the user to the provider's official OAuth consent screen.
 4. The provider returns an authorization code and the same state value.
@@ -101,6 +101,7 @@ There are no plaintext or API compatibility shims beyond the default `auto` poli
 | **Slack** | Mint via token-rotation refresh → new access | Standing `xoxp` without rotation → hard-fail. |
 | **Notion** | Mint via refresh → new access | Legacy non-expiring tokens without refresh → hard-fail. |
 | **GitHub** | Mint via GitHub App user-token refresh → new access | Classic OAuth / standing-only user tokens (no refresh) → **hard-fail**. Use a GitHub App (`Iv…` client) that issues refreshable user access tokens. |
+| **GitLab** | Mint via refresh → short-lived access (~2h) | gitlab.com only (self-managed later). No refresh → hard-fail. |
 
 There is **no** request proxy. Agents call providers directly with the minted Bearer.
 
@@ -221,3 +222,23 @@ Create a Sign in with Vercel application, register `https://<deployment>.convex.
 5. Connect Zoom from `/connections`. Disconnecting revokes the current access token through Zoom's OAuth revoke endpoint.
 
 Official references: [Zoom OAuth](https://developers.zoom.us/docs/integrations/oauth/) and [Zoom API reference](https://developers.zoom.us/docs/api/).
+
+### GitLab OAuth setup
+
+GitLab support uses **gitlab.com** only. Self-managed GitLab instances are out of scope for this connection.
+
+1. Open [GitLab User Settings → Applications](https://gitlab.com/-/user_settings/applications) (or a group/instance application with equivalent scopes).
+2. Create an application named Agent Passport. Enable Confidential application. Select scopes **`api`** and **`read_user`**.
+3. Set the redirect URI to:
+   `https://<deployment>.convex.site/api/gitlab/callback`
+4. Copy the Application ID and Secret. Set them on Convex and deploy:
+
+   ```bash
+   npx convex env set GITLAB_CLIENT_ID <application-id>
+   npx convex env set GITLAB_CLIENT_SECRET <secret>
+   npx convex deploy
+   ```
+
+5. Connect **GitLab** from `/connections`. Access tokens expire (~2 hours); Agent Passport mints short-lived tokens for agents via refresh. Disconnecting revokes the current access token through GitLab's OAuth revoke endpoint.
+
+Official references: [GitLab OAuth 2.0](https://docs.gitlab.com/api/oauth2/) and [OAuth provider applications](https://docs.gitlab.com/integration/oauth_provider/).
