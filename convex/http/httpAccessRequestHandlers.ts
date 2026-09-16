@@ -58,7 +58,7 @@ export const httpCreateAccessRequestHandler = httpAction(async (ctx, request) =>
     typeof body.reason === "string" ? body.reason : undefined;
 
   const created = await ctx.runMutation(
-    internal.tables.slices.accessRequests.createOnboarding,
+    internal.tables.slices.onboardingAccess.createOnboarding,
     { agentName, apps, ttlMs, reason },
   );
   if (!created.ok) {
@@ -92,7 +92,7 @@ export const httpAccessRequestStatusHandler = httpAction(async (ctx, request) =>
   }
 
   const status = await ctx.runMutation(
-    internal.tables.slices.accessRequests.resolveOnboardingStatus,
+    internal.tables.slices.onboardingAccess.resolveOnboardingStatus,
     { claimHandle },
   );
   if (!status.ok) {
@@ -122,7 +122,7 @@ export const httpAccessRequestClaimHandler = httpAction(async (ctx, request) => 
   }
 
   const decision = await ctx.runMutation(
-    internal.tables.slices.accessRequests.resolveOnboardingClaim,
+    internal.tables.slices.onboardingAccess.resolveOnboardingClaim,
     { claimHandle },
   );
   if (!decision.ok) {
