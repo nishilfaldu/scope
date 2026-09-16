@@ -8,9 +8,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -21,42 +18,5 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: test
-        id: vitest
-        run: pnpm test 2>&1 | tee test-output.txt; exit ${PIPESTATUS[0]}
-      - name: lint
-        id: eslint
-        run: pnpm lint 2>&1 | tee lint-output.txt; exit ${PIPESTATUS[0]}
-      - name: Comment CI failure output on PR
-        if: failure() && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const testOut = fs.existsSync('test-output.txt') ? fs.readFileSync('test-output.txt', 'utf8') : '(no test-output.txt)';
-            const lintOut = fs.existsSync('lint-output.txt') ? fs.readFileSync('lint-output.txt', 'utf8') : '(no lint-output.txt — test likely failed first)';
-            const clip = (s) => {
-              const lines = s.trimEnd().split('\n');
-              return lines.slice(-120).join('\n');
-            };
-            const body = [
-              '## CI failure dump (temporary)',
-              '',
-              `head: \`${context.sha.slice(0, 7)}\``,
-              '',
-              '### pnpm test (last 120 lines)',
-              '```',
-              clip(testOut),
-              '```',
-              '',
-              '### pnpm lint (last 120 lines)',
-              '```',
-              clip(lintOut),
-              '```',
-            ].join('\n');
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
-            });
+      - run: pnpm test
+      - run: pnpm lint
