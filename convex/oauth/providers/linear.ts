@@ -21,7 +21,11 @@ async function tokenRequest(body: Record<string, string>) {
   const response = await fetch("https://api.linear.app/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ ...body, ...client }).toString(),
+    body: new URLSearchParams({
+      ...body,
+      client_id: client.clientId,
+      client_secret: client.clientSecret,
+    }).toString(),
   });
   const raw: unknown = await response.json();
   if (!isPlainObject(raw) || typeof raw.access_token !== "string") {
