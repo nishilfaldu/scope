@@ -47,42 +47,12 @@ const boardRequest = v.object({
   claimedAt: v.optional(v.number()),
 });
 
-function isCompleteAccessRequest(request: Doc<"accessRequests">): boolean {
-  return (
-    request.kind !== undefined &&
-    request.publicToken !== undefined &&
-    request.claimSecretHash !== undefined
-  );
-}
-
 export const expireDue = internalMutation({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
     const now = Date.now();
-    let changed = 0;
-
-    // Pre-prod: delete mint rows from before option A (missing kind/token/hash)
-    // so they do not linger after the schema soft-landed those fields as optional.
-    for (const status of [
-      "pending",
-      "approved",
-      "denied",
-      "expired",
-      "claimed",
-    ] as const) {
-      const rows = await ctx.db
-        .query("accessRequests")
-        .withIndex("by_status_and_expiresAt", (q) => q.eq("status", status))
-        .take(50);
-      for (const request of rows) {
-        if (!isCompleteAccessRequest(request)) {
-          await ctx.db.delete("accessRequests", request._id);
-          changed += 1;
-        }
-      }
-    }
-
+    let expired = 0;
     for (const status of ["pending", "approved"] as const) {
       const due = await ctx.db
         .query("accessRequests")
@@ -94,10 +64,10 @@ export const expireDue = internalMutation({
         await ctx.db.patch("accessRequests", request._id, {
           status: "expired",
         });
-        changed += 1;
+        expired += 1;
       }
     }
-    return changed;
+    return expired;
   },
 });
 
@@ -105,9 +75,6 @@ async function toBoardRequest(
   ctx: Pick<QueryCtx, "db">,
   request: Doc<"accessRequests">,
 ) {
-  if (!isCompleteAccessRequest(request)) {
-    throw new Error("Incomplete access request row");
-  }
   if (request.kind === "onboarding") {
     return {
       _id: request._id,
@@ -159,10 +126,7 @@ export const listPending = authenticatedQuery({
       )
       .collect();
     const now = Date.now();
-    const live = pending.filter(
-      (request) =>
-        request.expiresAt > now && isCompleteAccessRequest(request),
-    );
+    const live = pending.filter((request) => request.expiresAt > now);
     live.sort((a, b) => b._creationTime - a._creationTime);
     return await Promise.all(live.map((request) => toBoardRequest(ctx, request)));
   },
@@ -180,10 +144,7 @@ export const pendingCount = authenticatedQuery({
       )
       .collect();
     const now = Date.now();
-    return pending.filter(
-      (request) =>
-        request.expiresAt > now && isCompleteAccessRequest(request),
-    ).length;
+    return pending.filter((request) => request.expiresAt > now).length;
   },
 });
 
@@ -210,7 +171,7 @@ export const listForSlice = authenticatedQuery({
           q.eq("sliceId", id).eq("status", status),
         )
         .collect();
-      all.push(...rows.filter(isCompleteAccessRequest));
+      all.push(...rows);
     }
     all.sort((a, b) => b._creationTime - a._creationTime);
     return await Promise.all(
@@ -227,7 +188,7 @@ export const getByPublicToken = authenticatedQuery({
       .query("accessRequests")
       .withIndex("by_public_token", (q) => q.eq("publicToken", args.publicToken))
       .unique();
-    if (!request || !isCompleteAccessRequest(request)) return null;
+    if (!request) return null;
     if (request.userId && request.userId !== ctx.userId) {
       return null;
     }
@@ -244,14 +205,14 @@ export const bindToViewer = authenticatedMutation({
       .query("accessRequests")
       .withIndex("by_public_token", (q) => q.eq("publicToken", args.publicToken))
       .unique();
-    if (!request || !isCompleteAccessRequest(request)) return null;
+    if (!request) return null;
     if (request.userId && request.userId !== userId) {
       return null;
     }
     if (!request.userId) {
       await ctx.db.patch("accessRequests", request._id, { userId });
       const updated = await ctx.db.get("accessRequests", request._id);
-      if (!updated || !isCompleteAccessRequest(updated)) return null;
+      if (!updated) return null;
       return await toBoardRequest(ctx, updated);
     }
     return await toBoardRequest(ctx, request);
@@ -267,7 +228,7 @@ export const decide = authenticatedMutation({
   handler: async (ctx, args) => {
     const { userId } = ctx;
     const request = await ctx.db.get("accessRequests", args.requestId);
-    if (!request || !isCompleteAccessRequest(request)) {
+    if (!request) {
       throw new Error("Request not found");
     }
     if (request.userId && request.userId !== userId) {

@@ -66,13 +66,8 @@ export default defineSchema({
   // - onboarding: agent-initiated grant request before any slice exists.
   //   Approve creates the slice; claim returns sliceToken/sliceSecret once.
   // - mint: operator approval for a short-lived credential on an existing slice.
-  //
-  // kind / publicToken / claimSecretHash are optional only so `convex deploy`
-  // can accept pre-option-A mint rows still in the table (those fields were
-  // required-new). Writers always set them; expireDue deletes incomplete legacy
-  // rows. Pre-prod: not an API compat shim.
   accessRequests: defineTable({
-    kind: v.optional(accessRequestKindValidator),
+    kind: accessRequestKindValidator,
     // Bound when a signed-in user opens the approval URL or decides.
     userId: v.optional(v.id("users")),
     // Set for mint immediately; set for onboarding on approve.
@@ -86,9 +81,9 @@ export default defineSchema({
     app: v.optional(appValidator),
     refresh: v.optional(v.boolean()),
     // Chat-safe public id used in BOARD_ORIGIN approval URLs.
-    publicToken: v.optional(v.string()),
+    publicToken: v.string(),
     // Agent-only claim handle (hashed). Never put in chat or the approval URL.
-    claimSecretHash: v.optional(v.string()),
+    claimSecretHash: v.string(),
     // Onboarding: one-time slice secret ciphertext until claim.
     issuedSliceToken: v.optional(v.string()),
     issuedSliceSecretCipher: v.optional(v.string()),

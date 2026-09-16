@@ -156,12 +156,7 @@ export const resolveOnboardingStatus = internalMutation({
         q.eq("claimSecretHash", claimSecretHash),
       )
       .unique();
-    if (
-      !request ||
-      request.kind !== "onboarding" ||
-      !request.publicToken ||
-      !request.claimSecretHash
-    ) {
+    if (!request || request.kind !== "onboarding") {
       return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
     }
     const now = Date.now();
@@ -230,12 +225,7 @@ export const resolveOnboardingClaim = internalMutation({
         q.eq("claimSecretHash", claimSecretHash),
       )
       .unique();
-    if (
-      !request ||
-      request.kind !== "onboarding" ||
-      !request.publicToken ||
-      !request.claimSecretHash
-    ) {
+    if (!request || request.kind !== "onboarding") {
       return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
     }
     const now = Date.now();

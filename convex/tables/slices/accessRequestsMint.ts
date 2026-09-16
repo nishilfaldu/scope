@@ -125,9 +125,7 @@ export const resolveClaim = internalMutation({
     if (
       !request ||
       request.kind !== "mint" ||
-      request.sliceId !== slice._id ||
-      !request.publicToken ||
-      !request.claimSecretHash
+      request.sliceId !== slice._id
     ) {
       return denyCreate(404, "Unknown credential request", "INVALID_REQUEST");
     }
