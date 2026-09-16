@@ -118,6 +118,15 @@ Open [http://localhost:3000](http://localhost:3000). Convex HTTP routes live on 
 
 Set OAuth client IDs and secrets on the Convex deployment. Set `BOARD_ORIGIN` to the board's origin, such as `http://localhost:3000` in development, so OAuth can return there.
 
+All connection secrets (upstream OAuth access and refresh tokens) are stored encrypted at rest with AES-256-GCM using `TOKEN_ENCRYPTION_KEY` in Convex env. Generate a base64-encoded 32-byte key and set it before connecting services:
+
+```bash
+openssl rand -base64 32
+npx convex env set TOKEN_ENCRYPTION_KEY <base64-32-byte-key>
+```
+
+Keep the same key across deploys. Rotating it without re-saving connections will break decryption of existing ciphertext. If anything was stored before encryption was enabled, reconnect those providers so tokens are stored as `enc:v1:` ciphertext.
+
 `GET /api/health` reports which OAuth providers have both a non-empty client ID and secret. It does not return the values.
 
 If schema deploy fails because `tokenLogs` still has rows, delete those documents in the Convex dashboard, then deploy again. Do not add a wipe mutation.
