@@ -37,6 +37,9 @@ export function oauthConfigured(): Record<ProviderId, boolean> {
     zoom:
       envConfigured(env.ZOOM_CLIENT_ID) &&
       envConfigured(env.ZOOM_CLIENT_SECRET),
+    teams:
+      envConfigured(env.TEAMS_CLIENT_ID) &&
+      envConfigured(env.TEAMS_CLIENT_SECRET),
   };
 }
 

@@ -8,6 +8,7 @@ import { notion } from "./notion";
 import { linear } from "./linear";
 import { vercel } from "./vercel";
 import { zoom } from "./zoom";
+import { teams } from "./teams";
 
 export const PROVIDER_OAUTH: Record<ProviderId, ProviderOAuth> = {
   github,
@@ -18,4 +19,5 @@ export const PROVIDER_OAUTH: Record<ProviderId, ProviderOAuth> = {
   linear,
   vercel,
   zoom,
+  teams,
 };
