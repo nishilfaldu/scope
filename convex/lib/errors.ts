@@ -33,6 +33,10 @@ export const APP_UNAVAILABLE_ERROR =
 
 export const UNAUTHORIZED_ERROR = "Unknown slice token or slice secret";
 
+export const REVOKED_ERROR = "Slice revoked";
+
+export const EXPIRED_ERROR = "Slice expired";
+
 export const APPROVAL_REQUIRED_ERROR =
   "Operator approval required before this credential can be minted";
 

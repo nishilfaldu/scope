@@ -9,6 +9,8 @@ import {
 import {
   denyResultValidator,
   APP_UNAVAILABLE_ERROR,
+  EXPIRED_ERROR,
+  REVOKED_ERROR,
   UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
 import { hashesEqual, sha256Hex } from "../../lib/secrets";
@@ -64,10 +66,10 @@ export const authorizeCreate = internalMutation({
     const provider = providerForApp(app);
 
     if (slice.status === "revoked") {
-      return denyCreate(403, "Passport revoked", "REVOKED");
+      return denyCreate(403, REVOKED_ERROR, "REVOKED");
     }
     if (slice.status === "expired" || slice.expiresAt <= now) {
-      return denyCreate(403, "Passport expired", "EXPIRED");
+      return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
     }
     const grant = await ctx.db.get("grants", slice.grantId);
     if (!grant || !grant.apps.includes(app)) {

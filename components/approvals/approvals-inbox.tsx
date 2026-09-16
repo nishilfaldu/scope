@@ -57,7 +57,7 @@ export function ApprovalsInbox() {
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
-                          href={`/passports/${request.sliceId}`}
+                          href={`/slices/${request.sliceId}`}
                           className="font-medium underline-offset-4 hover:underline"
                         >
                           {request.sliceName}

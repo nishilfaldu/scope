@@ -68,7 +68,7 @@ export function AppSidebar({
                   <SidebarMenuButton
                     isActive={
                       item.href === "/"
-                        ? pathname === "/" || pathname.startsWith("/passports/")
+                        ? pathname === "/" || pathname.startsWith("/slices/")
                         : pathname === item.href || pathname.startsWith(`${item.href}/`)
                     }
                     tooltip={item.title}
