@@ -37,6 +37,8 @@ function providerIcon(id: ProviderId) {
       return CloudIcon;
     case "zoom":
       return DatabaseIcon;
+    case "teams":
+      return SlackIcon;
     default: {
       const _exhaustive: never = id;
       return _exhaustive;
