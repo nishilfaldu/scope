@@ -50,6 +50,12 @@ export type IssueShortLivedAccessResult =
   | { accessToken: string; expiresAt: number }
   | { error: string; code: AgentErrorCode };
 
+const SHORT_LIVED_UNAVAILABLE_RESULT = {
+  error:
+    "Provider cannot mint a short-lived access token for agents. Reconnect with a refresh-capable OAuth grant, or this provider hard-fails standing-token handoff.",
+  code: "SHORT_LIVED_UNAVAILABLE" as const satisfies AgentErrorCode,
+};
+
 /**
  * Mint a provider-native short-lived access token for an agent.
  *
@@ -78,13 +84,15 @@ export async function issueShortLivedAccess(
     };
   }
 
-  const minted = await refreshProviderTokens(provider, connection);
+  let minted: RefreshedTokens | null;
+  try {
+    minted = await refreshProviderTokens(provider, connection);
+  } catch {
+    // Network / malformed / unexpected refresh failures must not become 500s.
+    return SHORT_LIVED_UNAVAILABLE_RESULT;
+  }
   if (!minted) {
-    return {
-      error:
-        "Provider cannot mint a short-lived access token for agents. Reconnect with a refresh-capable OAuth grant, or this provider hard-fails standing-token handoff.",
-      code: "SHORT_LIVED_UNAVAILABLE",
-    };
+    return SHORT_LIVED_UNAVAILABLE_RESULT;
   }
 
   // Refuse vault standing-token handoff even if a provider regresses.

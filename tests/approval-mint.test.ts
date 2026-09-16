@@ -145,6 +145,38 @@ describe("auto mint policy unchanged", () => {
     expect(body).not.toHaveProperty("accessToken");
     expect(JSON.stringify(body)).not.toMatch(/ghs_standing_token/);
   });
+
+  test("refresh fetch rejection yields SHORT_LIVED_UNAVAILABLE not 500", async () => {
+    const test = t();
+    const { backend } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
+    vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
+    vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new Error("network down"),
+    );
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
+      name: "Refresh throw",
+      ttlMs: 60_000,
+      apps: ["github"],
+      mintPolicy: "auto",
+    });
+    const response = await test.fetch("/api/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        app: "github",
+      }),
+    });
+    expect(response.status).toBe(503);
+    const body = await response.json();
+    expect(body.code).toBe("SHORT_LIVED_UNAVAILABLE");
+    expect(body).not.toHaveProperty("accessToken");
+    expect(JSON.stringify(body)).not.toMatch(/ghs_standing_token/);
+  });
 });
 
 describe("approve-gated mint", () => {
