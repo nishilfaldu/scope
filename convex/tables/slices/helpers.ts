@@ -3,6 +3,14 @@ import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { AgentErrorCode } from "../../lib/errors";
 import { hashesEqual, sha256Hex } from "../../lib/secrets";
 
+export type MintPolicy = "auto" | "approve";
+
+export function effectiveMintPolicy(
+  slice: Pick<Doc<"slices">, "mintPolicy">,
+): MintPolicy {
+  return slice.mintPolicy === "approve" ? "approve" : "auto";
+}
+
 export function withoutSecretHash(slice: Doc<"slices">) {
   return {
     _id: slice._id,
@@ -14,6 +22,7 @@ export function withoutSecretHash(slice: Doc<"slices">) {
     token: slice.token,
     status: slice.status,
     expiresAt: slice.expiresAt,
+    mintPolicy: effectiveMintPolicy(slice),
   };
 }
 

@@ -9,6 +9,16 @@ const sliceStatusValidator = v.union(
   v.literal("expired"),
 );
 
+const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
+
+const accessRequestStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("approved"),
+  v.literal("denied"),
+  v.literal("expired"),
+  v.literal("claimed"),
+);
+
 export default defineSchema({
   ...authTables,
 
@@ -29,6 +39,8 @@ export default defineSchema({
     secretHash: v.string(),
     status: sliceStatusValidator,
     expiresAt: v.number(),
+    // Missing on older rows means auto (pre-launch default).
+    mintPolicy: v.optional(mintPolicyValidator),
   })
     .index("by_token", ["token"])
     .index("by_user", ["userId"])
@@ -44,6 +56,23 @@ export default defineSchema({
     apps: v.array(appValidator),
     expiresAt: v.number(),
   }).index("by_passport", ["passportId"]),
+
+  // Operator approval queue for credential mint when mintPolicy is "approve".
+  // Token is minted at claim time, not at approve.
+  accessRequests: defineTable({
+    sliceId: v.id("slices"),
+    userId: v.id("users"),
+    app: appValidator,
+    refresh: v.boolean(),
+    status: accessRequestStatusValidator,
+    // Pending deadline (~5m) or post-approve claim window (~60s).
+    expiresAt: v.number(),
+    decidedAt: v.optional(v.number()),
+    claimedAt: v.optional(v.number()),
+  })
+    .index("by_slice_and_status", ["sliceId", "status"])
+    .index("by_user_and_status", ["userId", "status"])
+    .index("by_status_and_expiresAt", ["status", "expiresAt"]),
 
   connections: defineTable({
     userId: v.id("users"),

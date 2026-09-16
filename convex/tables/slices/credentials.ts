@@ -12,9 +12,11 @@ import {
   UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
 import { hashesEqual, sha256Hex } from "../../lib/secrets";
-import { denyCreate } from "./helpers";
+import { denyCreate, effectiveMintPolicy } from "./helpers";
 
 export const APP_TOKEN_TTL_MS = 15 * 60 * 1000;
+
+const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
 
 export const authorizeCreate = internalMutation({
   args: {
@@ -31,6 +33,7 @@ export const authorizeCreate = internalMutation({
       app: appValidator,
       provider: providerValidator,
       refresh: v.boolean(),
+      mintPolicy: mintPolicyValidator,
     }),
     denyResultValidator,
   ),
@@ -89,6 +92,7 @@ export const authorizeCreate = internalMutation({
       app,
       provider,
       refresh: args.refresh,
+      mintPolicy: effectiveMintPolicy(slice),
     };
   },
 });
