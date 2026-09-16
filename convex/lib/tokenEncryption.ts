@@ -91,11 +91,14 @@ export async function encryptToken(plaintext: string): Promise<string> {
 }
 
 /**
- * Decrypt a stored token. Legacy plaintext (no `enc:v1:` prefix) is returned as-is.
+ * Decrypt a stored token. Values without a valid `enc:v1:` ciphertext
+ * prefix are rejected — plaintext is never returned as-is.
  */
 export async function decryptToken(stored: string): Promise<string> {
   if (!isEncryptedToken(stored)) {
-    return stored;
+    throw new Error(
+      "Stored connection token is not encrypted (expected enc:v1: ciphertext). Reconnect the provider so tokens are stored encrypted.",
+    );
   }
   const packed = base64ToBytes(stored.slice(TOKEN_CIPHER_PREFIX.length));
   if (packed.byteLength <= IV_BYTES) {

@@ -43,9 +43,11 @@ describe("token encryption helpers", () => {
     expect(await decryptToken(encrypted)).toBe(plaintext);
   });
 
-  test("decrypt returns legacy plaintext unchanged", async () => {
-    expect(await decryptToken("ya29.legacy_plain")).toBe("ya29.legacy_plain");
-    expect(isEncryptedToken("ya29.legacy_plain")).toBe(false);
+  test("decrypt rejects plaintext-looking stored values", async () => {
+    await expect(decryptToken("ya29.not_encrypted")).rejects.toThrow(
+      /not encrypted/,
+    );
+    expect(isEncryptedToken("ya29.not_encrypted")).toBe(false);
   });
 });
 
@@ -91,7 +93,7 @@ describe("connection secrets at rest", () => {
     });
   });
 
-  test("legacy plaintext rows still read; next save re-encrypts", async () => {
+  test("getConnection rejects plaintext-looking stored tokens", async () => {
     const test = t();
     const { userId } = await signedIn(test);
 
@@ -99,51 +101,19 @@ describe("connection secrets at rest", () => {
       await ctx.db.insert("connections", {
         userId,
         provider: "github",
-        accessToken: "ghs_legacy_plain",
+        accessToken: "ghs_plaintext_stored",
         login: "octocat",
         providerUserId: "1",
-        refreshToken: "ghr_legacy_plain",
+        refreshToken: "ghr_plaintext_stored",
       });
     });
 
-    const loaded = await test.query(
-      internal.tables.connections.queries.getConnection,
-      { userId, provider: "github" },
-    );
-    expect(loaded).toMatchObject({
-      accessToken: "ghs_legacy_plain",
-      refreshToken: "ghr_legacy_plain",
-    });
-
-    await test.mutation(internal.tables.connections.mutations.saveConnection, {
-      userId,
-      provider: "github",
-      accessToken: "ghs_legacy_plain",
-      login: "octocat",
-      providerUserId: "1",
-      refreshToken: "ghr_legacy_plain",
-    });
-
-    const stored = await test.run(async (ctx) => {
-      return await ctx.db
-        .query("connections")
-        .withIndex("by_user_and_provider", (q) =>
-          q.eq("userId", userId).eq("provider", "github"),
-        )
-        .unique();
-    });
-    expect(stored!.accessToken.startsWith(TOKEN_CIPHER_PREFIX)).toBe(true);
-    expect(stored!.refreshToken!.startsWith(TOKEN_CIPHER_PREFIX)).toBe(true);
-    expect(stored!.accessToken).not.toBe("ghs_legacy_plain");
-
-    const after = await test.query(
-      internal.tables.connections.queries.getConnection,
-      { userId, provider: "github" },
-    );
-    expect(after).toMatchObject({
-      accessToken: "ghs_legacy_plain",
-      refreshToken: "ghr_legacy_plain",
-    });
+    await expect(
+      test.query(internal.tables.connections.queries.getConnection, {
+        userId,
+        provider: "github",
+      }),
+    ).rejects.toThrow(/not encrypted/);
   });
 
   test("listStatuses omits access and refresh tokens", async () => {
