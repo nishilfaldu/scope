@@ -5,7 +5,7 @@ import { authenticatedMutation, authenticatedQuery } from "../../functions";
 import { appValidator } from "../../domain/apps";
 import { requestStatusValidator, requestKindValidator, effectiveRequestStatus } from "../../domain/requests";
 import { encryptToken } from "../../lib/tokenEncryption";
-import { createSlice, validatedBindings } from "./helpers";
+import { bindingFor, createSlice, validatedBindings } from "./helpers";
 
 export const CLAIM_WINDOW_MS = 60 * 1000;
 
@@ -16,6 +16,7 @@ const boardRequest = v.object({
   sliceToken: v.optional(v.string()), agentName: v.optional(v.string()),
   apps: v.optional(v.array(appValidator)), ttlMs: v.optional(v.number()),
   reason: v.optional(v.string()), app: v.optional(appValidator),
+  accountLogin: v.optional(v.string()),
   status: requestStatusValidator, expiresAt: v.number(),
   decidedAt: v.optional(v.number()), claimedAt: v.optional(v.number()),
 });
@@ -32,11 +33,13 @@ async function toBoardRequest(ctx: Pick<QueryCtx, "db">, request: Doc<"accessReq
     decidedAt: request.decidedAt, claimedAt: request.claimedAt,
   };
   const slice = request.sliceId ? await ctx.db.get("slices", request.sliceId) : null;
+  const binding = slice ? await bindingFor(ctx, slice._id, request.app) : null;
+  const connection = binding ? await ctx.db.get("connections", binding.connectionId) : null;
   return {
     _id: request._id, _creationTime: request._creationTime,
     kind: "mint" as const, publicToken: request.publicToken,
     sliceId: request.sliceId, sliceName: slice?.name ?? "Unknown slice",
-    sliceToken: slice?.token, app: request.app, status,
+    sliceToken: slice?.token, app: request.app, accountLogin: connection?.login, status,
     expiresAt: request.expiresAt,
     decidedAt: request.decidedAt, claimedAt: request.claimedAt,
   };

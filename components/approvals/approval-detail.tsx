@@ -236,7 +236,12 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                         {APP_LABELS[request.app]}
                       </Badge>
                     ) : null}
-                                    {request.sliceId ? (
+                    {request.accountLogin ? (
+                      <span className="text-sm text-muted-foreground">
+                        Account: {request.accountLogin}
+                      </span>
+                    ) : null}
+                    {request.sliceId ? (
                       <Link
                         href={`/slices/${request.sliceId}`}
                         className="text-sm underline-offset-4 hover:underline"

@@ -82,6 +82,9 @@ export function ApprovalsInbox() {
                           : null}
                       </div>
                       <p className="text-sm text-muted-foreground">
+                        {request.kind === "mint" && request.accountLogin
+                          ? `${request.accountLogin} · `
+                          : ""}
                         Expires {formatRemaining(request.expiresAt, now)}
                         {request.reason ? ` · ${request.reason}` : ""}
                       </p>
