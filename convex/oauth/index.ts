@@ -1,5 +1,5 @@
 import { env } from "../_generated/server";
-import type { ProviderId } from "../domain/apps";
+import type { AppId, ProviderId } from "../domain/apps";
 import { envConfigured } from "./shared";
 import { PROVIDER_OAUTH } from "./providers";
 import type {
@@ -43,16 +43,18 @@ export function oauthConfigured(): Record<ProviderId, boolean> {
 export async function startAuthorize(
   provider: ProviderId,
   state: string,
+  app: AppId,
 ): Promise<AuthorizeStart> {
-  return await PROVIDER_OAUTH[provider].authorize(state);
+  return await PROVIDER_OAUTH[provider].authorize(state, app);
 }
 
 export async function exchangeAuthorizationCode(
   provider: ProviderId,
   code: string,
-  state?: string,
+  state: string,
+  app: AppId,
 ): Promise<OAuthGrant | { error: string }> {
-  return await PROVIDER_OAUTH[provider].exchange(code, state);
+  return await PROVIDER_OAUTH[provider].exchange(code, state, app);
 }
 
 export async function refreshProviderTokens(

@@ -14,6 +14,7 @@ import {
   UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
 import { hashesEqual, sha256Hex } from "../../lib/secrets";
+import { selectedConnection } from "../connections/helpers";
 import { denyCreate, effectiveMintPolicy } from "./helpers";
 
 export const APP_TOKEN_TTL_MS = 15 * 60 * 1000;
@@ -34,6 +35,7 @@ export const authorizeCreate = internalMutation({
       userId: v.id("users"),
       app: appValidator,
       provider: providerValidator,
+      connectionId: v.id("connections"),
       refresh: v.boolean(),
       mintPolicy: mintPolicyValidator,
     }),
@@ -76,13 +78,8 @@ export const authorizeCreate = internalMutation({
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
     }
 
-    const connection = await ctx.db
-      .query("connections")
-      .withIndex("by_user_and_provider", (q) =>
-        q.eq("userId", slice.userId).eq("provider", provider),
-      )
-      .unique();
-
+    const binding = grant.bindings.find((entry) => entry.app === app);
+    const connection = binding ? await selectedConnection(ctx, slice.userId, app, binding.connectionId) : null;
     if (!connection) {
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
     }
@@ -93,6 +90,7 @@ export const authorizeCreate = internalMutation({
       userId: slice.userId,
       app,
       provider,
+      connectionId: connection._id,
       refresh: args.refresh,
       mintPolicy: effectiveMintPolicy(slice),
     };

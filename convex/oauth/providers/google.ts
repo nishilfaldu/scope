@@ -7,38 +7,30 @@ import {
   oauthErrorReason,
   refreshedFromPayload,
 } from "../shared";
+import { isGoogleApp, scopesForGoogleApp } from "../../domain/apps";
 import type { ProviderOAuth } from "../types";
 
-const GOOGLE_OAUTH_SCOPES = [
-  "openid",
-  "email",
-  "profile",
-  "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/calendar",
-  "https://www.googleapis.com/auth/drive",
-  "https://www.googleapis.com/auth/documents",
-  "https://www.googleapis.com/auth/spreadsheets",
-].join(" ");
-
 export const google: ProviderOAuth = {
-  authorize(state) {
+  authorize(state, app) {
+    if (!app || !isGoogleApp(app)) return { error: "Invalid Google app." };
     const clientId = envTrimmed(env.GOOGLE_CLIENT_ID);
     if (!clientId) {
       return { error: "Google OAuth is not configured." };
     }
     const authorize = new URL("https://accounts.google.com/o/oauth2/v2/auth");
     authorize.searchParams.set("client_id", clientId);
-    authorize.searchParams.set("redirect_uri", oauthCallbackUrl("google"));
+    authorize.searchParams.set("redirect_uri", oauthCallbackUrl(app));
     authorize.searchParams.set("response_type", "code");
-    authorize.searchParams.set("scope", GOOGLE_OAUTH_SCOPES);
+    authorize.searchParams.set("scope", scopesForGoogleApp(app));
     authorize.searchParams.set("state", state);
     authorize.searchParams.set("access_type", "offline");
-    authorize.searchParams.set("prompt", "consent");
-    authorize.searchParams.set("include_granted_scopes", "true");
+    authorize.searchParams.set("prompt", "consent select_account");
+    authorize.searchParams.set("include_granted_scopes", "false");
     return { url: authorize.toString() };
   },
 
-  async exchange(code) {
+  async exchange(code, _state, app) {
+    if (!app || !isGoogleApp(app)) return { error: "app" };
     const clientId = envTrimmed(env.GOOGLE_CLIENT_ID);
     const clientSecret = envTrimmed(env.GOOGLE_CLIENT_SECRET);
     if (!clientId || !clientSecret) {
@@ -52,7 +44,7 @@ export const google: ProviderOAuth = {
         client_secret: clientSecret,
         code,
         grant_type: "authorization_code",
-        redirect_uri: oauthCallbackUrl("google"),
+        redirect_uri: oauthCallbackUrl(app),
       }).toString(),
     });
     const tokenRaw: unknown = await tokenResponse.json();
@@ -64,14 +56,12 @@ export const google: ProviderOAuth = {
       { headers: { Authorization: `Bearer ${tokenRaw.access_token}` } },
     );
     const userRaw: unknown = await userResponse.json();
+    if (!userResponse.ok || !isPlainObject(userRaw) || typeof userRaw.sub !== "string" || !userRaw.sub) return { error: "identity" };
     const email =
       isPlainObject(userRaw) && typeof userRaw.email === "string"
         ? userRaw.email
         : "google";
-    const sub =
-      isPlainObject(userRaw) && typeof userRaw.sub === "string"
-        ? userRaw.sub
-        : email;
+    const sub = userRaw.sub;
     return grantFromTokenPayload(tokenRaw, { login: email, providerUserId: sub });
   },
 

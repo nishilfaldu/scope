@@ -1,7 +1,8 @@
 import { v } from "convex/values";
 import { internalMutation } from "../../_generated/server";
 import { authenticatedMutation } from "../../functions";
-import { appValidator, providerForApp } from "../../domain/apps";
+import { appValidator } from "../../domain/apps";
+import { connectionsForApp, selectedConnection } from "../connections/helpers";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
 import { markExpired, MAX_SLICE_NAME, MAX_TTL_MS } from "./helpers";
 
@@ -32,6 +33,7 @@ export const create = authenticatedMutation({
     name: v.string(),
     ttlMs: v.number(),
     apps: v.array(appValidator),
+    bindings: v.optional(v.array(v.object({ app: appValidator, connectionId: v.id("connections") }))),
     mintPolicy: v.optional(mintPolicyValidator),
   },
   returns: v.object({
@@ -64,25 +66,14 @@ export const create = authenticatedMutation({
     if (uniqueApps.length === 0) {
       throw new Error("Turn on at least one app");
     }
-    const connections = await ctx.db
-      .query("connections")
-      .withIndex("by_user_and_provider", (q) => q.eq("userId", userId))
-      .collect();
-    if (connections.length === 0) {
-      throw new Error(
-        "Connect an account at /connections before creating a slice",
-      );
-    }
-    const connectedProviders = new Set(
-      connections.map((connection) => connection.provider),
-    );
-    const unavailable = uniqueApps.find(
-      (app) => !connectedProviders.has(providerForApp(app)),
-    );
-    if (unavailable) {
-      throw new Error(
-        `Connect ${providerForApp(unavailable)} before allowing ${unavailable}`,
-      );
+    const bindings = args.bindings ?? (await Promise.all(uniqueApps.map(async (app) => {
+      const accounts = await connectionsForApp(ctx, userId, app);
+      return accounts.length === 1 ? { app, connectionId: accounts[0]._id } : null;
+    }))).filter((binding): binding is { app: (typeof uniqueApps)[number]; connectionId: import("../../_generated/dataModel").Id<"connections"> } => binding !== null);
+    if (bindings.length !== uniqueApps.length || new Set(bindings.map((binding) => binding.app)).size !== uniqueApps.length) throw new Error("Select one account for each app");
+    for (const app of uniqueApps) {
+      const binding = bindings.find((entry) => entry.app === app);
+      if (!binding || !await selectedConnection(ctx, userId, app, binding.connectionId)) throw new Error(`Select a connected account for ${app}`);
     }
 
     const passport = await ctx.db
@@ -99,6 +90,7 @@ export const create = authenticatedMutation({
       userId,
       agent: name,
       apps: uniqueApps,
+      bindings,
       expiresAt,
     });
 
@@ -157,6 +149,7 @@ export const setApp = authenticatedMutation({
     sliceToken: v.string(),
     app: appValidator,
     enabled: v.boolean(),
+    connectionId: v.optional(v.id("connections")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -185,21 +178,15 @@ export const setApp = authenticatedMutation({
       return null;
     }
     if (args.enabled) {
-      const provider = providerForApp(args.app);
-      const connection = await ctx.db
-        .query("connections")
-        .withIndex("by_user_and_provider", (q) =>
-          q.eq("userId", userId).eq("provider", provider),
-        )
-        .unique();
-      if (!connection) {
-        throw new Error(`Connect ${provider} before allowing ${args.app}`);
-      }
+      if (!args.connectionId || !await selectedConnection(ctx, userId, args.app, args.connectionId)) throw new Error(`Select a connected account for ${args.app}`);
     }
     const apps = args.enabled
       ? [...grant.apps, args.app]
       : grant.apps.filter((app) => app !== args.app);
-    await ctx.db.patch("grants", grant._id, { apps });
+    const bindings = args.enabled
+      ? [...grant.bindings.filter((binding) => binding.app !== args.app), { app: args.app, connectionId: args.connectionId! }]
+      : grant.bindings.filter((binding) => binding.app !== args.app);
+    await ctx.db.patch("grants", grant._id, { apps, bindings });
     return null;
   },
 });

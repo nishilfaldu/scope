@@ -31,6 +31,7 @@ export type ProviderOAuth = {
   exchange: (
     code: string,
     state?: string,
+    app?: AppId,
   ) => Promise<OAuthGrant | { error: string }>;
   refresh: (connection: ConnectionSecrets) => Promise<RefreshedTokens | null>;
   revoke: (accessToken: string) => Promise<void>;

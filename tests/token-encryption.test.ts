@@ -61,6 +61,7 @@ describe("connection secrets at rest", () => {
     await test.mutation(internal.tables.connections.mutations.saveConnection, {
       userId,
       provider: "github",
+      app: "github",
       accessToken,
       login: "octocat",
       providerUserId: "1",
@@ -70,8 +71,8 @@ describe("connection secrets at rest", () => {
     const stored = await test.run(async (ctx) => {
       return await ctx.db
         .query("connections")
-        .withIndex("by_user_and_provider", (q) =>
-          q.eq("userId", userId).eq("provider", "github"),
+        .withIndex("by_user_provider_app_providerUserId", (q) =>
+          q.eq("userId", userId).eq("provider", "github").eq("app", "github"),
         )
         .unique();
     });
@@ -83,7 +84,7 @@ describe("connection secrets at rest", () => {
 
     const loaded = await test.query(
       internal.tables.connections.queries.getConnection,
-      { userId, provider: "github" },
+      { userId, app: "github", connectionId: stored!._id },
     );
     expect(loaded).toMatchObject({
       accessToken,
@@ -97,10 +98,11 @@ describe("connection secrets at rest", () => {
     const test = t();
     const { userId } = await signedIn(test);
 
-    await test.run(async (ctx) => {
-      await ctx.db.insert("connections", {
+    const connectionId = await test.run(async (ctx) => {
+      return await ctx.db.insert("connections", {
         userId,
         provider: "github",
+        app: "github",
         accessToken: "ghs_plaintext_stored",
         login: "octocat",
         providerUserId: "1",
@@ -111,7 +113,7 @@ describe("connection secrets at rest", () => {
     await expect(
       test.query(internal.tables.connections.queries.getConnection, {
         userId,
-        provider: "github",
+        app: "github", connectionId,
       }),
     ).rejects.toThrow(/not encrypted/);
   });
@@ -122,6 +124,7 @@ describe("connection secrets at rest", () => {
     await test.mutation(internal.tables.connections.mutations.saveConnection, {
       userId,
       provider: "github",
+      app: "github",
       accessToken: "ghs_standing_token",
       login: "octocat",
       providerUserId: "1",
@@ -135,8 +138,9 @@ describe("connection secrets at rest", () => {
     const github = statuses.find(({ provider }) => provider === "github");
     expect(github).toEqual({
       provider: "github",
+      app: "github",
       connected: true,
-      login: "octocat",
+      accounts: [expect.objectContaining({ login: "octocat" })],
     });
     expect(JSON.stringify(statuses)).not.toMatch(/ghs_|ghr_|enc:v1:/);
     expect(github).not.toHaveProperty("accessToken");

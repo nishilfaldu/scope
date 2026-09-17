@@ -5,9 +5,9 @@ import { authenticatedMutation, authenticatedQuery } from "../../functions";
 import {
   appValidator,
   isAppId,
-  providerForApp,
   type AppId,
 } from "../../domain/apps";
+import { connectionsForApp, selectedConnection } from "../connections/helpers";
 import { encryptToken } from "../../lib/tokenEncryption";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
 import { ensurePassport } from "../passports";
@@ -223,6 +223,7 @@ export const decide = authenticatedMutation({
   args: {
     requestId: v.id("accessRequests"),
     decision: v.union(v.literal("approved"), v.literal("denied")),
+    bindings: v.optional(v.array(v.object({ app: appValidator, connectionId: v.id("connections") }))),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -274,25 +275,14 @@ export const decide = authenticatedMutation({
     if (apps.length === 0 || ttlMs <= 0) {
       throw new Error("Onboarding request is incomplete");
     }
-    const connections = await ctx.db
-      .query("connections")
-      .withIndex("by_user_and_provider", (q) => q.eq("userId", userId))
-      .collect();
-    if (connections.length === 0) {
-      throw new Error(
-        "Connect an account at /connections before approving this request",
-      );
-    }
-    const connectedProviders = new Set(
-      connections.map((connection) => connection.provider),
-    );
-    const unavailable = apps.find(
-      (app) => !connectedProviders.has(providerForApp(app)),
-    );
-    if (unavailable) {
-      throw new Error(
-        `Connect ${providerForApp(unavailable)} before allowing ${unavailable}`,
-      );
+    const bindings = args.bindings ?? (await Promise.all(apps.map(async (app) => {
+      const accounts = await connectionsForApp(ctx, userId, app);
+      return accounts.length === 1 ? { app, connectionId: accounts[0]._id } : null;
+    }))).filter((binding): binding is { app: AppId; connectionId: import("../../_generated/dataModel").Id<"connections"> } => binding !== null);
+    if (bindings.length !== apps.length || new Set(bindings.map((binding) => binding.app)).size !== apps.length) throw new Error("Select one account for each app");
+    for (const app of apps) {
+      const binding = bindings.find((entry) => entry.app === app);
+      if (!binding || !await selectedConnection(ctx, userId, app, binding.connectionId)) throw new Error(`Select a connected account for ${app}`);
     }
 
     const passportId = await ensurePassport(ctx, userId);
@@ -302,6 +292,7 @@ export const decide = authenticatedMutation({
       userId,
       agent: agentName,
       apps,
+      bindings,
       expiresAt,
     });
     const token = randomSecret("st_");

@@ -1,79 +1,31 @@
-import { PROVIDERS, type ProviderId } from "../convex/domain/apps";
+import { ALL_APPS, providerForApp, type AppId } from "../convex/domain/apps";
 
-export { PROVIDERS, type ProviderId };
-
-export type ConnectionRow = {
-  connected: boolean;
-  login: string | null;
-};
+export { ALL_APPS, type AppId };
+export const CONNECTION_APPS = [
+  { id: "github", name: "GitHub", description: "GitHub repositories and account." },
+  { id: "gmail", name: "Gmail", description: "Read and manage mail." },
+  { id: "calendar", name: "Google Calendar", description: "Manage calendar events." },
+  { id: "drive", name: "Google Drive", description: "Manage Drive files." },
+  { id: "docs", name: "Google Docs", description: "Manage documents." },
+  { id: "sheets", name: "Google Sheets", description: "Manage spreadsheets." },
+  { id: "slack", name: "Slack", description: "Slack workspace access." },
+  { id: "airtable", name: "Airtable", description: "Bases, schemas, records, and comments." },
+  { id: "notion", name: "Notion", description: "Pages and databases shared with Agent Passport." },
+  { id: "linear", name: "Linear", description: "Issues, projects, teams, and workflow updates." },
+  { id: "vercel", name: "Vercel", description: "Projects, deployments, domains, and team profile." },
+  { id: "zoom", name: "Zoom", description: "Meetings, webinars, and recordings." },
+] as const satisfies ReadonlyArray<{ id: AppId; name: string; description: string }>;
 
 const siteUrl = process.env.NEXT_PUBLIC_CONVEX_SITE_URL ?? "";
-
-export const PROVIDER_CONNECT_URL: Record<ProviderId, string> = {
-  github: `${siteUrl}/api/github/connect`,
-  google: `${siteUrl}/api/google/connect`,
-  slack: `${siteUrl}/api/slack/connect`,
-  airtable: `${siteUrl}/api/airtable/connect`,
-  notion: `${siteUrl}/api/notion/connect`,
-  linear: `${siteUrl}/api/linear/connect`,
-  vercel: `${siteUrl}/api/vercel/connect`,
-  zoom: `${siteUrl}/api/zoom/connect`,
-};
-
+export const APP_CONNECT_URL = Object.fromEntries(
+  ALL_APPS.map((app) => [app, `${siteUrl}/api/${app}/connect`]),
+) as Record<AppId, string>;
 export const CONNECT_ERRORS: Record<string, string> = {
-  token:
-    "The provider did not issue a token. Check the OAuth callback URL on the app.",
-  incorrect_client_credentials:
-    "The provider rejected the client secret. Set a new secret on Convex.",
-  redirect_uri_mismatch:
-    "The provider rejected the callback URL. Set it to this Convex site’s /api/<provider>/callback.",
-  bad_verification_code:
-    "The authorization code expired or was reused. Flip the toggle again.",
-  state: "Connect session expired. Flip the toggle again.",
+  token: "The provider did not issue a token. Check the OAuth callback URL.",
+  identity: "The provider did not return a stable account identity.",
+  redirect_uri_mismatch: "The provider rejected the callback URL. Register this app's /api/<app>/callback URL.",
+  state: "Connect session expired. Try connecting again.",
   code: "The provider did not return an authorization code.",
   config: "OAuth client id/secret are missing on Convex.",
 };
-
-export const CONNECTION_PROVIDERS = [
-  {
-    id: "github" as const,
-    name: "GitHub",
-    description: "One login. Passports can attach GitHub after you connect.",
-  },
-  {
-    id: "google" as const,
-    name: "Google",
-    description:
-      "One login for Gmail, Calendar, Drive, Docs, and Sheets. Connecting does not grant any agent access.",
-  },
-  {
-    id: "slack" as const,
-    name: "Slack",
-    description: "One login. Passports can attach Slack after you connect.",
-  },
-  {
-    id: "airtable" as const,
-    name: "Airtable",
-    description: "Bases, schemas, records, and comments.",
-  },
-  {
-    id: "notion" as const,
-    name: "Notion",
-    description: "Connect pages and databases shared with Agent Passport.",
-  },
-  {
-    id: "linear" as const,
-    name: "Linear",
-    description: "Issues, projects, teams, and workflow updates.",
-  },
-  {
-    id: "vercel" as const,
-    name: "Vercel",
-    description: "Projects, deployments, domains, and team profile.",
-  },
-  {
-    id: "zoom" as const,
-    name: "Zoom",
-    description: "Meetings, webinars, recordings, and account profile.",
-  },
-] as const;
+export { providerForApp };

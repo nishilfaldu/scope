@@ -25,6 +25,7 @@ async function signedIn(test: ReturnType<typeof t>) {
     await ctx.db.insert("connections", {
       userId,
       provider: "github",
+      app: "github",
       accessToken: "github-token",
       login: "nishil",
       providerUserId: "github-1",
@@ -34,6 +35,7 @@ async function signedIn(test: ReturnType<typeof t>) {
     await ctx.db.insert("connections", {
       userId,
       provider: "google",
+      app: "gmail",
       accessToken: "google-token",
       login: "nishil@example.com",
       providerUserId: "google-1",
@@ -92,11 +94,12 @@ describe("slice ownership", () => {
         ttlMs: 60_000,
         apps: ["github"],
       }),
-    ).rejects.toThrow("Connect an account at /connections");
+    ).rejects.toThrow("Select one account for each app");
     await test.run(async (ctx) => {
       await ctx.db.insert("connections", {
         userId,
         provider: "github",
+        app: "github",
         accessToken: "github-token",
         login: "nishil",
         providerUserId: "github-1",
@@ -108,7 +111,7 @@ describe("slice ownership", () => {
         ttlMs: 60_000,
         apps: ["slack"],
       }),
-    ).rejects.toThrow("Connect slack before allowing slack");
+    ).rejects.toThrow("Select one account for each app");
   });
 
   test("create reuses the existing passport for later slices", async () => {

@@ -32,18 +32,10 @@ async function createSlice(
     await ensurePassport(ctx, userId);
   });
   await test.run(async (ctx) => {
-    const providers = new Set(
-      args.apps.map((app) =>
-        app === "github" ? "github" : app === "slack" ? "slack" : app === "airtable" ? "airtable" : app === "notion" ? "notion" : app === "linear" ? "linear" : app === "vercel" ? "vercel" : app === "zoom" ? "zoom" : "google",
-      ),
-    );
-    for (const provider of providers) {
+    for (const app of args.apps) {
+      const provider = ["gmail", "calendar", "drive", "docs", "sheets"].includes(app) ? "google" : app;
       await ctx.db.insert("connections", {
-        userId,
-        provider,
-        accessToken: `${provider}-token`,
-        login: "nishil",
-        providerUserId: `${provider}-1`,
+        userId, provider, app, accessToken: `${app}-token`, login: "nishil", providerUserId: `${provider}-1`,
       });
     }
   });

@@ -1,4 +1,4 @@
-import { ALL_APPS, PROVIDERS } from "../domain/apps";
+import { ALL_APPS } from "../domain/apps";
 import { AGENT_ERROR_CODES, type AgentErrorCode } from "../lib/errors";
 
 type JsonValue = {
@@ -255,7 +255,7 @@ const healthSuccess: JsonSchema = {
   },
 };
 
-const oauthRoutes: RouteSpec[] = PROVIDERS.flatMap((provider) => [
+const oauthRoutes: RouteSpec[] = ALL_APPS.flatMap((provider) => [
   {
     path: `/api/${provider}/connect`,
     method: "GET" as const,

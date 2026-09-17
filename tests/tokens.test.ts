@@ -25,6 +25,7 @@ async function signedIn(test: ReturnType<typeof t>, connect = true) {
     await test.mutation(internal.tables.connections.mutations.saveConnection, {
       userId,
       provider: "github",
+      app: "github",
       accessToken: "ghs_standing_token",
       login: "octocat",
       providerUserId: "1",
@@ -43,6 +44,7 @@ async function seedGithub(
   await test.mutation(internal.tables.connections.mutations.saveConnection, {
     userId,
     provider: "github",
+    app: "github",
     accessToken: "ghs_standing_token",
     login: "octocat",
     providerUserId: "1",
@@ -59,6 +61,7 @@ describe("accounts and passports", () => {
         {
           userId,
           provider,
+          app: provider === "google" ? "gmail" : provider,
           accessToken: `${provider}-token`,
           login: "nishil",
           providerUserId: `${provider}-1`,
@@ -114,6 +117,7 @@ describe("accounts and passports", () => {
         {
           userId,
           provider,
+          app: provider === "google" ? "gmail" : provider,
           accessToken: `${provider}-token`,
           login: "nishil",
           providerUserId: `${provider}-1`,
@@ -154,9 +158,8 @@ describe("accounts and passports", () => {
       ttlMs: 60_000,
       apps: ["github"],
     });
-    await backend.action(api.tables.connections.actions.disconnect, {
-      provider: "github",
-    });
+    const githubId = (await backend.query(api.tables.connections.queries.listStatuses, {})).find((row) => row.app === "github")!.accounts[0].id;
+    await backend.action(api.tables.connections.actions.disconnect, { app: "github", connectionId: githubId });
     const slice = await backend.query(api.tables.slices.queries.get, {
       sliceId: created.id,
     });
@@ -181,18 +184,16 @@ describe("accounts and passports", () => {
       ownerStatuses.find(({ provider }) => provider === "github"),
     ).toMatchObject({
       connected: true,
-      login: "octocat",
+      accounts: [expect.objectContaining({ login: "octocat" })],
     });
     expect(
       otherStatuses.find(({ provider }) => provider === "github"),
     ).toMatchObject({
       connected: false,
-      login: null,
+      accounts: [],
     });
 
-    await other.action(api.tables.connections.actions.disconnect, {
-      provider: "github",
-    });
+    await other.action(api.tables.connections.actions.disconnect, { app: "github", connectionId: ownerStatuses.find((row) => row.app === "github")!.accounts[0].id });
     const stillConnected = await owner.query(
       api.tables.connections.queries.listStatuses,
       {},
@@ -333,9 +334,8 @@ describe("credential authorization", () => {
       ttlMs: 60_000,
       apps: ["github"],
     });
-    await backend.action(api.tables.connections.actions.disconnect, {
-      provider: "github",
-    });
+    const githubId = (await backend.query(api.tables.connections.queries.listStatuses, {})).find((row) => row.app === "github")!.accounts[0].id;
+    await backend.action(api.tables.connections.actions.disconnect, { app: "github", connectionId: githubId });
     const unavailable = {
       ok: false,
       status: 403,
@@ -389,33 +389,20 @@ describe("credential authorization", () => {
     });
   });
 
-  test("one Google connection covers every Google app", async () => {
+  test("a Gmail connection does not grant other Google apps", async () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     await test.mutation(internal.tables.connections.mutations.saveConnection, {
-      userId,
-      provider: "google",
-      accessToken: "ya29.standing",
-      login: "user@gmail.com",
-      providerUserId: "sub",
+      userId, provider: "google", app: "gmail", accessToken: "ya29.standing",
+      login: "user@gmail.com", providerUserId: "sub",
     });
-    const apps = ["gmail", "calendar", "drive", "docs", "sheets"] as const;
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Workspace",
-      ttlMs: 60_000,
-      apps: [...apps],
-    });
-    for (const app of apps) {
-      const allowed = await test.mutation(
-        internal.tables.slices.credentials.authorizeCreate,
-        {
-          sliceToken: created.sliceToken,
-          sliceSecret: created.sliceSecret,
-          app,
-          refresh: false,
-        },
-      );
-      expect(allowed).toMatchObject({ ok: true, provider: "google", app });
+    const statuses = await backend.query(api.tables.connections.queries.listStatuses, {});
+    expect(statuses.find((row) => row.app === "gmail")?.connected).toBe(true);
+    for (const app of ["calendar", "drive", "docs", "sheets"] as const) {
+      expect(statuses.find((row) => row.app === app)?.connected).toBe(false);
     }
-  });
+    await expect(backend.mutation(api.tables.slices.mutations.create, {
+      name: "Workspace", ttlMs: 60_000, apps: ["gmail", "calendar"],
+    })).rejects.toThrow("Select one account for each app");
+  });;
 });

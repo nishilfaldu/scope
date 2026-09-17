@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { Notification01Icon } from "@hugeicons/core-free-icons";
@@ -17,6 +18,7 @@ import { APP_LABELS, formatRemaining } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
 export function ApprovalsInbox() {
+  const router = useRouter();
   const pending = useQuery(api.tables.slices.accessRequests.listPending);
   const [decide, isDeciding] = useErrorCatchingMutation(
     api.tables.slices.accessRequests.decide,
@@ -89,14 +91,12 @@ export function ApprovalsInbox() {
                         size="sm"
                         disabled={isDeciding || busyId === request._id}
                         onClick={() => {
+                          if (request.kind === "onboarding") { router.push(`/approvals/${request.publicToken}`); return; }
                           setBusyId(request._id);
-                          void decide({
-                            requestId: request._id,
-                            decision: "approved",
-                          }).finally(() => setBusyId(null));
+                          void decide({ requestId: request._id, decision: "approved" }).finally(() => setBusyId(null));
                         }}
                       >
-                        Approve
+                        {request.kind === "onboarding" ? "Choose accounts" : "Approve"}
                       </Button>
                       <Button
                         size="sm"

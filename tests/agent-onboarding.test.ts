@@ -27,6 +27,7 @@ async function signedIn(
   await test.mutation(internal.tables.connections.mutations.saveConnection, {
     userId,
     provider: "github",
+    app: "github",
     accessToken: "ghs_standing_token",
     login: "octocat",
     providerUserId: "1",

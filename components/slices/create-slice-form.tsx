@@ -1,6 +1,9 @@
 "use client";
 
 import { api } from "@/convex/_generated/api";
+import { useState } from "react";
+import type { Id } from "@/convex/_generated/dataModel";
+import { AccountBindings, bindingsFor } from "@/components/connections/account-bindings";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import { useAppForm } from "@/components/form";
@@ -10,7 +13,6 @@ import {
   APP_LABELS,
   MINT_POLICY_ITEMS,
   TTL_OPTIONS,
-  providerForApp,
   type AppId,
   type MintPolicy,
 } from "@/lib/capabilities";
@@ -34,13 +36,10 @@ export function CreateSliceForm({
   onCreated: (result: CreatedSlice) => void;
 }) {
   const statuses = useQuery(api.tables.connections.queries.listStatuses);
-  const connectedProviders = new Set(
-    statuses
-      ?.filter((status) => status.connected)
-      .map((status) => status.provider),
-  );
+  const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">>>>({});
+  const connectedApps = new Set(statuses?.filter((status) => status.connected).map((status) => status.app));
   const appOptions = ALL_APPS.map((app) => {
-    const connected = connectedProviders.has(providerForApp(app));
+    const connected = connectedApps.has(app);
     return {
       value: app,
       title: APP_LABELS[app],
@@ -48,7 +47,7 @@ export function CreateSliceForm({
       disabled: !connected,
     };
   });
-  const hasConnections = connectedProviders.size > 0;
+  const hasConnections = connectedApps.size > 0;
 
   const [createSlice] = useErrorCatchingMutation(
     api.tables.slices.mutations.create,
@@ -67,6 +66,7 @@ export function CreateSliceForm({
         name: value.name.trim() || "Untitled agent",
         ttlMs: Number(value.ttlMs),
         apps: value.apps,
+        bindings: bindingsFor(value.apps, statuses, selected),
         mintPolicy: value.mintPolicy,
       });
       if (result === undefined) return;
@@ -119,6 +119,9 @@ export function CreateSliceForm({
             before creating a slice.
           </p>
         ) : null}
+        <form.Subscribe selector={(state) => state.values.apps}>
+          {(apps) => <AccountBindings apps={apps} statuses={statuses} selected={selected} onChange={(app, id) => setSelected((current) => ({ ...current, [app]: id }))} />}
+        </form.Subscribe>
         <form.SubmitButton pendingLabel="Creating…" disabled={!hasConnections}>
           Create slice
         </form.SubmitButton>

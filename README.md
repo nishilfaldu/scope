@@ -7,7 +7,7 @@ The system has two layers:
 1. A **passport** belongs to the user. It is the long-lived vault that holds the user's connected services and their real upstream tokens.
 2. A **slice** belongs to one agent. It is a scoped, expiring grant created from one passport.
 
-Connect once, give many agents access. A user can connect GitHub, Google, or Slack once, then give each agent its own slice of that access.
+Connect accounts to individual apps, then give agents scoped slices of that access. Multiple accounts can be connected to the same app.
 
 ## Architecture
 
@@ -73,18 +73,28 @@ Every agent gets its own slice. Two agents never share one. That keeps revocatio
 
 The user connects a service from the dashboard:
 
-1. The signed-in user clicks Connect for GitHub, Slack, Google, or another service.
+1. The signed-in user clicks Connect for an app. Gmail, Calendar, Drive, Docs, and Sheets have separate connection tiles and separate minimal Google consent scopes.
 2. Agent Passport creates a one-time OAuth state value bound to the signed-in user, their passport, the service, and a short expiry.
 3. Agent Passport sends the user to the provider's official OAuth consent screen.
 4. The provider returns an authorization code and the same state value.
 5. Agent Passport verifies the state before exchanging the code.
 6. The upstream access and refresh tokens are encrypted and stored on the user's passport.
-7. Slices can use that connection without making the user connect the service again.
+7. When creating a slice or approving onboarding, the operator chooses one connected account for each app. That account is bound to the grant; disconnecting it makes that app unavailable to the slice.
 
 There are two different consent screens:
 
 - The provider screen grants Agent Passport the upstream connection.
 - The Agent Passport board Approvals inbox (and approval deep links) grants an agent a slice (onboarding) or a short-lived credential (mint policy `approve`).
+
+For Google, register all five redirect URIs on the same Google OAuth client:
+
+- `https://<deployment>.convex.site/api/gmail/callback`
+- `https://<deployment>.convex.site/api/calendar/callback`
+- `https://<deployment>.convex.site/api/drive/callback`
+- `https://<deployment>.convex.site/api/docs/callback`
+- `https://<deployment>.convex.site/api/sheets/callback`
+
+Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` once. Each app requests OpenID identity scopes plus only that app's API scope. A second Google account creates another row for that app, keyed by Google's stable `sub` value. Disconnecting one Google app deletes its local token and blocks grants bound to it. Upstream Google revocation happens when the last app for that Google account is disconnected, because [Google revocation removes all scopes for the project](https://developers.google.com/identity/protocols/oauth2/web-server#tokenrevoke).
 
 The upstream service does not need to know which agent holds the slice.
 

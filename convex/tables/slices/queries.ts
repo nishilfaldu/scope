@@ -6,7 +6,7 @@ import { v } from "convex/values";
 import { internalQuery, type QueryCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import { authenticatedQuery } from "../../functions";
-import { appValidator, ALL_APPS, providerForApp } from "../../domain/apps";
+import { appValidator, ALL_APPS } from "../../domain/apps";
 import schema from "../../schema";
 import {
   denyResultValidator,
@@ -14,6 +14,7 @@ import {
   REVOKED_ERROR,
   UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
+import { connectionsForApp, selectedConnection } from "../connections/helpers";
 import { effectiveMintPolicy, sliceBySecret, withoutSecretHash } from "./helpers";
 
 const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
@@ -24,6 +25,7 @@ const boardSlice = schema
   .extend({
     grantApps: v.array(appValidator),
     connectedApps: v.array(appValidator),
+    grantBindings: v.array(v.object({ app: appValidator, connectionId: v.id("connections") })),
     mintPolicy: mintPolicyValidator,
   });
 
@@ -31,19 +33,8 @@ async function connectedAppsForUser(
   ctx: Pick<QueryCtx, "db">,
   userId: Id<"users">,
 ) {
-  const connectedProviders = new Set<string>();
-  for (const app of ALL_APPS) {
-    const provider = providerForApp(app);
-    if (connectedProviders.has(provider)) continue;
-    const connection = await ctx.db
-      .query("connections")
-      .withIndex("by_user_and_provider", (q) =>
-        q.eq("userId", userId).eq("provider", provider),
-      )
-      .unique();
-    if (connection) connectedProviders.add(provider);
-  }
-  return ALL_APPS.filter((app) => connectedProviders.has(providerForApp(app)));
+  const connected = await Promise.all(ALL_APPS.map(async (app) => ({ app, available: (await connectionsForApp(ctx, userId, app)).length > 0 })));
+  return connected.filter((entry) => entry.available).map((entry) => entry.app);
 }
 
 export const list = authenticatedQuery({
@@ -65,6 +56,7 @@ export const list = authenticatedQuery({
           return {
             ...withoutSecretHash(slice),
             grantApps: grant?.apps ?? [],
+            grantBindings: grant?.bindings ?? [],
             connectedApps,
             mintPolicy: effectiveMintPolicy(slice),
           };
@@ -92,6 +84,7 @@ export const get = authenticatedQuery({
     return {
       ...withoutSecretHash(slice),
       grantApps: grant?.apps ?? [],
+      grantBindings: grant?.bindings ?? [],
       connectedApps,
       mintPolicy: effectiveMintPolicy(slice),
     };
@@ -154,13 +147,17 @@ export const discoverApps = internalQuery({
       };
     }
     const connectedApps = await connectedAppsForUser(ctx, slice.userId);
+    const boundApps = new Set((await Promise.all(grant.bindings.map(async (binding) => ({
+      app: binding.app,
+      connected: !!await selectedConnection(ctx, slice.userId, binding.app, binding.connectionId),
+    })))).filter((binding) => binding.connected).map((binding) => binding.app));
     return {
       ok: true as const,
       expiresAt: slice.expiresAt,
       apps: ALL_APPS.map((app) => ({
         app,
         allowed: grant.apps.includes(app),
-        connected: connectedApps.includes(app),
+        connected: grant.apps.includes(app) ? boundApps.has(app) : connectedApps.includes(app),
       })),
     };
   },

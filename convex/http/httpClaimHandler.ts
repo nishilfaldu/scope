@@ -50,7 +50,8 @@ export const httpClaimHandler = httpAction(async (ctx, request) => {
   const issued = await issueShortLivedAccess(
     ctx,
     decision.userId,
-    decision.provider,
+    decision.app,
+    decision.connectionId,
   );
   if ("error" in issued) {
     const status = issued.code === "APP_UNAVAILABLE" ? 403 : 503;

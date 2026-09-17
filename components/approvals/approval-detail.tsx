@@ -7,6 +7,9 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { PassportIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
+import type { Id } from "@/convex/_generated/dataModel";
+import { AccountBindings, bindingsFor } from "@/components/connections/account-bindings";
+import type { AppId } from "@/lib/capabilities";
 import { api } from "@/convex/_generated/api";
 import { GoogleMark } from "@/components/auth/google-mark";
 import { BoardShell } from "@/components/layout/board-shell";
@@ -140,6 +143,8 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
   const [decide, isDeciding] = useErrorCatchingMutation(
     api.tables.slices.accessRequests.decide,
   );
+  const statuses = useQuery(api.tables.connections.queries.listStatuses);
+  const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">>>>({});
   const [now] = useState(() => Date.now());
   const [binding, setBinding] = useState(true);
   const [boundRequest, setBoundRequest] = useState<typeof bound>(undefined);
@@ -261,17 +266,19 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                     ) : null}
                   </div>
                 )}
+                {request.kind === "onboarding" && request.status === "pending" ? <AccountBindings apps={request.apps ?? []} statuses={statuses} selected={selected} onChange={(app, id) => setSelected((current) => ({ ...current, [app]: id }))} /> : null}
                 <p className="text-sm text-muted-foreground">
                   Expires {formatRemaining(request.expiresAt, now)}
                 </p>
                 {request.status === "pending" ? (
                   <div className="flex gap-2">
                     <Button
-                      disabled={isDeciding}
+                      disabled={isDeciding || (request.kind === "onboarding" && bindingsFor(request.apps ?? [], statuses, selected).length !== (request.apps ?? []).length)}
                       onClick={() =>
                         void decide({
                           requestId: request._id,
                           decision: "approved",
+                          bindings: request.kind === "onboarding" ? bindingsFor(request.apps ?? [], statuses, selected) : undefined,
                         })
                       }
                     >

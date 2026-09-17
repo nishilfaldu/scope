@@ -1,5 +1,5 @@
 import { env } from "../_generated/server";
-import type { ProviderId } from "../domain/apps";
+import type { AppId } from "../domain/apps";
 
 const ALLOWED_RETURN_PATHS = new Set(["/", "/connections"]);
 
@@ -57,7 +57,7 @@ export function allowedReturnTo(value: string | null): string {
 
 export function redirectTo(
   returnTo: string,
-  provider: ProviderId,
+  provider: AppId,
   status: string,
   reason?: string,
 ): Response {

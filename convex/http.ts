@@ -14,7 +14,7 @@ import {
   httpOAuthConnect,
 } from "./http/oauth";
 import { corsNoContent, jsonResponse } from "./lib/responses";
-import { PROVIDERS } from "./domain/apps";
+import { ALL_APPS } from "./domain/apps";
 import { oauthConfigured } from "./oauth";
 import { auth } from "./auth";
 
@@ -109,16 +109,16 @@ http.route({
 });
 
 // OAuth provider connection
-for (const provider of PROVIDERS) {
+for (const app of ALL_APPS) {
   http.route({
-    path: `/api/${provider}/connect`,
+    path: `/api/${app}/connect`,
     method: "GET",
-    handler: httpOAuthConnect(provider),
+    handler: httpOAuthConnect(app),
   });
   http.route({
-    path: `/api/${provider}/callback`,
+    path: `/api/${app}/callback`,
     method: "GET",
-    handler: httpOAuthCallback(provider),
+    handler: httpOAuthCallback(app),
   });
 }
 

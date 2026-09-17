@@ -23,6 +23,7 @@ describe("OAuth ownership", () => {
     await test.mutation(internal.tables.oauthStates.mutations.put, {
       userId,
       provider: "github",
+      app: "github",
       state: "state-1",
       returnTo: "https://board.example/connections",
     });
@@ -34,6 +35,7 @@ describe("OAuth ownership", () => {
     ).resolves.toEqual({
       userId,
       provider: "github",
+      app: "github",
       returnTo: "https://board.example/connections",
     });
     await expect(
@@ -50,7 +52,7 @@ describe("OAuth ownership", () => {
     const result = await test
       .withIdentity({ subject: `${userId}|session-1` })
       .mutation(api.tables.oauthStates.mutations.start, {
-        provider: "github",
+        app: "github",
         returnTo: "https://board.example/connections",
       });
 
@@ -62,6 +64,7 @@ describe("OAuth ownership", () => {
     ).resolves.toEqual({
       userId,
       provider: "github",
+      app: "github",
       returnTo: "http://localhost:3000/connections",
     });
   });
@@ -73,7 +76,7 @@ describe("OAuth ownership", () => {
     const { state } = await test
       .withIdentity({ subject: `${userId}|session-1` })
       .mutation(api.tables.oauthStates.mutations.start, {
-        provider: "github",
+        app: "github",
         returnTo: "http://localhost:3000/connections",
       });
 
@@ -95,6 +98,7 @@ describe("OAuth ownership", () => {
         {
           userId,
           provider: "github",
+          app: "github",
           accessToken: `token-${login}`,
           login,
           providerUserId: login,
@@ -102,13 +106,15 @@ describe("OAuth ownership", () => {
       );
     }
 
+    const ids = await test.run(async (ctx) => await ctx.db.query("connections").withIndex("by_user_provider_app_providerUserId", (q) => q.eq("userId", firstUserId).eq("provider", "github").eq("app", "github")).collect());
+    const secondIds = await test.run(async (ctx) => await ctx.db.query("connections").withIndex("by_user_provider_app_providerUserId", (q) => q.eq("userId", secondUserId).eq("provider", "github").eq("app", "github")).collect());
     const first = await test.query(
       internal.tables.connections.queries.getConnection,
-      { userId: firstUserId, provider: "github" },
+      { userId: firstUserId, app: "github", connectionId: ids[0]._id },
     );
     const second = await test.query(
       internal.tables.connections.queries.getConnection,
-      { userId: secondUserId, provider: "github" },
+      { userId: secondUserId, app: "github", connectionId: secondIds[0]._id },
     );
     expect(first?.login).toBe("first");
     expect(second?.login).toBe("second");

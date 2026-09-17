@@ -40,6 +40,7 @@ import type * as oauth_providers_zoom from "../oauth/providers/zoom.js";
 import type * as oauth_shared from "../oauth/shared.js";
 import type * as oauth_types from "../oauth/types.js";
 import type * as tables_connections_actions from "../tables/connections/actions.js";
+import type * as tables_connections_helpers from "../tables/connections/helpers.js";
 import type * as tables_connections_mutations from "../tables/connections/mutations.js";
 import type * as tables_connections_queries from "../tables/connections/queries.js";
 import type * as tables_oauthStates_mutations from "../tables/oauthStates/mutations.js";
@@ -94,6 +95,7 @@ declare const fullApi: ApiFromModules<{
   "oauth/shared": typeof oauth_shared;
   "oauth/types": typeof oauth_types;
   "tables/connections/actions": typeof tables_connections_actions;
+  "tables/connections/helpers": typeof tables_connections_helpers;
   "tables/connections/mutations": typeof tables_connections_mutations;
   "tables/connections/queries": typeof tables_connections_queries;
   "tables/oauthStates/mutations": typeof tables_oauthStates_mutations;

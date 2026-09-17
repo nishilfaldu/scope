@@ -1,6 +1,6 @@
 import { env } from "../_generated/server";
 import { asFiniteNumber, isPlainObject } from "../lib/json";
-import type { ProviderId } from "../domain/apps";
+import type { AppId, ProviderId } from "../domain/apps";
 import type { OAuthGrant, RefreshedTokens } from "./types";
 
 export const REFRESH_SKEW_MS = 2 * 60 * 1000;
@@ -28,7 +28,7 @@ export function oauthErrorReason(raw: unknown): string {
   return "token";
 }
 
-export function oauthCallbackUrl(provider: ProviderId): string {
+export function oauthCallbackUrl(provider: ProviderId | AppId): string {
   return `${env.CONVEX_SITE_URL.replace(/\/$/, "")}/api/${provider}/callback`;
 }
 

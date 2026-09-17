@@ -15,6 +15,7 @@ import {
   UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
 import { hashesEqual, sha256Hex } from "../../lib/secrets";
+import { selectedConnection } from "../connections/helpers";
 import { denyCreate } from "./helpers";
 import { issuePublicPair } from "./onboardingAccess";
 
@@ -103,6 +104,7 @@ export const resolveClaim = internalMutation({
       userId: v.id("users"),
       app: appValidator,
       provider: providerValidator,
+      connectionId: v.id("connections"),
       refresh: v.boolean(),
     }),
     denyResultValidator,
@@ -179,12 +181,8 @@ export const resolveClaim = internalMutation({
       );
     }
     const provider = providerForApp(request.app);
-    const connection = await ctx.db
-      .query("connections")
-      .withIndex("by_user_and_provider", (q) =>
-        q.eq("userId", slice.userId).eq("provider", provider),
-      )
-      .unique();
+    const binding = grant.bindings.find((entry) => entry.app === request.app);
+    const connection = binding ? await selectedConnection(ctx, slice.userId, request.app, binding.connectionId) : null;
     if (!connection) {
       return denyCreate(
         403,
@@ -206,6 +204,7 @@ export const resolveClaim = internalMutation({
       userId: slice.userId,
       app: request.app,
       provider,
+      connectionId: connection._id,
       refresh: request.refresh === true,
     };
   },
