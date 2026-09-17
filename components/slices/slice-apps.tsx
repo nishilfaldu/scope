@@ -16,9 +16,9 @@ const PAGE_SIZE = 50;
 
 export function SliceApps({ sliceId }: { sliceId: string }) {
   const now = useNow();
-  const statuses = useQuery(api.tables.connections.queries.listStatuses);
   const [page, setPage] = useState(0);
   const visibleApps = ALL_APPS.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const statuses = useQuery(api.tables.connections.queries.statusesForApps, { apps: visibleApps });
   const bindings = useQuery(api.tables.slices.queries.bindingsForApps, {
     sliceId: sliceId as Id<"slices">, apps: visibleApps,
   });

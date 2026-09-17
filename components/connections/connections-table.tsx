@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CONNECTION_APPS, APP_CONNECT_URL, type AppId } from "@/lib/connections";
 
+const PAGE_SIZE = 50;
+
 function appIcon(app: AppId) {
   if (["gmail", "calendar", "drive", "docs", "sheets"].includes(app)) return GoogleIcon;
   switch (app) {
@@ -28,7 +30,9 @@ function appIcon(app: AppId) {
 type Row = (typeof CONNECTION_APPS)[number] & { accounts: { id: Id<"connections">; login: string; providerUserId: string }[] | undefined };
 
 export function ConnectionsTable() {
-  const statuses = useQuery(api.tables.connections.queries.listStatuses);
+  const [page, setPage] = useState(0);
+  const visibleApps = CONNECTION_APPS.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const statuses = useQuery(api.tables.connections.queries.statusesForApps, { apps: visibleApps.map((app) => app.id) });
   const disconnect = useAction(api.tables.connections.actions.disconnect);
   const startOAuth = useMutation(api.tables.oauthStates.mutations.start);
   const [busy, setBusy] = useState<string | null>(null);
@@ -49,7 +53,7 @@ export function ConnectionsTable() {
     finally { setBusy(null); }
   }
 
-  const rows: Row[] = CONNECTION_APPS.map((app) => ({
+  const rows: Row[] = visibleApps.map((app) => ({
     ...app, accounts: statuses?.find((status) => status.app === app.id)?.accounts,
   }));
   const columns: DataTableColumn<Row>[] = [
@@ -69,5 +73,12 @@ export function ConnectionsTable() {
     { id: "status", header: "Status", cell: ({ row: { original: row } }) => row.accounts === undefined ? <Skeleton className="h-5 w-20" /> : <Badge variant={row.accounts.length ? "outline" : "secondary"}>{row.accounts.length ? `${row.accounts.length} connected` : "Off"}</Badge> },
     { id: "connect", header: () => <span className="sr-only">Connect</span>, cell: ({ row: { original: row } }) => <Button variant="outline" size="sm" disabled={row.accounts === undefined || busy !== null} onClick={() => void connect(row.id)}>{row.accounts?.length ? "Add account" : "Connect"}</Button> },
   ];
-  return <DataTable data={rows} columns={columns} getRowKey={(row) => row.id} />;
+  return <>
+    <DataTable data={rows} columns={columns} getRowKey={(row) => row.id} />
+    {CONNECTION_APPS.length > PAGE_SIZE ? <div className="mt-4 flex items-center gap-2">
+      <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</Button>
+      <span className="text-sm">Page {page + 1}</span>
+      <Button variant="outline" size="sm" disabled={(page + 1) * PAGE_SIZE >= CONNECTION_APPS.length} onClick={() => setPage(page + 1)}>Next</Button>
+    </div> : null}
+  </>;
 }

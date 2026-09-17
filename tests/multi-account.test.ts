@@ -120,6 +120,8 @@ describe("multi-account bindings", () => {
     const backend = test.withIdentity({ subject: `${userId}|session-1` });
     const status = (await backend.query(api.tables.connections.queries.listStatuses, {})).find((row) => row.app === "gmail")!;
     expect(status.accounts.map((account) => account.login)).toEqual(["renamed@gmail.com", "y@gmail.com"]);
+    const page = await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail", "calendar"] });
+    expect(page.map((entry) => [entry.app, entry.accounts.length])).toEqual([["gmail", 2], ["calendar", 0]]);
     await expect(backend.mutation(api.tables.slices.mutations.create, {
       name: "Agent", ttlMs: 60_000, apps: ["gmail"],
     })).rejects.toThrow("Select one account");
