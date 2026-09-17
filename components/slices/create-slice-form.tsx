@@ -17,6 +17,9 @@ import {
   type MintPolicy,
 } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
+import { Button } from "@/components/ui/button";
+
+const PAGE_SIZE = 50;
 
 const DEFAULT_TTL_MS = TTL_OPTIONS[1]?.ttlMs ?? 60 * 60 * 1000;
 const TTL_ITEMS = TTL_OPTIONS.map((option) => ({
@@ -35,10 +38,12 @@ export function CreateSliceForm({
 }: {
   onCreated: (result: CreatedSlice) => void;
 }) {
-  const statuses = useQuery(api.tables.connections.queries.listStatuses);
+  const [page, setPage] = useState(0);
+  const visibleApps = ALL_APPS.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const statuses = useQuery(api.tables.connections.queries.statusesForApps, { apps: visibleApps });
   const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">>>>({});
   const connectedApps = new Set(statuses?.filter((status) => status.connected).map((status) => status.app));
-  const appOptions = ALL_APPS.map((app) => {
+  const appOptions = visibleApps.map((app) => {
     const connected = connectedApps.has(app);
     return {
       value: app,
@@ -47,7 +52,6 @@ export function CreateSliceForm({
       disabled: !connected,
     };
   });
-  const hasConnections = connectedApps.size > 0;
 
   const [createSlice] = useErrorCatchingMutation(
     api.tables.slices.mutations.create,
@@ -66,7 +70,7 @@ export function CreateSliceForm({
         name: value.name.trim() || "Untitled agent",
         ttlMs: Number(value.ttlMs),
         apps: value.apps,
-        bindings: bindingsFor(value.apps, statuses, selected),
+        bindings: bindingsFor(value.apps, selected),
         mintPolicy: value.mintPolicy,
       });
       if (result === undefined) return;
@@ -108,23 +112,32 @@ export function CreateSliceForm({
           }}
         >
           {(field) => (
-            <field.CheckboxGroupField legend="Apps" options={appOptions} />
+            <>
+              <field.CheckboxGroupField legend={`Apps (${field.state.value.length} selected)`} options={appOptions} />
+              {ALL_APPS.length > PAGE_SIZE ? <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous apps</Button>
+                <span className="text-sm">Page {page + 1} of {Math.ceil(ALL_APPS.length / PAGE_SIZE)}</span>
+                <Button type="button" variant="outline" size="sm" disabled={(page + 1) * PAGE_SIZE >= ALL_APPS.length} onClick={() => setPage(page + 1)}>Next apps</Button>
+              </div> : null}
+            </>
           )}
         </form.AppField>
-        {!hasConnections && statuses !== undefined ? (
+        {page === 0 && connectedApps.size === 0 && statuses !== undefined ? (
           <p className="text-sm text-muted-foreground">
             <Link href="/connections" className="underline">
               Connect an account
             </Link>{" "}
-            before creating a slice.
+            before selecting its app.
           </p>
         ) : null}
         <form.Subscribe selector={(state) => state.values.apps}>
-          {(apps) => <AccountBindings apps={apps} statuses={statuses} selected={selected} onChange={(app, id) => setSelected((current) => ({ ...current, [app]: id }))} />}
+          {(apps) => <AccountBindings apps={apps} selected={selected} onChange={(app, id) => setSelected((current) => ({ ...current, [app]: id }))} />}
         </form.Subscribe>
-        <form.SubmitButton pendingLabel="Creating…" disabled={!hasConnections}>
-          Create slice
-        </form.SubmitButton>
+        <form.Subscribe selector={(state) => state.values.apps}>
+          {(apps) => <form.SubmitButton pendingLabel="Creating…" disabled={apps.length === 0 || bindingsFor(apps, selected).length !== apps.length}>
+            Create slice
+          </form.SubmitButton>}
+        </form.Subscribe>
       </form.Form>
     </form.AppForm>
   );

@@ -57,13 +57,13 @@ describe("Google disconnect", () => {
       login: "x@gmail.com", accessToken: "access-x", refreshToken: "refresh-x",
     });
     const backend = test.withIdentity({ subject: `${userId}|session-1` });
-    const status = (await backend.query(api.tables.connections.queries.listStatuses, {}))
+    const status = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail"] }))
       .find((row) => row.app === "gmail")!;
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("provider down"));
     await backend.action(api.tables.connections.actions.disconnect, {
       app: "gmail", connectionId: status.accounts[0].id,
     });
-    const after = (await backend.query(api.tables.connections.queries.listStatuses, {}))
+    const after = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail"] }))
       .find((row) => row.app === "gmail")!;
     expect(after.accounts).toEqual([]);
   });
@@ -78,7 +78,7 @@ describe("Google disconnect", () => {
       });
     }
     const backend = test.withIdentity({ subject: `${userId}|session-1` });
-    const statuses = await backend.query(api.tables.connections.queries.listStatuses, {});
+    const statuses = await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail", "calendar"] });
     const gmailId = statuses.find((row) => row.app === "gmail")!.accounts[0].id;
     const calendarId = statuses.find((row) => row.app === "calendar")!.accounts[0].id;
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 200 }));
@@ -118,7 +118,7 @@ describe("multi-account bindings", () => {
       accessToken: "access-new", refreshToken: "refresh-new",
     });
     const backend = test.withIdentity({ subject: `${userId}|session-1` });
-    const status = (await backend.query(api.tables.connections.queries.listStatuses, {})).find((row) => row.app === "gmail")!;
+    const status = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail"] })).find((row) => row.app === "gmail")!;
     expect(status.accounts.map((account) => account.login)).toEqual(["renamed@gmail.com", "y@gmail.com"]);
     const page = await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail", "calendar"] });
     expect(page.map((entry) => [entry.app, entry.accounts.length])).toEqual([["gmail", 2], ["calendar", 0]]);
@@ -138,6 +138,15 @@ describe("multi-account bindings", () => {
       sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "gmail",
     });
     expect(authorized).toMatchObject({ ok: true, connectionId: selected });
+    await test.mutation(internal.tables.connections.mutations.saveConnection, {
+      userId, provider: "google", app: "calendar", providerUserId: "sub-x",
+      login: "renamed@gmail.com", accessToken: "calendar-token", refreshToken: "calendar-refresh",
+    });
+    const before = await test.query(internal.tables.slices.queries.discoverApps, {
+      sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, now: Date.now(),
+    });
+    expect(before.ok && before.apps.find((app) => app.app === "calendar"))
+      .toMatchObject({ allowed: false, connected: false });
     await test.mutation(internal.tables.connections.mutations.clearConnection, { userId, app: "gmail", connectionId: selected });
     const denied = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
       sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "gmail",
@@ -152,7 +161,7 @@ describe("multi-account bindings", () => {
       userId, app: "gmail", connectionId: selected, providerUserId: "sub-y",
       accessToken: "late-token", refreshToken: "late-refresh",
     })).toBe(false);
-    const after = (await backend.query(api.tables.connections.queries.listStatuses, {})).find((row) => row.app === "gmail")!;
+    const after = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail"] })).find((row) => row.app === "gmail")!;
     expect(after.accounts.map((account) => account.login)).toEqual(["renamed@gmail.com"]);
   });
 });

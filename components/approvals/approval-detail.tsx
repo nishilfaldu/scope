@@ -30,6 +30,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { APP_LABELS, formatRemaining } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
+function appSummary(apps: readonly AppId[]) {
+  const visible = apps.slice(0, 3).map((app) => APP_LABELS[app] ?? app);
+  const remaining = apps.length - visible.length;
+  return visible.join(", ") + (remaining > 0 ? ` and ${remaining} more` : "");
+}
+
 function ApprovalGate({ publicToken }: { publicToken: string }) {
   const { signIn } = useAuthActions();
   const summary = useQuery(api.tables.slices.accessRequestPublic.publicSummary, {
@@ -70,9 +76,7 @@ function ApprovalGate({ publicToken }: { publicToken: string }) {
 
   const appsLabel =
     summary.kind === "onboarding"
-      ? (summary.apps ?? [])
-          .map((app) => APP_LABELS[app] ?? app)
-          .join(", ") || "apps"
+      ? appSummary(summary.apps ?? []) || "apps"
       : summary.app
         ? (APP_LABELS[summary.app] ?? summary.app)
         : "an app";
@@ -142,7 +146,6 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
   const [decide, isDeciding] = useErrorCatchingMutation(
     api.tables.slices.accessRequests.decide,
   );
-  const statuses = useQuery(api.tables.connections.queries.listStatuses);
   const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">>>>({});
   const now = useNow();
   const request = bound;
@@ -208,9 +211,7 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                   <div className="space-y-2 text-sm text-muted-foreground">
                     <p>
                       Apps:{" "}
-                      {(request.apps ?? [])
-                        .map((app) => APP_LABELS[app] ?? app)
-                        .join(", ") || "—"}
+                      {appSummary(request.apps ?? []) || "—"}
                     </p>
                     {request.ttlMs ? (
                       <p>
@@ -245,19 +246,19 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                     ) : null}
                   </div>
                 )}
-                {request.kind === "onboarding" && request.status === "pending" ? <AccountBindings apps={request.apps ?? []} statuses={statuses} selected={selected} onChange={(app, id) => setSelected((current) => ({ ...current, [app]: id }))} /> : null}
+                {request.kind === "onboarding" && request.status === "pending" ? <AccountBindings apps={request.apps ?? []} selected={selected} onChange={(app, id) => setSelected((current) => ({ ...current, [app]: id }))} /> : null}
                 <p className="text-sm text-muted-foreground">
                   Expires {formatRemaining(request.expiresAt, now)}
                 </p>
                 {request.status === "pending" ? (
                   <div className="flex gap-2">
                     <Button
-                      disabled={isDeciding || (request.kind === "onboarding" && bindingsFor(request.apps ?? [], statuses, selected).length !== (request.apps ?? []).length)}
+                      disabled={isDeciding || (request.kind === "onboarding" && bindingsFor(request.apps ?? [], selected).length !== (request.apps ?? []).length)}
                       onClick={() =>
                         void decide({
                           requestId: request._id,
                           decision: "approved",
-                          bindings: request.kind === "onboarding" ? bindingsFor(request.apps ?? [], statuses, selected) : undefined,
+                          bindings: request.kind === "onboarding" ? bindingsFor(request.apps ?? [], selected) : undefined,
                         })
                       }
                     >
@@ -309,5 +310,5 @@ export function ApprovalDetail({ publicToken }: { publicToken: string }) {
     return <ApprovalGate publicToken={publicToken} />;
   }
 
-  return <SignedInApproval publicToken={publicToken} />;
+  return <SignedInApproval key={publicToken} publicToken={publicToken} />;
 }

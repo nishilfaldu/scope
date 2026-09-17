@@ -150,7 +150,7 @@ describe("accounts and slices", () => {
       ttlMs: 60_000,
       apps: ["github"],
     });
-    const githubId = (await backend.query(api.tables.connections.queries.listStatuses, {})).find((row) => row.app === "github")!.accounts[0].id;
+    const githubId = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["github"] })).find((row) => row.app === "github")!.accounts[0].id;
     await backend.action(api.tables.connections.actions.disconnect, { app: "github", connectionId: githubId });
     const slice = await backend.query(api.tables.slices.queries.get, {
       sliceId: created.id,
@@ -165,12 +165,12 @@ describe("accounts and slices", () => {
     await seedGithub(test, ownerId);
 
     const ownerStatuses = await owner.query(
-      api.tables.connections.queries.listStatuses,
-      {},
+      api.tables.connections.queries.statusesForApps,
+      { apps: ["github"] },
     );
     const otherStatuses = await other.query(
-      api.tables.connections.queries.listStatuses,
-      {},
+      api.tables.connections.queries.statusesForApps,
+      { apps: ["github"] },
     );
     expect(
       ownerStatuses.find(({ provider }) => provider === "github"),
@@ -187,8 +187,8 @@ describe("accounts and slices", () => {
 
     await other.action(api.tables.connections.actions.disconnect, { app: "github", connectionId: ownerStatuses.find((row) => row.app === "github")!.accounts[0].id });
     const stillConnected = await owner.query(
-      api.tables.connections.queries.listStatuses,
-      {},
+      api.tables.connections.queries.statusesForApps,
+      { apps: ["github"] },
     );
     expect(
       stillConnected.find(({ provider }) => provider === "github")?.connected,
@@ -317,7 +317,7 @@ describe("credential authorization", () => {
       ttlMs: 60_000,
       apps: ["github"],
     });
-    const githubId = (await backend.query(api.tables.connections.queries.listStatuses, {})).find((row) => row.app === "github")!.accounts[0].id;
+    const githubId = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["github"] })).find((row) => row.app === "github")!.accounts[0].id;
     await backend.action(api.tables.connections.actions.disconnect, { app: "github", connectionId: githubId });
     const unavailable = {
       ok: false,
@@ -376,7 +376,7 @@ describe("credential authorization", () => {
       userId, provider: "google", app: "gmail", accessToken: "ya29.standing",
       login: "user@gmail.com", providerUserId: "sub",
     });
-    const statuses = await backend.query(api.tables.connections.queries.listStatuses, {});
+    const statuses = await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail", "calendar", "drive", "docs", "sheets"] });
     expect(statuses.find((row) => row.app === "gmail")?.connected).toBe(true);
     for (const app of ["calendar", "drive", "docs", "sheets"] as const) {
       expect(statuses.find((row) => row.app === app)?.connected).toBe(false);

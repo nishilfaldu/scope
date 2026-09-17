@@ -114,7 +114,7 @@ describe("connection secrets at rest", () => {
     ).rejects.toThrow(/not encrypted/);
   });
 
-  test("listStatuses omits access and refresh tokens", async () => {
+  test("account statuses omit access and refresh tokens", async () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     await test.mutation(internal.tables.connections.mutations.saveConnection, {
@@ -128,8 +128,8 @@ describe("connection secrets at rest", () => {
     });
 
     const statuses = await backend.query(
-      api.tables.connections.queries.listStatuses,
-      {},
+      api.tables.connections.queries.statusesForApps,
+      { apps: ["github"] },
     );
     const github = statuses.find(({ provider }) => provider === "github");
     expect(github).toEqual({

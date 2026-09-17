@@ -15,7 +15,7 @@ The vault never hands out its stored access token or refresh token. Providers wi
 
 ## Connect and account selection
 
-The signed-in operator connects apps from `/connections`. Each connection is keyed by user, provider, app, and the provider's stable account ID. The display login is never used as an account key. Creating a slice or approving onboarding requires choosing one account for each app when more than one is connected.
+The signed-in operator connects apps from `/connections`. Each connection is keyed by user, provider, app, and the provider's stable account ID. The display login is never used as an account key. Slice creation and onboarding approval page through apps and account choices, retaining selections across pages. One account must be chosen for every selected app.
 
 For Google, register five redirects on the same OAuth client:
 
@@ -36,7 +36,7 @@ Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` once. Disconnect removes local
 
 A failed provider refresh leaves an approved mint request available to retry until its claim window expires. The backend consumes the request only after refresh and the final slice, account, and binding check succeed.
 
-`GET /` on the Convex HTTP origin lists routes. `GET /api/apps` reports app availability for a slice.
+`GET /` on the Convex HTTP origin lists routes. `GET /api/apps` reports app availability for a slice. Its `connected` flag means the slice's selected account for that app is still connected; unbound apps report `false`.
 
 ## Run it
 

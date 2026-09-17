@@ -3,8 +3,7 @@ import {
   paginationResultValidator,
 } from "convex/server";
 import { v } from "convex/values";
-import { internalQuery, type QueryCtx } from "../../_generated/server";
-import type { Id } from "../../_generated/dataModel";
+import { internalQuery } from "../../_generated/server";
 import { authenticatedQuery } from "../../functions";
 import { appValidator, ALL_APPS } from "../../domain/apps";
 import {
@@ -35,18 +34,6 @@ const boardSlice = v.object({
   expiresAt: v.number(),
   mintPolicy: v.union(v.literal("auto"), v.literal("approve")),
 });
-
-async function connectionsForUser(
-  ctx: Pick<QueryCtx, "db">,
-  userId: Id<"users">,
-) {
-  return await ctx.db
-    .query("connections")
-    .withIndex("by_user_provider_app_providerUserId", (q) =>
-      q.eq("userId", userId),
-    )
-    .take(2000);
-}
 
 export const list = authenticatedQuery({
   args: { paginationOpts: paginationOptsValidator },
@@ -130,47 +117,23 @@ export const discoverApps = internalQuery({
         code:
           status === "revoked" ? ("REVOKED" as const) : ("EXPIRED" as const),
       };
-    const [bindings, connections] = await Promise.all([
-      ctx.db
-        .query("sliceBindings")
-        .withIndex("by_slice", (q) => q.eq("sliceId", slice._id))
-        .take(MAX_SLICE_APPS + 1),
-      connectionsForUser(ctx, slice.userId),
-    ]);
-    const bound = new Map(
-      bindings.map((item) => [item.app, item.connectionId]),
-    );
-    const connectedIds = new Set(
-      connections.map((connection) => connection._id),
-    );
-    const connectedApps = new Set(
-      connections.map((connection) => connection.app),
-    );
-    // The user may have more than 2,000 accounts. Check any selected account
-    // absent from the bounded summary query by its exact ID.
-    await Promise.all(
-      bindings
-        .filter((item) => !connectedIds.has(item.connectionId))
-        .map(async (item) => {
-          const account = await ctx.db.get("connections", item.connectionId);
-          if (
-            account &&
-            account.userId === slice.userId &&
-            account.app === item.app
-          ) {
-            connectedIds.add(item.connectionId);
-          }
-        }),
-    );
+    const bindings = await ctx.db
+      .query("sliceBindings")
+      .withIndex("by_slice", (q) => q.eq("sliceId", slice._id))
+      .take(MAX_SLICE_APPS + 1);
+    const bound = new Set(bindings.map((item) => item.app));
+    const connected = new Set((await Promise.all(bindings.map(async (item) => {
+      const account = await ctx.db.get("connections", item.connectionId);
+      return account && account.userId === slice.userId && account.app === item.app
+        ? item.app : null;
+    }))).filter((app): app is NonNullable<typeof app> => app !== null));
     return {
       ok: true as const,
       expiresAt: slice.expiresAt,
       apps: ALL_APPS.map((app) => ({
         app,
         allowed: bound.has(app),
-        connected: bound.has(app)
-          ? connectedIds.has(bound.get(app)!)
-          : connectedApps.has(app),
+        connected: connected.has(app),
       })),
     };
   },
