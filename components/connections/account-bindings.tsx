@@ -22,7 +22,7 @@ export function AccountBindings({ apps, statuses, selected, onChange }: {
 }) {
   if (apps.length === 0) return null;
   return <div className="space-y-3">
-    <p className="text-sm font-medium">Accounts for this grant</p>
+    <p className="text-sm font-medium">Accounts for this slice</p>
     {apps.map((app) => {
       const accounts = statuses?.find((entry) => entry.app === app)?.accounts ?? [];
       return <label key={app} className="block space-y-1 text-sm">

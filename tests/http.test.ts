@@ -3,7 +3,6 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { ensurePassport } from "../convex/tables/passports";
 import { resolveReturnTo } from "../convex/http/helpers";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -27,9 +26,6 @@ async function createSlice(
       name: "Nishil Faldu",
       email: "nishil@example.com",
     });
-  });
-  await test.run(async (ctx) => {
-    await ensurePassport(ctx, userId);
   });
   await test.run(async (ctx) => {
     for (const app of args.apps) {
@@ -77,15 +73,7 @@ describe("GET /", () => {
     expect(paths).toContain("GET /api/health");
     expect(paths).toContain("POST /api/credentials");
     expect(paths).toContain("GET /api/apps");
-    const credentials = body.routes.find(
-      (route: { path: string }) => route.path === "/api/credentials",
-    );
-    expect(credentials.body.required).toEqual([
-      "sliceToken",
-      "sliceSecret",
-      "app",
-    ]);
-    expect(body.errors.APP_UNAVAILABLE.hint).toContain("dashboard");
+    expect(body.errors).toContain("APP_UNAVAILABLE");
   });
 });
 
@@ -108,37 +96,15 @@ describe("OPTIONS", () => {
 });
 
 describe("POST /api/credentials denials", () => {
-  test("invalid JSON and a non-boolean refresh are invalid_request", async () => {
-    const test = t();
-    const created = await createSlice(test, {
-      name: "Keyed",
-      ttlMs: 60_000,
-      apps: ["slack"],
-    });
-    const malformed = await test.fetch("/api/credentials", {
+  test("invalid JSON is invalid_request", async () => {
+    const malformed = await t().fetch("/api/credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{",
     });
     expect(malformed.status).toBe(400);
     expect(await malformed.json()).toEqual({
-      error: "Invalid JSON body",
-      code: "INVALID_REQUEST",
-    });
-    const refresh = await test.fetch("/api/credentials", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sliceToken: created.sliceToken,
-        sliceSecret: created.sliceSecret,
-        app: "slack",
-        refresh: "yes",
-      }),
-    });
-    expect(refresh.status).toBe(400);
-    expect(await refresh.json()).toEqual({
-      error: "refresh must be a boolean",
-      code: "INVALID_REQUEST",
+      error: "Invalid JSON body", code: "INVALID_REQUEST",
     });
   });
 

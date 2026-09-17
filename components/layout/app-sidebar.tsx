@@ -13,6 +13,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { api } from "@/convex/_generated/api";
+import { useNow } from "@/hooks/use-now";
 import { SidebarUser } from "@/components/layout/sidebar-user";
 import {
   Sidebar,
@@ -37,7 +38,8 @@ export function AppSidebar({
   ...props
 }: ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
-  const pendingCount = useQuery(api.tables.slices.accessRequests.pendingCount);
+  const now = useNow();
+  const pendingCount = useQuery(api.tables.slices.accessRequests.pendingCount, { now });
 
   return (
     <Sidebar collapsible="icon" {...props}>

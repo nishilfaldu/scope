@@ -103,19 +103,6 @@ export function providerForApp(app: AppId): ProviderId {
   }
 }
 
-export function appsForProvider(provider: ProviderId): AppId[] {
-  return ALL_APPS.filter((app) => providerForApp(app) === provider);
-}
-
-/**
- * Non-Google providers map 1:1 to a single app id (github→github, …).
- * Google has multiple apps under one provider — returns null.
- */
-export function soleAppForProvider(provider: ProviderId): AppId | null {
-  const apps = appsForProvider(provider);
-  return apps.length === 1 ? apps[0]! : null;
-}
-
 const GOOGLE_APP_SCOPES: Record<GoogleAppId, string> = {
   gmail: "https://www.googleapis.com/auth/gmail.modify",
   calendar: "https://www.googleapis.com/auth/calendar",

@@ -68,6 +68,14 @@ export const STATUS_LABELS = {
   expired: "Expired",
 } as const;
 
+export function effectiveSliceStatus(
+  slice: { status: "active" | "revoked" | "expired"; expiresAt: number },
+  now: number,
+) {
+  return slice.status === "revoked" ? "revoked" as const
+    : slice.expiresAt <= now ? "expired" as const : "active" as const;
+}
+
 export function appLabel(id: string): string {
   return (ALL_APPS as readonly string[]).includes(id)
     ? APP_LABELS[id as AppId]

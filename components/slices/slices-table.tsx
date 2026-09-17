@@ -27,7 +27,8 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "@/components/ui/toast";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
-import { formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
+import { effectiveSliceStatus, formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
+import { useNow } from "@/hooks/use-now";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
 type Slice = FunctionReturnType<
@@ -38,6 +39,7 @@ const PAGE_SIZE = 10;
 
 export function SlicesTable() {
   const router = useRouter();
+  const now = useNow();
   const { paginationOpts, canPrevious, goNext, goPrevious } =
     useCursorPagination(PAGE_SIZE);
   const result = useQuery(api.tables.slices.queries.list, {
@@ -89,14 +91,14 @@ export function SlicesTable() {
       cell: ({ row: { original: slice } }) => (
         <Badge
           variant={
-            slice.status === "active"
+            effectiveSliceStatus(slice, now) === "active"
               ? "secondary"
-              : slice.status === "revoked"
+              : effectiveSliceStatus(slice, now) === "revoked"
                 ? "destructive"
                 : "outline"
           }
         >
-          {STATUS_LABELS[slice.status]}
+          {STATUS_LABELS[effectiveSliceStatus(slice, now)]}
         </Badge>
       ),
     },
@@ -105,7 +107,7 @@ export function SlicesTable() {
       header: "Expires",
       cell: ({ row: { original: slice } }) => (
         <Badge variant="outline">
-          {formatRemaining(slice.expiresAt, Date.now())}
+          {formatRemaining(slice.expiresAt, now)}
         </Badge>
       ),
     },
@@ -127,7 +129,7 @@ export function SlicesTable() {
             onSelect: () => void handleCopy("Slice token", slice.token),
           },
         ];
-        if (slice.status === "active") {
+        if (effectiveSliceStatus(slice, now) === "active") {
           items.push({
             id: "revoke",
             label: revokingId === slice.token ? "Revoking…" : "Revoke",

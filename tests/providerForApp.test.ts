@@ -3,7 +3,6 @@ import {
   ALL_APPS,
   providerForApp,
   scopesForGoogleApp,
-  soleAppForProvider,
   type AppId,
   type ProviderId,
 } from "../convex/domain/apps";
@@ -28,14 +27,6 @@ describe("providerForApp", () => {
     for (const app of ALL_APPS) {
       expect(providerForApp(app)).toBe(EXPECTED_PROVIDERS[app]);
     }
-  });
-});
-
-describe("soleAppForProvider", () => {
-  test("returns the single app for non-google providers", () => {
-    expect(soleAppForProvider("github")).toBe("github");
-    expect(soleAppForProvider("slack")).toBe("slack");
-    expect(soleAppForProvider("google")).toBeNull();
   });
 });
 

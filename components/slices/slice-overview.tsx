@@ -1,7 +1,8 @@
 "use client";
 
+import { useNow } from "@/hooks/use-now";
+
 import { useQuery } from "convex/react";
-import { useState } from "react";
 import { Delete02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   MINT_POLICY_LABELS,
+  effectiveSliceStatus,
   formatRemaining,
   STATUS_LABELS,
   type MintPolicy,
@@ -31,7 +33,7 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
     api.tables.slices.mutations.setMintPolicy,
     { successMessage: "Mint policy updated" },
   );
-  const [now] = useState(() => Date.now());
+  const now = useNow();
 
   if (slice === undefined) {
     return <Skeleton className="h-28 w-full" />;
@@ -48,9 +50,9 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
     <div className="flex flex-col gap-4">
       <ContentCard
         title={slice.name}
-        description="Status, credentials, mint policy, and apps from this slice's grant."
+        description="Status, credentials, mint policy, and apps from this slice."
         action={
-          slice.status === "active" ? (
+          effectiveSliceStatus(slice, now) === "active" ? (
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
@@ -90,14 +92,14 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
             <Badge
               className="mt-1"
               variant={
-                slice.status === "active"
+                effectiveSliceStatus(slice, now) === "active"
                   ? "secondary"
-                  : slice.status === "revoked"
+                  : effectiveSliceStatus(slice, now) === "revoked"
                     ? "destructive"
                     : "outline"
               }
             >
-              {STATUS_LABELS[slice.status]}
+              {STATUS_LABELS[effectiveSliceStatus(slice, now)]}
             </Badge>
           </div>
           <div>

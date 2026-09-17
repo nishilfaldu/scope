@@ -57,9 +57,17 @@ export function httpOAuthCallback(app: AppId) {
       return redirectTo(returnFallback, app, "error", "state");
     }
 
-    const grant = await exchangeAuthorizationCode(provider, code, state, app);
+    let grant;
+    try {
+      grant = await exchangeAuthorizationCode(provider, code, state, app);
+    } catch {
+      return redirectTo(origin.returnTo, app, "error", "identity");
+    }
     if ("error" in grant) {
       return redirectTo(origin.returnTo, app, "error", grant.error);
+    }
+    if (!grant.providerUserId.trim()) {
+      return redirectTo(origin.returnTo, app, "error", "identity");
     }
     await ctx.runMutation(
       internal.tables.connections.mutations.saveConnection,

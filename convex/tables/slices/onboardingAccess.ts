@@ -1,8 +1,8 @@
 import { v } from "convex/values";
-import { internalMutation } from "../../_generated/server";
+import { requestStatusValidator, effectiveRequestStatus } from "../../domain/requests";
+import { internalMutation, type MutationCtx } from "../../_generated/server";
 import {
   appValidator,
-  type AppId,
 } from "../../domain/apps";
 import {
   APPROVAL_DENIED_ERROR,
@@ -11,19 +11,11 @@ import {
 } from "../../lib/errors";
 import { decryptToken } from "../../lib/tokenEncryption";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
-import { denyCreate, MAX_SLICE_NAME, MAX_TTL_MS } from "./helpers";
+import { denyCreate, MAX_SLICE_APPS, MAX_SLICE_NAME, MAX_TTL_MS } from "./helpers";
 
 export const ONBOARDING_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 export const MAX_PENDING_ONBOARDING = 100;
 export const MAX_REASON_LENGTH = 280;
-
-const requestStatusValidator = v.union(
-  v.literal("pending"),
-  v.literal("approved"),
-  v.literal("denied"),
-  v.literal("expired"),
-  v.literal("claimed"),
-);
 
 export async function issuePublicPair() {
   const publicToken = randomSecret("ar_");
@@ -73,8 +65,8 @@ export const createOnboarding = internalMutation({
       return denyCreate(400, "ttlMs must be 7 days or fewer", "INVALID_REQUEST");
     }
     const uniqueApps = [...new Set(args.apps)];
-    if (uniqueApps.length === 0) {
-      return denyCreate(400, "apps must include at least one app", "INVALID_REQUEST");
+    if (uniqueApps.length === 0 || uniqueApps.length > MAX_SLICE_APPS) {
+      return denyCreate(400, `apps must include 1 to ${MAX_SLICE_APPS} apps`, "INVALID_REQUEST");
     }
     let reason = args.reason?.trim();
     if (reason !== undefined && reason.length === 0) {
@@ -88,22 +80,14 @@ export const createOnboarding = internalMutation({
       );
     }
 
-    const open = await ctx.db
-      .query("accessRequests")
-      .withIndex("by_status_and_expiresAt", (q) =>
-        q.eq("status", "pending").gt("expiresAt", Date.now()),
-      )
-      .take(MAX_PENDING_ONBOARDING + 1);
-    const onboardingOpen = open.filter((row) => row.kind === "onboarding");
-    if (onboardingOpen.length >= MAX_PENDING_ONBOARDING) {
-      return denyCreate(
-        429,
-        "Too many pending onboarding requests",
-        "INVALID_REQUEST",
-      );
-    }
-
     const now = Date.now();
+    const open = await ctx.db.query("accessRequests")
+      .withIndex("by_kind_status_expiresAt", (q) =>
+        q.eq("kind", "onboarding").eq("status", "pending").gt("expiresAt", now))
+      .take(MAX_PENDING_ONBOARDING);
+    if (open.length >= MAX_PENDING_ONBOARDING) {
+      return denyCreate(429, "Too many pending onboarding requests", "INVALID_REQUEST");
+    }
     const expiresAt = now + ONBOARDING_PENDING_TTL_MS;
     const { publicToken, claimHandle, claimSecretHash } = await issuePublicPair();
     const requestId = await ctx.db.insert("accessRequests", {
@@ -132,6 +116,23 @@ export const createOnboarding = internalMutation({
   },
 });
 
+async function onboardingByClaim(ctx: MutationCtx, claimHandle: string) {
+  const claimSecretHash = await sha256Hex(claimHandle);
+  const request = await ctx.db.query("accessRequests")
+    .withIndex("by_claim_secret_hash", (q) => q.eq("claimSecretHash", claimSecretHash))
+    .unique();
+  return request?.kind === "onboarding" ? request : null;
+}
+
+function claimDenial(request: NonNullable<Awaited<ReturnType<typeof onboardingByClaim>>>) {
+  const status = effectiveRequestStatus(request, Date.now());
+  if (status === "denied") return denyCreate(403, APPROVAL_DENIED_ERROR, "APPROVAL_DENIED");
+  if (status === "expired" || status === "claimed") {
+    return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
+  }
+  return null;
+}
+
 export const resolveOnboardingStatus = internalMutation({
   args: { claimHandle: v.string() },
   returns: v.union(
@@ -149,42 +150,19 @@ export const resolveOnboardingStatus = internalMutation({
     denyResultValidator,
   ),
   handler: async (ctx, args) => {
-    const claimSecretHash = await sha256Hex(args.claimHandle);
-    const request = await ctx.db
-      .query("accessRequests")
-      .withIndex("by_claim_secret_hash", (q) =>
-        q.eq("claimSecretHash", claimSecretHash),
-      )
-      .unique();
-    if (!request || request.kind !== "onboarding") {
-      return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
-    }
-    const now = Date.now();
-    if (
-      (request.status === "pending" || request.status === "approved") &&
-      request.expiresAt <= now
-    ) {
-      await ctx.db.patch("accessRequests", request._id, { status: "expired" });
-      return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
-    }
-    if (request.status === "denied") {
-      return denyCreate(403, APPROVAL_DENIED_ERROR, "APPROVAL_DENIED");
-    }
-    if (request.status === "expired") {
-      return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
-    }
-    if (request.status === "claimed") {
-      return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
-    }
+    const request = await onboardingByClaim(ctx, args.claimHandle);
+    if (!request) return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
+    const denied = claimDenial(request);
+    if (denied) return denied;
     return {
       ok: true as const,
       requestId: request._id,
       publicToken: request.publicToken,
       status: request.status,
       expiresAt: request.expiresAt,
-      agentName: request.agentName ?? "agent",
-      apps: (request.apps ?? []) as AppId[],
-      ttlMs: request.ttlMs ?? 0,
+      agentName: request.agentName,
+      apps: request.apps,
+      ttlMs: request.ttlMs,
       reason: request.reason,
     };
   },
@@ -218,30 +196,11 @@ export const resolveOnboardingClaim = internalMutation({
     denyResultValidator,
   ),
   handler: async (ctx, args) => {
-    const claimSecretHash = await sha256Hex(args.claimHandle);
-    const request = await ctx.db
-      .query("accessRequests")
-      .withIndex("by_claim_secret_hash", (q) =>
-        q.eq("claimSecretHash", claimSecretHash),
-      )
-      .unique();
-    if (!request || request.kind !== "onboarding") {
-      return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
-    }
+    const request = await onboardingByClaim(ctx, args.claimHandle);
+    if (!request) return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
+    const denied = claimDenial(request);
+    if (denied) return denied;
     const now = Date.now();
-    if (
-      (request.status === "pending" || request.status === "approved") &&
-      request.expiresAt <= now
-    ) {
-      await ctx.db.patch("accessRequests", request._id, { status: "expired" });
-      return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
-    }
-    if (request.status === "denied") {
-      return denyCreate(403, APPROVAL_DENIED_ERROR, "APPROVAL_DENIED");
-    }
-    if (request.status === "expired" || request.status === "claimed") {
-      return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
-    }
     if (request.status === "pending") {
       return {
         ok: true as const,
@@ -250,8 +209,8 @@ export const resolveOnboardingClaim = internalMutation({
         publicToken: request.publicToken,
         status: "pending" as const,
         expiresAt: request.expiresAt,
-        agentName: request.agentName ?? "agent",
-        apps: (request.apps ?? []) as AppId[],
+        agentName: request.agentName,
+        apps: request.apps,
       };
     }
 
@@ -296,7 +255,7 @@ export const resolveOnboardingClaim = internalMutation({
       sliceSecret,
       expiresAt: slice.expiresAt,
       name: slice.name,
-      apps: (request.apps ?? []) as AppId[],
+      apps: request.apps,
       mintPolicy: "auto" as const,
     };
   },

@@ -3,7 +3,6 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { ensurePassport } from "../convex/tables/passports";
 import {
   TOKEN_CIPHER_PREFIX,
   decryptToken,
@@ -23,9 +22,6 @@ async function signedIn(test: ReturnType<typeof t>) {
       name: "Nishil Faldu",
       email: "nishil@example.com",
     });
-  });
-  await test.run(async (ctx) => {
-    await ensurePassport(ctx, userId);
   });
   return {
     backend: test.withIdentity({ subject: `${userId}|session-1` }),

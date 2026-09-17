@@ -17,7 +17,6 @@ export type RefreshedTokens = {
 export type OAuthGrant = RefreshedTokens & {
   login: string;
   providerUserId: string;
-  scopes?: string;
 };
 
 export type AuthorizeStart = { url: string } | { error: string };

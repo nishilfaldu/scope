@@ -5,12 +5,29 @@ import { encryptToken } from "../../lib/tokenEncryption";
 
 export const clearConnection = internalMutation({
   args: { userId: v.id("users"), app: appValidator, connectionId: v.id("connections") },
-  returns: v.null(),
+  returns: v.union(
+    v.object({ storedAccessToken: v.string(), revokeUpstream: v.boolean() }),
+    v.null(),
+  ),
   handler: async (ctx, args) => {
     const row = await ctx.db.get("connections", args.connectionId);
     if (!row || row.userId !== args.userId || row.app !== args.app) return null;
+    let revokeUpstream = true;
+    if (row.provider === "google") {
+      for (const app of ["gmail", "calendar", "drive", "docs", "sheets"] as const) {
+        const others = await ctx.db.query("connections")
+          .withIndex("by_user_provider_app_providerUserId", (q) =>
+            q.eq("userId", args.userId).eq("provider", "google")
+              .eq("app", app).eq("providerUserId", row.providerUserId))
+          .take(2);
+        if (others.some((other) => other._id !== row._id)) {
+          revokeUpstream = false;
+          break;
+        }
+      }
+    }
     await ctx.db.delete("connections", row._id);
-    return null;
+    return { storedAccessToken: row.accessToken, revokeUpstream };
   },
 });
 
@@ -27,6 +44,7 @@ export const saveConnection = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    if (!args.providerUserId.trim()) throw new Error("Provider account ID is required");
     const existing = await ctx.db
       .query("connections")
       .withIndex("by_user_provider_app_providerUserId", (q) =>
@@ -54,7 +72,6 @@ export const saveConnection = internalMutation({
       providerUserId: args.providerUserId,
       refreshToken: refreshToken ?? existing?.refreshToken,
       tokenExpiresAt: args.tokenExpiresAt,
-      scopes: undefined,
     };
     if (existing) await ctx.db.replace("connections", existing._id, doc);
     else await ctx.db.insert("connections", doc);

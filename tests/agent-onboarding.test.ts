@@ -3,7 +3,6 @@ import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { ensurePassport } from "../convex/tables/passports";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -20,9 +19,6 @@ async function signedIn(
       name: "Nishil Faldu",
       email: "nishil@example.com",
     });
-  });
-  await test.run(async (ctx) => {
-    await ensurePassport(ctx, userId);
   });
   await test.mutation(internal.tables.connections.mutations.saveConnection, {
     userId,
@@ -84,12 +80,11 @@ describe("agent onboarding approval link", () => {
     expect(pendingBody.approvalUrl).toBe(body.approvalUrl);
 
     const publicToken = body.approvalUrl.split("/approvals/")[1];
-    const bound = await backend.mutation(
-      api.tables.slices.accessRequests.bindToViewer,
-      { publicToken },
+    const preview = await backend.query(
+      api.tables.slices.accessRequests.getByPublicToken, { publicToken },
     );
-    expect(bound?.kind).toBe("onboarding");
-    expect(bound?.agentName).toBe("Chat agent");
+    expect(preview?.kind).toBe("onboarding");
+    expect(preview?.agentName).toBe("Chat agent");
 
     await backend.mutation(api.tables.slices.accessRequests.decide, {
       requestId: body.requestId,
@@ -225,9 +220,7 @@ describe("agent onboarding approval link", () => {
     expect(paths).toContain("POST /api/access-requests");
     expect(paths).toContain("POST /api/access-requests/status");
     expect(paths).toContain("POST /api/access-requests/claim");
-    expect(body.summary.toLowerCase()).toContain("approvalurl");
-    expect(body.errors.APPROVAL_REQUIRED.hint.toLowerCase()).toContain(
-      "approvalurl",
-    );
+    expect(body.summary.toLowerCase()).toContain("future credential mints");
+    expect(body.routes.some((route: { path: string }) => route.path === "/api/access-requests")).toBe(true);
   });
 });

@@ -9,8 +9,8 @@
  */
 
 import type * as auth from "../auth.js";
-import type * as crons from "../crons.js";
 import type * as domain_apps from "../domain/apps.js";
+import type * as domain_requests from "../domain/requests.js";
 import type * as functions from "../functions.js";
 import type * as http from "../http.js";
 import type * as http_contracts from "../http/contracts.js";
@@ -19,6 +19,7 @@ import type * as http_httpAccessRequestHandlers from "../http/httpAccessRequestH
 import type * as http_httpAppsHandler from "../http/httpAppsHandler.js";
 import type * as http_httpClaimHandler from "../http/httpClaimHandler.js";
 import type * as http_httpCredentialsHandler from "../http/httpCredentialsHandler.js";
+import type * as http_mint from "../http/mint.js";
 import type * as http_oauth from "../http/oauth.js";
 import type * as lib_errors from "../lib/errors.js";
 import type * as lib_json from "../lib/json.js";
@@ -45,7 +46,6 @@ import type * as tables_connections_mutations from "../tables/connections/mutati
 import type * as tables_connections_queries from "../tables/connections/queries.js";
 import type * as tables_oauthStates_mutations from "../tables/oauthStates/mutations.js";
 import type * as tables_oauthStates_queries from "../tables/oauthStates/queries.js";
-import type * as tables_passports from "../tables/passports.js";
 import type * as tables_slices_accessRequestPublic from "../tables/slices/accessRequestPublic.js";
 import type * as tables_slices_accessRequests from "../tables/slices/accessRequests.js";
 import type * as tables_slices_accessRequestsMint from "../tables/slices/accessRequestsMint.js";
@@ -64,8 +64,8 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
-  crons: typeof crons;
   "domain/apps": typeof domain_apps;
+  "domain/requests": typeof domain_requests;
   functions: typeof functions;
   http: typeof http;
   "http/contracts": typeof http_contracts;
@@ -74,6 +74,7 @@ declare const fullApi: ApiFromModules<{
   "http/httpAppsHandler": typeof http_httpAppsHandler;
   "http/httpClaimHandler": typeof http_httpClaimHandler;
   "http/httpCredentialsHandler": typeof http_httpCredentialsHandler;
+  "http/mint": typeof http_mint;
   "http/oauth": typeof http_oauth;
   "lib/errors": typeof lib_errors;
   "lib/json": typeof lib_json;
@@ -100,7 +101,6 @@ declare const fullApi: ApiFromModules<{
   "tables/connections/queries": typeof tables_connections_queries;
   "tables/oauthStates/mutations": typeof tables_oauthStates_mutations;
   "tables/oauthStates/queries": typeof tables_oauthStates_queries;
-  "tables/passports": typeof tables_passports;
   "tables/slices/accessRequestPublic": typeof tables_slices_accessRequestPublic;
   "tables/slices/accessRequests": typeof tables_slices_accessRequests;
   "tables/slices/accessRequestsMint": typeof tables_slices_accessRequestsMint;

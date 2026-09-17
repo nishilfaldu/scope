@@ -30,7 +30,7 @@ async function identity(accessToken: string) {
   const raw: unknown = await response.json();
   const value = isPlainObject(raw) ? raw : {};
   const login = typeof value.email === "string" ? value.email : "zoom";
-  return { login, providerUserId: typeof value.id === "string" ? value.id : login };
+  return { login, providerUserId: typeof value.id === "string" && value.id ? value.id : "" };
 }
 
 export const zoom: ProviderOAuth = {

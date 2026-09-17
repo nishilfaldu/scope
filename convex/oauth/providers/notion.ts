@@ -75,7 +75,7 @@ export const notion: ProviderOAuth = {
         ? owner.id
         : typeof raw.bot_id === "string"
           ? raw.bot_id
-          : login;
+          : "";
     return grantFromTokenPayload(raw, { login, providerUserId });
   },
 

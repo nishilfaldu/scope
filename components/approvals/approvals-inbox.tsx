@@ -1,5 +1,7 @@
 "use client";
 
+import { useNow } from "@/hooks/use-now";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -23,7 +25,8 @@ export function ApprovalsInbox() {
   const [decide, isDeciding] = useErrorCatchingMutation(
     api.tables.slices.accessRequests.decide,
   );
-  const [now] = useState(() => Date.now());
+  const now = useNow();
+  const livePending = pending?.filter((request) => request.expiresAt > now);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   return (
@@ -34,12 +37,12 @@ export function ApprovalsInbox() {
             title="Access requests"
             description="Approve agent onboarding links and approve-gated credential mints. Slice secrets and provider tokens are claimed by the agent over HTTPS — never pasted in chat."
           >
-            {pending === undefined ? (
+            {livePending === undefined ? (
               <div className="space-y-3 p-6">
                 <Skeleton className="h-16 w-full" />
                 <Skeleton className="h-16 w-full" />
               </div>
-            ) : pending.length === 0 ? (
+            ) : livePending.length === 0 ? (
               <div className="p-6">
                 <EmptyState
                   title="No pending approvals"
@@ -51,7 +54,7 @@ export function ApprovalsInbox() {
               </div>
             ) : (
               <ul className="divide-y">
-                {pending.map((request) => (
+                {livePending.map((request) => (
                   <li
                     key={request._id}
                     className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between"
@@ -77,9 +80,6 @@ export function ApprovalsInbox() {
                               </Badge>
                             ))
                           : null}
-                        {request.refresh ? (
-                          <Badge variant="outline">refresh</Badge>
-                        ) : null}
                       </div>
                       <p className="text-sm text-muted-foreground">
                         Expires {formatRemaining(request.expiresAt, now)}

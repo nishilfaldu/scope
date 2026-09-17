@@ -3,7 +3,6 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { ensurePassport } from "../convex/tables/passports";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -17,9 +16,6 @@ async function signedIn(test: ReturnType<typeof t>) {
       name: "Nishil Faldu",
       email: "nishil@example.com",
     });
-  });
-  await test.run(async (ctx) => {
-    await ensurePassport(ctx, userId);
   });
   await test.run(async (ctx) => {
     await ctx.db.insert("connections", {
@@ -56,24 +52,14 @@ describe("slice ownership", () => {
       ttlMs: 60_000,
       apps: ["github"],
     });
-    const stored = await test.run(async (ctx) => {
-      const slice = await ctx.db.get("slices", created.id);
-      if (!slice) throw new Error("slice missing");
-      const passport = await ctx.db.get("passports", slice.passportId);
-      const grant = await ctx.db.get("grants", slice.grantId);
-      return { slice, passport, grant };
-    });
-    expect(stored.slice.userId).toEqual(userId);
+    const stored = await test.run(async (ctx) => ({
+      slice: await ctx.db.get("slices", created.id),
+      bindings: await ctx.db.query("sliceBindings")
+        .withIndex("by_slice", (q) => q.eq("sliceId", created.id)).collect(),
+    }));
+    expect(stored.slice?.userId).toEqual(userId);
     expect(stored.slice).not.toHaveProperty("apps");
-    expect(stored.passport).toMatchObject({ userId, name: "Default passport" });
-    expect(stored.passport).not.toHaveProperty("token");
-    expect(stored.grant).toMatchObject({
-      passportId: stored.passport?._id,
-      userId,
-      agent: "PR agent",
-      apps: ["github"],
-      expiresAt: created.expiresAt,
-    });
+    expect(stored.bindings).toMatchObject([{ app: "github" }]);
   });
 
   test("create requires a connection and only accepts connected apps", async () => {
@@ -84,9 +70,6 @@ describe("slice ownership", () => {
         email: "none@example.com",
       }),
     );
-    await test.run(async (ctx) => {
-      await ensurePassport(ctx, userId);
-    });
     const backend = test.withIdentity({ subject: `${userId}|session-1` });
     await expect(
       backend.mutation(api.tables.slices.mutations.create, {
@@ -114,37 +97,18 @@ describe("slice ownership", () => {
     ).rejects.toThrow("Select one account for each app");
   });
 
-  test("create reuses the existing passport for later slices", async () => {
+  test("each slice owns indexed bindings", async () => {
     const test = t();
     const { backend } = await signedIn(test);
     const first = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "One",
-      ttlMs: 60_000,
-      apps: ["github"],
+      name: "One", ttlMs: 60_000, apps: ["github"],
     });
     const second = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Two",
-      ttlMs: 60_000,
-      apps: ["github"],
+      name: "Two", ttlMs: 60_000, apps: ["github"],
     });
-
-    const stored = await test.run(async (ctx) => ({
-      passports: await ctx.db.query("passports").collect(),
-      slices: await ctx.db.query("slices").collect(),
-      grants: await ctx.db.query("grants").collect(),
-    }));
-    expect(stored.passports).toHaveLength(1);
-    expect(stored.slices).toHaveLength(2);
-    expect(stored.grants).toHaveLength(2);
+    const rows = await test.run(async (ctx) => ctx.db.query("sliceBindings").collect());
     expect(first.id).not.toEqual(second.id);
-    expect(stored.slices.map((slice) => slice.passportId)).toEqual([
-      stored.passports[0]?._id,
-      stored.passports[0]?._id,
-    ]);
-    expect(stored.grants.map((grant) => grant.passportId)).toEqual([
-      stored.passports[0]?._id,
-      stored.passports[0]?._id,
-    ]);
+    expect(rows.map((row) => row.sliceId).sort()).toEqual([first.id, second.id].sort());
   });
 
   test("create refuses a signed-out caller", async () => {
@@ -182,6 +146,12 @@ describe("slice ownership", () => {
         sliceId: created.id,
       }),
     ).toBeNull();
+    expect(await owner.query(api.tables.slices.queries.bindingsForApps, {
+      sliceId: created.id, apps: ["github"],
+    })).toMatchObject([{ app: "github", sliceId: created.id }]);
+    await expect(otherUser.query(api.tables.slices.queries.bindingsForApps, {
+      sliceId: created.id, apps: ["github"],
+    })).rejects.toThrow("Slice not found");
   });
 
   test("another user cannot change or revoke a slice", async () => {
@@ -212,7 +182,6 @@ describe("slice ownership", () => {
     });
     expect(slice).toMatchObject({
       status: "active",
-      grantApps: ["github", "gmail"],
     });
   });
 

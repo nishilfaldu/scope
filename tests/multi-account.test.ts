@@ -3,7 +3,6 @@ import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { ensurePassport } from "../convex/tables/passports";
 import { google } from "../convex/oauth/providers/google";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -49,7 +48,27 @@ describe("app-bound OAuth state", () => {
 });
 
 describe("Google disconnect", () => {
-  test("removing one app preserves other Google app grants", async () => {
+  test("local disconnect succeeds when upstream revocation fails", async () => {
+    const test = t();
+    const userId = await test.run(async (ctx) =>
+      ctx.db.insert("users", { name: "Owner", email: "owner@example.com" }));
+    await test.mutation(internal.tables.connections.mutations.saveConnection, {
+      userId, provider: "google", app: "gmail", providerUserId: "sub-x",
+      login: "x@gmail.com", accessToken: "access-x", refreshToken: "refresh-x",
+    });
+    const backend = test.withIdentity({ subject: `${userId}|session-1` });
+    const status = (await backend.query(api.tables.connections.queries.listStatuses, {}))
+      .find((row) => row.app === "gmail")!;
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("provider down"));
+    await backend.action(api.tables.connections.actions.disconnect, {
+      app: "gmail", connectionId: status.accounts[0].id,
+    });
+    const after = (await backend.query(api.tables.connections.queries.listStatuses, {}))
+      .find((row) => row.app === "gmail")!;
+    expect(after.accounts).toEqual([]);
+  });
+
+  test("removing one app preserves other Google app connections", async () => {
     const test = t();
     const userId = await test.run(async (ctx) => ctx.db.insert("users", { name: "Owner", email: "owner@example.com" }));
     for (const app of ["gmail", "calendar"] as const) {
@@ -70,12 +89,21 @@ describe("Google disconnect", () => {
   });
 });
 
-describe("multi-account grants", () => {
+describe("multi-account bindings", () => {
+  test("rejects a connection without a stable provider account ID", async () => {
+    const test = t();
+    const userId = await test.run(async (ctx) =>
+      ctx.db.insert("users", { name: "Owner", email: "owner@example.com" }));
+    await expect(test.mutation(internal.tables.connections.mutations.saveConnection, {
+      userId, provider: "google", app: "gmail", providerUserId: "",
+      login: "x@gmail.com", accessToken: "access-x",
+    })).rejects.toThrow("Provider account ID is required");
+  });
+
   test("keeps two accounts, requires a selection, and binds the selected account", async () => {
     const test = t();
     const userId = await test.run(async (ctx) => {
       const id = await ctx.db.insert("users", { name: "Owner", email: "owner@example.com" });
-      await ensurePassport(ctx, id);
       return id;
     });
     for (const [providerUserId, login] of [["sub-x", "x@gmail.com"], ["sub-y", "y@gmail.com"]] as const) {
@@ -101,18 +129,23 @@ describe("multi-account grants", () => {
     });
     const grant = await test.run(async (ctx) => {
       const slice = await ctx.db.get("slices", created.id);
-      return slice ? await ctx.db.get("grants", slice.grantId) : null;
+      return slice ? await ctx.db.query("sliceBindings").withIndex("by_slice", (q) => q.eq("sliceId", slice._id)).collect() : null;
     });
-    expect(grant?.bindings).toEqual([{ app: "gmail", connectionId: selected }]);
+    expect(grant).toMatchObject([{ app: "gmail", connectionId: selected }]);
     const authorized = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "gmail", refresh: false,
+      sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "gmail",
     });
     expect(authorized).toMatchObject({ ok: true, connectionId: selected });
     await test.mutation(internal.tables.connections.mutations.clearConnection, { userId, app: "gmail", connectionId: selected });
     const denied = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
-      sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "gmail", refresh: false,
+      sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "gmail",
     });
     expect(denied).toMatchObject({ ok: false, code: "APP_UNAVAILABLE" });
+    const discovery = await test.query(internal.tables.slices.queries.discoverApps, {
+      sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, now: Date.now(),
+    });
+    expect(discovery.ok && discovery.apps.find((app) => app.app === "gmail"))
+      .toMatchObject({ allowed: true, connected: false });
     expect(await test.mutation(internal.tables.connections.mutations.refreshConnection, {
       userId, app: "gmail", connectionId: selected, providerUserId: "sub-y",
       accessToken: "late-token", refreshToken: "late-refresh",

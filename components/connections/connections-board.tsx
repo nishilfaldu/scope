@@ -75,7 +75,7 @@ export function ConnectionsBoard() {
         <div className="px-4 lg:px-6">
           <ContentCard
             title="Connections"
-            description="Connect your accounts for the passport system to work."
+            description="Connect an account before adding its apps to a slice."
           >
             <ConnectionsTable />
           </ContentCard>

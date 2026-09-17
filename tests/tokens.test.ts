@@ -3,7 +3,6 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { ensurePassport } from "../convex/tables/passports";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -17,9 +16,6 @@ async function signedIn(test: ReturnType<typeof t>, connect = true) {
       name: "Nishil Faldu",
       email: "nishil@example.com",
     });
-  });
-  await test.run(async (ctx) => {
-    await ensurePassport(ctx, userId);
   });
   if (connect) {
     await test.mutation(internal.tables.connections.mutations.saveConnection, {
@@ -51,7 +47,7 @@ async function seedGithub(
   });
 }
 
-describe("accounts and passports", () => {
+describe("accounts and slices", () => {
   test("create returns credentials without exposing the secret hash", async () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
@@ -91,7 +87,7 @@ describe("accounts and passports", () => {
         ttlMs: 60_000,
         apps: ["github"],
       }),
-    ).rejects.toThrow(/Name must be non-empty/);
+    ).rejects.toThrow(/Name must be 1 to 80 characters/);
     await expect(
       backend.mutation(api.tables.slices.mutations.create, {
         name: "n".repeat(81),
@@ -108,7 +104,7 @@ describe("accounts and passports", () => {
     ).rejects.toThrow(/7 days/);
   });
 
-  test("setApp updates the parent grant and the slice reads through", async () => {
+  test("setApp updates indexed slice bindings", async () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     for (const provider of ["google", "slack"] as const) {
@@ -137,19 +133,15 @@ describe("accounts and passports", () => {
     const slice = await backend.query(api.tables.slices.queries.get, {
       sliceId: created.id,
     });
-    expect(slice?.grantApps.sort()).toEqual(["github", "slack"]);
-    const stored = await test.run(async (ctx) => {
-      const storedSlice = await ctx.db.get("slices", created.id);
-      const grant = storedSlice
-        ? await ctx.db.get("grants", storedSlice.grantId)
-        : null;
-      return { storedSlice, grant };
-    });
-    expect(stored.storedSlice).not.toHaveProperty("apps");
-    expect(stored.grant?.apps.sort()).toEqual(["github", "slack"]);
+    const bindings = await test.run(async (ctx) =>
+      ctx.db.query("sliceBindings")
+        .withIndex("by_slice", (q) => q.eq("sliceId", created.id)).collect(),
+    );
+    expect(bindings.map((binding) => binding.app).sort()).toEqual(["github", "slack"]);
+    expect(slice).not.toHaveProperty("grantApps");
   });
 
-  test("disconnecting an account leaves passports intact", async () => {
+  test("disconnecting an account leaves slices intact", async () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     await seedGithub(test, userId);
@@ -220,8 +212,7 @@ describe("credential authorization", () => {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
         app: "github",
-        refresh: false,
-      },
+              },
     );
     expect(allowed).toMatchObject({
       ok: true,
@@ -230,21 +221,16 @@ describe("credential authorization", () => {
       provider: "github",
     });
     if (!allowed.ok) throw new Error("expected authorization");
-    const committed = await test.mutation(
-      internal.tables.slices.credentials.commitCreate,
-      {
-        sliceId: allowed.sliceId,
-        app: allowed.app,
-        expiresAt: Date.now() + 60_000,
-        refresh: false,
-      },
+    const finalized = await test.mutation(
+      internal.tables.slices.credentials.finalize,
+      { sliceId: allowed.sliceId, app: allowed.app, connectionId: allowed.connectionId },
     );
-    expect(committed.expiresAt).toBeGreaterThan(Date.now());
+    expect(finalized).toEqual({ ok: true });
     expect(JSON.stringify(allowed)).not.toMatch(/ghs_/);
-    expect(JSON.stringify(committed)).not.toMatch(/ghs_/);
+    expect(JSON.stringify(finalized)).not.toMatch(/ghs_/);
   });
 
-  test("a grant app removal immediately denies a live slice", async () => {
+  test("removing a binding immediately denies a live slice", async () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     await seedGithub(test, userId);
@@ -264,8 +250,7 @@ describe("credential authorization", () => {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
         app: "github",
-        refresh: false,
-      },
+              },
     );
     expect(denied).toMatchObject({
       ok: false,
@@ -295,8 +280,7 @@ describe("credential authorization", () => {
         sliceToken: revokedSlice.sliceToken,
         sliceSecret: revokedSlice.sliceSecret,
         app: "github",
-        refresh: false,
-      },
+              },
     );
     expect(revoked).toMatchObject({ ok: false, code: "REVOKED" });
 
@@ -320,8 +304,7 @@ describe("credential authorization", () => {
         sliceToken: expiredSlice.sliceToken,
         sliceSecret: expiredSlice.sliceSecret,
         app: "github",
-        refresh: false,
-      },
+              },
     );
     expect(expired).toMatchObject({ ok: false, code: "EXPIRED" });
   });
@@ -348,8 +331,7 @@ describe("credential authorization", () => {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
         app: "dropbox",
-        refresh: false,
-      },
+              },
     );
     expect(unknown).toMatchObject(unavailable);
     const unconnected = await test.mutation(
@@ -358,8 +340,7 @@ describe("credential authorization", () => {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
         app: "github",
-        refresh: false,
-      },
+              },
     );
     expect(unconnected).toMatchObject(unavailable);
   });
@@ -379,8 +360,7 @@ describe("credential authorization", () => {
         sliceToken: created.sliceToken,
         sliceSecret: "ss_wrong",
         app: "github",
-        refresh: false,
-      },
+              },
     );
     expect(denied).toMatchObject({
       ok: false,

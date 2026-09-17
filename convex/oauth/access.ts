@@ -8,7 +8,6 @@ import {
 } from "./index";
 import { providerForApp, type AppId } from "../domain/apps";
 import type { AgentErrorCode } from "../lib/errors";
-import { APP_TOKEN_TTL_MS } from "../tables/slices/credentials";
 
 async function persistRefresh(
   ctx: GenericActionCtx<DataModel>,
@@ -32,7 +31,7 @@ async function persistRefresh(
 }
 
 export type IssueShortLivedAccessResult =
-  | { accessToken: string; expiresAt: number }
+  | { accessToken: string; expiresAt: number | null }
   | { error: string; code: AgentErrorCode };
 
 const SHORT_LIVED_UNAVAILABLE_RESULT = {
@@ -98,11 +97,9 @@ export async function issueShortLivedAccess(
     return { error: `${app} is not connected`, code: "APP_UNAVAILABLE" };
   }
 
-  const providerExpiry = minted.tokenExpiresAt ?? connection.tokenExpiresAt;
-  const expiresAt = Math.min(
-    Date.now() + APP_TOKEN_TTL_MS,
-    providerExpiry ?? Date.now() + APP_TOKEN_TTL_MS,
-  );
+  // The provider controls this token's lifetime. We cannot shorten it by
+  // reporting an earlier expiry to the agent.
+  const expiresAt = minted.tokenExpiresAt ?? null;
   // Intentionally omit refreshToken — agents never receive vault refresh secrets.
   return { accessToken: minted.accessToken, expiresAt };
 }

@@ -1,9 +1,11 @@
 "use client";
 
+import { useNow } from "@/hooks/use-now";
+
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { PassportIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -33,7 +35,7 @@ function ApprovalGate({ publicToken }: { publicToken: string }) {
   const summary = useQuery(api.tables.slices.accessRequestPublic.publicSummary, {
     publicToken,
   });
-  const [now] = useState(() => Date.now());
+  const now = useNow();
   const redirectTo = `/approvals/${publicToken}`;
 
   if (summary === undefined) {
@@ -137,39 +139,19 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
   const bound = useQuery(api.tables.slices.accessRequests.getByPublicToken, {
     publicToken,
   });
-  const bindToViewer = useMutation(
-    api.tables.slices.accessRequests.bindToViewer,
-  );
   const [decide, isDeciding] = useErrorCatchingMutation(
     api.tables.slices.accessRequests.decide,
   );
   const statuses = useQuery(api.tables.connections.queries.listStatuses);
   const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">>>>({});
-  const [now] = useState(() => Date.now());
-  const [binding, setBinding] = useState(true);
-  const [boundRequest, setBoundRequest] = useState<typeof bound>(undefined);
-
-  useEffect(() => {
-    let cancelled = false;
-    void bindToViewer({ publicToken })
-      .then((result) => {
-        if (!cancelled) setBoundRequest(result);
-      })
-      .finally(() => {
-        if (!cancelled) setBinding(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [bindToViewer, publicToken]);
-
-  const request = boundRequest ?? bound;
+  const now = useNow();
+  const request = bound;
 
   return (
     <BoardShell title="Approve access">
       <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
         <div className="px-4 lg:px-6">
-          {binding && request === undefined ? (
+          {request === undefined ? (
             <Skeleton className="h-40 w-full" />
           ) : request === null || request === undefined ? (
             <ContentCard title="Request not found">
@@ -253,10 +235,7 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                         {APP_LABELS[request.app]}
                       </Badge>
                     ) : null}
-                    {request.refresh ? (
-                      <Badge variant="outline">refresh</Badge>
-                    ) : null}
-                    {request.sliceId ? (
+                                    {request.sliceId ? (
                       <Link
                         href={`/slices/${request.sliceId}`}
                         className="text-sm underline-offset-4 hover:underline"
