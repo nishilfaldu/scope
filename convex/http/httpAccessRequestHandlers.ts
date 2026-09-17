@@ -91,7 +91,7 @@ export const httpAccessRequestStatusHandler = httpAction(async (ctx, request) =>
     return claimHandle;
   }
 
-  const status = await ctx.runMutation(
+  const status = await ctx.runQuery(
     internal.tables.slices.onboardingAccess.resolveOnboardingStatus,
     { claimHandle },
   );

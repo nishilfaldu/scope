@@ -14,6 +14,7 @@ import {
   UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
 import {
+  bindingFor,
   effectiveStatus,
   MAX_SLICE_APPS,
   sliceBySecret,

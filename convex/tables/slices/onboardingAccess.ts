@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { requestStatusValidator, effectiveRequestStatus } from "../../domain/requests";
-import { internalMutation, type MutationCtx } from "../../_generated/server";
+import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "../../_generated/server";
 import {
   appValidator,
 } from "../../domain/apps";
@@ -116,7 +116,7 @@ export const createOnboarding = internalMutation({
   },
 });
 
-async function onboardingByClaim(ctx: MutationCtx, claimHandle: string) {
+async function onboardingByClaim(ctx: MutationCtx | QueryCtx, claimHandle: string) {
   const claimSecretHash = await sha256Hex(claimHandle);
   const request = await ctx.db.query("accessRequests")
     .withIndex("by_claim_secret_hash", (q) => q.eq("claimSecretHash", claimSecretHash))
@@ -133,7 +133,7 @@ function claimDenial(request: NonNullable<Awaited<ReturnType<typeof onboardingBy
   return null;
 }
 
-export const resolveOnboardingStatus = internalMutation({
+export const resolveOnboardingStatus = internalQuery({
   args: { claimHandle: v.string() },
   returns: v.union(
     v.object({
