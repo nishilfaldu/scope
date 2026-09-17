@@ -133,14 +133,14 @@ export function BaseModal({
       {children?.({ openModal })}
       
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className={`min-w-0 ${maxWidth}`}>
-          <DialogHeader>
+        <DialogContent className={`grid max-h-[calc(100dvh-2rem)] min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden ${maxWidth}`}>
+          <DialogHeader className="shrink-0">
             <DialogTitle>{title}</DialogTitle>
             {description && (
               <DialogDescription>{description}</DialogDescription>
             )}
           </DialogHeader>
-          <div className="min-w-0 max-w-full">{content}</div>
+          <div className="min-h-0 min-w-0 max-w-full overflow-y-auto overscroll-contain">{content}</div>
           {showFooter ? (
             <DialogFooter>
               <Button variant="outline" onClick={closeModal} disabled={isLoading}>

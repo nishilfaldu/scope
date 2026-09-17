@@ -133,11 +133,13 @@ export function CreateSliceForm({
         <form.Subscribe selector={(state) => state.values.apps}>
           {(apps) => <AccountBindings apps={apps} selected={selected} onChange={(app, id) => setSelected((current) => ({ ...current, [app]: id }))} />}
         </form.Subscribe>
-        <form.Subscribe selector={(state) => state.values.apps}>
-          {(apps) => <form.SubmitButton pendingLabel="Creating…" disabled={apps.length === 0 || bindingsFor(apps, selected).length !== apps.length}>
-            Create slice
-          </form.SubmitButton>}
-        </form.Subscribe>
+        <div className="sticky bottom-0 z-10 border-t bg-popover py-3">
+          <form.Subscribe selector={(state) => state.values.apps}>
+            {(apps) => <form.SubmitButton pendingLabel="Creating…" disabled={apps.length === 0 || bindingsFor(apps, selected).length !== apps.length}>
+              Create slice
+            </form.SubmitButton>}
+          </form.Subscribe>
+        </div>
       </form.Form>
     </form.AppForm>
   );
