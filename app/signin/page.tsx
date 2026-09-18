@@ -26,11 +26,6 @@ export default async function SignInPage({
     <SignIn
       redirectTo={redirectTo}
       title={returningToApproval ? "Continue to approve" : "Agent Passport"}
-      description={
-        returningToApproval
-          ? "Sign in to review this agent access request"
-          : "Sign in to manage your slices"
-      }
     />
   );
 }

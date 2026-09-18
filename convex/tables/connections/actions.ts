@@ -2,26 +2,24 @@ import { v } from "convex/values";
 import { internal } from "../../_generated/api";
 import { authenticatedAction } from "../../functions";
 import { revokeProviderGrant } from "../../oauth";
-import { providerValidator } from "../../domain/apps";
+import { appValidator, providerForApp } from "../../domain/apps";
+import { decryptToken } from "../../lib/tokenEncryption";
 
 export const disconnect = authenticatedAction({
-  args: { provider: providerValidator },
+  args: { app: appValidator, connectionId: v.id("connections") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const connection = await ctx.runQuery(
-      internal.tables.connections.queries.getConnection,
-      { userId: ctx.userId, provider: args.provider },
-    );
-    if (connection) {
-      await revokeProviderGrant(args.provider, connection.accessToken);
-    }
-    await ctx.runMutation(
+    const removed = await ctx.runMutation(
       internal.tables.connections.mutations.clearConnection,
-      {
-        userId: ctx.userId,
-        provider: args.provider,
-      },
+      { userId: ctx.userId, app: args.app, connectionId: args.connectionId },
     );
+    if (removed?.revokeUpstream) {
+      try {
+        await revokeProviderGrant(providerForApp(args.app), await decryptToken(removed.storedAccessToken));
+      } catch {
+        // Local revocation has already committed. Provider revocation is best effort.
+      }
+    }
     return null;
   },
 });

@@ -4,6 +4,7 @@ import { env } from "../_generated/server";
 import { isAppId, type AppId } from "../domain/apps";
 import { readObjectBody, requiredString } from "../lib/requests";
 import { errorResponse, jsonResponse } from "../lib/responses";
+import { AGENT_ERROR_GUIDANCE } from "../lib/errors";
 import { parseBoardOrigin } from "./helpers";
 
 function approvalUrlFor(publicToken: string): string {
@@ -56,17 +57,21 @@ export const httpCreateAccessRequestHandler = httpAction(async (ctx, request) =>
   }
   const reason =
     typeof body.reason === "string" ? body.reason : undefined;
+  const idempotencyKey = request.headers.get("idempotency-key")?.trim();
+  if (idempotencyKey !== undefined && (idempotencyKey.length < 32 || idempotencyKey.length > 128)) {
+    return errorResponse(400, "Idempotency-Key must be 32 to 128 characters", "INVALID_REQUEST");
+  }
 
   const created = await ctx.runMutation(
     internal.tables.slices.onboardingAccess.createOnboarding,
-    { agentName, apps, ttlMs, reason },
+    { agentName, apps, ttlMs, reason, idempotencyKey },
   );
   if (!created.ok) {
     return errorResponse(created.status, created.reason, created.code);
   }
 
   const approvalUrl = approvalUrlFor(created.publicToken);
-  return jsonResponse(201, {
+  return jsonResponse(created.reused ? 200 : 201, {
     requestId: created.requestId,
     status: created.status,
     expiresAt: created.expiresAt,
@@ -78,6 +83,7 @@ export const httpCreateAccessRequestHandler = httpAction(async (ctx, request) =>
     approvalUrl,
     // Runtime-only: never paste claimHandle into chat.
     claimHandle: created.claimHandle,
+    reused: created.reused,
   });
 });
 
@@ -91,7 +97,7 @@ export const httpAccessRequestStatusHandler = httpAction(async (ctx, request) =>
     return claimHandle;
   }
 
-  const status = await ctx.runMutation(
+  const status = await ctx.runQuery(
     internal.tables.slices.onboardingAccess.resolveOnboardingStatus,
     { claimHandle },
   );
@@ -133,6 +139,7 @@ export const httpAccessRequestClaimHandler = httpAction(async (ctx, request) => 
     return jsonResponse(202, {
       error: "Operator approval required before slice credentials can be claimed",
       code: "APPROVAL_REQUIRED",
+      ...AGENT_ERROR_GUIDANCE.APPROVAL_REQUIRED,
       requestId: decision.requestId,
       status: decision.status,
       expiresAt: decision.expiresAt,

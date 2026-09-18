@@ -7,7 +7,6 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -24,11 +23,9 @@ function safeRedirectPath(value: string | undefined): string {
 export function SignIn({
   redirectTo = "/",
   title = "Agent Passport",
-  description = "Sign in to manage your slices",
 }: {
   redirectTo?: string;
   title?: string;
-  description?: string;
 }) {
   const { signIn } = useAuthActions();
   const destination = safeRedirectPath(redirectTo);
@@ -45,7 +42,6 @@ export function SignIn({
           </div>
           <div className="flex flex-col gap-1">
             <CardTitle className="text-xl">{title}</CardTitle>
-            <CardDescription>{description}</CardDescription>
           </div>
         </CardHeader>
         <CardContent>

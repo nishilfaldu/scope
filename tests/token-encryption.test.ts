@@ -3,7 +3,6 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { ensurePassport } from "../convex/tables/passports";
 import {
   TOKEN_CIPHER_PREFIX,
   decryptToken,
@@ -23,9 +22,6 @@ async function signedIn(test: ReturnType<typeof t>) {
       name: "Nishil Faldu",
       email: "nishil@example.com",
     });
-  });
-  await test.run(async (ctx) => {
-    await ensurePassport(ctx, userId);
   });
   return {
     backend: test.withIdentity({ subject: `${userId}|session-1` }),
@@ -61,6 +57,7 @@ describe("connection secrets at rest", () => {
     await test.mutation(internal.tables.connections.mutations.saveConnection, {
       userId,
       provider: "github",
+      app: "github",
       accessToken,
       login: "octocat",
       providerUserId: "1",
@@ -70,8 +67,8 @@ describe("connection secrets at rest", () => {
     const stored = await test.run(async (ctx) => {
       return await ctx.db
         .query("connections")
-        .withIndex("by_user_and_provider", (q) =>
-          q.eq("userId", userId).eq("provider", "github"),
+        .withIndex("by_user_provider_app_providerUserId", (q) =>
+          q.eq("userId", userId).eq("provider", "github").eq("app", "github"),
         )
         .unique();
     });
@@ -83,7 +80,7 @@ describe("connection secrets at rest", () => {
 
     const loaded = await test.query(
       internal.tables.connections.queries.getConnection,
-      { userId, provider: "github" },
+      { userId, app: "github", connectionId: stored!._id },
     );
     expect(loaded).toMatchObject({
       accessToken,
@@ -97,10 +94,11 @@ describe("connection secrets at rest", () => {
     const test = t();
     const { userId } = await signedIn(test);
 
-    await test.run(async (ctx) => {
-      await ctx.db.insert("connections", {
+    const connectionId = await test.run(async (ctx) => {
+      return await ctx.db.insert("connections", {
         userId,
         provider: "github",
+        app: "github",
         accessToken: "ghs_plaintext_stored",
         login: "octocat",
         providerUserId: "1",
@@ -111,17 +109,18 @@ describe("connection secrets at rest", () => {
     await expect(
       test.query(internal.tables.connections.queries.getConnection, {
         userId,
-        provider: "github",
+        app: "github", connectionId,
       }),
     ).rejects.toThrow(/not encrypted/);
   });
 
-  test("listStatuses omits access and refresh tokens", async () => {
+  test("account statuses omit access and refresh tokens", async () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     await test.mutation(internal.tables.connections.mutations.saveConnection, {
       userId,
       provider: "github",
+      app: "github",
       accessToken: "ghs_standing_token",
       login: "octocat",
       providerUserId: "1",
@@ -129,14 +128,15 @@ describe("connection secrets at rest", () => {
     });
 
     const statuses = await backend.query(
-      api.tables.connections.queries.listStatuses,
-      {},
+      api.tables.connections.queries.statusesForApps,
+      { apps: ["github"] },
     );
     const github = statuses.find(({ provider }) => provider === "github");
     expect(github).toEqual({
       provider: "github",
+      app: "github",
       connected: true,
-      login: "octocat",
+      accounts: [expect.objectContaining({ login: "octocat" })],
     });
     expect(JSON.stringify(statuses)).not.toMatch(/ghs_|ghr_|enc:v1:/);
     expect(github).not.toHaveProperty("accessToken");

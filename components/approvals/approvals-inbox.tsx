@@ -1,6 +1,9 @@
 "use client";
 
+import { useNow } from "@/hooks/use-now";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { Notification01Icon } from "@hugeicons/core-free-icons";
@@ -10,38 +13,37 @@ import { api } from "@/convex/_generated/api";
 import { BoardShell } from "@/components/layout/board-shell";
 import { ContentCard } from "@/components/shared/content-card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ExpiryTime } from "@/components/shared/expiry-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { APP_LABELS, formatRemaining } from "@/lib/capabilities";
+import { APP_LABELS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
 export function ApprovalsInbox() {
+  const router = useRouter();
   const pending = useQuery(api.tables.slices.accessRequests.listPending);
   const [decide, isDeciding] = useErrorCatchingMutation(
     api.tables.slices.accessRequests.decide,
   );
-  const [now] = useState(() => Date.now());
+  const now = useNow();
+  const livePending = pending?.filter((request) => request.expiresAt > now);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   return (
     <BoardShell title="Approvals">
       <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
         <div className="px-4 lg:px-6">
-          <ContentCard
-            title="Access requests"
-            description="Approve agent onboarding links and approve-gated credential mints. Slice secrets and provider tokens are claimed by the agent over HTTPS — never pasted in chat."
-          >
-            {pending === undefined ? (
+          <ContentCard title="Access requests">
+            {livePending === undefined ? (
               <div className="space-y-3 p-6">
                 <Skeleton className="h-16 w-full" />
                 <Skeleton className="h-16 w-full" />
               </div>
-            ) : pending.length === 0 ? (
+            ) : livePending.length === 0 ? (
               <div className="p-6">
                 <EmptyState
                   title="No pending approvals"
-                  description="When an agent creates an access request or needs an approve-gated mint, it shows up here (and via the approval URL)."
                   icon={
                     <HugeiconsIcon icon={Notification01Icon} strokeWidth={2} />
                   }
@@ -49,7 +51,7 @@ export function ApprovalsInbox() {
               </div>
             ) : (
               <ul className="divide-y">
-                {pending.map((request) => (
+                {livePending.map((request) => (
                   <li
                     key={request._id}
                     className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between"
@@ -75,12 +77,12 @@ export function ApprovalsInbox() {
                               </Badge>
                             ))
                           : null}
-                        {request.refresh ? (
-                          <Badge variant="outline">refresh</Badge>
-                        ) : null}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Expires {formatRemaining(request.expiresAt, now)}
+                        {request.kind === "mint" && request.accountLogin
+                          ? `${request.accountLogin} · `
+                          : ""}
+                        Expires <ExpiryTime expiresAt={request.expiresAt} now={now} />
                         {request.reason ? ` · ${request.reason}` : ""}
                       </p>
                     </div>
@@ -89,14 +91,12 @@ export function ApprovalsInbox() {
                         size="sm"
                         disabled={isDeciding || busyId === request._id}
                         onClick={() => {
+                          if (request.kind === "onboarding") { router.push(`/approvals/${request.publicToken}`); return; }
                           setBusyId(request._id);
-                          void decide({
-                            requestId: request._id,
-                            decision: "approved",
-                          }).finally(() => setBusyId(null));
+                          void decide({ requestId: request._id, decision: "approved" }).finally(() => setBusyId(null));
                         }}
                       >
-                        Approve
+                        {request.kind === "onboarding" ? "Choose accounts" : "Approve"}
                       </Button>
                       <Button
                         size="sm"

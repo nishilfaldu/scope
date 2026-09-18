@@ -1,9 +1,9 @@
-import type { AgentErrorCode } from "./errors";
+import { AGENT_ERROR_GUIDANCE, type AgentErrorCode } from "./errors";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-slice-token, x-slice-secret",
+  "Access-Control-Allow-Headers": "Content-Type, Idempotency-Key, x-slice-token, x-slice-secret",
   "Content-Type": "application/json",
 };
 
@@ -23,5 +23,5 @@ export function errorResponse(
   error: string,
   code: AgentErrorCode,
 ): Response {
-  return jsonResponse(status, { error, code });
+  return jsonResponse(status, { error, code, ...AGENT_ERROR_GUIDANCE[code] });
 }

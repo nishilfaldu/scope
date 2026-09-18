@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useNow } from "@/hooks/use-now";
+
 import { useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
@@ -21,7 +22,7 @@ export function SliceRequests({ sliceId }: { sliceId: string }) {
   const requests = useQuery(api.tables.slices.accessRequests.listForSlice, {
     sliceId,
   });
-  const [now] = useState(() => Date.now());
+  const now = useNow();
 
   if (requests === undefined) {
     return <Skeleton className="h-28 w-full" />;
@@ -32,12 +33,13 @@ export function SliceRequests({ sliceId }: { sliceId: string }) {
   }
 
   return (
-    <ContentCard
-      title="Recent credential requests"
-      description="Approval-gated mint history for this slice."
-    >
+    <ContentCard title="Recent credential requests">
       <ul className="divide-y">
-        {requests.map((request) => (
+        {requests.map((request) => {
+          const status = request.expiresAt <= now &&
+            (request.status === "pending" || request.status === "approved")
+            ? "expired" : request.status;
+          return (
           <li
             key={request._id}
             className="flex items-center justify-between gap-3 px-6 py-3 text-sm"
@@ -51,15 +53,16 @@ export function SliceRequests({ sliceId }: { sliceId: string }) {
                     : "Mint"}
               </span>
               <Badge variant="outline">{request.kind}</Badge>
-              <Badge variant={STATUS_VARIANT[request.status]}>
-                {request.status}
+              <Badge variant={STATUS_VARIANT[status]}>
+                {status}
               </Badge>
             </div>
             <span className="text-muted-foreground">
               {formatRelativeTime(request._creationTime, now)}
             </span>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </ContentCard>
   );

@@ -52,7 +52,8 @@ export const slack: ProviderOAuth = {
     if (!authed || typeof authed.access_token !== "string") {
       return { error: "token" };
     }
-    const userId = typeof authed.id === "string" ? authed.id : "slack";
+    const userId = typeof authed.id === "string" ? authed.id : "";
+    if (!userId) return { error: "identity" };
     let login = userId;
     const userResponse = await fetch("https://slack.com/api/users.info", {
       method: "POST",

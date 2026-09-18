@@ -2,19 +2,7 @@ import { v } from "convex/values";
 
 import { query } from "../../_generated/server";
 import { appValidator } from "../../domain/apps";
-
-const requestStatusValidator = v.union(
-  v.literal("pending"),
-  v.literal("approved"),
-  v.literal("denied"),
-  v.literal("expired"),
-  v.literal("claimed"),
-);
-
-const requestKindValidator = v.union(
-  v.literal("onboarding"),
-  v.literal("mint"),
-);
+import { requestKindValidator, requestStatusValidator, effectiveRequestStatus } from "../../domain/requests";
 
 /**
  * Unsigned preview for the Link-style approval gate.
@@ -43,13 +31,13 @@ export const publicSummary = query({
     if (!request) return null;
     return {
       kind: request.kind,
-      status: request.status,
-      agentName: request.agentName,
-      apps: request.apps,
-      app: request.app,
-      reason: request.reason,
+      status: effectiveRequestStatus(request, Date.now()),
+      agentName: request.kind === "onboarding" ? request.agentName : undefined,
+      apps: request.kind === "onboarding" ? request.apps : undefined,
+      app: request.kind === "mint" ? request.app : undefined,
+      reason: request.kind === "onboarding" ? request.reason : undefined,
       expiresAt: request.expiresAt,
-      ttlMs: request.ttlMs,
+      ttlMs: request.kind === "onboarding" ? request.ttlMs : undefined,
     };
   },
 });

@@ -17,7 +17,26 @@ export const ALL_APPS = [
 
 export type AppId = (typeof ALL_APPS)[number];
 
-export const PROVIDERS = ["github", "google", "slack", "airtable", "notion", "linear", "vercel", "zoom"] as const;
+export const GOOGLE_APPS = [
+  "gmail",
+  "calendar",
+  "drive",
+  "docs",
+  "sheets",
+] as const satisfies readonly AppId[];
+
+export type GoogleAppId = (typeof GOOGLE_APPS)[number];
+
+export const PROVIDERS = [
+  "github",
+  "google",
+  "slack",
+  "airtable",
+  "notion",
+  "linear",
+  "vercel",
+  "zoom",
+] as const;
 
 export type ProviderId = (typeof PROVIDERS)[number];
 
@@ -51,6 +70,10 @@ export function isAppId(value: string): value is AppId {
   return (ALL_APPS as readonly string[]).includes(value);
 }
 
+export function isGoogleApp(app: AppId): app is GoogleAppId {
+  return (GOOGLE_APPS as readonly string[]).includes(app);
+}
+
 export function providerForApp(app: AppId): ProviderId {
   switch (app) {
     case "github":
@@ -80,6 +103,18 @@ export function providerForApp(app: AppId): ProviderId {
   }
 }
 
-export function appsForProvider(provider: ProviderId): AppId[] {
-  return ALL_APPS.filter((app) => providerForApp(app) === provider);
+const GOOGLE_APP_SCOPES: Record<GoogleAppId, string> = {
+  gmail: "https://www.googleapis.com/auth/gmail.modify",
+  calendar: "https://www.googleapis.com/auth/calendar",
+  drive: "https://www.googleapis.com/auth/drive",
+  docs: "https://www.googleapis.com/auth/documents",
+  sheets: "https://www.googleapis.com/auth/spreadsheets",
+};
+
+/** OpenID identity scopes plus only the scopes for this Google app. */
+export function scopesForGoogleApp(app: AppId): string {
+  if (!isGoogleApp(app)) {
+    throw new Error(`scopesForGoogleApp requires a Google app, got ${app}`);
+  }
+  return ["openid", "email", "profile", GOOGLE_APP_SCOPES[app]].join(" ");
 }

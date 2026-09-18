@@ -1,17 +1,23 @@
 "use client";
 
+import { useNow } from "@/hooks/use-now";
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { PassportIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
+import type { Id } from "@/convex/_generated/dataModel";
+import { AccountBindings, bindingsFor } from "@/components/connections/account-bindings";
+import type { AppId } from "@/lib/capabilities";
 import { api } from "@/convex/_generated/api";
 import { GoogleMark } from "@/components/auth/google-mark";
 import { BoardShell } from "@/components/layout/board-shell";
 import { ContentCard } from "@/components/shared/content-card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ExpiryTime } from "@/components/shared/expiry-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,15 +28,35 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { APP_LABELS, formatRemaining } from "@/lib/capabilities";
+import { APP_LABELS, APP_PERMISSIONS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
+import { ALL_APPS, CONNECT_ERRORS } from "@/lib/connections";
+
+function appSummary(apps: readonly AppId[]) {
+  const visible = apps.slice(0, 3).map((app) => APP_LABELS[app] ?? app);
+  const remaining = apps.length - visible.length;
+  return visible.join(", ") + (remaining > 0 ? ` and ${remaining} more` : "");
+}
+
+function readConnectionResult(): string | null {
+  if (typeof window === "undefined") return null;
+  const url = new URL(window.location.href);
+  for (const app of ALL_APPS) {
+    const status = url.searchParams.get(app);
+    if (!status) continue;
+    return status === "connected" ? `${APP_LABELS[app]} connected. Choose its account below.`
+      : status === "denied" ? `${APP_LABELS[app]} connection was denied.`
+        : CONNECT_ERRORS[url.searchParams.get("reason") ?? ""] ?? `${APP_LABELS[app]} connection failed. Try again.`;
+  }
+  return null;
+}
 
 function ApprovalGate({ publicToken }: { publicToken: string }) {
   const { signIn } = useAuthActions();
   const summary = useQuery(api.tables.slices.accessRequestPublic.publicSummary, {
     publicToken,
   });
-  const [now] = useState(() => Date.now());
+  const now = useNow();
   const redirectTo = `/approvals/${publicToken}`;
 
   if (summary === undefined) {
@@ -65,9 +91,7 @@ function ApprovalGate({ publicToken }: { publicToken: string }) {
 
   const appsLabel =
     summary.kind === "onboarding"
-      ? (summary.apps ?? [])
-          .map((app) => APP_LABELS[app] ?? app)
-          .join(", ") || "apps"
+      ? appSummary(summary.apps ?? []) || "apps"
       : summary.app
         ? (APP_LABELS[summary.app] ?? summary.app)
         : "an app";
@@ -98,7 +122,7 @@ function ApprovalGate({ publicToken }: { publicToken: string }) {
                 ? "Ask the agent for a fresh approval link."
                 : decided
                   ? `This request is ${summary.status}. Sign in only if you need the board inbox.`
-                  : `${agentLabel} is requesting access to ${appsLabel}. Sign in to review and approve — secrets stay out of chat.`}
+                  : `${agentLabel} is requesting access to ${appsLabel}. The requester supplied this agent name. Sign in to review the accounts and permissions.`}
             </CardDescription>
           </div>
         </CardHeader>
@@ -110,7 +134,7 @@ function ApprovalGate({ publicToken }: { publicToken: string }) {
           ) : null}
           {!expired && !decided ? (
             <p className="text-center text-xs text-muted-foreground">
-              Expires {formatRemaining(summary.expiresAt, now)}
+              Expires <ExpiryTime expiresAt={summary.expiresAt} now={now} />
             </p>
           ) : null}
           <Button
@@ -134,37 +158,28 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
   const bound = useQuery(api.tables.slices.accessRequests.getByPublicToken, {
     publicToken,
   });
-  const bindToViewer = useMutation(
-    api.tables.slices.accessRequests.bindToViewer,
-  );
   const [decide, isDeciding] = useErrorCatchingMutation(
     api.tables.slices.accessRequests.decide,
   );
-  const [now] = useState(() => Date.now());
-  const [binding, setBinding] = useState(true);
-  const [boundRequest, setBoundRequest] = useState<typeof bound>(undefined);
+  const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">[]>>>({});
+  const [connectionResult] = useState(readConnectionResult);
+  const now = useNow();
+  const request = bound;
 
   useEffect(() => {
-    let cancelled = false;
-    void bindToViewer({ publicToken })
-      .then((result) => {
-        if (!cancelled) setBoundRequest(result);
-      })
-      .finally(() => {
-        if (!cancelled) setBinding(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [bindToViewer, publicToken]);
-
-  const request = boundRequest ?? bound;
+    const url = new URL(window.location.href);
+    for (const app of ALL_APPS) {
+      url.searchParams.delete(app);
+    }
+    url.searchParams.delete("reason");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+  }, []);
 
   return (
     <BoardShell title="Approve access">
       <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
         <div className="px-4 lg:px-6">
-          {binding && request === undefined ? (
+          {request === undefined ? (
             <Skeleton className="h-40 w-full" />
           ) : request === null || request === undefined ? (
             <ContentCard title="Request not found">
@@ -186,6 +201,7 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
           ) : request.status === "expired" || request.expiresAt <= now ? (
             <ContentCard title="Link expired">
               <div className="space-y-4 p-6">
+                {connectionResult ? <p role="status" className="rounded-md border p-3 text-sm">{connectionResult}</p> : null}
                 <EmptyState
                   title="This approval link expired"
                   description="Ask the agent to create a new access request and open the fresh link."
@@ -221,9 +237,7 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                   <div className="space-y-2 text-sm text-muted-foreground">
                     <p>
                       Apps:{" "}
-                      {(request.apps ?? [])
-                        .map((app) => APP_LABELS[app] ?? app)
-                        .join(", ") || "—"}
+                      {appSummary(request.apps ?? []) || "—"}
                     </p>
                     {request.ttlMs ? (
                       <p>
@@ -231,15 +245,8 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                       </p>
                     ) : null}
                     {request.reason ? <p>Reason: {request.reason}</p> : null}
-                    <p>
-                      Need the apps connected first?{" "}
-                      <Link
-                        href="/connections"
-                        className="underline-offset-4 hover:underline"
-                      >
-                        Open connections
-                      </Link>
-                    </p>
+                    <p>Agent name is supplied by the requester and is not independently verified.</p>
+                    <p>Approving lets the agent mint provider tokens for the accounts you choose. Turning off this slice later stops future mints; issued tokens may remain usable until upstream expiry.</p>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center gap-2">
@@ -248,9 +255,14 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                         {APP_LABELS[request.app]}
                       </Badge>
                     ) : null}
-                    {request.refresh ? (
-                      <Badge variant="outline">refresh</Badge>
+                    {request.accountLogin ? (
+                      <span className="text-sm text-muted-foreground">
+                        Account: {request.accountLogin}
+                      </span>
+                    ) : request.status === "pending" ? (
+                      <span className="text-sm text-destructive">Requested account is no longer available.</span>
                     ) : null}
+                    {request.app ? <p className="text-sm text-muted-foreground">{APP_PERMISSIONS[request.app]}</p> : null}
                     {request.sliceId ? (
                       <Link
                         href={`/slices/${request.sliceId}`}
@@ -261,17 +273,19 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                     ) : null}
                   </div>
                 )}
+                {request.kind === "onboarding" && request.status === "pending" ? <AccountBindings apps={request.apps ?? []} selected={selected} onChange={(app, ids) => setSelected((current) => ({ ...current, [app]: ids }))} /> : null}
                 <p className="text-sm text-muted-foreground">
-                  Expires {formatRemaining(request.expiresAt, now)}
+                  Expires <ExpiryTime expiresAt={request.expiresAt} now={now} />
                 </p>
                 {request.status === "pending" ? (
                   <div className="flex gap-2">
                     <Button
-                      disabled={isDeciding}
+                      disabled={isDeciding || (request.kind === "mint" && !request.accountLogin) || (request.kind === "onboarding" && (request.apps ?? []).some((app) => !selected[app]?.length))}
                       onClick={() =>
                         void decide({
                           requestId: request._id,
                           decision: "approved",
+                          bindings: request.kind === "onboarding" ? bindingsFor(request.apps ?? [], selected) : undefined,
                         })
                       }
                     >
@@ -323,5 +337,5 @@ export function ApprovalDetail({ publicToken }: { publicToken: string }) {
     return <ApprovalGate publicToken={publicToken} />;
   }
 
-  return <SignedInApproval publicToken={publicToken} />;
+  return <SignedInApproval key={publicToken} publicToken={publicToken} />;
 }

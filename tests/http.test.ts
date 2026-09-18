@@ -3,7 +3,6 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { ensurePassport } from "../convex/tables/passports";
 import { resolveReturnTo } from "../convex/http/helpers";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -29,21 +28,10 @@ async function createSlice(
     });
   });
   await test.run(async (ctx) => {
-    await ensurePassport(ctx, userId);
-  });
-  await test.run(async (ctx) => {
-    const providers = new Set(
-      args.apps.map((app) =>
-        app === "github" ? "github" : app === "slack" ? "slack" : app === "airtable" ? "airtable" : app === "notion" ? "notion" : app === "linear" ? "linear" : app === "vercel" ? "vercel" : app === "zoom" ? "zoom" : "google",
-      ),
-    );
-    for (const provider of providers) {
+    for (const app of args.apps) {
+      const provider = ["gmail", "calendar", "drive", "docs", "sheets"].includes(app) ? "google" : app;
       await ctx.db.insert("connections", {
-        userId,
-        provider,
-        accessToken: `${provider}-token`,
-        login: "nishil",
-        providerUserId: `${provider}-1`,
+        userId, provider, app, accessToken: `${app}-token`, login: "nishil", providerUserId: `${provider}-1`,
       });
     }
   });
@@ -85,15 +73,8 @@ describe("GET /", () => {
     expect(paths).toContain("GET /api/health");
     expect(paths).toContain("POST /api/credentials");
     expect(paths).toContain("GET /api/apps");
-    const credentials = body.routes.find(
-      (route: { path: string }) => route.path === "/api/credentials",
-    );
-    expect(credentials.body.required).toEqual([
-      "sliceToken",
-      "sliceSecret",
-      "app",
-    ]);
-    expect(body.errors.APP_UNAVAILABLE.hint).toContain("dashboard");
+    expect(paths).toContain("GET /api/accounts");
+    expect(body.errors).toContain("APP_UNAVAILABLE");
   });
 });
 
@@ -105,7 +86,7 @@ describe("GET /api/credentials", () => {
 });
 
 describe("OPTIONS", () => {
-  test.each(["/api/credentials", "/api/apps"])(
+  test.each(["/api/credentials", "/api/apps", "/api/accounts"])(
     "%s returns 204 with an empty body",
     async (path) => {
       const response = await t().fetch(path, { method: "OPTIONS" });
@@ -116,37 +97,15 @@ describe("OPTIONS", () => {
 });
 
 describe("POST /api/credentials denials", () => {
-  test("invalid JSON and a non-boolean refresh are invalid_request", async () => {
-    const test = t();
-    const created = await createSlice(test, {
-      name: "Keyed",
-      ttlMs: 60_000,
-      apps: ["slack"],
-    });
-    const malformed = await test.fetch("/api/credentials", {
+  test("invalid JSON is invalid_request", async () => {
+    const malformed = await t().fetch("/api/credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{",
     });
     expect(malformed.status).toBe(400);
-    expect(await malformed.json()).toEqual({
-      error: "Invalid JSON body",
-      code: "INVALID_REQUEST",
-    });
-    const refresh = await test.fetch("/api/credentials", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sliceToken: created.sliceToken,
-        sliceSecret: created.sliceSecret,
-        app: "slack",
-        refresh: "yes",
-      }),
-    });
-    expect(refresh.status).toBe(400);
-    expect(await refresh.json()).toEqual({
-      error: "refresh must be a boolean",
-      code: "INVALID_REQUEST",
+    expect(await malformed.json()).toMatchObject({
+      error: "Invalid JSON body", code: "INVALID_REQUEST",
     });
   });
 
@@ -171,7 +130,7 @@ describe("POST /api/credentials denials", () => {
       }),
     });
     expect(unknown.status).toBe(403);
-    expect(await unknown.json()).toEqual(unavailable);
+    expect(await unknown.json()).toMatchObject(unavailable);
     const off = await test.fetch("/api/credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -182,7 +141,7 @@ describe("POST /api/credentials denials", () => {
       }),
     });
     expect(off.status).toBe(403);
-    expect(await off.json()).toEqual(unavailable);
+    expect(await off.json()).toMatchObject(unavailable);
   });
 
   test("wrong slice secret is unauthorized and does not name the app", async () => {
@@ -202,7 +161,7 @@ describe("POST /api/credentials denials", () => {
       }),
     });
     expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       error: "Unknown slice token or slice secret",
       code: "UNAUTHORIZED",
     });
@@ -226,7 +185,7 @@ describe("GET /api/apps", () => {
     });
     expect(wrong.status).toBe(401);
     const wrongBody = await wrong.json();
-    expect(wrongBody).toEqual({
+    expect(wrongBody).toMatchObject({
       error: "Unknown slice token or slice secret",
       code: "UNAUTHORIZED",
     });
@@ -239,7 +198,7 @@ describe("GET /api/apps", () => {
     });
     expect(missing.status).toBe(400);
     const missingBody = await missing.json();
-    expect(missingBody).toEqual({
+    expect(missingBody).toMatchObject({
       error: "x-slice-secret must be a string",
       code: "INVALID_REQUEST",
     });
@@ -288,6 +247,31 @@ describe("GET /api/apps", () => {
         { app: "zoom", allowed: false, connected: false },
       ],
     });
+  });
+});
+
+describe("GET /api/accounts", () => {
+  test("returns only allowed accounts and requires the slice secret", async () => {
+    const test = t();
+    const created = await createSlice(test, {
+      name: "Account discovery", ttlMs: 60_000, apps: ["github"],
+    });
+    const headers = {
+      "x-slice-token": created.sliceToken,
+      "x-slice-secret": created.sliceSecret,
+    };
+    const response = await test.fetch("/api/accounts?app=github", { method: "GET", headers });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      app: "github", accounts: [expect.objectContaining({ login: "nishil", bindingId: expect.any(String) })],
+    });
+    const other = await test.fetch("/api/accounts?app=gmail", { method: "GET", headers });
+    expect(await other.json()).toEqual({ app: "gmail", accounts: [] });
+    const denied = await test.fetch("/api/accounts?app=github", {
+      method: "GET", headers: { ...headers, "x-slice-secret": "ss_wrong" },
+    });
+    expect(denied.status).toBe(401);
+    expect(await denied.json()).not.toHaveProperty("accounts");
   });
 });
 

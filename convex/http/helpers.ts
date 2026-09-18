@@ -1,5 +1,5 @@
 import { env } from "../_generated/server";
-import type { ProviderId } from "../domain/apps";
+import type { AppId } from "../domain/apps";
 
 const ALLOWED_RETURN_PATHS = new Set(["/", "/connections"]);
 
@@ -42,7 +42,7 @@ export function resolveReturnTo(
     if (url.origin !== boardOrigin) {
       return fallback;
     }
-    const path = ALLOWED_RETURN_PATHS.has(url.pathname)
+    const path = ALLOWED_RETURN_PATHS.has(url.pathname) || /^\/approvals\/ar_[A-Za-z0-9_-]+$/.test(url.pathname)
       ? url.pathname
       : "/connections";
     return `${url.origin}${path}`;
@@ -57,7 +57,7 @@ export function allowedReturnTo(value: string | null): string {
 
 export function redirectTo(
   returnTo: string,
-  provider: ProviderId,
+  provider: AppId,
   status: string,
   reason?: string,
 ): Response {

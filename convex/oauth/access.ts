@@ -6,38 +6,22 @@ import {
   type ConnectionSecrets,
   type RefreshedTokens,
 } from "./index";
-import type { ProviderId } from "../domain/apps";
+import { providerForApp, type AppId } from "../domain/apps";
 import type { AgentErrorCode } from "../lib/errors";
-import { APP_TOKEN_TTL_MS } from "../tables/slices/credentials";
 
-function secretsChanged(
-  connection: ConnectionSecrets,
-  refreshed: RefreshedTokens,
-): boolean {
-  const refreshToken = refreshed.refreshToken ?? connection.refreshToken;
-  const tokenExpiresAt = refreshed.tokenExpiresAt ?? connection.tokenExpiresAt;
-  return (
-    refreshed.accessToken !== connection.accessToken ||
-    refreshToken !== connection.refreshToken ||
-    tokenExpiresAt !== connection.tokenExpiresAt
-  );
-}
-
-async function persistIfChanged(
+async function persistRefresh(
   ctx: GenericActionCtx<DataModel>,
   userId: Id<"users">,
-  provider: ProviderId,
+  app: AppId,
+  connectionId: Id<"connections">,
   connection: ConnectionSecrets,
   refreshed: RefreshedTokens,
-): Promise<void> {
-  if (!secretsChanged(connection, refreshed)) {
-    return;
-  }
-  await ctx.runMutation(internal.tables.connections.mutations.saveConnection, {
+): Promise<boolean> {
+  return await ctx.runMutation(internal.tables.connections.mutations.refreshConnection, {
     userId,
-    provider,
+    app,
+    connectionId,
     accessToken: refreshed.accessToken,
-    login: connection.login,
     providerUserId: connection.providerUserId,
     refreshToken:
       refreshed.refreshToken ?? connection.refreshToken ?? undefined,
@@ -47,7 +31,7 @@ async function persistIfChanged(
 }
 
 export type IssueShortLivedAccessResult =
-  | { accessToken: string; expiresAt: number }
+  | { accessToken: string; expiresAt: number | null }
   | { error: string; code: AgentErrorCode };
 
 const SHORT_LIVED_UNAVAILABLE_RESULT = {
@@ -68,25 +52,26 @@ const SHORT_LIVED_UNAVAILABLE_RESULT = {
 export async function issueShortLivedAccess(
   ctx: GenericActionCtx<DataModel>,
   userId: Id<"users">,
-  provider: ProviderId,
+  app: AppId,
+  connectionId: Id<"connections">,
 ): Promise<IssueShortLivedAccessResult> {
   const connection = await ctx.runQuery(
     internal.tables.connections.queries.getConnection,
     {
       userId,
-      provider,
+      app, connectionId,
     },
   );
   if (!connection) {
     return {
-      error: `${provider} is not connected`,
+      error: `${app} is not connected`,
       code: "APP_UNAVAILABLE",
     };
   }
 
   let minted: RefreshedTokens | null;
   try {
-    minted = await refreshProviderTokens(provider, connection);
+    minted = await refreshProviderTokens(providerForApp(app), connection);
   } catch {
     // Network / malformed / unexpected refresh failures must not become 500s.
     return SHORT_LIVED_UNAVAILABLE_RESULT;
@@ -108,13 +93,13 @@ export async function issueShortLivedAccess(
     };
   }
 
-  await persistIfChanged(ctx, userId, provider, connection, minted);
+  if (!await persistRefresh(ctx, userId, app, connectionId, connection, minted)) {
+    return { error: `${app} is not connected`, code: "APP_UNAVAILABLE" };
+  }
 
-  const providerExpiry = minted.tokenExpiresAt ?? connection.tokenExpiresAt;
-  const expiresAt = Math.min(
-    Date.now() + APP_TOKEN_TTL_MS,
-    providerExpiry ?? Date.now() + APP_TOKEN_TTL_MS,
-  );
+  // The provider controls this token's lifetime. We cannot shorten it by
+  // reporting an earlier expiry to the agent.
+  const expiresAt = minted.tokenExpiresAt ?? null;
   // Intentionally omit refreshToken — agents never receive vault refresh secrets.
   return { accessToken: minted.accessToken, expiresAt };
 }

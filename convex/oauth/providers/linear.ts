@@ -57,7 +57,7 @@ async function viewer(accessToken: string) {
         ? value.name
         : "linear";
   const providerUserId =
-    value && typeof value.id === "string" ? value.id : login;
+    value && typeof value.id === "string" && value.id ? value.id : "";
   return { login, providerUserId };
 }
 

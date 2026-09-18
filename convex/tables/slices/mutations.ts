@@ -1,229 +1,89 @@
 import { v } from "convex/values";
-import { internalMutation } from "../../_generated/server";
 import { authenticatedMutation } from "../../functions";
-import { appValidator, providerForApp } from "../../domain/apps";
-import { randomSecret, sha256Hex } from "../../lib/secrets";
-import { markExpired, MAX_SLICE_NAME, MAX_TTL_MS } from "./helpers";
+import { appValidator } from "../../domain/apps";
+import { bindingForConnection, createSlice, effectiveStatus, MAX_SLICE_NAME, MAX_TTL_MS, validatedBindings } from "./helpers";
+import { selectedConnection } from "../connections/helpers";
 
 export { MAX_SLICE_NAME, MAX_TTL_MS };
 
 const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
-
-export const expireDue = internalMutation({
-  args: {},
-  returns: v.number(),
-  handler: async (ctx) => {
-    const now = Date.now();
-    const due = await ctx.db
-      .query("slices")
-      .withIndex("by_status_and_expiresAt", (q) =>
-        q.eq("status", "active").lte("expiresAt", now),
-      )
-      .take(25);
-    for (const slice of due) {
-      await markExpired(ctx, slice);
-    }
-    return due.length;
-  },
-});
+const bindingValidator = v.object({ app: appValidator, connectionId: v.id("connections") });
 
 export const create = authenticatedMutation({
   args: {
-    name: v.string(),
-    ttlMs: v.number(),
-    apps: v.array(appValidator),
+    name: v.string(), ttlMs: v.number(), apps: v.array(appValidator),
+    bindings: v.optional(v.array(bindingValidator)),
     mintPolicy: v.optional(mintPolicyValidator),
   },
   returns: v.object({
-    id: v.id("slices"),
-    sliceToken: v.string(),
-    sliceSecret: v.string(),
-    expiresAt: v.number(),
-    name: v.string(),
-    apps: v.array(appValidator),
+    id: v.id("slices"), sliceToken: v.string(), sliceSecret: v.string(),
+    expiresAt: v.number(), name: v.string(), apps: v.array(appValidator),
     mintPolicy: mintPolicyValidator,
   }),
   handler: async (ctx, args) => {
-    const { userId } = ctx;
     const name = args.name.trim();
-    if (name.length === 0) {
-      throw new Error("Name must be non-empty");
+    if (!name || name.length > MAX_SLICE_NAME) throw new Error("Name must be 1 to 80 characters");
+    if (!Number.isFinite(args.ttlMs) || args.ttlMs <= 0 || args.ttlMs > MAX_TTL_MS) {
+      throw new Error("ttlMs must be between 1 millisecond and 7 days");
     }
-    if (name.length > MAX_SLICE_NAME) {
-      throw new Error("Name must be 80 characters or fewer");
-    }
-    if (!Number.isFinite(args.ttlMs) || args.ttlMs <= 0) {
-      throw new Error("ttlMs must be a positive number");
-    }
-    if (args.ttlMs > MAX_TTL_MS) {
-      throw new Error("ttlMs must be 7 days or fewer");
-    }
-    const mintPolicy: "auto" | "approve" =
-      args.mintPolicy === "approve" ? "approve" : "auto";
-    const uniqueApps = [...new Set(args.apps)];
-    if (uniqueApps.length === 0) {
-      throw new Error("Turn on at least one app");
-    }
-    const connections = await ctx.db
-      .query("connections")
-      .withIndex("by_user_and_provider", (q) => q.eq("userId", userId))
-      .collect();
-    if (connections.length === 0) {
-      throw new Error(
-        "Connect an account at /connections before creating a slice",
-      );
-    }
-    const connectedProviders = new Set(
-      connections.map((connection) => connection.provider),
-    );
-    const unavailable = uniqueApps.find(
-      (app) => !connectedProviders.has(providerForApp(app)),
-    );
-    if (unavailable) {
-      throw new Error(
-        `Connect ${providerForApp(unavailable)} before allowing ${unavailable}`,
-      );
-    }
-
-    const passport = await ctx.db
-      .query("passports")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .unique();
-    if (!passport) {
-      throw new Error("Passport not found for this account");
-    }
-    const passportId = passport._id;
-    const expiresAt = Date.now() + args.ttlMs;
-    const grantId = await ctx.db.insert("grants", {
-      passportId,
-      userId,
-      agent: name,
-      apps: uniqueApps,
-      expiresAt,
+    const bindings = await validatedBindings(ctx, ctx.userId, args.bindings, args.apps);
+    return await createSlice(ctx, {
+      userId: ctx.userId, name, ttlMs: args.ttlMs,
+      mintPolicy: args.mintPolicy ?? "auto", bindings,
     });
-
-    const token = randomSecret("st_");
-    const sliceSecret = randomSecret("ss_");
-    const secretHash = await sha256Hex(sliceSecret);
-    const id = await ctx.db.insert("slices", {
-      passportId,
-      grantId,
-      userId,
-      name,
-      token,
-      secretHash,
-      status: "active",
-      expiresAt,
-      mintPolicy,
-    });
-
-    return {
-      id,
-      sliceToken: token,
-      sliceSecret,
-      expiresAt,
-      name,
-      apps: uniqueApps,
-      mintPolicy,
-    };
   },
 });
 
 export const setMintPolicy = authenticatedMutation({
-  args: {
-    sliceToken: v.string(),
-    mintPolicy: mintPolicyValidator,
-  },
+  args: { sliceToken: v.string(), mintPolicy: mintPolicyValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { userId } = ctx;
-    const slice = await ctx.db
-      .query("slices")
-      .withIndex("by_token", (q) => q.eq("token", args.sliceToken))
-      .unique();
-    if (!slice || slice.userId !== userId) {
-      throw new Error("Slice not found");
-    }
-    if (slice.status !== "active") {
-      throw new Error("Slice is not live");
-    }
+    const slice = await ctx.db.query("slices")
+      .withIndex("by_token", (q) => q.eq("token", args.sliceToken)).unique();
+    if (!slice || slice.userId !== ctx.userId) throw new Error("Slice not found");
+    if (effectiveStatus(slice) !== "active") throw new Error("Slice is not live");
     await ctx.db.patch("slices", slice._id, { mintPolicy: args.mintPolicy });
     return null;
   },
 });
 
-export const setApp = authenticatedMutation({
+export const setBinding = authenticatedMutation({
   args: {
-    sliceToken: v.string(),
-    app: appValidator,
-    enabled: v.boolean(),
+    sliceToken: v.string(), app: appValidator, enabled: v.boolean(),
+    connectionId: v.id("connections"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { userId } = ctx;
-    const slice = await ctx.db
-      .query("slices")
-      .withIndex("by_token", (q) => q.eq("token", args.sliceToken))
-      .unique();
-    if (!slice || slice.userId !== userId) {
-      throw new Error("Slice not found");
-    }
-    const now = Date.now();
-    if (slice.status === "active" && slice.expiresAt <= now) {
-      await markExpired(ctx, slice);
-      throw new Error("Slice expired");
-    }
-    if (slice.status !== "active") {
-      throw new Error("Slice is not live");
-    }
-    const grant = await ctx.db.get("grants", slice.grantId);
-    if (!grant) {
-      throw new Error("Grant not found");
-    }
-    const enabled = grant.apps.includes(args.app);
-    if (enabled === args.enabled) {
+    const slice = await ctx.db.query("slices")
+      .withIndex("by_token", (q) => q.eq("token", args.sliceToken)).unique();
+    if (!slice || slice.userId !== ctx.userId) throw new Error("Slice not found");
+    if (effectiveStatus(slice) !== "active") throw new Error("Slice is not live");
+    const binding = await bindingForConnection(ctx, slice._id, args.app, args.connectionId);
+    if (!args.enabled) {
+      if (binding) await ctx.db.delete("sliceBindings", binding._id);
       return null;
     }
-    if (args.enabled) {
-      const provider = providerForApp(args.app);
-      const connection = await ctx.db
-        .query("connections")
-        .withIndex("by_user_and_provider", (q) =>
-          q.eq("userId", userId).eq("provider", provider),
-        )
-        .unique();
-      if (!connection) {
-        throw new Error(`Connect ${provider} before allowing ${args.app}`);
-      }
+    if (!await selectedConnection(ctx, ctx.userId, args.app, args.connectionId)) {
+      throw new Error(`Select a connected account for ${args.app}`);
     }
-    const apps = args.enabled
-      ? [...grant.apps, args.app]
-      : grant.apps.filter((app) => app !== args.app);
-    await ctx.db.patch("grants", grant._id, { apps });
+    if (!binding) {
+      await ctx.db.insert("sliceBindings", {
+        sliceId: slice._id, app: args.app, connectionId: args.connectionId,
+      });
+    }
     return null;
   },
 });
 
 export const revoke = authenticatedMutation({
-  args: { sliceToken: v.string() },
-  returns: v.null(),
+  args: { sliceToken: v.string() }, returns: v.null(),
   handler: async (ctx, args) => {
-    const { userId } = ctx;
-    const slice = await ctx.db
-      .query("slices")
-      .withIndex("by_token", (q) => q.eq("token", args.sliceToken))
-      .unique();
-    if (!slice || slice.userId !== userId) {
-      throw new Error("Slice not found");
+    const slice = await ctx.db.query("slices")
+      .withIndex("by_token", (q) => q.eq("token", args.sliceToken)).unique();
+    if (!slice || slice.userId !== ctx.userId) throw new Error("Slice not found");
+    if (slice.status !== "revoked") {
+      await ctx.db.patch("slices", slice._id, { status: "revoked" });
     }
-    if (slice.status === "revoked") {
-      return null;
-    }
-    const now = Date.now();
-    if (slice.status === "active" && slice.expiresAt <= now) {
-      await markExpired(ctx, slice);
-    }
-    await ctx.db.patch("slices", slice._id, { status: "revoked" });
     return null;
   },
 });

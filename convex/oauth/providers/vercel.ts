@@ -53,7 +53,7 @@ async function userInfo(accessToken: string) {
           : "vercel";
   return {
     login,
-    providerUserId: typeof info.sub === "string" ? info.sub : login,
+    providerUserId: typeof info.sub === "string" && info.sub ? info.sub : "",
   };
 }
 

@@ -1,9 +1,7 @@
 import { env } from "../_generated/server";
 import { asFiniteNumber, isPlainObject } from "../lib/json";
-import type { ProviderId } from "../domain/apps";
+import type { AppId, ProviderId } from "../domain/apps";
 import type { OAuthGrant, RefreshedTokens } from "./types";
-
-export const REFRESH_SKEW_MS = 2 * 60 * 1000;
 
 /** Missing/empty env (vitest/CI) must never throw on .trim(). */
 export function envTrimmed(value: unknown): string | undefined {
@@ -28,7 +26,7 @@ export function oauthErrorReason(raw: unknown): string {
   return "token";
 }
 
-export function oauthCallbackUrl(provider: ProviderId): string {
+export function oauthCallbackUrl(provider: ProviderId | AppId): string {
   return `${env.CONVEX_SITE_URL.replace(/\/$/, "")}/api/${provider}/callback`;
 }
 
@@ -36,6 +34,9 @@ export function grantFromTokenPayload(
   tokenRaw: Record<string, unknown>,
   identity: { login: string; providerUserId: string },
 ): OAuthGrant {
+  if (!identity.providerUserId.trim()) {
+    throw new Error("Provider did not return a stable account ID");
+  }
   const expiresIn = asFiniteNumber(tokenRaw.expires_in);
   return {
     accessToken: String(tokenRaw.access_token),

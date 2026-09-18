@@ -5,27 +5,46 @@ export const AGENT_ERROR_CODES = [
   "REVOKED",
   "EXPIRED",
   "APP_UNAVAILABLE",
+  "ACCOUNT_SELECTION_REQUIRED",
   "INVALID_REQUEST",
   "PROVIDER_ERROR",
   "SHORT_LIVED_UNAVAILABLE",
   "APPROVAL_REQUIRED",
   "APPROVAL_DENIED",
   "APPROVAL_EXPIRED",
+  "IDEMPOTENCY_CONFLICT",
 ] as const;
 
 export type AgentErrorCode = (typeof AGENT_ERROR_CODES)[number];
+
+export const AGENT_ERROR_GUIDANCE: Record<AgentErrorCode, { retryable: boolean; nextAction: string }> = {
+  UNAUTHORIZED: { retryable: false, nextAction: "Check the private credentials or request access again." },
+  REVOKED: { retryable: false, nextAction: "Ask the operator for a new grant." },
+  EXPIRED: { retryable: false, nextAction: "Request a new grant." },
+  APP_UNAVAILABLE: { retryable: false, nextAction: "Ask the operator to reconnect or rebind this app." },
+  ACCOUNT_SELECTION_REQUIRED: { retryable: false, nextAction: "List the slice's allowed accounts and retry with a bindingId." },
+  INVALID_REQUEST: { retryable: false, nextAction: "Correct the request before retrying." },
+  PROVIDER_ERROR: { retryable: true, nextAction: "Retry later; if it persists, reconnect the provider." },
+  SHORT_LIVED_UNAVAILABLE: { retryable: false, nextAction: "Use a provider connection that supports fresh short-lived tokens." },
+  APPROVAL_REQUIRED: { retryable: true, nextAction: "Show the approval URL to the operator and wait for their decision." },
+  APPROVAL_DENIED: { retryable: false, nextAction: "Respect the denial; make a new request only if the operator asks." },
+  APPROVAL_EXPIRED: { retryable: false, nextAction: "Start a new approval request." },
+  IDEMPOTENCY_CONFLICT: { retryable: false, nextAction: "Use the original payload or a new idempotency key." },
+};
 
 export const agentErrorCodeValidator = v.union(
   v.literal("UNAUTHORIZED"),
   v.literal("REVOKED"),
   v.literal("EXPIRED"),
   v.literal("APP_UNAVAILABLE"),
+  v.literal("ACCOUNT_SELECTION_REQUIRED"),
   v.literal("INVALID_REQUEST"),
   v.literal("PROVIDER_ERROR"),
   v.literal("SHORT_LIVED_UNAVAILABLE"),
   v.literal("APPROVAL_REQUIRED"),
   v.literal("APPROVAL_DENIED"),
   v.literal("APPROVAL_EXPIRED"),
+  v.literal("IDEMPOTENCY_CONFLICT"),
 );
 
 export const APP_UNAVAILABLE_ERROR =

@@ -31,7 +31,7 @@ export function CreateSliceDialog({
       description={
         createdSlice
           ? "Copy these credentials now. The slice secret will not be shown again."
-          : "Create a time-boxed identity for one agent and choose which connected apps its grant allows."
+          : undefined
       }
       content={
         createdSlice ? (
@@ -40,7 +40,7 @@ export function CreateSliceDialog({
           <CreateSliceForm onCreated={handleCreated} />
         )
       }
-      maxWidth="sm:max-w-lg"
+      maxWidth="sm:max-w-2xl"
       showFooter={createdSlice != null}
       onClose={handleClose}
     >

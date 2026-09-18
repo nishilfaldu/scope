@@ -3,7 +3,6 @@ import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { ensurePassport } from "../convex/tables/passports";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -26,12 +25,10 @@ async function signedIn(
       email: "nishil@example.com",
     });
   });
-  await test.run(async (ctx) => {
-    await ensurePassport(ctx, userId);
-  });
   await test.mutation(internal.tables.connections.mutations.saveConnection, {
     userId,
     provider: "github",
+    app: "github",
     accessToken: "ghs_standing_token",
     login: "octocat",
     providerUserId: "1",
@@ -79,7 +76,6 @@ describe("auto mint policy unchanged", () => {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
         app: "github",
-        refresh: false,
       },
     );
     expect(allowed).toMatchObject({
@@ -116,6 +112,7 @@ describe("auto mint policy unchanged", () => {
     expect(body.accessToken).not.toBe("ghs_standing_token");
     expect(body.tokenType).toBe("Bearer");
     expect(body.app).toBe("github");
+    expect(body.expiresIn).toBeGreaterThan(7 * 60 * 60);
     expect(body).not.toHaveProperty("requestId");
     expect(body).not.toHaveProperty("refreshToken");
     expect(JSON.stringify(body)).not.toMatch(/ghr_/);
@@ -180,6 +177,55 @@ describe("auto mint policy unchanged", () => {
 });
 
 describe("approve-gated mint", () => {
+  test("failed refresh leaves an approved request claimable", async () => {
+    const test = t();
+    const { backend } = await signedIn(test, { refreshToken: "ghr_refresh_token" });
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
+      name: "Retry agent", ttlMs: 60_000, apps: ["github"], mintPolicy: "approve",
+    });
+    const requested = await test.fetch("/api/credentials", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "github" }),
+    });
+    const { requestId } = await requested.json();
+    await backend.mutation(api.tables.slices.accessRequests.decide, { requestId, decision: "approved" });
+    vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
+    vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
+    const refresh = vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("temporary outage"))
+      .mockResolvedValue(json({ access_token: "ghu_retry", refresh_token: "ghr_next", expires_in: 3600 }));
+    const claim = () => test.fetch("/api/credentials/claim", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, requestId }),
+    });
+    const failed = await claim();
+    expect(failed.status).toBe(503);
+    expect(await test.run(async (ctx) => (await ctx.db.get("accessRequests", requestId))?.status)).toBe("approved");
+    const retried = await claim();
+    expect(retried.status).toBe(200);
+    expect((await retried.json()).accessToken).toBe("ghu_retry");
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  test("revocation during refresh blocks delivery", async () => {
+    const test = t();
+    const { backend } = await signedIn(test, { refreshToken: "ghr_refresh_token" });
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
+      name: "Race agent", ttlMs: 60_000, apps: ["github"],
+    });
+    vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
+    vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      await backend.mutation(api.tables.slices.mutations.revoke, { sliceToken: created.sliceToken });
+      return json({ access_token: "ghu_after_revoke", refresh_token: "ghr_next", expires_in: 3600 });
+    });
+    const response = await test.fetch("/api/credentials", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "github" }),
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: "REVOKED" });
+  });
+
   test("POST /api/credentials returns 202 APPROVAL_REQUIRED and claim mints short-lived after approve", async () => {
     const test = t();
     const { backend } = await signedIn(test, {
@@ -402,9 +448,9 @@ describe("approve-gated mint", () => {
         `${route.method} ${route.path}`,
     );
     expect(paths).toContain("POST /api/credentials/claim");
-    expect(body.errors.APPROVAL_REQUIRED).toBeTruthy();
-    expect(body.errors.APPROVAL_DENIED).toBeTruthy();
-    expect(body.errors.APPROVAL_EXPIRED).toBeTruthy();
-    expect(body.errors.SHORT_LIVED_UNAVAILABLE).toBeTruthy();
+    expect(body.errors).toContain("APPROVAL_REQUIRED");
+    expect(body.errors).toContain("APPROVAL_DENIED");
+    expect(body.errors).toContain("APPROVAL_EXPIRED");
+    expect(body.errors).toContain("SHORT_LIVED_UNAVAILABLE");
   });
 });

@@ -12,7 +12,6 @@ export function SliceListCard() {
   return (
     <ContentCard
       title="Slices"
-      description="Create one time-boxed identity. Each account can have one passport for now, and its grant controls which connected apps it can request."
       action={
         <CreateSliceDialog>
           {({ openModal }) => (

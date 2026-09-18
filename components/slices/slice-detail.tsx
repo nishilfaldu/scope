@@ -33,7 +33,6 @@ export function SliceDetail({ sliceId }: { sliceId: string }) {
           <div className="px-4 lg:px-6">
             <EmptyState
               title="Slice not found"
-              description="This card may have been deleted from the deployment, or the link is invalid."
               icon={<HugeiconsIcon icon={PassportIcon} strokeWidth={2} />}
             />
           </div>

@@ -1,0 +1,11 @@
+{
+  "recommendations": [
+    "bradlc.vscode-tailwindcss",
+    "esbenp.prettier-vscode",
+    "editorconfig.editorconfig",
+    "ms-azuretools.vscode-docker",
+    "dbaeumer.vscode-eslint",
+    "foxundermoon.shell-format",
+    "vivaxy.vscode-conventional-commits"
+  ]
+}

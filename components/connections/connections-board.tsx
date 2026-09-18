@@ -10,14 +10,14 @@ import { ContentCard } from "@/components/shared/content-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   CONNECT_ERRORS,
-  PROVIDERS,
-  type ProviderId,
+  ALL_APPS,
+  type AppId,
 } from "@/lib/connections";
 
-function readOauthReturn(): { provider: ProviderId; message: string } | null {
+function readOauthReturn(): { provider: AppId; message: string } | null {
   if (typeof window === "undefined") return null;
   const url = new URL(window.location.href);
-  for (const id of PROVIDERS) {
+  for (const id of ALL_APPS) {
     const value = url.searchParams.get(id);
     if (!value || value === "connected") continue;
     if (value === "denied") {
@@ -40,7 +40,7 @@ export function ConnectionsBoard() {
   useEffect(() => {
     const url = new URL(window.location.href);
     let dirty = false;
-    for (const id of PROVIDERS) {
+    for (const id of ALL_APPS) {
       if (url.searchParams.has(id)) {
         url.searchParams.delete(id);
         dirty = true;
@@ -73,10 +73,7 @@ export function ConnectionsBoard() {
         ) : null}
 
         <div className="px-4 lg:px-6">
-          <ContentCard
-            title="Connections"
-            description="Connect your accounts for the passport system to work."
-          >
+          <ContentCard title="Connections">
             <ConnectionsTable />
           </ContentCard>
         </div>

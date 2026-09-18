@@ -1,179 +1,48 @@
 # Agent Passport
 
-Agent Passport gives agents short-lived access without giving them a user's real credentials.
+Agent Passport lets a user connect OAuth accounts and give an agent a slice that can request provider credentials for selected apps.
 
-The system has two layers:
+## How it works
 
-1. A **passport** belongs to the user. It is the long-lived vault that holds the user's connected services and their real upstream tokens.
-2. A **slice** belongs to one agent. It is a scoped, expiring grant created from one passport.
+- A **connection** stores one provider account's encrypted OAuth tokens. Google has separate Gmail, Calendar, Drive, Docs, and Sheets connections, each with its own consent scopes and callback. One user can connect multiple accounts to the same app.
+- A **slice** belongs to a user, has a token and secret, an expiry, a revocation state, and an `auto` or `approve` mint policy.
+- Each allowed account has one indexed **slice binding** that selects a connection. A slice can allow several accounts for the same app. Bindings are separate rows; the slice does not store an array of apps or accounts.
+- An agent presents its slice token and secret to `POST /api/credentials`. When several accounts are allowed for an app, it chooses a `bindingId` from `GET /api/accounts?app=<app>`. The backend checks that exact binding, refreshes its provider connection, checks permissions again, then returns the newly issued provider access token. Under `approve`, the operator first approves a one-time mint request for that account.
 
-Connect once, give many agents access. A user can connect GitHub, Google, or Slack once, then give each agent its own slice of that access.
+**Revocation boundary:** Revoking a slice or disconnecting an account immediately blocks *future* credential mints. An already issued provider-native access token remains usable until that provider expires or revokes it. Agent Passport does not proxy provider requests and cannot shorten an upstream token's lifetime. The credential response reports the provider's expiry, or `null` if the provider did not give one.
 
-## Architecture
+The vault never hands out its stored access token or refresh token. Providers without a refresh-capable grant cannot mint agent credentials and return `SHORT_LIVED_UNAVAILABLE`.
 
-```mermaid
-flowchart TB
-  User([Signed-in user]) --> Board[Web board]
-  Board --> Passport[Passport vault]
+## Agent approval
 
-  Passport --> Connections["Connections\nencrypted upstream OAuth tokens"]
-  Passport --> Grants["Grants\napproved apps + expiry"]
-  Grants --> Slices["Slices\nper-agent token + secret\nmintPolicy: auto | approve"]
+An agent calls `POST /api/access-requests`, sends only the returned `approvalUrl` to the operator, and stores its private `claimHandle` in its own runtime. The operator signs in through that link, connects missing apps directly from the account picker, returns to the same approval, chooses an account per app, and approves or denies. Agent names and reasons are supplied by the requester and are not verified identities.
 
-  Agent([Agent]) --> SiteAPI["Agent API (.convex.site)"]
-  SiteAPI -->|"POST /api/credentials"| Slices
+Use a random, task-stable `Idempotency-Key` header (32–128 characters) when creating an access request. The same key and payload return the same pending or approved request and private handle before it is claimed. A different payload with that key returns `IDEMPOTENCY_CONFLICT`. Treat this key as a secret because a caller holding it can recover the claim handle while the request is live. Agent errors include stable `code`, `retryable`, and `nextAction` fields. A denied, expired, or claimed request needs a fresh task and key.
 
-  Slices -->|mintPolicy auto| Mint["Short-lived mint\nprovider-native access token"]
-  Slices -->|mintPolicy approve| Inbox[Approvals inbox]
-  Inbox -->|Approve| Claim["POST /api/credentials/claim"]
-  Claim --> Mint
+## Connect and account selection
 
-  Connections -.->|"refresh stays in vault\nno standing handoff"| Mint
-  Mint --> Providers["Upstream providers\nGitHub · Google · Slack · …"]
-  Agent --> Providers
-```
+The signed-in operator connects apps from `/connections`. Each connection is keyed by user, provider, app, and the provider's stable account ID. The display login is never used as an account key. Slice creation and onboarding approval page through apps and account choices, retaining selections across pages. At least one account must be chosen for every selected app; several may be chosen.
 
-*User signs in on the board, connects providers into the passport vault, and creates per-agent slices from grants. Agents call the `.convex.site` API with slice credentials; Agent Passport mints a short-lived provider token (auto, or after board approval) and never hands out vault standing access or refresh tokens. Agents then call providers directly.*
+For Google, register five redirects on the same OAuth client:
 
-## Passport
+- `https://<deployment>.convex.site/api/gmail/callback`
+- `https://<deployment>.convex.site/api/calendar/callback`
+- `https://<deployment>.convex.site/api/drive/callback`
+- `https://<deployment>.convex.site/api/docs/callback`
+- `https://<deployment>.convex.site/api/sheets/callback`
 
-A passport is owned by a user and stays inside Agent Passport. It holds:
+Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` once. Disconnect removes local access first. Provider revocation is attempted afterward; for Google it is attempted when the last app connection for that Google account is removed.
 
-- the user's identity
-- connected services
-- upstream OAuth access and refresh tokens
-- every slice created from the passport
-- grant and audit history
+## Agent onboarding and minting
 
-The passport does not have an external key and secret. Nothing outside the backend authenticates as the passport.
+1. The agent calls `POST /api/access-requests` with `agentName`, `apps`, `ttlMs`, and optional `reason`.
+2. The response contains a chat-safe `approvalUrl` and a private `claimHandle`. The operator opens the URL, selects one or more accounts for each app, and approves or denies. Opening the link alone does not assign it to an operator.
+3. The agent polls `POST /api/access-requests/status` and claims slice credentials once with `POST /api/access-requests/claim`.
+4. The agent calls `GET /api/accounts?app=<app>` with `x-slice-token` and `x-slice-secret` to see the accounts allowed for that app. It sends `sliceToken`, `sliceSecret`, `app`, and the chosen `bindingId` to `POST /api/credentials`. With a single allowed account, `bindingId` may be omitted. With several, omitting it returns `ACCOUNT_SELECTION_REQUIRED`. An auto slice mints immediately. An approve slice returns a request ID and approval URL for the exact account; after approval the agent calls `POST /api/credentials/claim`.
 
-The user reaches it through their signed-in dashboard session. The backend uses its upstream OAuth tokens to talk to GitHub, Slack, Google, and other services.
+A failed provider refresh leaves an approved mint request available to retry until its claim window expires. The backend consumes the request only after refresh and the final slice, account, and binding check succeed.
 
-A user can have more than one passport when they need separation, such as work and personal accounts.
-
-## Slice
-
-A slice is created for one agent and one grant. It contains:
-
-- a slice token and slice secret
-- the passport and user it belongs to
-- the agent it was created for
-- allowed services and actions
-- an expiry
-- revocation state
-- a **mint policy** (`auto` or `approve`, default `auto`)
-
-A slice never contains an upstream OAuth token or a copy of the grant's apps. It points to the grant, which remains the single source of truth for allowed apps, so grant changes apply to live slices immediately.
-
-When an agent calls the API, Agent Passport finds the slice and checks that it is valid, not expired, not revoked, and allowed to perform the requested action. The agent gets exactly the power in that grant and nothing else from the user's account.
-
-Every agent gets its own slice. Two agents never share one. That keeps revocation and audit history specific to one agent. Revoke one slice and that agent becomes a stranger while the user's passport, connected services, and other agents keep working.
-
-## Connect flow
-
-The user connects a service from the dashboard:
-
-1. The signed-in user clicks Connect for GitHub, Slack, Google, or another service.
-2. Agent Passport creates a one-time OAuth state value bound to the signed-in user, their passport, the service, and a short expiry.
-3. Agent Passport sends the user to the provider's official OAuth consent screen.
-4. The provider returns an authorization code and the same state value.
-5. Agent Passport verifies the state before exchanging the code.
-6. The upstream access and refresh tokens are encrypted and stored on the user's passport.
-7. Slices can use that connection without making the user connect the service again.
-
-There are two different consent screens:
-
-- The provider screen grants Agent Passport the upstream connection.
-- The Agent Passport board Approvals inbox (and approval deep links) grants an agent a slice (onboarding) or a short-lived credential (mint policy `approve`).
-
-The upstream service does not need to know which agent holds the slice.
-
-## Giving an agent access
-
-**Primary onboarding (option A):** the agent never needs secrets pasted in chat. The user connects OAuth themselves; the agent only needs the public Convex `.convex.site` origin (discovery).
-
-1. User connects providers on the board (`/connections`) — OAuth stays user-initiated.
-2. Agent `GET /` on `.convex.site` for the contract, then `POST /api/access-requests` with `agentName`, `apps`, `ttlMs`, and optional `reason`.
-3. Response includes:
-   - `approvalUrl` — **chat-safe**, always on `BOARD_ORIGIN` (e.g. `https://board.example/approvals/ar_…`)
-   - `claimHandle` — **runtime-only**; keep it out of chat
-4. User opens the approval URL. If they are signed out, the board shows a Stripe Link–style continue card, then Google sign-in / sign-up, and returns them to the same link. Once signed in they **Approve** or **Deny** (also listed in the **Approvals** inbox). This path **always** requires Approve — there is no auto grant.
-5. Agent polls `POST /api/access-requests/status` or `POST /api/access-requests/claim` with `claimHandle`.
-   - Pending → **202** `APPROVAL_REQUIRED` (claim) / **200** with `status: "pending"` (status)
-   - Denied → **403** `APPROVAL_DENIED`
-   - Expired → **403** `APPROVAL_EXPIRED`
-   - Approved → claim returns **200** once with `sliceToken` + `sliceSecret` over HTTPS
-6. Agent then uses short-lived mint as today: `POST /api/credentials` with those slice credentials. No standing upstream handoff.
-
-### Short-lived mint after the slice exists
-
-Once the agent has slice credentials (from claim, or from a board-created slice):
-
-#### Auto mint (default on onboarding-created slices)
-
-1. `POST /api/credentials` with `sliceToken`, `sliceSecret`, and `app`.
-2. On success it receives a **provider-native short-lived access token** — never the vault's standing upstream access or refresh token.
-
-#### Approve-gated mint (board inbox)
-
-For slices with mint policy **Approve**:
-
-1. `POST /api/credentials` returns **202** with `APPROVAL_REQUIRED`, `requestId`, and a board `approvalUrl`.
-2. Operator Approves/Denies in **Approvals** (or the deep link).
-3. Agent polls `POST /api/credentials/claim` with `sliceToken`, `sliceSecret`, and `requestId`.
-   - Pending → **202** `APPROVAL_REQUIRED`
-   - Denied → **403** `APPROVAL_DENIED`
-   - Expired → **403** `APPROVAL_EXPIRED`
-   - Approved → **200** once with a freshly minted short-lived token (minted at claim, not at approve; ~60s claim window)
-
-Claim and auto mint both refuse vault standing-token handoff. Agents never receive `connection.accessToken` or `connection.refreshToken`. If the provider cannot mint, the API hard-fails with **503** `SHORT_LIVED_UNAVAILABLE`.
-
-Pre-launch: no backward-compat shims for standing-token handoff.
-
-### Short-lived mint per provider
-
-| Provider | Agent mint behavior | Notes |
-| --- | --- | --- |
-| **Google** | Mint via `refresh_token` → new short-lived access | Requires offline refresh from connect (`access_type=offline`). No refresh → hard-fail. |
-| **Airtable** | Mint via refresh → short-lived access | No refresh → hard-fail. |
-| **Linear** | Mint via refresh → short-lived access | No refresh → hard-fail. |
-| **Vercel** | Mint via refresh → short-lived access | Needs `offline_access` on connect. No refresh → hard-fail. |
-| **Zoom** | Mint via refresh → short-lived access | No refresh → hard-fail. |
-| **Slack** | Mint via token-rotation refresh → new access | Standing `xoxp` without rotation → hard-fail. |
-| **Notion** | Mint via refresh → new access | Legacy non-expiring tokens without refresh → hard-fail. |
-| **GitHub** | Mint via GitHub App user-token refresh → new access | Classic OAuth / standing-only user tokens (no refresh) → **hard-fail**. Use a GitHub App (`Iv…` client) that issues refreshable user access tokens. |
-
-There is **no** request proxy. Agents call providers directly with the minted Bearer.
-
-## Expiry and renewal
-
-A slice stops working at its expiry.
-
-The agent cannot extend it. It can only request renewal. Renewal goes back through user approval and starts with the same services, actions, and duration as the previous grant. The user can change any of them before approving.
-
-There are two paths:
-
-- **same-policy renewal:** approve the existing scope for another period
-- **changed renewal:** approve a different scope or duration, which creates a new grant
-
-Per-user defaults can control renewal behavior, including always asking before any renewal.
-
-## What an agent can never do
-
-Agents spend power. Users grant power. An agent cannot:
-
-1. renew or extend its own slice
-2. add services, actions, or time to its own slice
-3. create slices for other agents
-4. view, revoke, or change another agent's slice
-5. read an upstream OAuth access or refresh token (including the vault standing token)
-6. connect or disconnect a service on the user's passport
-7. change grant defaults or expiry policy
-8. change the user's sign-in methods or authentication factors
-9. approve its own request
-10. read passports or slices owned by another user
-
-These limits come from the data model and API boundaries, not from instructions given to the agent.
+`GET /` on the Convex HTTP origin lists routes. `GET /api/apps` reports app availability for a slice. Its `connected` flag means at least one account allowed by the slice is still connected; unbound apps report `false`. `GET /api/accounts?app=<app>` returns each available account's display login and opaque `bindingId`. If an account is removed from the slice while a mint is pending, that mint can no longer be claimed.
 
 ## Run it
 
@@ -198,8 +67,6 @@ npx convex env set TOKEN_ENCRYPTION_KEY <base64-32-byte-key>
 Keep the same key across deploys. Rotating it without re-saving connections will break decryption of existing ciphertext. If anything was stored before encryption was enabled, reconnect those providers so tokens are stored as `enc:v1:` ciphertext.
 
 `GET /api/health` reports which OAuth providers have both a non-empty client ID and secret. It does not return the values.
-
-If schema deploy fails because `tokenLogs` still has rows, delete those documents in the Convex dashboard, then deploy again. Do not add a wipe mutation.
 
 ## Test
 

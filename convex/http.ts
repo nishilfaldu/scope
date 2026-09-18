@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { httpAppsHandler } from "./http/httpAppsHandler";
+import { httpAccountsHandler } from "./http/httpAccountsHandler";
 import { httpClaimHandler } from "./http/httpClaimHandler";
 import { httpCredentialsHandler } from "./http/httpCredentialsHandler";
 import {
@@ -14,7 +15,7 @@ import {
   httpOAuthConnect,
 } from "./http/oauth";
 import { corsNoContent, jsonResponse } from "./lib/responses";
-import { PROVIDERS } from "./domain/apps";
+import { ALL_APPS } from "./domain/apps";
 import { oauthConfigured } from "./oauth";
 import { auth } from "./auth";
 
@@ -30,7 +31,6 @@ http.route({
   method: "GET",
   handler: httpAction(async () => jsonResponse(200, discoverySpec)),
 });
-
 // Agent-initiated onboarding (approval link)
 http.route({
   path: "/api/access-requests",
@@ -98,6 +98,8 @@ http.route({
   method: "GET",
   handler: httpAppsHandler,
 });
+http.route({ path: "/api/accounts", method: "OPTIONS", handler: optionsOk });
+http.route({ path: "/api/accounts", method: "GET", handler: httpAccountsHandler });
 
 // Health check
 http.route({
@@ -109,16 +111,16 @@ http.route({
 });
 
 // OAuth provider connection
-for (const provider of PROVIDERS) {
+for (const app of ALL_APPS) {
   http.route({
-    path: `/api/${provider}/connect`,
+    path: `/api/${app}/connect`,
     method: "GET",
-    handler: httpOAuthConnect(provider),
+    handler: httpOAuthConnect(app),
   });
   http.route({
-    path: `/api/${provider}/callback`,
+    path: `/api/${app}/callback`,
     method: "GET",
-    handler: httpOAuthCallback(provider),
+    handler: httpOAuthCallback(app),
   });
 }
 

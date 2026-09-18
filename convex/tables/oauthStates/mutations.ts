@@ -1,8 +1,8 @@
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
-import type { ProviderId } from "../../domain/apps";
-import { providerValidator } from "../../domain/apps";
+import type { AppId, ProviderId } from "../../domain/apps";
+import { appValidator, providerForApp, providerValidator } from "../../domain/apps";
 import { authenticatedMutation } from "../../functions";
 import { allowedReturnTo } from "../../http/helpers";
 
@@ -13,6 +13,7 @@ async function insertState(
   args: {
     userId: Id<"users">;
     provider: ProviderId;
+    app: AppId;
     state: string;
     returnTo: string;
   },
@@ -24,13 +25,14 @@ async function insertState(
 }
 
 export const start = authenticatedMutation({
-  args: { provider: providerValidator, returnTo: v.string() },
+  args: { app: appValidator, returnTo: v.string() },
   returns: v.object({ state: v.string() }),
   handler: async (ctx, args) => {
     const state = crypto.randomUUID();
     await insertState(ctx, {
       userId: ctx.userId,
-      provider: args.provider,
+      provider: providerForApp(args.app),
+      app: args.app,
       state,
       returnTo: allowedReturnTo(args.returnTo),
     });
@@ -42,6 +44,7 @@ export const put = internalMutation({
   args: {
     userId: v.id("users"),
     provider: providerValidator,
+    app: appValidator,
     state: v.string(),
     returnTo: v.string(),
   },
@@ -58,6 +61,7 @@ export const consume = internalMutation({
     v.object({
       userId: v.id("users"),
       provider: providerValidator,
+      app: appValidator,
       returnTo: v.string(),
     }),
     v.null(),
@@ -73,6 +77,7 @@ export const consume = internalMutation({
     return {
       userId: row.userId,
       provider: row.provider,
+      app: row.app,
       returnTo: row.returnTo,
     };
   },

@@ -32,36 +32,13 @@ async function githubIdentity(
   };
   const userResponse = await fetch("https://api.github.com/user", { headers });
   const userRaw: unknown = await userResponse.json();
-  if (isPlainObject(userRaw) && typeof userRaw.login === "string") {
+  if (isPlainObject(userRaw) && typeof userRaw.login === "string" && asFiniteNumber(userRaw.id) !== null) {
     return {
       login: userRaw.login,
-      providerUserId: String(asFiniteNumber(userRaw.id) ?? userRaw.login),
+      providerUserId: String(asFiniteNumber(userRaw.id)),
     };
   }
-  const instResponse = await fetch("https://api.github.com/user/installations", {
-    headers,
-  });
-  const instRaw: unknown = await instResponse.json();
-  if (
-    isPlainObject(instRaw) &&
-    Array.isArray(instRaw.installations) &&
-    instRaw.installations.length > 0
-  ) {
-    const first = instRaw.installations[0];
-    if (
-      isPlainObject(first) &&
-      isPlainObject(first.account) &&
-      typeof first.account.login === "string"
-    ) {
-      return {
-        login: first.account.login,
-        providerUserId: String(
-          asFiniteNumber(first.account.id) ?? first.account.login,
-        ),
-      };
-    }
-  }
-  return { login: "github", providerUserId: "unknown" };
+  throw new Error("GitHub did not return a stable account ID");
 }
 
 export const github: ProviderOAuth = {
