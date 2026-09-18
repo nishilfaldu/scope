@@ -1,9 +1,9 @@
-import { convexAuth } from "@convex-dev/auth/server";
 import { Email } from "@convex-dev/auth/providers/Email";
-import { internal, components } from "./_generated/api";
-import { Resend } from "@convex-dev/resend";
 import type { EmailConfig } from "@convex-dev/auth/server";
-import type { ActionCtx } from "./_generated/server";
+import { convexAuth } from "@convex-dev/auth/server";
+import { Resend } from "@convex-dev/resend";
+import { components, internal } from "./_generated/api";
+import { type ActionCtx, env } from "./_generated/server";
 
 const resend = new Resend(components.resend, { testMode: false });
 
@@ -23,9 +23,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         ctx: ActionCtx,
       ) => {
         await resend.sendEmail(ctx, {
-          from:
-            process.env.RESEND_FROM ??
-            "Agent Passport <login@nishilfaldu.site>",
+          from: env.RESEND_FROM ?? "Agent Passport <login@nishilfaldu.site>",
           to: identifier,
           subject: "Your Agent Passport sign-in code",
           text: `Your Agent Passport code is ${token}. It expires in 10 minutes. If you did not request it, ignore this email.`,

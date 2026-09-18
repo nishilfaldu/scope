@@ -17,7 +17,7 @@ export const viewer = query({
     if (userId === null) {
       return null;
     }
-    const user = await ctx.db.get(userId);
+    const user = await ctx.db.get("users", userId);
     if (user === null) {
       return null;
     }
