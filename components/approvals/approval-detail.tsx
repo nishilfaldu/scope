@@ -1,24 +1,13 @@
 "use client";
 
-import { useNow } from "@/hooks/use-now";
-
-import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth, useQuery } from "convex/react";
 import { PassportIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-
-import type { Id } from "@/convex/_generated/dataModel";
-import { AccountBindings, bindingsFor } from "@/components/connections/account-bindings";
-import type { AppId } from "@/lib/capabilities";
-import { api } from "@/convex/_generated/api";
+import { useConvexAuth, useQuery } from "convex/react";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { GoogleMark } from "@/components/auth/google-mark";
-import { BoardShell } from "@/components/layout/board-shell";
-import { ContentCard } from "@/components/shared/content-card";
-import { EmptyState } from "@/components/shared/empty-state";
 import { ExpiryTime } from "@/components/shared/expiry-time";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,9 +17,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { APP_LABELS, APP_PERMISSIONS } from "@/lib/capabilities";
-import { useErrorCatchingMutation } from "@/lib/errors";
-import { ALL_APPS, CONNECT_ERRORS } from "@/lib/connections";
+import { api } from "@/convex/_generated/api";
+import { useNow } from "@/hooks/use-now";
+import type { AppId } from "@/lib/capabilities";
+import { APP_LABELS } from "@/lib/capabilities";
 
 function appSummary(apps: readonly AppId[]) {
   const visible = apps.slice(0, 3).map((app) => APP_LABELS[app] ?? app);
@@ -38,24 +28,14 @@ function appSummary(apps: readonly AppId[]) {
   return visible.join(", ") + (remaining > 0 ? ` and ${remaining} more` : "");
 }
 
-function readConnectionResult(): string | null {
-  if (typeof window === "undefined") return null;
-  const url = new URL(window.location.href);
-  for (const app of ALL_APPS) {
-    const status = url.searchParams.get(app);
-    if (!status) continue;
-    return status === "connected" ? `${APP_LABELS[app]} connected. Choose its account below.`
-      : status === "denied" ? `${APP_LABELS[app]} connection was denied.`
-        : CONNECT_ERRORS[url.searchParams.get("reason") ?? ""] ?? `${APP_LABELS[app]} connection failed. Try again.`;
-  }
-  return null;
-}
-
 function ApprovalGate({ publicToken }: { publicToken: string }) {
   const { signIn } = useAuthActions();
-  const summary = useQuery(api.tables.slices.accessRequestPublic.publicSummary, {
-    publicToken,
-  });
+  const summary = useQuery(
+    api.tables.slices.accessRequestPublic.publicSummary,
+    {
+      publicToken,
+    },
+  );
   const now = useNow();
   const redirectTo = `/approvals/${publicToken}`;
 
@@ -154,176 +134,13 @@ function ApprovalGate({ publicToken }: { publicToken: string }) {
   );
 }
 
-function SignedInApproval({ publicToken }: { publicToken: string }) {
-  const bound = useQuery(api.tables.slices.accessRequests.getByPublicToken, {
-    publicToken,
-  });
-  const [decide, isDeciding] = useErrorCatchingMutation(
-    api.tables.slices.accessRequests.decide,
-  );
-  const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">[]>>>({});
-  const [connectionResult] = useState(readConnectionResult);
-  const now = useNow();
-  const request = bound;
-
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    for (const app of ALL_APPS) {
-      url.searchParams.delete(app);
-    }
-    url.searchParams.delete("reason");
-    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
-  }, []);
-
-  return (
-    <BoardShell title="Approve access">
-      <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
-        <div className="px-4 lg:px-6">
-          {request === undefined ? (
-            <Skeleton className="h-40 w-full" />
-          ) : request === null || request === undefined ? (
-            <ContentCard title="Request not found">
-              <div className="p-6">
-                <EmptyState
-                  title="Unknown or unavailable request"
-                  description="This approval link is invalid, expired, or belongs to another account. Ask the agent for a new link if you still need access."
-                />
-                <div className="mt-4">
-                  <Link
-                    href="/approvals"
-                    className="text-sm underline-offset-4 hover:underline"
-                  >
-                    Back to inbox
-                  </Link>
-                </div>
-              </div>
-            </ContentCard>
-          ) : request.status === "expired" || request.expiresAt <= now ? (
-            <ContentCard title="Link expired">
-              <div className="space-y-4 p-6">
-                {connectionResult ? <p role="status" className="rounded-md border p-3 text-sm">{connectionResult}</p> : null}
-                <EmptyState
-                  title="This approval link expired"
-                  description="Ask the agent to create a new access request and open the fresh link."
-                />
-                <Link
-                  href="/approvals"
-                  className="text-sm underline-offset-4 hover:underline"
-                >
-                  Back to inbox
-                </Link>
-              </div>
-            </ContentCard>
-          ) : (
-            <ContentCard
-              title={
-                request.kind === "onboarding"
-                  ? "Agent access request"
-                  : "Credential mint request"
-              }
-              description={
-                request.kind === "onboarding"
-                  ? "Approving creates a slice for this agent. The agent claims slice credentials over HTTPS — secrets never appear in chat."
-                  : "Approving lets the agent claim a short-lived provider token for this slice."
-              }
-            >
-              <div className="space-y-4 p-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{request.sliceName}</span>
-                  <Badge variant="secondary">{request.status}</Badge>
-                  <Badge variant="outline">{request.kind}</Badge>
-                </div>
-                {request.kind === "onboarding" ? (
-                  <div className="space-y-2 text-sm text-muted-foreground">
-                    <p>
-                      Apps:{" "}
-                      {appSummary(request.apps ?? []) || "—"}
-                    </p>
-                    {request.ttlMs ? (
-                      <p>
-                        Requested TTL: {Math.round(request.ttlMs / 60000)} min
-                      </p>
-                    ) : null}
-                    {request.reason ? <p>Reason: {request.reason}</p> : null}
-                    <p>Agent name is supplied by the requester and is not independently verified.</p>
-                    <p>Approving lets the agent mint provider tokens for the accounts you choose. Turning off this slice later stops future mints; issued tokens may remain usable until upstream expiry.</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {request.app ? (
-                      <Badge variant="secondary">
-                        {APP_LABELS[request.app]}
-                      </Badge>
-                    ) : null}
-                    {request.accountLogin ? (
-                      <span className="text-sm text-muted-foreground">
-                        Account: {request.accountLogin}
-                      </span>
-                    ) : request.status === "pending" ? (
-                      <span className="text-sm text-destructive">Requested account is no longer available.</span>
-                    ) : null}
-                    {request.app ? <p className="text-sm text-muted-foreground">{APP_PERMISSIONS[request.app]}</p> : null}
-                    {request.sliceId ? (
-                      <Link
-                        href={`/slices/${request.sliceId}`}
-                        className="text-sm underline-offset-4 hover:underline"
-                      >
-                        Open slice
-                      </Link>
-                    ) : null}
-                  </div>
-                )}
-                {request.kind === "onboarding" && request.status === "pending" ? <AccountBindings apps={request.apps ?? []} selected={selected} onChange={(app, ids) => setSelected((current) => ({ ...current, [app]: ids }))} /> : null}
-                <p className="text-sm text-muted-foreground">
-                  Expires <ExpiryTime expiresAt={request.expiresAt} now={now} />
-                </p>
-                {request.status === "pending" ? (
-                  <div className="flex gap-2">
-                    <Button
-                      disabled={isDeciding || (request.kind === "mint" && !request.accountLogin) || (request.kind === "onboarding" && (request.apps ?? []).some((app) => !selected[app]?.length))}
-                      onClick={() =>
-                        void decide({
-                          requestId: request._id,
-                          decision: "approved",
-                          bindings: request.kind === "onboarding" ? bindingsFor(request.apps ?? [], selected) : undefined,
-                        })
-                      }
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={isDeciding}
-                      onClick={() =>
-                        void decide({
-                          requestId: request._id,
-                          decision: "denied",
-                        })
-                      }
-                    >
-                      Deny
-                    </Button>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    This request is already{" "}
-                    <span className="font-medium">{request.status}</span>.
-                    {request.status === "approved"
-                      ? " The agent can claim over HTTPS."
-                      : null}
-                  </p>
-                )}
-              </div>
-            </ContentCard>
-          )}
-        </div>
-      </div>
-    </BoardShell>
-  );
-}
-
 export function ApprovalDetail({ publicToken }: { publicToken: string }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isAuthenticated) router.replace(`/approvals?request=${encodeURIComponent(publicToken)}`);
+  }, [isAuthenticated, publicToken, router]);
 
   if (isLoading) {
     return (
@@ -337,5 +154,5 @@ export function ApprovalDetail({ publicToken }: { publicToken: string }) {
     return <ApprovalGate publicToken={publicToken} />;
   }
 
-  return <SignedInApproval key={publicToken} publicToken={publicToken} />;
+  return <div className="flex min-h-svh items-center justify-center bg-muted/40 p-4"><Skeleton className="h-56 w-full max-w-sm" /></div>;
 }
