@@ -65,7 +65,7 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
           ) : null
         }
       >
-        <div className="grid gap-4 p-6 sm:grid-cols-3">
+        <div className="grid gap-4 p-6 sm:grid-cols-2">
           <div>
             <p className="text-xs text-muted-foreground">Status</p>
             <Badge
@@ -80,10 +80,6 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
             >
               {STATUS_LABELS[effectiveSliceStatus(slice, now)]}
             </Badge>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Mint policy</p>
-            <p className="mt-1 text-sm">{slice.mintPolicy === "approve" ? "Approval required" : "Automatic"}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Expires</p>
