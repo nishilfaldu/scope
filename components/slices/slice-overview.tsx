@@ -14,12 +14,11 @@ import { CopyableField } from "@/components/shared/copyable-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
-  MINT_POLICY_LABELS,
   effectiveSliceStatus,
   formatRemaining,
   STATUS_LABELS,
-  type MintPolicy,
 } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
@@ -43,8 +42,7 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
     return null;
   }
 
-  const nextPolicy: MintPolicy =
-    slice.mintPolicy === "approve" ? "auto" : "approve";
+  const isActive = effectiveSliceStatus(slice, now) === "active";
 
   return (
     <div className="flex flex-col gap-4">
@@ -52,37 +50,20 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
         title={slice.name}
         description="Status, credentials, mint policy, and apps from this slice."
         action={
-          effectiveSliceStatus(slice, now) === "active" ? (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={isSettingPolicy}
-                onClick={() =>
-                  void setMintPolicy({
-                    sliceToken: slice.token,
-                    mintPolicy: nextPolicy,
-                  })
-                }
-              >
-                {isSettingPolicy
-                  ? "Updating…"
-                  : `Use ${MINT_POLICY_LABELS[nextPolicy]}`}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={isRevoking}
-                onClick={() => void revoke({ sliceToken: slice.token })}
-              >
-                <HugeiconsIcon
-                  icon={Delete02Icon}
-                  strokeWidth={2}
-                  data-icon="inline-start"
-                />
-                {isRevoking ? "Revoking…" : "Revoke"}
-              </Button>
-            </div>
+          isActive ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isRevoking}
+              onClick={() => void revoke({ sliceToken: slice.token })}
+            >
+              <HugeiconsIcon
+                icon={Delete02Icon}
+                strokeWidth={2}
+                data-icon="inline-start"
+              />
+              {isRevoking ? "Revoking…" : "Revoke"}
+            </Button>
           ) : null
         }
       >
@@ -104,9 +85,22 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Mint policy</p>
-            <Badge className="mt-1" variant="outline">
-              {MINT_POLICY_LABELS[slice.mintPolicy]}
-            </Badge>
+            <div className="mt-1 flex items-center gap-2">
+              <Switch
+                id={`mint-policy-${sliceId}`}
+                checked={slice.mintPolicy === "approve"}
+                disabled={!isActive || isSettingPolicy}
+                onCheckedChange={(checked) =>
+                  void setMintPolicy({
+                    sliceToken: slice.token,
+                    mintPolicy: checked ? "approve" : "auto",
+                  })
+                }
+              />
+              <label htmlFor={`mint-policy-${sliceId}`} className="text-sm">
+                Require approval
+              </label>
+            </div>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Expires</p>
