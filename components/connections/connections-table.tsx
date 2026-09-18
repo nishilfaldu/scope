@@ -6,6 +6,7 @@ import { DatabaseIcon, GithubIcon, GoogleIcon, SlackIcon, Notion01Icon, Chart01I
 import { HugeiconsIcon } from "@hugeicons/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { ConvexPagination } from "@/components/shared/convex-pagination";
 import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -73,12 +74,15 @@ export function ConnectionsTable() {
     { id: "status", header: "Status", cell: ({ row: { original: row } }) => row.accounts === undefined ? <Skeleton className="h-5 w-20" /> : <Badge variant={row.accounts.length ? "outline" : "secondary"}>{row.accounts.length ? `${row.accounts.length} connected` : "Off"}</Badge> },
     { id: "connect", header: () => <span className="sr-only">Connect</span>, cell: ({ row: { original: row } }) => <Button variant="outline" size="sm" disabled={row.accounts === undefined || busy !== null} onClick={() => void connect(row.id)}>{row.accounts?.length ? "Add account" : "Connect"}</Button> },
   ];
-  return <>
-    <DataTable data={rows} columns={columns} getRowKey={(row) => row.id} />
-    {CONNECTION_APPS.length > PAGE_SIZE ? <div className="mt-4 flex items-center gap-2">
-      <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</Button>
-      <span className="text-sm">Page {page + 1}</span>
-      <Button variant="outline" size="sm" disabled={(page + 1) * PAGE_SIZE >= CONNECTION_APPS.length} onClick={() => setPage(page + 1)}>Next</Button>
-    </div> : null}
-  </>;
+  return <DataTable
+    data={rows}
+    columns={columns}
+    getRowKey={(row) => row.id}
+    pagination={CONNECTION_APPS.length > PAGE_SIZE ? <ConvexPagination
+      canPrevious={page > 0}
+      canNext={(page + 1) * PAGE_SIZE < CONNECTION_APPS.length}
+      onPrevious={() => setPage((current) => current - 1)}
+      onNext={() => setPage((current) => current + 1)}
+    /> : undefined}
+  />;
 }
