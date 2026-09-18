@@ -36,8 +36,17 @@ describe("users.viewer", () => {
   });
 
   test("returns null when the identity has no matching user", async () => {
-    const viewer = await t()
-      .withIdentity({ subject: "missing-user|session-1" })
+    const backend = t();
+    const missingUserId = await backend.run(async (ctx) => {
+      const id = await ctx.db.insert("users", {
+        name: "Gone",
+        email: "gone@example.com",
+      });
+      await ctx.db.delete("users", id);
+      return id;
+    });
+    const viewer = await backend
+      .withIdentity({ subject: `${missingUserId}|session-1` })
       .query(api.users.viewer, {});
     expect(viewer).toBeNull();
   });
