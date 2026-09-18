@@ -17,6 +17,7 @@ import { GoogleMark } from "@/components/auth/google-mark";
 import { BoardShell } from "@/components/layout/board-shell";
 import { ContentCard } from "@/components/shared/content-card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ExpiryTime } from "@/components/shared/expiry-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +28,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { APP_LABELS, APP_PERMISSIONS, formatRemaining } from "@/lib/capabilities";
+import { APP_LABELS, APP_PERMISSIONS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 import { ALL_APPS, CONNECT_ERRORS } from "@/lib/connections";
 
@@ -133,7 +134,7 @@ function ApprovalGate({ publicToken }: { publicToken: string }) {
           ) : null}
           {!expired && !decided ? (
             <p className="text-center text-xs text-muted-foreground">
-              Expires {formatRemaining(summary.expiresAt, now)}
+              Expires <ExpiryTime expiresAt={summary.expiresAt} now={now} />
             </p>
           ) : null}
           <Button
@@ -274,7 +275,7 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                 )}
                 {request.kind === "onboarding" && request.status === "pending" ? <AccountBindings apps={request.apps ?? []} selected={selected} onChange={(app, ids) => setSelected((current) => ({ ...current, [app]: ids }))} /> : null}
                 <p className="text-sm text-muted-foreground">
-                  Expires {formatRemaining(request.expiresAt, now)}
+                  Expires <ExpiryTime expiresAt={request.expiresAt} now={now} />
                 </p>
                 {request.status === "pending" ? (
                   <div className="flex gap-2">

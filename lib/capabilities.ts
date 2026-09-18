@@ -101,11 +101,13 @@ export function formatRemaining(expiresAt: number, now: number): string {
   const ms = expiresAt - now;
   if (ms <= 0) return "expired";
   const minutes = Math.floor(ms / 60_000);
+  if (minutes === 0) return "<1m left";
   if (minutes < 60) return `${minutes}m left`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours}h left`;
+  const remainingMinutes = minutes % 60;
+  if (hours < 48) return `${hours}h ${remainingMinutes}m left`;
   const days = Math.floor(hours / 24);
-  return `${days}d left`;
+  return `${days}d ${hours % 24}h ${remainingMinutes}m left`;
 }
 
 export function formatRelativeTime(ts: number, now: number): string {

@@ -1,12 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { useQuery } from "convex/react";
-import {
-  Delete02Icon,
-  PlusSignIcon,
-} from "@hugeicons/core-free-icons";
+import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { FunctionReturnType } from "convex/server";
 
@@ -17,12 +13,12 @@ import {
   type DataTableColumn,
 } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ExpiryTime } from "@/components/shared/expiry-time";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { SliceRevokeButton } from "@/components/slices/slice-revoke-button";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
-import { effectiveSliceStatus, formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
+import { effectiveSliceStatus, STATUS_LABELS } from "@/lib/capabilities";
 import { useNow } from "@/hooks/use-now";
-import { useErrorCatchingMutation } from "@/lib/errors";
 
 type Slice = FunctionReturnType<
   typeof api.tables.slices.queries.list
@@ -37,21 +33,6 @@ export function SlicesTable() {
   const result = useQuery(api.tables.slices.queries.list, {
     paginationOpts,
   });
-  const [revoke] = useErrorCatchingMutation(
-    api.tables.slices.mutations.revoke,
-    { successMessage: "Slice revoked" },
-  );
-  const [revokingId, setRevokingId] = useState<string | null>(null);
-
-  async function handleRevoke(sliceToken: string) {
-    setRevokingId(sliceToken);
-    try {
-      await revoke({ sliceToken });
-    } finally {
-      setRevokingId(null);
-    }
-  }
-
   const columns: DataTableColumn<Slice>[] = [
     {
       id: "name",
@@ -86,9 +67,7 @@ export function SlicesTable() {
       id: "expires",
       header: "Expires",
       cell: ({ row: { original: slice } }) => (
-        <Badge variant="outline">
-          {formatRemaining(slice.expiresAt, now)}
-        </Badge>
+        <ExpiryTime expiresAt={slice.expiresAt} now={now} stacked />
       ),
     },
     {
@@ -96,17 +75,7 @@ export function SlicesTable() {
       header: "Revoke",
       cell: ({ row: { original: slice } }) =>
         effectiveSliceStatus(slice, now) === "active" ? (
-          <Button
-            type="button"
-            variant="destructive"
-            size="sm"
-            disabled={revokingId !== null}
-            onClick={() => void handleRevoke(slice.token)}
-            aria-label={`Revoke ${slice.name}`}
-          >
-            <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
-            {revokingId === slice.token ? "Revoking…" : "Revoke"}
-          </Button>
+          <SliceRevokeButton sliceToken={slice.token} sliceName={slice.name} />
         ) : (
           <span className="text-muted-foreground">—</span>
         ),

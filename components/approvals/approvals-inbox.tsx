@@ -13,10 +13,11 @@ import { api } from "@/convex/_generated/api";
 import { BoardShell } from "@/components/layout/board-shell";
 import { ContentCard } from "@/components/shared/content-card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ExpiryTime } from "@/components/shared/expiry-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { APP_LABELS, formatRemaining } from "@/lib/capabilities";
+import { APP_LABELS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
 export function ApprovalsInbox() {
@@ -81,7 +82,7 @@ export function ApprovalsInbox() {
                         {request.kind === "mint" && request.accountLogin
                           ? `${request.accountLogin} · `
                           : ""}
-                        Expires {formatRemaining(request.expiresAt, now)}
+                        Expires <ExpiryTime expiresAt={request.expiresAt} now={now} />
                         {request.reason ? ` · ${request.reason}` : ""}
                       </p>
                     </div>
