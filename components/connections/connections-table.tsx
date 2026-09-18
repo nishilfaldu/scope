@@ -75,9 +75,9 @@ function ConnectionRow({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border-b last:border-b-0">
-      <div className="flex items-center gap-2 px-4 py-2 sm:gap-3">
+      <div className="px-4 py-2">
         <CollapsibleTrigger
-          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex w-full min-w-0 items-center gap-3 rounded-xl px-2 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={`${open ? "Hide" : "Show"} ${app.name} accounts`}
         >
           <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted">
@@ -101,22 +101,25 @@ function ConnectionRow({
             className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
           />
         </CollapsibleTrigger>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={count === undefined || busy}
-          onClick={() => onConnect(app.id)}
-        >
-          {count ? "Add account" : "Connect"}
-        </Button>
       </div>
       <CollapsibleContent className="border-t bg-muted/20">
-        {count === 0 ? (
-          <p className="px-6 py-4 text-sm text-muted-foreground">No accounts connected yet.</p>
-        ) : count === undefined ? (
+        <div className="flex items-center justify-between gap-3 px-6 py-3">
+          <p className="text-sm text-muted-foreground">
+            {count === 0 ? "No accounts connected yet." : "Connected accounts"}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={count === undefined || busy}
+            onClick={() => onConnect(app.id)}
+          >
+            {count ? "Add account" : "Connect"}
+          </Button>
+        </div>
+        {count === undefined ? (
           <Skeleton className="mx-6 my-4 h-8 w-48" />
-        ) : (
-          <ul className="divide-y px-6">
+        ) : count > 0 ? (
+          <ul className="divide-y border-t px-6">
             {app.accounts?.map((account) => (
               <li key={account.id} className="flex min-w-0 items-center justify-between gap-3 py-3 pl-9">
                 <span className="min-w-0 break-all text-sm">{account.login}</span>
@@ -132,7 +135,7 @@ function ConnectionRow({
               </li>
             ))}
           </ul>
-        )}
+        ) : null}
       </CollapsibleContent>
     </Collapsible>
   );
