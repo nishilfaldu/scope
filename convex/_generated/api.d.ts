@@ -10,7 +10,6 @@
 
 import type * as auth from "../auth.js";
 import type * as domain_apps from "../domain/apps.js";
-import type * as domain_capabilities from "../domain/capabilities.js";
 import type * as domain_requests from "../domain/requests.js";
 import type * as functions from "../functions.js";
 import type * as http from "../http.js";
@@ -66,7 +65,6 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   "domain/apps": typeof domain_apps;
-  "domain/capabilities": typeof domain_capabilities;
   "domain/requests": typeof domain_requests;
   functions: typeof functions;
   http: typeof http;

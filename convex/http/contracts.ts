@@ -6,10 +6,9 @@ import { AGENT_ERROR_CODES, AGENT_ERROR_GUIDANCE } from "../lib/errors";
 const routes = [
   { method: "GET", path: "/", summary: "API route index." },
   { method: "GET", path: "/api/health", summary: "Liveness and OAuth configuration." },
-  { method: "GET", path: "/api/capabilities", summary: "Public, machine-readable app capabilities and OAuth scope model." },
   { method: "POST", path: "/api/access-requests", summary: "Start agent onboarding; returns an approval URL and private claim handle." },
   { method: "POST", path: "/api/access-requests/status", summary: "Poll onboarding with the claim handle." },
-  { method: "POST", path: "/api/access-requests/claim", summary: "Claim approved slice credentials during the short recovery window." },
+  { method: "POST", path: "/api/access-requests/claim", summary: "Claim approved slice credentials once." },
   { method: "POST", path: "/api/credentials", summary: "Mint a provider-native token for one allowed app." },
   { method: "POST", path: "/api/credentials/claim", summary: "Claim an approved credential request." },
   { method: "GET", path: "/api/apps", summary: "Discover available apps for a slice." },

@@ -8,7 +8,8 @@ import {
   refreshedFromPayload,
 } from "../shared";
 import type { ProviderOAuth } from "../types";
-import { AIRTABLE_SCOPES } from "../../domain/capabilities";
+
+const SCOPES = "data.records:read data.records:write schema.bases:read schema.bases:write user.email:read";
 
 function credentials() {
   const clientId = envTrimmed(env.AIRTABLE_CLIENT_ID);
@@ -65,7 +66,7 @@ export const airtable: ProviderOAuth = {
     authorize.searchParams.set("client_id", client.clientId);
     authorize.searchParams.set("redirect_uri", oauthCallbackUrl("airtable"));
     authorize.searchParams.set("response_type", "code");
-    authorize.searchParams.set("scope", AIRTABLE_SCOPES);
+    authorize.searchParams.set("scope", SCOPES);
     authorize.searchParams.set("state", state);
     authorize.searchParams.set("code_challenge", await codeChallenge(verifier));
     authorize.searchParams.set("code_challenge_method", "S256");

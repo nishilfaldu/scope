@@ -3,16 +3,55 @@ import {
   providerForApp,
   type AppId,
 } from "../convex/domain/apps";
-import { CAPABILITY_LABELS, CAPABILITY_SUMMARIES } from "../convex/domain/capabilities";
 
 export { ALL_APPS, providerForApp, type AppId };
 
 export type MintPolicy = "auto" | "approve";
 
-export const APP_LABELS = CAPABILITY_LABELS;
-export const APP_PERMISSIONS = CAPABILITY_SUMMARIES;
+export const APP_LABELS: Record<AppId, string> = {
+  github: "GitHub",
+  gmail: "Gmail",
+  calendar: "Calendar",
+  drive: "Drive",
+  docs: "Docs",
+  sheets: "Sheets",
+  slack: "Slack",
+  airtable: "Airtable",
+  notion: "Notion",
+  linear: "Linear",
+  vercel: "Vercel",
+  zoom: "Zoom",
+};
 
-export const APP_HINTS = CAPABILITY_SUMMARIES;
+export const APP_PERMISSIONS: Record<AppId, string> = {
+  github: "Repository, workflow, and account permissions granted by the GitHub connection.",
+  gmail: "Read, send, and manage mail in the selected Gmail account.",
+  calendar: "Read and manage calendars and events in the selected Google account.",
+  drive: "Read and manage Drive files in the selected Google account.",
+  docs: "Read and edit documents in the selected Google account.",
+  sheets: "Read and edit spreadsheets in the selected Google account.",
+  slack: "Read conversations and files and send messages with the connected Slack user.",
+  airtable: "Read and write records and schemas in bases approved during Airtable consent.",
+  notion: "Read and edit pages shared with the Notion integration.",
+  linear: "Read and write issues, projects, and teams in Linear.",
+  vercel: "Access the Vercel account authorized by its OAuth grant.",
+  zoom: "Access meetings and other data allowed by the configured Zoom app scopes.",
+};
+
+export const APP_HINTS: Record<AppId, string> = {
+  github: "Create a short-lived GitHub token. The agent calls GitHub directly.",
+  gmail: "Gmail via the Google login.",
+  calendar: "Calendar via the Google login.",
+  drive: "Drive via the Google login.",
+  docs: "Docs via the Google login.",
+  sheets: "Sheets via the Google login.",
+  slack: "Create a short-lived Slack token. The agent calls Slack directly.",
+  airtable: "Bases, schemas, records, and comments.",
+  notion: "Pages and databases shared with the Notion connection.",
+  linear: "Issues, projects, teams, and workflow updates.",
+  vercel: "Projects, deployments, domains, and team profile.",
+  zoom: "Meetings, webinars, recordings, and account profile.",
+};
 
 export const TTL_OPTIONS = [
   { label: "15 minutes", ttlMs: 15 * 60 * 1000 },

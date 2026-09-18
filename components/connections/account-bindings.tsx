@@ -7,7 +7,6 @@ import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { APP_LABELS, APP_PERMISSIONS, type AppId } from "@/lib/capabilities";
 import { APP_CONNECT_URL } from "@/lib/connections";
-import { Input } from "@/components/ui/input";
 
 const PAGE_SIZE = 50;
 export type Binding = { app: AppId; connectionId: Id<"connections"> };
@@ -23,16 +22,11 @@ export function AccountBindings({ apps, selected, onChange }: {
   onChange: (app: AppId, id: Id<"connections">) => void;
 }) {
   const [page, setPage] = useState(0);
-  const [search, setSearch] = useState("");
-  const [needsAttention, setNeedsAttention] = useState(false);
   const [connecting, setConnecting] = useState<AppId | null>(null);
   const startOAuth = useMutation(api.tables.oauthStates.mutations.start);
-  const filteredApps = apps.filter((app) =>
-    APP_LABELS[app].toLowerCase().includes(search.toLowerCase()) &&
-    (!needsAttention || !selected[app]));
-  const lastPage = Math.max(0, Math.ceil(filteredApps.length / PAGE_SIZE) - 1);
+  const lastPage = Math.max(0, Math.ceil(apps.length / PAGE_SIZE) - 1);
   const currentPage = Math.min(page, lastPage);
-  const visibleApps = filteredApps.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const visibleApps = apps.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
   const statuses = useQuery(api.tables.connections.queries.statusesForApps, { apps: [...visibleApps] });
 
   useEffect(() => {
@@ -58,11 +52,6 @@ export function AccountBindings({ apps, selected, onChange }: {
   }
   return <div className="space-y-3">
     <p className="text-sm font-medium">Accounts for this slice ({chosen} of {apps.length} selected)</p>
-    {apps.length > 10 ? <div className="flex flex-wrap items-center gap-2">
-      <Input aria-label="Find an app account" placeholder="Find an app…" value={search} onChange={(event) => { setSearch(event.target.value); setPage(0); }} className="max-w-xs" />
-      <Button type="button" variant={needsAttention ? "secondary" : "outline"} size="sm" onClick={() => { setNeedsAttention(!needsAttention); setPage(0); }}>Needs attention</Button>
-    </div> : null}
-    {filteredApps.length === 0 ? <p className="text-sm text-muted-foreground">No matching apps need an account.</p> : null}
     {visibleApps.map((app) => {
       const accounts = statuses?.find((entry) => entry.app === app)?.accounts ?? [];
       return <div key={app} className="space-y-1 text-sm">
@@ -75,7 +64,7 @@ export function AccountBindings({ apps, selected, onChange }: {
         {statuses !== undefined && accounts.length > 0 ? <Button type="button" variant="ghost" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Add another account</Button> : null}
       </div>;
     })}
-    {filteredApps.length > PAGE_SIZE ? <div className="flex items-center gap-2">
+    {apps.length > PAGE_SIZE ? <div className="flex items-center gap-2">
       <Button type="button" variant="outline" size="sm" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous accounts</Button>
       <span className="text-sm">Page {currentPage + 1} of {lastPage + 1}</span>
       <Button type="button" variant="outline" size="sm" disabled={currentPage === lastPage} onClick={() => setPage(currentPage + 1)}>Next accounts</Button>

@@ -163,7 +163,7 @@ async function onboardingByClaim(ctx: MutationCtx | QueryCtx, claimHandle: strin
 function claimDenial(request: NonNullable<Awaited<ReturnType<typeof onboardingByClaim>>>) {
   const status = effectiveRequestStatus(request, Date.now());
   if (status === "denied") return denyCreate(403, APPROVAL_DENIED_ERROR, "APPROVAL_DENIED");
-  if (status === "expired" || request.expiresAt <= Date.now()) {
+  if (status === "expired" || status === "claimed") {
     return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
   }
   return null;
@@ -279,6 +279,8 @@ export const resolveOnboardingClaim = internalMutation({
     await ctx.db.patch("accessRequests", request._id, {
       status: "claimed",
       claimedAt: now,
+      issuedSliceSecretCipher: "",
+      claimHandleCipher: "",
     });
     return {
       ok: true as const,

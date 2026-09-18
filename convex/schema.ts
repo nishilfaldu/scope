@@ -46,8 +46,7 @@ export default defineSchema({
 
   // Access requests cover two kinds:
   // - onboarding: agent-initiated grant request before any slice exists.
-  //   Approve creates the slice; claim can repeat with the private handle during
-  //   a short recovery window, after which encrypted handoff material is cleared.
+  //   Approve creates the slice; claim returns sliceToken/sliceSecret once.
   // - mint: operator approval for a short-lived credential on an existing slice.
   accessRequests: defineTable(v.union(
     v.object({

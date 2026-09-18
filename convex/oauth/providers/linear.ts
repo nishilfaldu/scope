@@ -8,7 +8,6 @@ import {
   refreshedFromPayload,
 } from "../shared";
 import type { ProviderOAuth } from "../types";
-import { LINEAR_SCOPES } from "../../domain/capabilities";
 
 function credentials() {
   const clientId = envTrimmed(env.LINEAR_CLIENT_ID);
@@ -70,7 +69,7 @@ export const linear: ProviderOAuth = {
     authorize.searchParams.set("client_id", client.clientId);
     authorize.searchParams.set("redirect_uri", oauthCallbackUrl("linear"));
     authorize.searchParams.set("response_type", "code");
-    authorize.searchParams.set("scope", LINEAR_SCOPES);
+    authorize.searchParams.set("scope", "read,write");
     authorize.searchParams.set("actor", "user");
     authorize.searchParams.set("state", state);
     return { url: authorize.toString() };
