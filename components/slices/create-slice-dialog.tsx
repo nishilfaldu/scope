@@ -31,7 +31,7 @@ export function CreateSliceDialog({
       description={
         createdSlice
           ? "Copy these credentials now. The slice secret will not be shown again."
-          : "Choose the accounts this agent can use, then set its access rules."
+          : undefined
       }
       content={
         createdSlice ? (

@@ -12,7 +12,6 @@ export function SliceListCard() {
   return (
     <ContentCard
       title="Slices"
-      description="Create a time-boxed slice and choose which connected apps its agent can request."
       action={
         <CreateSliceDialog>
           {({ openModal }) => (

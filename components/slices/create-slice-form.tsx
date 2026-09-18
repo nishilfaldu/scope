@@ -87,8 +87,7 @@ export function CreateSliceForm({
     <form.AppForm>
       <form.Form>
         <section className="space-y-3">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <p className="text-sm text-muted-foreground">Only apps with a connected account can be added.</p>
+          <div className="flex flex-wrap items-start justify-end gap-2">
             <Link href="/connections" className="text-sm font-medium text-primary underline-offset-4 hover:underline">Manage connections</Link>
           </div>
           <form.AppField
@@ -107,7 +106,6 @@ export function CreateSliceForm({
             ) : (
               <div className="rounded-xl border border-dashed p-5 text-sm">
                 <p className="font-medium">No connected apps on this page</p>
-                <p className="mt-1 text-muted-foreground">Connect an account to make its app available here.</p>
                 <Link href="/connections" className="mt-3 inline-block font-medium text-primary underline-offset-4 hover:underline">Go to Connections</Link>
               </div>
             )}
@@ -122,10 +120,7 @@ export function CreateSliceForm({
           {(apps) => <AccountBindings compact apps={apps} selected={selected} onChange={(app, ids) => setSelected((current) => ({ ...current, [app]: ids }))} />}
         </form.Subscribe>
         <section className="space-y-4 border-t pt-5">
-          <div>
-            <h3 className="font-medium">Access rules</h3>
-            <p className="text-sm text-muted-foreground">Choose how long this slice lasts and whether token requests need approval.</p>
-          </div>
+          <h3 className="font-medium">Access rules</h3>
           <div className="grid gap-4 sm:grid-cols-2">
             <form.AppField name="name">
               {(field) => <field.TextField label="Name (optional)" placeholder="e.g. PR agent" maxLength={80} />}

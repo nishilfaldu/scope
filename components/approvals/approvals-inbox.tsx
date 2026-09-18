@@ -33,10 +33,7 @@ export function ApprovalsInbox() {
     <BoardShell title="Approvals">
       <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
         <div className="px-4 lg:px-6">
-          <ContentCard
-            title="Access requests"
-            description="Approve agent onboarding links and approve-gated credential mints. Slice secrets and provider tokens are claimed by the agent over HTTPS — never pasted in chat."
-          >
+          <ContentCard title="Access requests">
             {livePending === undefined ? (
               <div className="space-y-3 p-6">
                 <Skeleton className="h-16 w-full" />
@@ -46,7 +43,6 @@ export function ApprovalsInbox() {
               <div className="p-6">
                 <EmptyState
                   title="No pending approvals"
-                  description="When an agent creates an access request or needs an approve-gated mint, it shows up here (and via the approval URL)."
                   icon={
                     <HugeiconsIcon icon={Notification01Icon} strokeWidth={2} />
                   }

@@ -138,7 +138,6 @@ export function SlicesTable() {
       empty={
         <EmptyState
           title="No slices"
-          description="Create a slice for an agent."
           icon={<HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} />}
         />
       }

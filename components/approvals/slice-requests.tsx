@@ -33,10 +33,7 @@ export function SliceRequests({ sliceId }: { sliceId: string }) {
   }
 
   return (
-    <ContentCard
-      title="Recent credential requests"
-      description="Approval-gated mint history for this slice."
-    >
+    <ContentCard title="Recent credential requests">
       <ul className="divide-y">
         {requests.map((request) => {
           const status = request.expiresAt <= now &&

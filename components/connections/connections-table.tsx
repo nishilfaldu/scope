@@ -103,10 +103,7 @@ function ConnectionRow({
         </CollapsibleTrigger>
       </div>
       <CollapsibleContent className="border-t bg-muted/20">
-        <div className="flex items-center justify-between gap-3 px-6 py-3">
-          <p className="text-sm text-muted-foreground">
-            {count === 0 ? "No accounts connected yet." : "Connected accounts"}
-          </p>
+        <div className="flex items-center justify-end gap-3 px-6 py-3">
           <Button
             variant="outline"
             size="sm"

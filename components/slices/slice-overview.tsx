@@ -48,7 +48,6 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
     <div className="flex flex-col gap-4">
       <ContentCard
         title={slice.name}
-        description="Status, credentials, mint policy, and apps from this slice."
         action={
           isActive ? (
             <Button

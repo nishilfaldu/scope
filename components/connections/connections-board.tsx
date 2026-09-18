@@ -73,10 +73,7 @@ export function ConnectionsBoard() {
         ) : null}
 
         <div className="px-4 lg:px-6">
-          <ContentCard
-            title="Connections"
-            description="Connect an account before adding its apps to a slice."
-          >
+          <ContentCard title="Connections">
             <ConnectionsTable />
           </ContentCard>
         </div>
