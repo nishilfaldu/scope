@@ -16,10 +16,11 @@ export function bindingsFor(apps: readonly AppId[], selected: AccountSelection):
   return apps.flatMap((app) => selected[app] ? [{ app, connectionId: selected[app] }] : []);
 }
 
-export function AccountBindings({ apps, selected, onChange }: {
+export function AccountBindings({ apps, selected, onChange, compact = false }: {
   apps: readonly AppId[];
   selected: AccountSelection;
   onChange: (app: AppId, id: Id<"connections">) => void;
+  compact?: boolean;
 }) {
   const [page, setPage] = useState(0);
   const [connecting, setConnecting] = useState<AppId | null>(null);
@@ -51,17 +52,17 @@ export function AccountBindings({ apps, selected, onChange }: {
     }
   }
   return <div className="space-y-3">
-    <p className="text-sm font-medium">Accounts for this slice ({chosen} of {apps.length} selected)</p>
+    <p className="text-sm font-medium">Accounts ({chosen} of {apps.length} selected)</p>
     {visibleApps.map((app) => {
       const accounts = statuses?.find((entry) => entry.app === app)?.accounts ?? [];
-      return <div key={app} className="space-y-1 text-sm">
-        <div><span className="font-medium">{APP_LABELS[app]}</span><p className="text-muted-foreground">{APP_PERMISSIONS[app]}</p></div>
+      return <div key={app} className={compact ? "grid gap-2 rounded-lg border p-3 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:items-center" : "space-y-1 text-sm"}>
+        <div><span className="font-medium">{APP_LABELS[app]}</span>{!compact ? <p className="text-muted-foreground">{APP_PERMISSIONS[app]}</p> : null}</div>
         <select aria-label={`${APP_LABELS[app]} account`} className="w-full rounded-md border bg-background px-3 py-2" value={selected[app] ?? ""} onChange={(event) => onChange(app, event.target.value as Id<"connections">)} required>
           <option value="" disabled>{statuses === undefined ? "Loading accounts…" : accounts.length ? "Choose an account" : "Connect an account first"}</option>
           {accounts.map((account) => <option key={account.id} value={account.id}>{account.login}</option>)}
         </select>
-        {statuses !== undefined && accounts.length === 0 ? <Button type="button" variant="outline" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Connect {APP_LABELS[app]}</Button> : null}
-        {statuses !== undefined && accounts.length > 0 ? <Button type="button" variant="ghost" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Add another account</Button> : null}
+        {!compact && statuses !== undefined && accounts.length === 0 ? <Button type="button" variant="outline" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Connect {APP_LABELS[app]}</Button> : null}
+        {!compact && statuses !== undefined && accounts.length > 0 ? <Button type="button" variant="ghost" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Add another account</Button> : null}
       </div>;
     })}
     {apps.length > PAGE_SIZE ? <div className="flex items-center gap-2">
