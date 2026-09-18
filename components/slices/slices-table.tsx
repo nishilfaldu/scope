@@ -1,23 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import {
-  Copy01Icon,
   Delete02Icon,
-  File01Icon,
   PlusSignIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { FunctionReturnType } from "convex/server";
 
 import { api } from "@/convex/_generated/api";
-import {
-  ActionsMenu,
-  type ActionsMenuItem,
-} from "@/components/shared/actions-menu";
 import { ConvexPagination } from "@/components/shared/convex-pagination";
 import {
   DataTable,
@@ -25,7 +18,7 @@ import {
 } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "@/components/ui/toast";
+import { Button } from "@/components/ui/button";
 import { useCursorPagination } from "@/hooks/use-cursor-pagination";
 import { effectiveSliceStatus, formatRemaining, STATUS_LABELS } from "@/lib/capabilities";
 import { useNow } from "@/hooks/use-now";
@@ -38,7 +31,6 @@ type Slice = FunctionReturnType<
 const PAGE_SIZE = 10;
 
 export function SlicesTable() {
-  const router = useRouter();
   const now = useNow();
   const { paginationOpts, canPrevious, goNext, goPrevious } =
     useCursorPagination(PAGE_SIZE);
@@ -50,18 +42,6 @@ export function SlicesTable() {
     { successMessage: "Slice revoked" },
   );
   const [revokingId, setRevokingId] = useState<string | null>(null);
-
-  async function handleCopy(label: string, value: string) {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.add({ title: `${label} copied`, type: "success" });
-    } catch {
-      toast.add({
-        title: `Could not copy ${label.toLowerCase()}`,
-        type: "error",
-      });
-    }
-  }
 
   async function handleRevoke(sliceToken: string) {
     setRevokingId(sliceToken);
@@ -112,36 +92,24 @@ export function SlicesTable() {
       ),
     },
     {
-      id: "actions",
-      header: () => <span className="sr-only">Actions</span>,
-      cell: ({ row: { original: slice } }) => {
-        const items: ActionsMenuItem[] = [
-          {
-            id: "view",
-            label: "View",
-            icon: File01Icon,
-            onSelect: () => router.push(`/slices/${slice._id}`),
-          },
-          {
-            id: "copy-token",
-            label: "Copy slice token",
-            icon: Copy01Icon,
-            onSelect: () => void handleCopy("Slice token", slice.token),
-          },
-        ];
-        if (effectiveSliceStatus(slice, now) === "active") {
-          items.push({
-            id: "revoke",
-            label: revokingId === slice.token ? "Revoking…" : "Revoke",
-            icon: Delete02Icon,
-            variant: "destructive",
-            disabled: revokingId === slice.token,
-            separatorBefore: true,
-            onSelect: () => void handleRevoke(slice.token),
-          });
-        }
-        return <ActionsMenu items={items} />;
-      },
+      id: "revoke",
+      header: "Revoke",
+      cell: ({ row: { original: slice } }) =>
+        effectiveSliceStatus(slice, now) === "active" ? (
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            disabled={revokingId !== null}
+            onClick={() => void handleRevoke(slice.token)}
+            aria-label={`Revoke ${slice.name}`}
+          >
+            <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} />
+            {revokingId === slice.token ? "Revoking…" : "Revoke"}
+          </Button>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
   ];
 
