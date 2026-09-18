@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CONNECTION_APPS, APP_CONNECT_URL, type AppId } from "@/lib/connections";
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 10;
 
 function appIcon(app: AppId) {
   if (["gmail", "calendar", "drive", "docs", "sheets"].includes(app)) return GoogleIcon;
