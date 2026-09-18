@@ -21,6 +21,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
@@ -61,17 +62,21 @@ type Row = (typeof CONNECTION_APPS)[number] & {
 
 function ConnectionRow({
   app,
+  searchTerm,
   busy,
   onConnect,
   onDisconnect,
 }: {
   app: Row;
+  searchTerm: string;
   busy: boolean;
   onConnect: (app: AppId) => void;
   onDisconnect: (app: AppId, connectionId: Id<"connections">) => void;
 }) {
   const [open, setOpen] = useState(false);
   const count = app.accounts?.length;
+  const matchedAccount = searchTerm ? app.accounts?.find((account) =>
+    account.login.toLocaleLowerCase().includes(searchTerm)) : null;
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="border-b last:border-b-0">
@@ -85,7 +90,7 @@ function ConnectionRow({
           </span>
           <span className="min-w-0 flex-1 sm:flex sm:items-baseline sm:gap-3">
             <span className="block font-medium">{app.name}</span>
-            <span className="block min-w-0 truncate text-sm text-muted-foreground sm:flex-1">{app.description}</span>
+            <span className="block min-w-0 truncate text-sm text-muted-foreground sm:flex-1">{matchedAccount?.login ?? app.description}</span>
           </span>
           <span className="shrink-0 text-sm text-muted-foreground">
             {count === undefined ? <Skeleton className="h-5 w-6 sm:w-16" /> : (
@@ -140,13 +145,17 @@ function ConnectionRow({
 
 export function ConnectionsTable() {
   const [page, setPage] = useState(0);
-  const visibleApps = CONNECTION_APPS.slice(
-    page * PAGE_SIZE,
-    (page + 1) * PAGE_SIZE,
-  );
+  const [search, setSearch] = useState("");
   const statuses = useQuery(api.tables.connections.queries.statusesForApps, {
-    apps: visibleApps.map((app) => app.id),
+    apps: CONNECTION_APPS.map((app) => app.id),
   });
+  const term = search.trim().toLocaleLowerCase();
+  const filteredApps = term ? CONNECTION_APPS.filter((app) =>
+    app.name.toLocaleLowerCase().includes(term) ||
+    app.description.toLocaleLowerCase().includes(term) ||
+    (statuses?.find((status) => status.app === app.id)?.accounts ?? [])
+      .some((account) => account.login.toLocaleLowerCase().includes(term))) : CONNECTION_APPS;
+  const visibleApps = filteredApps.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const disconnect = useAction(api.tables.connections.actions.disconnect);
   const startOAuth = useMutation(api.tables.oauthStates.mutations.start);
   const [busy, setBusy] = useState<string | null>(null);
@@ -181,20 +190,32 @@ export function ConnectionsTable() {
   }));
   return (
     <div>
+      <div className="border-b px-6 py-4">
+        <Input
+          type="search"
+          value={search}
+          onChange={(event) => { setSearch(event.target.value); setPage(0); }}
+          placeholder="Search apps or connected accounts"
+          aria-label="Search connections by app or account"
+          className="max-w-sm"
+        />
+      </div>
+      {rows.length === 0 ? <p role="status" className="p-6 text-sm text-muted-foreground">{statuses === undefined ? "Loading connections…" : "No apps or accounts match."}</p> : null}
       {rows.map((app) => (
         <ConnectionRow
           key={app.id}
           app={app}
+          searchTerm={term}
           busy={busy !== null}
           onConnect={(appId) => void connect(appId)}
           onDisconnect={(appId, connectionId) => void remove(appId, connectionId)}
         />
       ))}
-      {CONNECTION_APPS.length > PAGE_SIZE ? (
+      {filteredApps.length > PAGE_SIZE ? (
         <div className="border-t">
           <ConvexPagination
             canPrevious={page > 0}
-            canNext={(page + 1) * PAGE_SIZE < CONNECTION_APPS.length}
+            canNext={(page + 1) * PAGE_SIZE < filteredApps.length}
             onPrevious={() => setPage((current) => current - 1)}
             onNext={() => setPage((current) => current + 1)}
           />

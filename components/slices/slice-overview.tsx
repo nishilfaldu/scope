@@ -91,8 +91,8 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
             successMessage="Slice token copied"
           />
         </div>
-        <SliceApps sliceId={sliceId} />
       </ContentCard>
+      <SliceApps sliceId={sliceId} />
       <SliceRequests sliceId={sliceId} />
     </div>
   );
