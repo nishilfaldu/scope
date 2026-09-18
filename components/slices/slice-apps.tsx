@@ -9,16 +9,19 @@ import { api } from "@/convex/_generated/api";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ALL_APPS, APP_LABELS, effectiveSliceStatus, type AppId } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 import { useNow } from "@/hooks/use-now";
 
 const PAGE_SIZE = 50;
+const INITIAL_ACCOUNTS = 4;
 
 export function SliceApps({ sliceId }: { sliceId: string }) {
   const now = useNow();
   const [page, setPage] = useState(0);
+  const [accountSearch, setAccountSearch] = useState("");
   const visibleApps = ALL_APPS.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const statuses = useQuery(api.tables.connections.queries.statusesForApps, { apps: visibleApps });
   const bindings = useQuery(api.tables.slices.queries.bindingsForApps, {
@@ -75,9 +78,18 @@ export function SliceApps({ sliceId }: { sliceId: string }) {
     };
   });
   const allowedGroups = groups.filter((group) => group.allowed.length > 0);
-  const availableGroups = groups.filter((group) => group.available.length > 0);
   const allowedCount = allowedGroups.reduce((count, group) => count + group.allowed.length, 0);
-  const availableCount = availableGroups.reduce((count, group) => count + group.available.length, 0);
+  const availableAccounts = groups.flatMap(({ app, available }) =>
+    available.map((account) => ({ app, ...account })));
+  const availableCount = availableAccounts.length;
+  const search = availableCount > INITIAL_ACCOUNTS ? accountSearch.trim().toLocaleLowerCase() : "";
+  const shownAccounts = search
+    ? availableAccounts.filter(({ app, login }) =>
+        APP_LABELS[app].toLocaleLowerCase().includes(search) || login.toLocaleLowerCase().includes(search))
+    : availableAccounts.slice(0, INITIAL_ACCOUNTS);
+  const shownGroups = visibleApps.map((app) => ({
+    app, accounts: shownAccounts.filter((account) => account.app === app),
+  })).filter((group) => group.accounts.length > 0);
   const active = effectiveSliceStatus(slice, now) === "active";
 
   return (
@@ -112,19 +124,31 @@ export function SliceApps({ sliceId }: { sliceId: string }) {
           <CollapsibleTrigger asChild>
             <Button type="button" variant="outline" size="sm">Add accounts ({availableCount})</Button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="mt-3 grid gap-3 sm:grid-cols-2">
-            {availableGroups.map(({ app, available }) => <div key={app} className="space-y-2 rounded-xl border px-3 py-3">
-              <p className="text-sm font-medium">{APP_LABELS[app]}</p>
-              {available.map((account) => <div key={account.id} className="flex items-center justify-between gap-3">
-                <span className="min-w-0 break-all text-xs">{account.login}</span>
-                <Switch
-                  checked={false}
-                  disabled={isToggling}
-                  onCheckedChange={() => handleToggle(app, account.id, true)}
-                  aria-label={`Allow ${APP_LABELS[app]} for ${account.login} on this slice`}
-                />
-              </div>)}
-            </div>)}
+          <CollapsibleContent className="mt-3 space-y-3">
+            {availableCount > INITIAL_ACCOUNTS ? <Input
+              type="search"
+              value={accountSearch}
+              onChange={(event) => setAccountSearch(event.target.value)}
+              placeholder="Search connected accounts"
+              aria-label="Search connected accounts by app or login"
+              className="max-w-sm"
+            /> : null}
+            {shownGroups.length === 0 ? <p role="status" className="text-sm text-muted-foreground">No matching connected accounts.</p> : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {shownGroups.map(({ app, accounts }) => <div key={app} className="space-y-2 rounded-xl border px-3 py-3">
+                  <p className="text-sm font-medium">{APP_LABELS[app]}</p>
+                  {accounts.map((account) => <div key={account.id} className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 break-all text-xs">{account.login}</span>
+                    <Switch
+                      checked={false}
+                      disabled={isToggling}
+                      onCheckedChange={() => handleToggle(app, account.id, true)}
+                      aria-label={`Allow ${APP_LABELS[app]} for ${account.login} on this slice`}
+                    />
+                  </div>)}
+                </div>)}
+              </div>
+            )}
           </CollapsibleContent>
         </Collapsible> : null}
       </>}

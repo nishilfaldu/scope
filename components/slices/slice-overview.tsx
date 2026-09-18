@@ -65,7 +65,7 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
           ) : null
         }
       >
-        <div className="grid gap-4 p-6 sm:grid-cols-2">
+        <div className="grid gap-4 p-6 sm:grid-cols-3">
           <div>
             <p className="text-xs text-muted-foreground">Status</p>
             <Badge
@@ -85,8 +85,6 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
             <p className="text-xs text-muted-foreground">Expires</p>
             <div className="mt-1 text-sm"><ExpiryTime expiresAt={slice.expiresAt} now={now} stacked /></div>
           </div>
-        </div>
-        <div className="px-6 pb-4">
           <CopyableField
             label="Slice token"
             value={slice.token}
