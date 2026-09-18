@@ -14,7 +14,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { ConvexPagination } from "@/components/shared/convex-pagination";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -96,13 +95,6 @@ function ConnectionRow({
               </>
             )}
           </span>
-          {count === undefined ? (
-            <Skeleton className="h-5 w-16 shrink-0" />
-          ) : (
-            <Badge variant={count > 0 ? "outline" : "secondary"} className="shrink-0">
-              {count > 0 ? "Connected" : "Off"}
-            </Badge>
-          )}
           <HugeiconsIcon
             icon={ArrowDown01Icon}
             strokeWidth={2}
