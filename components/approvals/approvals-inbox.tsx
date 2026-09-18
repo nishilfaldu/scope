@@ -2,45 +2,43 @@
 
 import { useNow } from "@/hooks/use-now";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { useQuery } from "convex/react";
 import { Notification01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { api } from "@/convex/_generated/api";
+import { ApprovalRow } from "@/components/approvals/approval-row";
 import { BoardShell } from "@/components/layout/board-shell";
 import { ContentCard } from "@/components/shared/content-card";
 import { EmptyState } from "@/components/shared/empty-state";
-import { ExpiryTime } from "@/components/shared/expiry-time";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { APP_LABELS } from "@/lib/capabilities";
-import { useErrorCatchingMutation } from "@/lib/errors";
 
-export function ApprovalsInbox() {
-  const router = useRouter();
+export function ApprovalsInbox({ requestToken }: { requestToken?: string }) {
   const pending = useQuery(api.tables.slices.accessRequests.listPending);
-  const [decide, isDeciding] = useErrorCatchingMutation(
-    api.tables.slices.accessRequests.decide,
+  const linked = useQuery(
+    api.tables.slices.accessRequests.getByPublicToken,
+    requestToken ? { publicToken: requestToken } : "skip",
   );
   const now = useNow();
-  const livePending = pending?.filter((request) => request.expiresAt > now);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const livePending = pending?.filter((request) => request.expiresAt > now) ?? [];
+  const requests = linked && !livePending.some((request) => request._id === linked._id)
+    ? [linked, ...livePending] : livePending;
 
   return (
     <BoardShell title="Approvals">
       <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
         <div className="px-4 lg:px-6">
           <ContentCard title="Access requests">
-            {livePending === undefined ? (
+            {pending === undefined || (requestToken && linked === undefined) ? (
               <div className="space-y-3 p-6">
                 <Skeleton className="h-16 w-full" />
                 <Skeleton className="h-16 w-full" />
               </div>
-            ) : livePending.length === 0 ? (
+            ) : requestToken && linked === null ? (
+              <div className="p-6">
+                <EmptyState title="Request unavailable" description="This link is invalid or belongs to another account." />
+              </div>
+            ) : requests.length === 0 ? (
               <div className="p-6">
                 <EmptyState
                   title="No pending approvals"
@@ -51,69 +49,9 @@ export function ApprovalsInbox() {
               </div>
             ) : (
               <ul className="divide-y">
-                {livePending.map((request) => (
-                  <li
-                    key={request._id}
-                    className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Link
-                          href={`/approvals/${request.publicToken}`}
-                          className="font-medium underline-offset-4 hover:underline"
-                        >
-                          {request.sliceName}
-                        </Link>
-                        <Badge variant="outline">{request.kind}</Badge>
-                        {request.kind === "mint" && request.app ? (
-                          <Badge variant="secondary">
-                            {APP_LABELS[request.app]}
-                          </Badge>
-                        ) : null}
-                        {request.kind === "onboarding" && request.apps
-                          ? request.apps.slice(0, 3).map((app) => (
-                              <Badge key={app} variant="secondary">
-                                {APP_LABELS[app]}
-                              </Badge>
-                            ))
-                          : null}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {request.kind === "mint" && request.accountLogin
-                          ? `${request.accountLogin} · `
-                          : ""}
-                        Expires <ExpiryTime expiresAt={request.expiresAt} now={now} />
-                        {request.reason ? ` · ${request.reason}` : ""}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        disabled={isDeciding || busyId === request._id}
-                        onClick={() => {
-                          if (request.kind === "onboarding") { router.push(`/approvals/${request.publicToken}`); return; }
-                          setBusyId(request._id);
-                          void decide({ requestId: request._id, decision: "approved" }).finally(() => setBusyId(null));
-                        }}
-                      >
-                        {request.kind === "onboarding" ? "Choose accounts" : "Approve"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={isDeciding || busyId === request._id}
-                        onClick={() => {
-                          setBusyId(request._id);
-                          void decide({
-                            requestId: request._id,
-                            decision: "denied",
-                          }).finally(() => setBusyId(null));
-                        }}
-                      >
-                        Deny
-                      </Button>
-                    </div>
-                  </li>
+                {requests.map((request) => (
+                  <ApprovalRow key={request._id} request={request} now={now}
+                    initiallyOpen={request.publicToken === requestToken} />
                 ))}
               </ul>
             )}

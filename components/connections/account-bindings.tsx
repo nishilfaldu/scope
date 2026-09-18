@@ -17,11 +17,12 @@ export function bindingsFor(apps: readonly AppId[], selected: AccountSelection):
   return apps.flatMap((app) => (selected[app] ?? []).map((connectionId) => ({ app, connectionId })));
 }
 
-export function AccountBindings({ apps, selected, onChange, compact = false }: {
+export function AccountBindings({ apps, selected, onChange, compact = false, allowConnect = true }: {
   apps: readonly AppId[];
   selected: AccountSelection;
   onChange: (app: AppId, ids: Id<"connections">[]) => void;
   compact?: boolean;
+  allowConnect?: boolean;
 }) {
   const [page, setPage] = useState(0);
   const [connecting, setConnecting] = useState<AppId | null>(null);
@@ -70,8 +71,8 @@ export function AccountBindings({ apps, selected, onChange, compact = false }: {
             </div>;
           })}
         </div>
-        {!compact && statuses !== undefined && accounts.length === 0 ? <Button type="button" variant="outline" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Connect {APP_LABELS[app]}</Button> : null}
-        {!compact && statuses !== undefined && accounts.length > 0 ? <Button type="button" variant="ghost" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Add another account</Button> : null}
+        {allowConnect && !compact && statuses !== undefined && accounts.length === 0 ? <Button type="button" variant="outline" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Connect {APP_LABELS[app]}</Button> : null}
+        {allowConnect && !compact && statuses !== undefined && accounts.length > 0 ? <Button type="button" variant="ghost" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Add another account</Button> : null}
       </div>;
     })}
     {apps.length > PAGE_SIZE ? <div className="flex items-center gap-2">

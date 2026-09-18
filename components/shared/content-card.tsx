@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { cn } from "cn";
 
 import {
   Card,
@@ -28,7 +29,9 @@ export function ContentCard({
   return (
     <Card size={size}>
       <CardHeader className={headerBorder ? "border-b" : undefined}>
-        <CardTitle className={titleClassName}>{title}</CardTitle>
+        <CardTitle className={cn(action && "self-center", titleClassName)}>
+          {title}
+        </CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}
         {action ? <CardAction>{action}</CardAction> : null}
       </CardHeader>

@@ -1,14 +1,14 @@
 "use client";
 
-import type { ReactNode } from "react";
 import {
+  type ColumnDef,
   createPaginatedRowModel,
+  type RowData,
   rowPaginationFeature,
   tableFeatures,
   useTable,
-  type ColumnDef,
-  type RowData,
 } from "@tanstack/react-table";
+import type { ReactNode } from "react";
 
 import { DataTableSkeletonRows } from "@/components/shared/data-table-skeleton-rows";
 import { EmptyState } from "@/components/shared/empty-state";
