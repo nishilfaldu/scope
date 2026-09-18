@@ -5,6 +5,13 @@ import { useMutation, useQuery } from "convex/react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { APP_LABELS, APP_PERMISSIONS, type AppId } from "@/lib/capabilities";
 import { APP_CONNECT_URL } from "@/lib/connections";
 
@@ -57,10 +64,24 @@ export function AccountBindings({ apps, selected, onChange, compact = false }: {
       const accounts = statuses?.find((entry) => entry.app === app)?.accounts ?? [];
       return <div key={app} className={compact ? "grid gap-2 rounded-lg border p-3 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:items-center" : "space-y-1 text-sm"}>
         <div><span className="font-medium">{APP_LABELS[app]}</span>{!compact ? <p className="text-muted-foreground">{APP_PERMISSIONS[app]}</p> : null}</div>
-        <select aria-label={`${APP_LABELS[app]} account`} className="w-full rounded-md border bg-background px-3 py-2" value={selected[app] ?? ""} onChange={(event) => onChange(app, event.target.value as Id<"connections">)} required>
-          <option value="" disabled>{statuses === undefined ? "Loading accounts…" : accounts.length ? "Choose an account" : "Connect an account first"}</option>
-          {accounts.map((account) => <option key={account.id} value={account.id}>{account.login}</option>)}
-        </select>
+        <Select
+          items={accounts.map((account) => ({ value: account.id, label: account.login }))}
+          value={selected[app] ?? null}
+          onValueChange={(value) => {
+            if (value != null) onChange(app, value as Id<"connections">);
+          }}
+        >
+          <SelectTrigger
+            aria-label={`${APP_LABELS[app]} account`}
+            className="w-full min-w-0"
+            disabled={statuses === undefined || accounts.length === 0}
+          >
+            <SelectValue placeholder={statuses === undefined ? "Loading accounts…" : accounts.length ? "Choose an account" : "Connect an account first"} />
+          </SelectTrigger>
+          <SelectContent>
+            {accounts.map((account) => <SelectItem key={account.id} value={account.id}>{account.login}</SelectItem>)}
+          </SelectContent>
+        </Select>
         {!compact && statuses !== undefined && accounts.length === 0 ? <Button type="button" variant="outline" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Connect {APP_LABELS[app]}</Button> : null}
         {!compact && statuses !== undefined && accounts.length > 0 ? <Button type="button" variant="ghost" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Add another account</Button> : null}
       </div>;

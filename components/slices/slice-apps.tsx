@@ -8,6 +8,13 @@ import { api } from "@/convex/_generated/api";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ALL_APPS, APP_LABELS, effectiveSliceStatus, type AppId } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 import { useNow } from "@/hooks/use-now";
@@ -82,7 +89,22 @@ export function SliceApps({ sliceId }: { sliceId: string }) {
               <div>
                 <p className="text-sm">{APP_LABELS[app]}</p>
                 <p className="text-xs text-muted-foreground">{allowed ? (boundLogin ? `Using ${boundLogin}` : "Selected account disconnected") : (connected ? "Account connected" : "Account not connected")}</p>
-                {!allowed && accounts.length > 1 ? <select className="mt-1 max-w-48 rounded border bg-background px-2 py-1 text-xs" value={selected[app] ?? ""} onChange={(event) => setSelected((current) => ({ ...current, [app]: event.target.value as Id<"connections"> }))} aria-label={`Account for ${APP_LABELS[app]}`}><option value="" disabled>Choose an account</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.login}</option>)}</select> : null}
+                {!allowed && accounts.length > 1 ? (
+                  <Select
+                    items={accounts.map((account) => ({ value: account.id, label: account.login }))}
+                    value={selected[app] ?? null}
+                    onValueChange={(value) => {
+                      if (value != null) setSelected((current) => ({ ...current, [app]: value as Id<"connections"> }));
+                    }}
+                  >
+                    <SelectTrigger size="sm" className="mt-1 w-full max-w-48" aria-label={`Account for ${APP_LABELS[app]}`}>
+                      <SelectValue placeholder="Choose an account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((account) => <SelectItem key={account.id} value={account.id}>{account.login}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                ) : null}
               </div>
               <Switch
                 checked={allowed}
