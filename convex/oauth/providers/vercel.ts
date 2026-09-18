@@ -8,6 +8,7 @@ import {
   refreshedFromPayload,
 } from "../shared";
 import type { ProviderOAuth } from "../types";
+import { VERCEL_SCOPES } from "../../domain/capabilities";
 
 function credentials() {
   const clientId = envTrimmed(env.VERCEL_CLIENT_ID);
@@ -67,7 +68,7 @@ export const vercel: ProviderOAuth = {
     authorize.searchParams.set("response_type", "code");
     authorize.searchParams.set(
       "scope",
-      "openid email profile offline_access",
+      VERCEL_SCOPES,
     );
     authorize.searchParams.set("state", state);
     return { url: authorize.toString() };

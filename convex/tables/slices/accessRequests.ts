@@ -5,6 +5,7 @@ import { authenticatedMutation, authenticatedQuery } from "../../functions";
 import { appValidator } from "../../domain/apps";
 import { requestStatusValidator, requestKindValidator, effectiveRequestStatus } from "../../domain/requests";
 import { encryptToken } from "../../lib/tokenEncryption";
+import { internal } from "../../_generated/api";
 import { bindingFor, createSlice, validatedBindings } from "./helpers";
 
 export const CLAIM_WINDOW_MS = 60 * 1000;
@@ -112,6 +113,7 @@ export const decide = authenticatedMutation({
     if (args.decision === "denied") {
       await ctx.db.patch("accessRequests", request._id, {
         status: "denied", decidedAt: now, userId: ctx.userId,
+        ...(request.kind === "onboarding" ? { claimHandleCipher: "" } : {}),
       });
       return null;
     }
@@ -138,6 +140,7 @@ export const decide = authenticatedMutation({
       issuedSliceSecretCipher: await encryptToken(created.sliceSecret),
       expiresAt: now + CLAIM_WINDOW_MS,
     });
+    await ctx.scheduler.runAfter(CLAIM_WINDOW_MS, internal.tables.slices.onboardingAccess.clearClaimSecret, { requestId: request._id });
     return null;
   },
 });

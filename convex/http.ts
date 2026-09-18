@@ -9,6 +9,7 @@ import {
   httpCreateAccessRequestHandler,
 } from "./http/httpAccessRequestHandlers";
 import { discoverySpec } from "./http/contracts";
+import { PUBLIC_CAPABILITIES } from "./domain/capabilities";
 import {
   httpOAuthCallback,
   httpOAuthConnect,
@@ -29,6 +30,14 @@ http.route({
   path: "/",
   method: "GET",
   handler: httpAction(async () => jsonResponse(200, discoverySpec)),
+});
+http.route({
+  path: "/api/capabilities",
+  method: "GET",
+  handler: httpAction(async () => jsonResponse(200, {
+    apps: PUBLIC_CAPABILITIES,
+    revocation: "Stopping a slice blocks future mints; already issued provider tokens may work until upstream expiry or revocation.",
+  })),
 });
 
 // Agent-initiated onboarding (approval link)

@@ -40,12 +40,6 @@ export function httpOAuthCallback(app: AppId) {
     const code = requestUrl.searchParams.get("code");
     const state = requestUrl.searchParams.get("state");
 
-    if (errorParam) {
-      return redirectTo(returnFallback, app, "denied");
-    }
-    if (typeof code !== "string") {
-      return redirectTo(returnFallback, app, "error", "code");
-    }
     if (typeof state !== "string") {
       return redirectTo(returnFallback, app, "error", "state");
     }
@@ -55,6 +49,12 @@ export function httpOAuthCallback(app: AppId) {
     );
     if (!origin || origin.app !== app) {
       return redirectTo(returnFallback, app, "error", "state");
+    }
+    if (errorParam) {
+      return redirectTo(origin.returnTo, app, "denied");
+    }
+    if (typeof code !== "string") {
+      return redirectTo(origin.returnTo, app, "error", "code");
     }
 
     let grant;

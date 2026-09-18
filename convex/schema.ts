@@ -46,7 +46,8 @@ export default defineSchema({
 
   // Access requests cover two kinds:
   // - onboarding: agent-initiated grant request before any slice exists.
-  //   Approve creates the slice; claim returns sliceToken/sliceSecret once.
+  //   Approve creates the slice; claim can repeat with the private handle during
+  //   a short recovery window, after which encrypted handoff material is cleared.
   // - mint: operator approval for a short-lived credential on an existing slice.
   accessRequests: defineTable(v.union(
     v.object({
@@ -60,6 +61,8 @@ export default defineSchema({
       reason: v.optional(v.string()),
       issuedSliceToken: v.optional(v.string()),
       issuedSliceSecretCipher: v.optional(v.string()),
+      idempotencyKeyHash: v.optional(v.string()),
+      claimHandleCipher: v.optional(v.string()),
     }),
     v.object({
       ...requestBase,
@@ -71,6 +74,7 @@ export default defineSchema({
   ))
     .index("by_public_token", ["publicToken"])
     .index("by_claim_secret_hash", ["claimSecretHash"])
+    .index("by_idempotency_key_hash", ["idempotencyKeyHash"])
     .index("by_slice", ["sliceId"])
     .index("by_slice_status_expiresAt", ["sliceId", "status", "expiresAt"])
     .index("by_user_status_expiresAt", ["userId", "status", "expiresAt"])

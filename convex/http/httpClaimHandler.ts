@@ -3,6 +3,7 @@ import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { readObjectBody, requiredString } from "../lib/requests";
 import { errorResponse, jsonResponse } from "../lib/responses";
+import { AGENT_ERROR_GUIDANCE } from "../lib/errors";
 import { mintCredential } from "./mint";
 
 export const httpClaimHandler = httpAction(async (ctx, request) => {
@@ -23,7 +24,7 @@ export const httpClaimHandler = httpAction(async (ctx, request) => {
   if (decision.kind === "pending") {
     return jsonResponse(202, {
       error: "Operator approval required before this credential can be minted",
-      code: "APPROVAL_REQUIRED", requestId: decision.requestId,
+      code: "APPROVAL_REQUIRED", ...AGENT_ERROR_GUIDANCE.APPROVAL_REQUIRED, requestId: decision.requestId,
       status: decision.status, expiresAt: decision.expiresAt, app: decision.app,
     });
   }

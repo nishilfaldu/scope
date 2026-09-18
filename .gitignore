@@ -19,6 +19,7 @@
 
 # production
 /build
+/agent-client/dist/
 
 # misc
 .DS_Store

@@ -2,6 +2,7 @@ import { httpAction, env } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { readObjectBody, requiredString } from "../lib/requests";
 import { errorResponse, jsonResponse } from "../lib/responses";
+import { AGENT_ERROR_GUIDANCE } from "../lib/errors";
 import { parseBoardOrigin } from "./helpers";
 import { mintCredential } from "./mint";
 
@@ -29,7 +30,7 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
     if (!pending.ok) return errorResponse(pending.status, pending.reason, pending.code);
     const boardOrigin = parseBoardOrigin(env.BOARD_ORIGIN);
     return jsonResponse(202, {
-      error: pending.reason, code: pending.code, requestId: pending.requestId,
+      error: pending.reason, code: pending.code, ...AGENT_ERROR_GUIDANCE.APPROVAL_REQUIRED, requestId: pending.requestId,
       status: pending.status, expiresAt: pending.expiresAt, app: decision.app,
       approvalUrl: `${boardOrigin}/approvals/${pending.publicToken}`,
     });

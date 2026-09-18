@@ -13,6 +13,16 @@ Agent Passport lets a user connect OAuth accounts and give an agent a slice that
 
 The vault never hands out its stored access token or refresh token. Providers without a refresh-capable grant cannot mint agent credentials and return `SHORT_LIVED_UNAVAILABLE`.
 
+## Agent-first experience
+
+The agent reads `GET /api/capabilities` to discover app IDs, provider names, and plain-language permissions before requesting access. The catalog distinguishes fixed Google OAuth scopes from provider/configuration-dependent grants. Agent names and reasons are supplied by the requester and are not verified identities.
+
+An agent calls `POST /api/access-requests`, sends only the returned `approvalUrl` to the operator, and stores its private `claimHandle` in its own runtime. The operator signs in through that link, connects missing apps directly from the account picker, returns to the same approval, chooses an account per app, and approves or denies. The agent then claims its slice privately and resumes. See [`agent-client/README.md`](agent-client/README.md) for the restart-safe Node client.
+
+Use a random, task-stable `Idempotency-Key` header (32–128 characters) when creating an access request. The same key and payload return the same pending or approved request and private handle. A different payload with that key returns `IDEMPOTENCY_CONFLICT`. Treat this key as a secret because a caller holding it can recover the claim handle while the request is live. Agent errors include stable `code`, `retryable`, and `nextAction` fields. A denied or expired request needs a fresh task and key.
+
+The board emphasizes agent-initiated approvals. Manual slice creation remains available for operators who need it.
+
 ## Connect and account selection
 
 The signed-in operator connects apps from `/connections`. Each connection is keyed by user, provider, app, and the provider's stable account ID. The display login is never used as an account key. Slice creation and onboarding approval page through apps and account choices, retaining selections across pages. One account must be chosen for every selected app.
@@ -31,7 +41,7 @@ Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` once. Disconnect removes local
 
 1. The agent calls `POST /api/access-requests` with `agentName`, `apps`, `ttlMs`, and optional `reason`.
 2. The response contains a chat-safe `approvalUrl` and a private `claimHandle`. The operator opens the URL and approves or denies. Opening the link alone does not assign it to an operator.
-3. The agent polls `POST /api/access-requests/status` and claims slice credentials once with `POST /api/access-requests/claim`.
+3. The agent polls `POST /api/access-requests/status` and claims slice credentials with `POST /api/access-requests/claim`. The same private handle may repeat the claim within the one-minute handoff window to recover from a crash before local storage completes; encrypted handoff material is cleared after that window.
 4. The agent sends `sliceToken`, `sliceSecret`, and one `app` to `POST /api/credentials`. An auto slice mints immediately. An approve slice returns a request ID and approval URL; after approval the agent calls `POST /api/credentials/claim`.
 
 A failed provider refresh leaves an approved mint request available to retry until its claim window expires. The backend consumes the request only after refresh and the final slice, account, and binding check succeed.

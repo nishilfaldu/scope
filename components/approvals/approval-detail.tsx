@@ -3,7 +3,7 @@
 import { useNow } from "@/hooks/use-now";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { PassportIcon } from "@hugeicons/core-free-icons";
@@ -27,13 +27,27 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { APP_LABELS, formatRemaining } from "@/lib/capabilities";
+import { APP_LABELS, APP_PERMISSIONS, formatRemaining } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
+import { ALL_APPS, CONNECT_ERRORS } from "@/lib/connections";
 
 function appSummary(apps: readonly AppId[]) {
   const visible = apps.slice(0, 3).map((app) => APP_LABELS[app] ?? app);
   const remaining = apps.length - visible.length;
   return visible.join(", ") + (remaining > 0 ? ` and ${remaining} more` : "");
+}
+
+function readConnectionResult(): string | null {
+  if (typeof window === "undefined") return null;
+  const url = new URL(window.location.href);
+  for (const app of ALL_APPS) {
+    const status = url.searchParams.get(app);
+    if (!status) continue;
+    return status === "connected" ? `${APP_LABELS[app]} connected. Choose its account below.`
+      : status === "denied" ? `${APP_LABELS[app]} connection was denied.`
+        : CONNECT_ERRORS[url.searchParams.get("reason") ?? ""] ?? `${APP_LABELS[app]} connection failed. Try again.`;
+  }
+  return null;
 }
 
 function ApprovalGate({ publicToken }: { publicToken: string }) {
@@ -107,7 +121,7 @@ function ApprovalGate({ publicToken }: { publicToken: string }) {
                 ? "Ask the agent for a fresh approval link."
                 : decided
                   ? `This request is ${summary.status}. Sign in only if you need the board inbox.`
-                  : `${agentLabel} is requesting access to ${appsLabel}. Sign in to review and approve — secrets stay out of chat.`}
+                  : `${agentLabel} is requesting access to ${appsLabel}. The requester supplied this agent name. Sign in to review the accounts and permissions.`}
             </CardDescription>
           </div>
         </CardHeader>
@@ -147,8 +161,18 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
     api.tables.slices.accessRequests.decide,
   );
   const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">>>>({});
+  const [connectionResult] = useState(readConnectionResult);
   const now = useNow();
   const request = bound;
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    for (const app of ALL_APPS) {
+      url.searchParams.delete(app);
+    }
+    url.searchParams.delete("reason");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}`);
+  }, []);
 
   return (
     <BoardShell title="Approve access">
@@ -176,6 +200,7 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
           ) : request.status === "expired" || request.expiresAt <= now ? (
             <ContentCard title="Link expired">
               <div className="space-y-4 p-6">
+                {connectionResult ? <p role="status" className="rounded-md border p-3 text-sm">{connectionResult}</p> : null}
                 <EmptyState
                   title="This approval link expired"
                   description="Ask the agent to create a new access request and open the fresh link."
@@ -219,15 +244,8 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                       </p>
                     ) : null}
                     {request.reason ? <p>Reason: {request.reason}</p> : null}
-                    <p>
-                      Need the apps connected first?{" "}
-                      <Link
-                        href="/connections"
-                        className="underline-offset-4 hover:underline"
-                      >
-                        Open connections
-                      </Link>
-                    </p>
+                    <p>Agent name is supplied by the requester and is not independently verified.</p>
+                    <p>Approving lets the agent mint provider tokens for the accounts you choose. Turning off this slice later stops future mints; issued tokens may remain usable until upstream expiry.</p>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center gap-2">
@@ -241,6 +259,7 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                         Account: {request.accountLogin}
                       </span>
                     ) : null}
+                    {request.app ? <p className="text-sm text-muted-foreground">{APP_PERMISSIONS[request.app]}</p> : null}
                     {request.sliceId ? (
                       <Link
                         href={`/slices/${request.sliceId}`}

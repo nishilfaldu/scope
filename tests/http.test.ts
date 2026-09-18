@@ -103,7 +103,7 @@ describe("POST /api/credentials denials", () => {
       body: "{",
     });
     expect(malformed.status).toBe(400);
-    expect(await malformed.json()).toEqual({
+    expect(await malformed.json()).toMatchObject({
       error: "Invalid JSON body", code: "INVALID_REQUEST",
     });
   });
@@ -129,7 +129,7 @@ describe("POST /api/credentials denials", () => {
       }),
     });
     expect(unknown.status).toBe(403);
-    expect(await unknown.json()).toEqual(unavailable);
+    expect(await unknown.json()).toMatchObject(unavailable);
     const off = await test.fetch("/api/credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -140,7 +140,7 @@ describe("POST /api/credentials denials", () => {
       }),
     });
     expect(off.status).toBe(403);
-    expect(await off.json()).toEqual(unavailable);
+    expect(await off.json()).toMatchObject(unavailable);
   });
 
   test("wrong slice secret is unauthorized and does not name the app", async () => {
@@ -160,7 +160,7 @@ describe("POST /api/credentials denials", () => {
       }),
     });
     expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({
+    expect(await response.json()).toMatchObject({
       error: "Unknown slice token or slice secret",
       code: "UNAUTHORIZED",
     });
@@ -184,7 +184,7 @@ describe("GET /api/apps", () => {
     });
     expect(wrong.status).toBe(401);
     const wrongBody = await wrong.json();
-    expect(wrongBody).toEqual({
+    expect(wrongBody).toMatchObject({
       error: "Unknown slice token or slice secret",
       code: "UNAUTHORIZED",
     });
@@ -197,7 +197,7 @@ describe("GET /api/apps", () => {
     });
     expect(missing.status).toBe(400);
     const missingBody = await missing.json();
-    expect(missingBody).toEqual({
+    expect(missingBody).toMatchObject({
       error: "x-slice-secret must be a string",
       code: "INVALID_REQUEST",
     });

@@ -115,14 +115,17 @@ describe("agent onboarding approval link", () => {
     expect(sliceCreds.apps).toEqual(["github"]);
     expect(sliceCreds.name).toBe("Chat agent");
 
-    // Second claim is single-use.
+    // The private handle can recover the same handoff during its short claim window.
     const second = await test.fetch("/api/access-requests/claim", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ claimHandle: body.claimHandle }),
     });
-    expect(second.status).toBe(403);
-    expect(await second.json()).toMatchObject({ code: "APPROVAL_EXPIRED" });
+    expect(second.status).toBe(200);
+    expect(await second.json()).toMatchObject({
+      sliceToken: sliceCreds.sliceToken,
+      sliceSecret: sliceCreds.sliceSecret,
+    });
 
     // Claimed slice works for short-lived mint path without user pasting ss_ earlier.
     vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");

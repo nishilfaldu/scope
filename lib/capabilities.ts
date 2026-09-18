@@ -3,40 +3,16 @@ import {
   providerForApp,
   type AppId,
 } from "../convex/domain/apps";
+import { CAPABILITY_LABELS, CAPABILITY_SUMMARIES } from "../convex/domain/capabilities";
 
 export { ALL_APPS, providerForApp, type AppId };
 
 export type MintPolicy = "auto" | "approve";
 
-export const APP_LABELS: Record<AppId, string> = {
-  github: "GitHub",
-  gmail: "Gmail",
-  calendar: "Calendar",
-  drive: "Drive",
-  docs: "Docs",
-  sheets: "Sheets",
-  slack: "Slack",
-  airtable: "Airtable",
-  notion: "Notion",
-  linear: "Linear",
-  vercel: "Vercel",
-  zoom: "Zoom",
-};
+export const APP_LABELS = CAPABILITY_LABELS;
+export const APP_PERMISSIONS = CAPABILITY_SUMMARIES;
 
-export const APP_HINTS: Record<AppId, string> = {
-  github: "Create a short-lived GitHub token. The agent calls GitHub directly.",
-  gmail: "Gmail via the Google login.",
-  calendar: "Calendar via the Google login.",
-  drive: "Drive via the Google login.",
-  docs: "Docs via the Google login.",
-  sheets: "Sheets via the Google login.",
-  slack: "Create a short-lived Slack token. The agent calls Slack directly.",
-  airtable: "Bases, schemas, records, and comments.",
-  notion: "Pages and databases shared with the Notion connection.",
-  linear: "Issues, projects, teams, and workflow updates.",
-  vercel: "Projects, deployments, domains, and team profile.",
-  zoom: "Meetings, webinars, recordings, and account profile.",
-};
+export const APP_HINTS = CAPABILITY_SUMMARIES;
 
 export const TTL_OPTIONS = [
   { label: "15 minutes", ttlMs: 15 * 60 * 1000 },
