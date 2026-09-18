@@ -1,39 +1,160 @@
 "use client";
 
+import {
+  ArrowDown01Icon,
+  Chart01Icon,
+  CloudIcon,
+  DatabaseIcon,
+  GithubIcon,
+  GoogleIcon,
+  Notion01Icon,
+  SlackIcon,
+} from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
-import { DatabaseIcon, GithubIcon, GoogleIcon, SlackIcon, Notion01Icon, Chart01Icon, CloudIcon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { ConvexPagination } from "@/components/shared/convex-pagination";
-import { DataTable, type DataTableColumn } from "@/components/shared/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CONNECTION_APPS, APP_CONNECT_URL, type AppId } from "@/lib/connections";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import {
+  APP_CONNECT_URL,
+  type AppId,
+  CONNECTION_APPS,
+} from "@/lib/connections";
 
 const PAGE_SIZE = 10;
 
 function appIcon(app: AppId) {
-  if (["gmail", "calendar", "drive", "docs", "sheets"].includes(app)) return GoogleIcon;
+  if (["gmail", "calendar", "drive", "docs", "sheets"].includes(app))
+    return GoogleIcon;
   switch (app) {
-    case "github": return GithubIcon;
-    case "slack": return SlackIcon;
-    case "airtable": case "zoom": return DatabaseIcon;
-    case "notion": return Notion01Icon;
-    case "linear": return Chart01Icon;
-    case "vercel": return CloudIcon;
-    default: return GoogleIcon;
+    case "github":
+      return GithubIcon;
+    case "slack":
+      return SlackIcon;
+    case "airtable":
+    case "zoom":
+      return DatabaseIcon;
+    case "notion":
+      return Notion01Icon;
+    case "linear":
+      return Chart01Icon;
+    case "vercel":
+      return CloudIcon;
+    default:
+      return GoogleIcon;
   }
 }
 
-type Row = (typeof CONNECTION_APPS)[number] & { accounts: { id: Id<"connections">; login: string; providerUserId: string }[] | undefined };
+type Row = (typeof CONNECTION_APPS)[number] & {
+  accounts:
+    | { id: Id<"connections">; login: string; providerUserId: string }[]
+    | undefined;
+};
+
+function ConnectionRow({
+  app,
+  busy,
+  onConnect,
+  onDisconnect,
+}: {
+  app: Row;
+  busy: boolean;
+  onConnect: (app: AppId) => void;
+  onDisconnect: (app: AppId, connectionId: Id<"connections">) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const count = app.accounts?.length;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="border-b last:border-b-0">
+      <div className="flex items-center gap-2 px-4 py-2 sm:gap-3">
+        <CollapsibleTrigger
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl px-2 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`${open ? "Hide" : "Show"} ${app.name} accounts`}
+        >
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted">
+            <HugeiconsIcon icon={appIcon(app.id)} strokeWidth={2} />
+          </span>
+          <span className="min-w-0 flex-1 sm:flex sm:items-baseline sm:gap-3">
+            <span className="block font-medium">{app.name}</span>
+            <span className="block min-w-0 truncate text-sm text-muted-foreground sm:flex-1">{app.description}</span>
+          </span>
+          <span className="shrink-0 text-sm text-muted-foreground">
+            {count === undefined ? <Skeleton className="h-5 w-6 sm:w-16" /> : (
+              <>
+                <span className="sm:hidden">{count}</span>
+                <span className="hidden sm:inline">{count} {count === 1 ? "account" : "accounts"}</span>
+              </>
+            )}
+          </span>
+          {count === undefined ? (
+            <Skeleton className="h-5 w-16 shrink-0" />
+          ) : (
+            <Badge variant={count > 0 ? "outline" : "secondary"} className="shrink-0">
+              {count > 0 ? "Connected" : "Off"}
+            </Badge>
+          )}
+          <HugeiconsIcon
+            icon={ArrowDown01Icon}
+            strokeWidth={2}
+            className={`size-4 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </CollapsibleTrigger>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={count === undefined || busy}
+          onClick={() => onConnect(app.id)}
+        >
+          {count ? "Add account" : "Connect"}
+        </Button>
+      </div>
+      <CollapsibleContent className="border-t bg-muted/20">
+        {count === 0 ? (
+          <p className="px-6 py-4 text-sm text-muted-foreground">No accounts connected yet.</p>
+        ) : count === undefined ? (
+          <Skeleton className="mx-6 my-4 h-8 w-48" />
+        ) : (
+          <ul className="divide-y px-6">
+            {app.accounts?.map((account) => (
+              <li key={account.id} className="flex min-w-0 items-center justify-between gap-3 py-3 pl-9">
+                <span className="min-w-0 break-all text-sm">{account.login}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => onDisconnect(app.id, account.id)}
+                  aria-label={`Disconnect ${account.login} from ${app.name}`}
+                >
+                  Disconnect
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 export function ConnectionsTable() {
   const [page, setPage] = useState(0);
-  const visibleApps = CONNECTION_APPS.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const statuses = useQuery(api.tables.connections.queries.statusesForApps, { apps: visibleApps.map((app) => app.id) });
+  const visibleApps = CONNECTION_APPS.slice(
+    page * PAGE_SIZE,
+    (page + 1) * PAGE_SIZE,
+  );
+  const statuses = useQuery(api.tables.connections.queries.statusesForApps, {
+    apps: visibleApps.map((app) => app.id),
+  });
   const disconnect = useAction(api.tables.connections.actions.disconnect);
   const startOAuth = useMutation(api.tables.oauthStates.mutations.start);
   const [busy, setBusy] = useState<string | null>(null);
@@ -41,48 +162,52 @@ export function ConnectionsTable() {
   async function connect(app: AppId) {
     setBusy(app);
     try {
-      const { state } = await startOAuth({ app, returnTo: `${window.location.origin}/connections` });
+      const { state } = await startOAuth({
+        app,
+        returnTo: `${window.location.origin}/connections`,
+      });
       const url = new URL(APP_CONNECT_URL[app]);
       url.searchParams.set("state", state);
       window.location.assign(url.toString());
-    } finally { setBusy(null); }
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function remove(app: AppId, connectionId: Id<"connections">) {
     setBusy(connectionId);
-    try { await disconnect({ app, connectionId }); }
-    finally { setBusy(null); }
+    try {
+      await disconnect({ app, connectionId });
+    } finally {
+      setBusy(null);
+    }
   }
 
   const rows: Row[] = visibleApps.map((app) => ({
-    ...app, accounts: statuses?.find((status) => status.app === app.id)?.accounts,
+    ...app,
+    accounts: statuses?.find((status) => status.app === app.id)?.accounts,
   }));
-  const columns: DataTableColumn<Row>[] = [
-    { id: "app", header: "App", cell: ({ row: { original: row } }) => (
-      <div className="flex items-start gap-3">
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted"><HugeiconsIcon icon={appIcon(row.id)} strokeWidth={2} /></div>
-        <div><p className="font-medium">{row.name}</p><p className="text-sm text-muted-foreground">{row.description}</p></div>
-      </div>
-    ) },
-    { id: "accounts", header: "Connected accounts", cell: ({ row: { original: row } }) =>
-      row.accounts === undefined ? <Skeleton className="h-5 w-28" /> : row.accounts.length === 0 ? <span className="text-muted-foreground">—</span> :
-      <div className="space-y-2">{row.accounts.map((account) => <div key={account.id} className="flex items-center gap-2">
-        <span className="break-all text-sm">{account.login}</span>
-        <Button variant="outline" size="sm" disabled={busy !== null} onClick={() => void remove(row.id, account.id)} aria-label={`Disconnect ${account.login} from ${row.name}`}>Disconnect</Button>
-      </div>)}</div>
-    },
-    { id: "status", header: "Status", cell: ({ row: { original: row } }) => row.accounts === undefined ? <Skeleton className="h-5 w-20" /> : <Badge variant={row.accounts.length ? "outline" : "secondary"}>{row.accounts.length ? `${row.accounts.length} connected` : "Off"}</Badge> },
-    { id: "connect", header: () => <span className="sr-only">Connect</span>, cell: ({ row: { original: row } }) => <Button variant="outline" size="sm" disabled={row.accounts === undefined || busy !== null} onClick={() => void connect(row.id)}>{row.accounts?.length ? "Add account" : "Connect"}</Button> },
-  ];
-  return <DataTable
-    data={rows}
-    columns={columns}
-    getRowKey={(row) => row.id}
-    pagination={CONNECTION_APPS.length > PAGE_SIZE ? <ConvexPagination
-      canPrevious={page > 0}
-      canNext={(page + 1) * PAGE_SIZE < CONNECTION_APPS.length}
-      onPrevious={() => setPage((current) => current - 1)}
-      onNext={() => setPage((current) => current + 1)}
-    /> : undefined}
-  />;
+  return (
+    <div>
+      {rows.map((app) => (
+        <ConnectionRow
+          key={app.id}
+          app={app}
+          busy={busy !== null}
+          onConnect={(appId) => void connect(appId)}
+          onDisconnect={(appId, connectionId) => void remove(appId, connectionId)}
+        />
+      ))}
+      {CONNECTION_APPS.length > PAGE_SIZE ? (
+        <div className="border-t">
+          <ConvexPagination
+            canPrevious={page > 0}
+            canNext={(page + 1) * PAGE_SIZE < CONNECTION_APPS.length}
+            onPrevious={() => setPage((current) => current - 1)}
+            onNext={() => setPage((current) => current + 1)}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
 }
