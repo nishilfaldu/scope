@@ -9,9 +9,10 @@ const routes = [
   { method: "POST", path: "/api/access-requests", summary: "Start agent onboarding; returns an approval URL and private claim handle." },
   { method: "POST", path: "/api/access-requests/status", summary: "Poll onboarding with the claim handle." },
   { method: "POST", path: "/api/access-requests/claim", summary: "Claim approved slice credentials once." },
-  { method: "POST", path: "/api/credentials", summary: "Mint a provider-native token for one allowed app." },
+  { method: "POST", path: "/api/credentials", summary: "Mint a provider-native token for an allowed app and account binding." },
   { method: "POST", path: "/api/credentials/claim", summary: "Claim an approved credential request." },
   { method: "GET", path: "/api/apps", summary: "Discover available apps for a slice." },
+  { method: "GET", path: "/api/accounts", summary: "List the accounts allowed for one app on a slice; requires an app query parameter and returns binding IDs." },
   ...ALL_APPS.flatMap((app) => [
     { method: "GET", path: `/api/${app}/connect`, summary: `Start ${app} OAuth.` },
     { method: "GET", path: `/api/${app}/callback`, summary: `${app} OAuth callback.` },

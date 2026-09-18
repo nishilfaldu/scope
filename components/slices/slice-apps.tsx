@@ -8,13 +8,6 @@ import { api } from "@/convex/_generated/api";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ALL_APPS, APP_LABELS, effectiveSliceStatus, type AppId } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 import { useNow } from "@/hooks/use-now";
@@ -29,10 +22,9 @@ export function SliceApps({ sliceId }: { sliceId: string }) {
   const bindings = useQuery(api.tables.slices.queries.bindingsForApps, {
     sliceId: sliceId as Id<"slices">, apps: visibleApps,
   });
-  const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">>>>({});
   const slice = useQuery(api.tables.slices.queries.get, { sliceId: sliceId });
-  const [setApp, isToggling] = useErrorCatchingMutation(
-    api.tables.slices.mutations.setApp,
+  const [setBinding, isToggling] = useErrorCatchingMutation(
+    api.tables.slices.mutations.setBinding,
     {
       successMessage: (args) =>
         args.enabled
@@ -41,12 +33,9 @@ export function SliceApps({ sliceId }: { sliceId: string }) {
     },
   );
 
-  function handleToggle(app: AppId, enabled: boolean) {
+  function handleToggle(app: AppId, connectionId: Id<"connections">, enabled: boolean) {
     if (!slice) return;
-    const accounts = statuses?.find((status) => status.app === app)?.accounts ?? [];
-    const connectionId = selected[app] ?? (accounts.length === 1 ? accounts[0].id : undefined);
-    if (enabled && !connectionId) return;
-    void setApp({
+    void setBinding({
       connectionId,
       sliceToken: slice.token,
       app,
@@ -75,43 +64,32 @@ export function SliceApps({ sliceId }: { sliceId: string }) {
       <p className="text-xs text-muted-foreground">App permissions</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         {visibleApps.map((app) => {
-          const allowed = bindings?.some((binding) => binding.app === app) ?? false;
-          const connected = (statuses?.find((status) => status.app === app)?.connected ?? false);
           const accounts = statuses?.find((status) => status.app === app)?.accounts ?? [];
-          const connectionId = selected[app] ?? (accounts.length === 1 ? accounts[0].id : undefined);
-          const boundId = bindings?.find((binding) => binding.app === app)?.connectionId;
-          const boundLogin = accounts.find((account) => account.id === boundId)?.login;
+          const bound = bindings?.filter((binding) => binding.app === app) ?? [];
+          const disconnected = bound.filter((binding) => !accounts.some((account) => account.id === binding.connectionId));
           return (
             <div
               key={app}
-              className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
+              className="space-y-2 rounded-xl border px-3 py-3"
             >
-              <div>
-                <p className="text-sm">{APP_LABELS[app]}</p>
-                <p className="text-xs text-muted-foreground">{allowed ? (boundLogin ? `Using ${boundLogin}` : "Selected account disconnected") : (connected ? "Account connected" : "Account not connected")}</p>
-                {!allowed && accounts.length > 1 ? (
-                  <Select
-                    items={accounts.map((account) => ({ value: account.id, label: account.login }))}
-                    value={selected[app] ?? null}
-                    onValueChange={(value) => {
-                      if (value != null) setSelected((current) => ({ ...current, [app]: value as Id<"connections"> }));
-                    }}
-                  >
-                    <SelectTrigger size="sm" className="mt-1 w-full max-w-48" aria-label={`Account for ${APP_LABELS[app]}`}>
-                      <SelectValue placeholder="Choose an account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accounts.map((account) => <SelectItem key={account.id} value={account.id}>{account.login}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                ) : null}
-              </div>
-              <Switch
-                checked={allowed}
-                disabled={bindings === undefined || effectiveSliceStatus(slice, now) !== "active" || isToggling || !connected || (!allowed && !connectionId)}
-                onCheckedChange={(checked) => handleToggle(app, checked)}
-                aria-label={`Allow ${APP_LABELS[app]} on this slice`}
-              />
+              <p className="text-sm font-medium">{APP_LABELS[app]}</p>
+              {accounts.length === 0 && disconnected.length === 0 ? <p className="text-xs text-muted-foreground">No connected accounts</p> : null}
+              {accounts.map((account) => {
+                const allowed = bound.some((binding) => binding.connectionId === account.id);
+                return <div key={account.id} className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 break-all text-xs">{account.login}</span>
+                  <Switch
+                    checked={allowed}
+                    disabled={bindings === undefined || effectiveSliceStatus(slice, now) !== "active" || isToggling}
+                    onCheckedChange={(checked) => handleToggle(app, account.id, checked)}
+                    aria-label={`Allow ${APP_LABELS[app]} for ${account.login} on this slice`}
+                  />
+                </div>;
+              })}
+              {disconnected.map((binding) => <div key={binding._id} className="flex items-center justify-between gap-3">
+                <span className="text-xs text-muted-foreground">Disconnected account</span>
+                <Switch checked disabled={effectiveSliceStatus(slice, now) !== "active" || isToggling} onCheckedChange={() => handleToggle(app, binding.connectionId, false)} aria-label={`Remove disconnected ${APP_LABELS[app]} account from this slice`} />
+              </div>)}
             </div>
           );
         })}

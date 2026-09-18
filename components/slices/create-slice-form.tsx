@@ -45,7 +45,7 @@ export function CreateSliceForm({
   const [page, setPage] = useState(0);
   const visibleApps = ALL_APPS.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const statuses = useQuery(api.tables.connections.queries.statusesForApps, { apps: visibleApps });
-  const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">>>>({});
+  const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">[]>>>({});
   const connectedApps = new Set(statuses?.filter((status) => status.connected).map((status) => status.app));
   const appOptions = visibleApps.filter((app) => connectedApps.has(app)).map((app) => ({
     value: app,
@@ -119,7 +119,7 @@ export function CreateSliceForm({
           </div> : null}
         </section>
         <form.Subscribe selector={(state) => state.values.apps}>
-          {(apps) => <AccountBindings compact apps={apps} selected={selected} onChange={(app, id) => setSelected((current) => ({ ...current, [app]: id }))} />}
+          {(apps) => <AccountBindings compact apps={apps} selected={selected} onChange={(app, ids) => setSelected((current) => ({ ...current, [app]: ids }))} />}
         </form.Subscribe>
         <section className="space-y-4 border-t pt-5">
           <div>
@@ -142,7 +142,7 @@ export function CreateSliceForm({
           <form.Subscribe selector={(state) => state.values.apps}>
             {(apps) => <>
               <span className="text-sm text-muted-foreground">{apps.length} {apps.length === 1 ? "app" : "apps"} selected</span>
-              <form.SubmitButton pendingLabel="Creating…" disabled={apps.length === 0 || bindingsFor(apps, selected).length !== apps.length}>
+              <form.SubmitButton pendingLabel="Creating…" disabled={apps.length === 0 || apps.some((app) => !selected[app]?.length)}>
                 Create slice
               </form.SubmitButton>
             </>}

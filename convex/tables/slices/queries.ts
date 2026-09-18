@@ -5,17 +5,18 @@ import {
 import { v } from "convex/values";
 import { internalQuery } from "../../_generated/server";
 import { authenticatedQuery } from "../../functions";
-import { appValidator, ALL_APPS } from "../../domain/apps";
+import { appValidator, ALL_APPS, isAppId } from "../../domain/apps";
+import { selectedConnection } from "../connections/helpers";
 import {
   denyResultValidator,
+  APP_UNAVAILABLE_ERROR,
   EXPIRED_ERROR,
   REVOKED_ERROR,
   UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
 import {
-  bindingFor,
+  bindingsForApp,
   effectiveStatus,
-  MAX_SLICE_APPS,
   sliceBySecret,
   withoutSecretHash,
 } from "./helpers";
@@ -72,14 +73,13 @@ export const bindingsForApps = authenticatedQuery({
   args: { sliceId: v.id("slices"), apps: v.array(appValidator) },
   returns: v.array(binding),
   handler: async (ctx, args) => {
-    if (args.apps.length > 50) throw new Error("Request at most 50 apps");
     const slice = await ctx.db.get("slices", args.sliceId);
     if (!slice || slice.userId !== ctx.userId)
       throw new Error("Slice not found");
     const rows = await Promise.all(
-      args.apps.map((app) => bindingFor(ctx, slice._id, app)),
+      args.apps.map((app) => bindingsForApp(ctx, slice._id, app)),
     );
-    return rows.filter((row): row is NonNullable<typeof row> => row !== null);
+    return rows.flat();
   },
 });
 
@@ -119,8 +119,8 @@ export const discoverApps = internalQuery({
       };
     const bindings = await ctx.db
       .query("sliceBindings")
-      .withIndex("by_slice", (q) => q.eq("sliceId", slice._id))
-      .take(MAX_SLICE_APPS + 1);
+      .withIndex("by_slice_app_connectionId", (q) => q.eq("sliceId", slice._id))
+      .collect();
     const bound = new Set(bindings.map((item) => item.app));
     const connected = new Set((await Promise.all(bindings.map(async (item) => {
       const account = await ctx.db.get("connections", item.connectionId);
@@ -136,5 +136,36 @@ export const discoverApps = internalQuery({
         connected: connected.has(app),
       })),
     };
+  },
+});
+
+export const discoverAccounts = internalQuery({
+  args: { sliceToken: v.string(), sliceSecret: v.string(), app: v.string(), now: v.number() },
+  returns: v.union(
+    v.object({
+      ok: v.literal(true), app: appValidator,
+      accounts: v.array(v.object({ bindingId: v.id("sliceBindings"), login: v.string() })),
+    }),
+    denyResultValidator,
+  ),
+  handler: async (ctx, args) => {
+    const slice = await sliceBySecret(ctx, args);
+    if (!slice) return { ok: false as const, status: 401, reason: UNAUTHORIZED_ERROR, code: "UNAUTHORIZED" as const };
+    const status = effectiveStatus(slice, args.now);
+    if (status !== "active") return {
+      ok: false as const, status: 403,
+      reason: status === "revoked" ? REVOKED_ERROR : EXPIRED_ERROR,
+      code: status === "revoked" ? "REVOKED" as const : "EXPIRED" as const,
+    };
+    const app = args.app;
+    if (!isAppId(app)) return {
+      ok: false as const, status: 403, reason: APP_UNAVAILABLE_ERROR, code: "APP_UNAVAILABLE" as const,
+    };
+    const bindings = await bindingsForApp(ctx, slice._id, app);
+    const accounts = (await Promise.all(bindings.map(async (binding) => {
+      const connection = await selectedConnection(ctx, slice.userId, app, binding.connectionId);
+      return connection ? { bindingId: binding._id, login: connection.login } : null;
+    }))).filter((account): account is NonNullable<typeof account> => account !== null);
+    return { ok: true as const, app, accounts };
   },
 });

@@ -90,6 +90,66 @@ describe("Google disconnect", () => {
 });
 
 describe("multi-account bindings", () => {
+  test("one slice allows two Gmail accounts and pins approval to the chosen binding", async () => {
+    const test = t();
+    const userId = await test.run(async (ctx) =>
+      ctx.db.insert("users", { name: "Owner", email: "owner@example.com" }));
+    for (const [providerUserId, login] of [["sub-x", "x@gmail.com"], ["sub-y", "y@gmail.com"]] as const) {
+      await test.mutation(internal.tables.connections.mutations.saveConnection, {
+        userId, provider: "google", app: "gmail", providerUserId, login,
+        accessToken: `access-${providerUserId}`, refreshToken: `refresh-${providerUserId}`,
+      });
+    }
+    const backend = test.withIdentity({ subject: `${userId}|session-1` });
+    const accounts = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail"] }))[0].accounts;
+    const created = await backend.mutation(api.tables.slices.mutations.create, {
+      name: "Both accounts", ttlMs: 60_000, apps: ["gmail"], mintPolicy: "approve",
+      bindings: accounts.map((account) => ({ app: "gmail" as const, connectionId: account.id })),
+    });
+    const discovered = await test.query(internal.tables.slices.queries.discoverAccounts, {
+      sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "gmail", now: Date.now(),
+    });
+    if (!discovered.ok) throw new Error("expected account discovery");
+    expect(discovered.accounts.map((account) => account.login)).toEqual(["x@gmail.com", "y@gmail.com"]);
+    const ambiguous = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
+      sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "gmail",
+    });
+    expect(ambiguous).toMatchObject({ ok: false, code: "ACCOUNT_SELECTION_REQUIRED" });
+    const selected = discovered.accounts[1];
+    const authorized = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
+      sliceToken: created.sliceToken, sliceSecret: created.sliceSecret,
+      app: "gmail", bindingId: selected.bindingId,
+    });
+    expect(authorized).toMatchObject({ ok: true, bindingId: selected.bindingId, connectionId: accounts[1].id });
+    if (!authorized.ok) throw new Error("expected authorization");
+    const pending = await test.mutation(internal.tables.slices.accessRequestsMint.createPending, {
+      sliceId: authorized.sliceId, userId, app: "gmail", bindingId: authorized.bindingId,
+    });
+    if (!pending.ok) throw new Error("expected pending request");
+    const boardRequest = await backend.query(api.tables.slices.accessRequests.getByPublicToken, {
+      publicToken: pending.publicToken,
+    });
+    expect(boardRequest?.accountLogin).toBe("y@gmail.com");
+    await backend.mutation(api.tables.slices.accessRequests.decide, {
+      requestId: pending.requestId, decision: "approved",
+    });
+    const claim = await test.mutation(internal.tables.slices.accessRequestsMint.resolveClaim, {
+      sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, requestId: pending.requestId,
+    });
+    expect(claim).toMatchObject({ ok: true, bindingId: selected.bindingId, connectionId: accounts[1].id });
+    await backend.mutation(api.tables.slices.mutations.setBinding, {
+      sliceToken: created.sliceToken, app: "gmail", connectionId: accounts[1].id, enabled: false,
+    });
+    const unavailable = await test.mutation(internal.tables.slices.accessRequestsMint.resolveClaim, {
+      sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, requestId: pending.requestId,
+    });
+    expect(unavailable).toMatchObject({ ok: false, code: "APP_UNAVAILABLE" });
+    const stillAllowed = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {
+      sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "gmail",
+    });
+    expect(stillAllowed).toMatchObject({ ok: true, connectionId: accounts[0].id });
+  });
+
   test("rejects a connection without a stable provider account ID", async () => {
     const test = t();
     const userId = await test.run(async (ctx) =>
@@ -124,14 +184,14 @@ describe("multi-account bindings", () => {
     expect(page.map((entry) => [entry.app, entry.accounts.length])).toEqual([["gmail", 2], ["calendar", 0]]);
     await expect(backend.mutation(api.tables.slices.mutations.create, {
       name: "Agent", ttlMs: 60_000, apps: ["gmail"],
-    })).rejects.toThrow("Select one account");
+    })).rejects.toThrow("Select at least one account");
     const selected = status.accounts[1].id;
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Agent", ttlMs: 60_000, apps: ["gmail"], bindings: [{ app: "gmail", connectionId: selected }],
     });
     const grant = await test.run(async (ctx) => {
       const slice = await ctx.db.get("slices", created.id);
-      return slice ? await ctx.db.query("sliceBindings").withIndex("by_slice", (q) => q.eq("sliceId", slice._id)).collect() : null;
+      return slice ? await ctx.db.query("sliceBindings").withIndex("by_slice_app_connectionId", (q) => q.eq("sliceId", slice._id)).collect() : null;
     });
     expect(grant).toMatchObject([{ app: "gmail", connectionId: selected }]);
     const authorized = await test.mutation(internal.tables.slices.credentials.authorizeCreate, {

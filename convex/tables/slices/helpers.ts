@@ -7,7 +7,6 @@ import { connectionsForApp, selectedConnection } from "../connections/helpers";
 
 export const MAX_SLICE_NAME = 80;
 export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-export const MAX_SLICE_APPS = 1500;
 export type MintPolicy = "auto" | "approve";
 export type Binding = { app: AppId; connectionId: Id<"connections"> };
 
@@ -31,29 +30,41 @@ export async function sliceBySecret(ctx: QueryCtx | MutationCtx, args: { sliceTo
   return slice;
 }
 
-export async function bindingFor(ctx: Pick<QueryCtx | MutationCtx, "db">, sliceId: Id<"slices">, app: AppId) {
+export async function bindingsForApp(ctx: Pick<QueryCtx | MutationCtx, "db">, sliceId: Id<"slices">, app: AppId) {
   return await ctx.db.query("sliceBindings")
-    .withIndex("by_slice_app", (q) => q.eq("sliceId", sliceId).eq("app", app)).unique();
+    .withIndex("by_slice_app_connectionId", (q) => q.eq("sliceId", sliceId).eq("app", app)).collect();
+}
+
+export async function bindingForConnection(
+  ctx: Pick<QueryCtx | MutationCtx, "db">, sliceId: Id<"slices">,
+  app: AppId, connectionId: Id<"connections">,
+) {
+  return await ctx.db.query("sliceBindings")
+    .withIndex("by_slice_app_connectionId", (q) =>
+      q.eq("sliceId", sliceId).eq("app", app).eq("connectionId", connectionId)).unique();
 }
 
 export async function validatedBindings(
-  ctx: Pick<MutationCtx, "db">, userId: Id<"users">, apps: AppId[], chosen?: Binding[],
+  ctx: Pick<MutationCtx, "db">, userId: Id<"users">,
+  chosen: Binding[] | undefined, requestedApps?: AppId[],
 ): Promise<Binding[]> {
-  if (apps.length === 0 || apps.length > MAX_SLICE_APPS || new Set(apps).size !== apps.length) {
-    throw new Error(`Select between 1 and ${MAX_SLICE_APPS} distinct apps`);
-  }
-  const bindings = chosen ?? (await Promise.all(apps.map(async (app) => {
+  const bindings = chosen ?? (await Promise.all((requestedApps ?? []).map(async (app) => {
     const accounts = await connectionsForApp(ctx, userId, app);
     return accounts.length === 1 ? { app, connectionId: accounts[0]._id } : null;
   }))).filter((binding): binding is Binding => binding !== null);
-  if (bindings.length !== apps.length || new Set(bindings.map((binding) => binding.app)).size !== apps.length) {
-    throw new Error("Select one account for each app");
+  if (bindings.length === 0) throw new Error("Select at least one account");
+  const keys = bindings.map((binding) => `${binding.app}:${binding.connectionId}`);
+  if (new Set(keys).size !== keys.length) throw new Error("Select each account only once");
+  if (requestedApps && (
+    new Set(requestedApps).size !== requestedApps.length ||
+    new Set(bindings.map((binding) => binding.app)).size !== requestedApps.length ||
+    bindings.some((binding) => !requestedApps.includes(binding.app))
+  )) {
+    throw new Error("Select at least one account for every requested app");
   }
-  const selected = new Map(bindings.map((binding) => [binding.app, binding.connectionId]));
-  await Promise.all(apps.map(async (app) => {
-    const connectionId = selected.get(app);
-    if (!connectionId || !await selectedConnection(ctx, userId, app, connectionId)) {
-      throw new Error(`Select a connected account for ${app}`);
+  await Promise.all(bindings.map(async (binding) => {
+    if (!await selectedConnection(ctx, userId, binding.app, binding.connectionId)) {
+      throw new Error(`Select a connected account for ${binding.app}`);
     }
   }));
   return bindings;
@@ -74,7 +85,7 @@ export async function createSlice(
   await Promise.all(args.bindings.map((binding) =>
     ctx.db.insert("sliceBindings", { sliceId: id, ...binding })));
   return { id, sliceToken: token, sliceSecret, expiresAt, name: args.name,
-    apps: args.bindings.map((binding) => binding.app), mintPolicy: args.mintPolicy };
+    apps: [...new Set(args.bindings.map((binding) => binding.app))], mintPolicy: args.mintPolicy };
 }
 
 export function denyCreate(status: number, reason: string, code: AgentErrorCode) {

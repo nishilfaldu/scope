@@ -6,8 +6,8 @@ Agent Passport lets a user connect OAuth accounts and give an agent a slice that
 
 - A **connection** stores one provider account's encrypted OAuth tokens. Google has separate Gmail, Calendar, Drive, Docs, and Sheets connections, each with its own consent scopes and callback. One user can connect multiple accounts to the same app.
 - A **slice** belongs to a user, has a token and secret, an expiry, a revocation state, and an `auto` or `approve` mint policy.
-- Each allowed app has one indexed **slice binding** that selects a connection. Bindings are separate rows so minting one app reads one binding and management can page through large slices. The model supports up to 1,500 bindings per slice.
-- An agent presents its slice token and secret to `POST /api/credentials`. The backend checks the slice and binding, refreshes the selected provider connection, checks permissions again, then returns the newly issued provider access token. Under `approve`, the operator first approves a one-time mint request.
+- Each allowed account has one indexed **slice binding** that selects a connection. A slice can allow several accounts for the same app. Bindings are separate rows; the slice does not store an array of apps or accounts.
+- An agent presents its slice token and secret to `POST /api/credentials`. When several accounts are allowed for an app, it chooses a `bindingId` from `GET /api/accounts?app=<app>`. The backend checks that exact binding, refreshes its provider connection, checks permissions again, then returns the newly issued provider access token. Under `approve`, the operator first approves a one-time mint request for that account.
 
 **Revocation boundary:** Revoking a slice or disconnecting an account immediately blocks *future* credential mints. An already issued provider-native access token remains usable until that provider expires or revokes it. Agent Passport does not proxy provider requests and cannot shorten an upstream token's lifetime. The credential response reports the provider's expiry, or `null` if the provider did not give one.
 
@@ -21,7 +21,7 @@ Use a random, task-stable `Idempotency-Key` header (32–128 characters) when cr
 
 ## Connect and account selection
 
-The signed-in operator connects apps from `/connections`. Each connection is keyed by user, provider, app, and the provider's stable account ID. The display login is never used as an account key. Slice creation and onboarding approval page through apps and account choices, retaining selections across pages. One account must be chosen for every selected app.
+The signed-in operator connects apps from `/connections`. Each connection is keyed by user, provider, app, and the provider's stable account ID. The display login is never used as an account key. Slice creation and onboarding approval page through apps and account choices, retaining selections across pages. At least one account must be chosen for every selected app; several may be chosen.
 
 For Google, register five redirects on the same OAuth client:
 
@@ -36,13 +36,13 @@ Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` once. Disconnect removes local
 ## Agent onboarding and minting
 
 1. The agent calls `POST /api/access-requests` with `agentName`, `apps`, `ttlMs`, and optional `reason`.
-2. The response contains a chat-safe `approvalUrl` and a private `claimHandle`. The operator opens the URL and approves or denies. Opening the link alone does not assign it to an operator.
+2. The response contains a chat-safe `approvalUrl` and a private `claimHandle`. The operator opens the URL, selects one or more accounts for each app, and approves or denies. Opening the link alone does not assign it to an operator.
 3. The agent polls `POST /api/access-requests/status` and claims slice credentials once with `POST /api/access-requests/claim`.
-4. The agent sends `sliceToken`, `sliceSecret`, and one `app` to `POST /api/credentials`. An auto slice mints immediately. An approve slice returns a request ID and approval URL; after approval the agent calls `POST /api/credentials/claim`.
+4. The agent calls `GET /api/accounts?app=<app>` with `x-slice-token` and `x-slice-secret` to see the accounts allowed for that app. It sends `sliceToken`, `sliceSecret`, `app`, and the chosen `bindingId` to `POST /api/credentials`. With a single allowed account, `bindingId` may be omitted. With several, omitting it returns `ACCOUNT_SELECTION_REQUIRED`. An auto slice mints immediately. An approve slice returns a request ID and approval URL for the exact account; after approval the agent calls `POST /api/credentials/claim`.
 
 A failed provider refresh leaves an approved mint request available to retry until its claim window expires. The backend consumes the request only after refresh and the final slice, account, and binding check succeed.
 
-`GET /` on the Convex HTTP origin lists routes. `GET /api/apps` reports app availability for a slice. Its `connected` flag means the slice's selected account for that app is still connected; unbound apps report `false`.
+`GET /` on the Convex HTTP origin lists routes. `GET /api/apps` reports app availability for a slice. Its `connected` flag means at least one account allowed by the slice is still connected; unbound apps report `false`. `GET /api/accounts?app=<app>` returns each available account's display login and opaque `bindingId`. If an account is removed from the slice while a mint is pending, that mint can no longer be claimed.
 
 ## Run it
 

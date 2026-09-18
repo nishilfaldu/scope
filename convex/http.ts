@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { httpAppsHandler } from "./http/httpAppsHandler";
+import { httpAccountsHandler } from "./http/httpAccountsHandler";
 import { httpClaimHandler } from "./http/httpClaimHandler";
 import { httpCredentialsHandler } from "./http/httpCredentialsHandler";
 import {
@@ -97,6 +98,8 @@ http.route({
   method: "GET",
   handler: httpAppsHandler,
 });
+http.route({ path: "/api/accounts", method: "OPTIONS", handler: optionsOk });
+http.route({ path: "/api/accounts", method: "GET", handler: httpAccountsHandler });
 
 // Health check
 http.route({

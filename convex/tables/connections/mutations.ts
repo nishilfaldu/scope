@@ -52,12 +52,6 @@ export const saveConnection = internalMutation({
       )
       .unique();
     if (args.provider !== providerForApp(args.app)) throw new Error("Provider/app mismatch");
-    if (!existing) {
-      const accounts = await ctx.db.query("connections")
-        .withIndex("by_user_provider_app_providerUserId", (q) => q.eq("userId", args.userId).eq("provider", args.provider).eq("app", args.app))
-        .take(100);
-      if (accounts.length >= 100) throw new Error("Too many connected accounts for this app");
-    }
     const accessToken = await encryptToken(args.accessToken);
     const refreshToken =
       args.refreshToken === undefined

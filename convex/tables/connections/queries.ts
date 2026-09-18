@@ -17,7 +17,6 @@ export const statusesForApps = authenticatedQuery({
     accounts: v.array(v.object({ id: v.id("connections"), login: v.string(), providerUserId: v.string() })),
   })),
   handler: async (ctx, args) => {
-    if (args.apps.length > 50) throw new Error("Request at most 50 apps");
     if (new Set(args.apps).size !== args.apps.length) throw new Error("Apps must be distinct");
     return await Promise.all(args.apps.map(async (app) => {
       const rows = await connectionsForApp(ctx, ctx.userId, app);

@@ -16,6 +16,7 @@ import type * as http from "../http.js";
 import type * as http_contracts from "../http/contracts.js";
 import type * as http_helpers from "../http/helpers.js";
 import type * as http_httpAccessRequestHandlers from "../http/httpAccessRequestHandlers.js";
+import type * as http_httpAccountsHandler from "../http/httpAccountsHandler.js";
 import type * as http_httpAppsHandler from "../http/httpAppsHandler.js";
 import type * as http_httpClaimHandler from "../http/httpClaimHandler.js";
 import type * as http_httpCredentialsHandler from "../http/httpCredentialsHandler.js";
@@ -71,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   "http/contracts": typeof http_contracts;
   "http/helpers": typeof http_helpers;
   "http/httpAccessRequestHandlers": typeof http_httpAccessRequestHandlers;
+  "http/httpAccountsHandler": typeof http_httpAccountsHandler;
   "http/httpAppsHandler": typeof http_httpAppsHandler;
   "http/httpClaimHandler": typeof http_httpClaimHandler;
   "http/httpCredentialsHandler": typeof http_httpCredentialsHandler;

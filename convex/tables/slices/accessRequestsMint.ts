@@ -6,14 +6,14 @@ import {
   denyResultValidator, EXPIRED_ERROR, REVOKED_ERROR, UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
 import { selectedConnection } from "../connections/helpers";
-import { bindingFor, denyCreate, effectiveStatus, sliceBySecret } from "./helpers";
+import { denyCreate, effectiveStatus, sliceBySecret } from "./helpers";
 import { issuePublicPair } from "./onboardingAccess";
 
 export const PENDING_TTL_MS = 5 * 60 * 1000;
 export const MAX_PENDING_PER_SLICE = 5;
 
 export const createPending = internalMutation({
-  args: { sliceId: v.id("slices"), userId: v.id("users"), app: appValidator },
+  args: { sliceId: v.id("slices"), userId: v.id("users"), app: appValidator, bindingId: v.id("sliceBindings") },
   returns: v.union(
     v.object({
       ok: v.literal(true), requestId: v.id("accessRequests"), publicToken: v.string(),
@@ -27,6 +27,11 @@ export const createPending = internalMutation({
     if (!slice || slice.userId !== args.userId || effectiveStatus(slice) !== "active") {
       return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
     }
+    const binding = await ctx.db.get("sliceBindings", args.bindingId);
+    if (!binding || binding.sliceId !== slice._id || binding.app !== args.app ||
+        !await selectedConnection(ctx, slice.userId, args.app, binding.connectionId)) {
+      return denyCreate(403, "This account is not available to this slice", "APP_UNAVAILABLE");
+    }
     const pending = await ctx.db.query("accessRequests")
       .withIndex("by_slice_status_expiresAt", (q) =>
         q.eq("sliceId", args.sliceId).eq("status", "pending")
@@ -37,7 +42,7 @@ export const createPending = internalMutation({
     const { publicToken, claimSecretHash } = await issuePublicPair();
     const expiresAt = Date.now() + PENDING_TTL_MS;
     const requestId = await ctx.db.insert("accessRequests", {
-      kind: "mint", sliceId: args.sliceId, userId: args.userId, app: args.app,
+      kind: "mint", sliceId: args.sliceId, userId: args.userId, app: args.app, bindingId: args.bindingId,
       publicToken, claimSecretHash, status: "pending", expiresAt,
     });
     return {
@@ -58,7 +63,7 @@ export const resolveClaim = internalMutation({
     v.object({
       ok: v.literal(true), kind: v.literal("mint"), requestId: v.id("accessRequests"),
       sliceId: v.id("slices"), userId: v.id("users"),
-      app: appValidator, connectionId: v.id("connections"),
+      app: appValidator, bindingId: v.id("sliceBindings"), connectionId: v.id("connections"),
     }),
     denyResultValidator,
   ),
@@ -82,14 +87,15 @@ export const resolveClaim = internalMutation({
     const status = effectiveStatus(slice);
     if (status === "revoked") return denyCreate(403, REVOKED_ERROR, "REVOKED");
     if (status === "expired") return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
-    const binding = await bindingFor(ctx, slice._id, request.app);
+    const binding = request.bindingId ? await ctx.db.get("sliceBindings", request.bindingId) : null;
     const connection = binding
+      && binding.sliceId === slice._id && binding.app === request.app
       ? await selectedConnection(ctx, slice.userId, request.app, binding.connectionId) : null;
     if (!connection) return denyCreate(403, "This app is not available to this slice", "APP_UNAVAILABLE");
     return {
       ok: true as const, kind: "mint" as const, requestId: request._id,
       sliceId: slice._id, userId: slice.userId, app: request.app,
-      connectionId: connection._id,
+      bindingId: binding!._id, connectionId: connection._id,
     };
   },
 });

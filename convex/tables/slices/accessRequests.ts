@@ -5,7 +5,8 @@ import { authenticatedMutation, authenticatedQuery } from "../../functions";
 import { appValidator } from "../../domain/apps";
 import { requestStatusValidator, requestKindValidator, effectiveRequestStatus } from "../../domain/requests";
 import { encryptToken } from "../../lib/tokenEncryption";
-import { bindingFor, createSlice, validatedBindings } from "./helpers";
+import { createSlice, validatedBindings } from "./helpers";
+import { selectedConnection } from "../connections/helpers";
 
 export const CLAIM_WINDOW_MS = 60 * 1000;
 
@@ -33,8 +34,9 @@ async function toBoardRequest(ctx: Pick<QueryCtx, "db">, request: Doc<"accessReq
     decidedAt: request.decidedAt, claimedAt: request.claimedAt,
   };
   const slice = request.sliceId ? await ctx.db.get("slices", request.sliceId) : null;
-  const binding = slice ? await bindingFor(ctx, slice._id, request.app) : null;
-  const connection = binding ? await ctx.db.get("connections", binding.connectionId) : null;
+  const binding = request.bindingId ? await ctx.db.get("sliceBindings", request.bindingId) : null;
+  const connection = slice && binding?.sliceId === slice._id && binding.app === request.app
+    ? await selectedConnection(ctx, slice.userId, request.app, binding.connectionId) : null;
   return {
     _id: request._id, _creationTime: request._creationTime,
     kind: "mint" as const, publicToken: request.publicToken,
@@ -119,6 +121,11 @@ export const decide = authenticatedMutation({
     if (request.kind === "mint") {
       const slice = request.sliceId ? await ctx.db.get("slices", request.sliceId) : null;
       if (!slice || slice.userId !== ctx.userId) throw new Error("Slice not found");
+      const binding = request.bindingId ? await ctx.db.get("sliceBindings", request.bindingId) : null;
+      if (!binding || binding.sliceId !== slice._id || binding.app !== request.app ||
+          !await selectedConnection(ctx, ctx.userId, request.app, binding.connectionId)) {
+        throw new Error("The requested account is no longer allowed on this slice");
+      }
       await ctx.db.patch("accessRequests", request._id, {
         status: "approved", decidedAt: now, userId: ctx.userId,
         expiresAt: now + CLAIM_WINDOW_MS,
@@ -129,7 +136,7 @@ export const decide = authenticatedMutation({
     const apps = request.apps;
     const ttlMs = request.ttlMs;
     if (!agentName || !apps || !ttlMs) throw new Error("Onboarding request is incomplete");
-    const bindings = await validatedBindings(ctx, ctx.userId, apps, args.bindings);
+    const bindings = await validatedBindings(ctx, ctx.userId, args.bindings, apps);
     const created = await createSlice(ctx, {
       userId: ctx.userId, name: agentName, ttlMs, mintPolicy: "auto", bindings,
     });

@@ -12,7 +12,7 @@ import {
 } from "../../lib/errors";
 import { decryptToken, encryptToken } from "../../lib/tokenEncryption";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
-import { denyCreate, MAX_SLICE_APPS, MAX_SLICE_NAME, MAX_TTL_MS } from "./helpers";
+import { denyCreate, MAX_SLICE_NAME, MAX_TTL_MS } from "./helpers";
 
 export const ONBOARDING_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 export const MAX_PENDING_ONBOARDING = 100;
@@ -68,8 +68,8 @@ export const createOnboarding = internalMutation({
       return denyCreate(400, "ttlMs must be 7 days or fewer", "INVALID_REQUEST");
     }
     const uniqueApps = [...new Set(args.apps)];
-    if (uniqueApps.length === 0 || uniqueApps.length > MAX_SLICE_APPS) {
-      return denyCreate(400, `apps must include 1 to ${MAX_SLICE_APPS} apps`, "INVALID_REQUEST");
+    if (uniqueApps.length === 0) {
+      return denyCreate(400, "apps must include at least one app", "INVALID_REQUEST");
     }
     let reason = args.reason?.trim();
     if (reason !== undefined && reason.length === 0) {

@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { authenticatedMutation } from "../../functions";
 import { appValidator } from "../../domain/apps";
-import { bindingFor, createSlice, effectiveStatus, MAX_SLICE_NAME, MAX_TTL_MS, validatedBindings } from "./helpers";
+import { bindingForConnection, createSlice, effectiveStatus, MAX_SLICE_NAME, MAX_TTL_MS, validatedBindings } from "./helpers";
 import { selectedConnection } from "../connections/helpers";
 
 export { MAX_SLICE_NAME, MAX_TTL_MS };
@@ -26,8 +26,7 @@ export const create = authenticatedMutation({
     if (!Number.isFinite(args.ttlMs) || args.ttlMs <= 0 || args.ttlMs > MAX_TTL_MS) {
       throw new Error("ttlMs must be between 1 millisecond and 7 days");
     }
-    const apps = [...new Set(args.apps)];
-    const bindings = await validatedBindings(ctx, ctx.userId, apps, args.bindings);
+    const bindings = await validatedBindings(ctx, ctx.userId, args.bindings, args.apps);
     return await createSlice(ctx, {
       userId: ctx.userId, name, ttlMs: args.ttlMs,
       mintPolicy: args.mintPolicy ?? "auto", bindings,
@@ -48,10 +47,10 @@ export const setMintPolicy = authenticatedMutation({
   },
 });
 
-export const setApp = authenticatedMutation({
+export const setBinding = authenticatedMutation({
   args: {
     sliceToken: v.string(), app: appValidator, enabled: v.boolean(),
-    connectionId: v.optional(v.id("connections")),
+    connectionId: v.id("connections"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -59,19 +58,15 @@ export const setApp = authenticatedMutation({
       .withIndex("by_token", (q) => q.eq("token", args.sliceToken)).unique();
     if (!slice || slice.userId !== ctx.userId) throw new Error("Slice not found");
     if (effectiveStatus(slice) !== "active") throw new Error("Slice is not live");
-    const binding = await bindingFor(ctx, slice._id, args.app);
+    const binding = await bindingForConnection(ctx, slice._id, args.app, args.connectionId);
     if (!args.enabled) {
       if (binding) await ctx.db.delete("sliceBindings", binding._id);
       return null;
     }
-    if (!args.connectionId || !await selectedConnection(ctx, ctx.userId, args.app, args.connectionId)) {
+    if (!await selectedConnection(ctx, ctx.userId, args.app, args.connectionId)) {
       throw new Error(`Select a connected account for ${args.app}`);
     }
-    if (binding) {
-      if (binding.connectionId !== args.connectionId) {
-        await ctx.db.patch("sliceBindings", binding._id, { connectionId: args.connectionId });
-      }
-    } else {
+    if (!binding) {
       await ctx.db.insert("sliceBindings", {
         sliceId: slice._id, app: args.app, connectionId: args.connectionId,
       });

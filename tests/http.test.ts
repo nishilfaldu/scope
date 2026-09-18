@@ -73,6 +73,7 @@ describe("GET /", () => {
     expect(paths).toContain("GET /api/health");
     expect(paths).toContain("POST /api/credentials");
     expect(paths).toContain("GET /api/apps");
+    expect(paths).toContain("GET /api/accounts");
     expect(body.errors).toContain("APP_UNAVAILABLE");
   });
 });
@@ -85,7 +86,7 @@ describe("GET /api/credentials", () => {
 });
 
 describe("OPTIONS", () => {
-  test.each(["/api/credentials", "/api/apps"])(
+  test.each(["/api/credentials", "/api/apps", "/api/accounts"])(
     "%s returns 204 with an empty body",
     async (path) => {
       const response = await t().fetch(path, { method: "OPTIONS" });
@@ -246,6 +247,31 @@ describe("GET /api/apps", () => {
         { app: "zoom", allowed: false, connected: false },
       ],
     });
+  });
+});
+
+describe("GET /api/accounts", () => {
+  test("returns only allowed accounts and requires the slice secret", async () => {
+    const test = t();
+    const created = await createSlice(test, {
+      name: "Account discovery", ttlMs: 60_000, apps: ["github"],
+    });
+    const headers = {
+      "x-slice-token": created.sliceToken,
+      "x-slice-secret": created.sliceSecret,
+    };
+    const response = await test.fetch("/api/accounts?app=github", { method: "GET", headers });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      app: "github", accounts: [expect.objectContaining({ login: "nishil", bindingId: expect.any(String) })],
+    });
+    const other = await test.fetch("/api/accounts?app=gmail", { method: "GET", headers });
+    expect(await other.json()).toEqual({ app: "gmail", accounts: [] });
+    const denied = await test.fetch("/api/accounts?app=github", {
+      method: "GET", headers: { ...headers, "x-slice-secret": "ss_wrong" },
+    });
+    expect(denied.status).toBe(401);
+    expect(await denied.json()).not.toHaveProperty("accounts");
   });
 });
 

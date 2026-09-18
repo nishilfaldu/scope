@@ -10,7 +10,7 @@ export async function mintCredential(
   ctx: GenericActionCtx<DataModel>,
   args: {
     sliceId: Id<"slices">; userId: Id<"users">; app: AppId;
-    connectionId: Id<"connections">; requestId?: Id<"accessRequests">;
+    bindingId: Id<"sliceBindings">; connectionId: Id<"connections">; requestId?: Id<"accessRequests">;
   },
 ): Promise<Response> {
   const issued = await issueShortLivedAccess(ctx, args.userId, args.app, args.connectionId);
@@ -22,14 +22,14 @@ export async function mintCredential(
     );
   }
   const finalized = await ctx.runMutation(internal.tables.slices.credentials.finalize, {
-    sliceId: args.sliceId, app: args.app, connectionId: args.connectionId,
+    sliceId: args.sliceId, app: args.app, bindingId: args.bindingId, connectionId: args.connectionId,
     requestId: args.requestId,
   });
   if (!finalized.ok) {
     return errorResponse(finalized.status, finalized.reason, finalized.code);
   }
   return jsonResponse(200, {
-    accessToken: issued.accessToken, tokenType: "Bearer", app: args.app,
+    accessToken: issued.accessToken, tokenType: "Bearer", app: args.app, bindingId: args.bindingId,
     expiresAt: issued.expiresAt,
     expiresIn: issued.expiresAt === null ? null
       : Math.max(0, Math.floor((issued.expiresAt - Date.now()) / 1000)),

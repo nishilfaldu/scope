@@ -104,7 +104,7 @@ describe("accounts and slices", () => {
     ).rejects.toThrow(/7 days/);
   });
 
-  test("setApp updates indexed slice bindings", async () => {
+  test("setBinding updates indexed slice bindings", async () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     for (const provider of ["google", "slack"] as const) {
@@ -125,9 +125,11 @@ describe("accounts and slices", () => {
       ttlMs: 60_000,
       apps: ["github", "gmail", "slack"],
     });
-    await backend.mutation(api.tables.slices.mutations.setApp, {
+    const gmailId = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail"] }))[0].accounts[0].id;
+    await backend.mutation(api.tables.slices.mutations.setBinding, {
       sliceToken: created.sliceToken,
       app: "gmail",
+      connectionId: gmailId,
       enabled: false,
     });
     const slice = await backend.query(api.tables.slices.queries.get, {
@@ -135,7 +137,7 @@ describe("accounts and slices", () => {
     });
     const bindings = await test.run(async (ctx) =>
       ctx.db.query("sliceBindings")
-        .withIndex("by_slice", (q) => q.eq("sliceId", created.id)).collect(),
+        .withIndex("by_slice_app_connectionId", (q) => q.eq("sliceId", created.id)).collect(),
     );
     expect(bindings.map((binding) => binding.app).sort()).toEqual(["github", "slack"]);
     expect(slice).not.toHaveProperty("grantApps");
@@ -223,7 +225,7 @@ describe("credential authorization", () => {
     if (!allowed.ok) throw new Error("expected authorization");
     const finalized = await test.mutation(
       internal.tables.slices.credentials.finalize,
-      { sliceId: allowed.sliceId, app: allowed.app, connectionId: allowed.connectionId },
+      { sliceId: allowed.sliceId, app: allowed.app, bindingId: allowed.bindingId, connectionId: allowed.connectionId },
     );
     expect(finalized).toEqual({ ok: true });
     expect(JSON.stringify(allowed)).not.toMatch(/ghs_/);
@@ -239,9 +241,11 @@ describe("credential authorization", () => {
       ttlMs: 60_000,
       apps: ["github"],
     });
-    await backend.mutation(api.tables.slices.mutations.setApp, {
+    const githubId = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["github"] }))[0].accounts[0].id;
+    await backend.mutation(api.tables.slices.mutations.setBinding, {
       sliceToken: created.sliceToken,
       app: "github",
+      connectionId: githubId,
       enabled: false,
     });
     const denied = await test.mutation(
@@ -383,6 +387,6 @@ describe("credential authorization", () => {
     }
     await expect(backend.mutation(api.tables.slices.mutations.create, {
       name: "Workspace", ttlMs: 60_000, apps: ["gmail", "calendar"],
-    })).rejects.toThrow("Select one account for each app");
+    })).rejects.toThrow("Select at least one account for every requested app");
   });;
 });

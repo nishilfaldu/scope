@@ -160,7 +160,7 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
   const [decide, isDeciding] = useErrorCatchingMutation(
     api.tables.slices.accessRequests.decide,
   );
-  const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">>>>({});
+  const [selected, setSelected] = useState<Partial<Record<AppId, Id<"connections">[]>>>({});
   const [connectionResult] = useState(readConnectionResult);
   const now = useNow();
   const request = bound;
@@ -258,6 +258,8 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                       <span className="text-sm text-muted-foreground">
                         Account: {request.accountLogin}
                       </span>
+                    ) : request.status === "pending" ? (
+                      <span className="text-sm text-destructive">Requested account is no longer available.</span>
                     ) : null}
                     {request.app ? <p className="text-sm text-muted-foreground">{APP_PERMISSIONS[request.app]}</p> : null}
                     {request.sliceId ? (
@@ -270,14 +272,14 @@ function SignedInApproval({ publicToken }: { publicToken: string }) {
                     ) : null}
                   </div>
                 )}
-                {request.kind === "onboarding" && request.status === "pending" ? <AccountBindings apps={request.apps ?? []} selected={selected} onChange={(app, id) => setSelected((current) => ({ ...current, [app]: id }))} /> : null}
+                {request.kind === "onboarding" && request.status === "pending" ? <AccountBindings apps={request.apps ?? []} selected={selected} onChange={(app, ids) => setSelected((current) => ({ ...current, [app]: ids }))} /> : null}
                 <p className="text-sm text-muted-foreground">
                   Expires {formatRemaining(request.expiresAt, now)}
                 </p>
                 {request.status === "pending" ? (
                   <div className="flex gap-2">
                     <Button
-                      disabled={isDeciding || (request.kind === "onboarding" && bindingsFor(request.apps ?? [], selected).length !== (request.apps ?? []).length)}
+                      disabled={isDeciding || (request.kind === "mint" && !request.accountLogin) || (request.kind === "onboarding" && (request.apps ?? []).some((app) => !selected[app]?.length))}
                       onClick={() =>
                         void decide({
                           requestId: request._id,

@@ -41,8 +41,7 @@ export default defineSchema({
     app: appValidator,
     connectionId: v.id("connections"),
   })
-    .index("by_slice_app", ["sliceId", "app"])
-    .index("by_slice", ["sliceId"]),
+    .index("by_slice_app_connectionId", ["sliceId", "app", "connectionId"]),
 
   // Access requests cover two kinds:
   // - onboarding: agent-initiated grant request before any slice exists.
@@ -69,6 +68,7 @@ export default defineSchema({
       userId: v.id("users"),
       sliceId: v.id("slices"),
       app: appValidator,
+      bindingId: v.optional(v.id("sliceBindings")),
     }),
   ))
     .index("by_public_token", ["publicToken"])

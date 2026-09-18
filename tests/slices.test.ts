@@ -55,7 +55,7 @@ describe("slice ownership", () => {
     const stored = await test.run(async (ctx) => ({
       slice: await ctx.db.get("slices", created.id),
       bindings: await ctx.db.query("sliceBindings")
-        .withIndex("by_slice", (q) => q.eq("sliceId", created.id)).collect(),
+        .withIndex("by_slice_app_connectionId", (q) => q.eq("sliceId", created.id)).collect(),
     }));
     expect(stored.slice?.userId).toEqual(userId);
     expect(stored.slice).not.toHaveProperty("apps");
@@ -77,7 +77,7 @@ describe("slice ownership", () => {
         ttlMs: 60_000,
         apps: ["github"],
       }),
-    ).rejects.toThrow("Select one account for each app");
+    ).rejects.toThrow("Select at least one account");
     await test.run(async (ctx) => {
       await ctx.db.insert("connections", {
         userId,
@@ -94,7 +94,7 @@ describe("slice ownership", () => {
         ttlMs: 60_000,
         apps: ["slack"],
       }),
-    ).rejects.toThrow("Select one account for each app");
+    ).rejects.toThrow("Select at least one account");
   });
 
   test("each slice owns indexed bindings", async () => {
@@ -165,9 +165,10 @@ describe("slice ownership", () => {
     const { backend: otherUser } = await signedIn(test);
 
     await expect(
-      otherUser.mutation(api.tables.slices.mutations.setApp, {
+      otherUser.mutation(api.tables.slices.mutations.setBinding, {
         sliceToken: created.sliceToken,
         app: "gmail",
+        connectionId: (await owner.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail"] }))[0].accounts[0].id,
         enabled: false,
       }),
     ).rejects.toThrow("Slice not found");
@@ -205,9 +206,10 @@ describe("slice ownership", () => {
       }),
     ).rejects.toThrow("Sign in to continue");
     await expect(
-      test.mutation(api.tables.slices.mutations.setApp, {
+      test.mutation(api.tables.slices.mutations.setBinding, {
         sliceToken: created.sliceToken,
         app: "github",
+        connectionId: (await owner.query(api.tables.connections.queries.statusesForApps, { apps: ["github"] }))[0].accounts[0].id,
         enabled: false,
       }),
     ).rejects.toThrow("Sign in to continue");

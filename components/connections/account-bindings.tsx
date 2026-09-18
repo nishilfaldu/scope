@@ -5,28 +5,22 @@ import { useMutation, useQuery } from "convex/react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { APP_LABELS, APP_PERMISSIONS, type AppId } from "@/lib/capabilities";
 import { APP_CONNECT_URL } from "@/lib/connections";
 
 const PAGE_SIZE = 50;
 export type Binding = { app: AppId; connectionId: Id<"connections"> };
-export type AccountSelection = Partial<Record<AppId, Id<"connections">>>;
+export type AccountSelection = Partial<Record<AppId, Id<"connections">[]>>;
 
 export function bindingsFor(apps: readonly AppId[], selected: AccountSelection): Binding[] {
-  return apps.flatMap((app) => selected[app] ? [{ app, connectionId: selected[app] }] : []);
+  return apps.flatMap((app) => (selected[app] ?? []).map((connectionId) => ({ app, connectionId })));
 }
 
 export function AccountBindings({ apps, selected, onChange, compact = false }: {
   apps: readonly AppId[];
   selected: AccountSelection;
-  onChange: (app: AppId, id: Id<"connections">) => void;
+  onChange: (app: AppId, ids: Id<"connections">[]) => void;
   compact?: boolean;
 }) {
   const [page, setPage] = useState(0);
@@ -39,8 +33,8 @@ export function AccountBindings({ apps, selected, onChange, compact = false }: {
 
   useEffect(() => {
     for (const status of statuses ?? []) {
-      if (status.accounts.length === 1 && !selected[status.app]) {
-        onChange(status.app, status.accounts[0].id);
+      if (status.accounts.length === 1 && selected[status.app] === undefined) {
+        onChange(status.app, [status.accounts[0].id]);
       }
     }
   }, [statuses, selected, onChange]);
@@ -59,29 +53,23 @@ export function AccountBindings({ apps, selected, onChange, compact = false }: {
     }
   }
   return <div className="space-y-3">
-    <p className="text-sm font-medium">Accounts ({chosen} of {apps.length} selected)</p>
+    <p className="text-sm font-medium">Accounts ({chosen} selected)</p>
     {visibleApps.map((app) => {
       const accounts = statuses?.find((entry) => entry.app === app)?.accounts ?? [];
       return <div key={app} className={compact ? "grid gap-2 rounded-lg border p-3 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:items-center" : "space-y-1 text-sm"}>
         <div><span className="font-medium">{APP_LABELS[app]}</span>{!compact ? <p className="text-muted-foreground">{APP_PERMISSIONS[app]}</p> : null}</div>
-        <Select
-          items={accounts.map((account) => ({ value: account.id, label: account.login }))}
-          value={selected[app] ?? null}
-          onValueChange={(value) => {
-            if (value != null) onChange(app, value as Id<"connections">);
-          }}
-        >
-          <SelectTrigger
-            aria-label={`${APP_LABELS[app]} account`}
-            className="w-full min-w-0"
-            disabled={statuses === undefined || accounts.length === 0}
-          >
-            <SelectValue placeholder={statuses === undefined ? "Loading accounts…" : accounts.length ? "Choose an account" : "Connect an account first"} />
-          </SelectTrigger>
-          <SelectContent>
-            {accounts.map((account) => <SelectItem key={account.id} value={account.id}>{account.login}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <div className="space-y-2">
+          {statuses === undefined ? <p className="text-muted-foreground">Loading accounts…</p> : accounts.length === 0 ? <p className="text-muted-foreground">Connect an account first</p> : accounts.map((account) => {
+            const checked = selected[app]?.includes(account.id) ?? false;
+            const id = `account-${app}-${account.id}`;
+            return <div key={account.id} className="flex min-w-0 items-center gap-2">
+              <Checkbox id={id} checked={checked} onCheckedChange={(next) => onChange(app, next
+                ? [...(selected[app] ?? []), account.id]
+                : (selected[app] ?? []).filter((value) => value !== account.id))} />
+              <label htmlFor={id} className="min-w-0 break-all">{account.login}</label>
+            </div>;
+          })}
+        </div>
         {!compact && statuses !== undefined && accounts.length === 0 ? <Button type="button" variant="outline" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Connect {APP_LABELS[app]}</Button> : null}
         {!compact && statuses !== undefined && accounts.length > 0 ? <Button type="button" variant="ghost" size="sm" disabled={connecting !== null} onClick={() => void connect(app)}>Add another account</Button> : null}
       </div>;

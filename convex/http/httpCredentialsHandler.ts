@@ -15,23 +15,26 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
   if (sliceSecret instanceof Response) return sliceSecret;
   const app = requiredString(body, "app");
   if (app instanceof Response) return app;
+  if (body.bindingId !== undefined && typeof body.bindingId !== "string") {
+    return errorResponse(400, "bindingId must be a string", "INVALID_REQUEST");
+  }
 
   const decision = await ctx.runMutation(
     internal.tables.slices.credentials.authorizeCreate,
-    { sliceToken, sliceSecret, app },
+    { sliceToken, sliceSecret, app, bindingId: body.bindingId as string | undefined },
   );
   if (!decision.ok) return errorResponse(decision.status, decision.reason, decision.code);
 
   if (decision.mintPolicy === "approve") {
     const pending = await ctx.runMutation(
       internal.tables.slices.accessRequestsMint.createPending,
-      { sliceId: decision.sliceId, userId: decision.userId, app: decision.app },
+      { sliceId: decision.sliceId, userId: decision.userId, app: decision.app, bindingId: decision.bindingId },
     );
     if (!pending.ok) return errorResponse(pending.status, pending.reason, pending.code);
     const boardOrigin = parseBoardOrigin(env.BOARD_ORIGIN);
     return jsonResponse(202, {
       error: pending.reason, code: pending.code, ...AGENT_ERROR_GUIDANCE.APPROVAL_REQUIRED, requestId: pending.requestId,
-      status: pending.status, expiresAt: pending.expiresAt, app: decision.app,
+      status: pending.status, expiresAt: pending.expiresAt, app: decision.app, bindingId: decision.bindingId,
       approvalUrl: `${boardOrigin}/approvals/${pending.publicToken}`,
     });
   }

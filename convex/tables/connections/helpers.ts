@@ -10,7 +10,7 @@ export async function connectionsForApp(
   return await ctx.db.query("connections")
     .withIndex("by_user_provider_app_providerUserId", (q) =>
       q.eq("userId", userId).eq("provider", providerForApp(app)).eq("app", app),
-    ).take(100);
+    ).collect();
 }
 
 export async function selectedConnection(
