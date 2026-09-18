@@ -40,9 +40,7 @@ export function ActionsMenu({
 }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        render={<Button variant="ghost" size="icon-sm" />}
-      >
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" />}>
         <HugeiconsIcon icon={MoreHorizontalIcon} strokeWidth={2} />
         <span className="sr-only">{triggerLabel}</span>
       </DropdownMenuTrigger>

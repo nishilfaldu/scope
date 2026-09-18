@@ -42,9 +42,11 @@ export function resolveReturnTo(
     if (url.origin !== boardOrigin) {
       return fallback;
     }
-    const path = ALLOWED_RETURN_PATHS.has(url.pathname) || /^\/approvals\/ar_[A-Za-z0-9_-]+$/.test(url.pathname)
-      ? url.pathname
-      : "/connections";
+    const path =
+      ALLOWED_RETURN_PATHS.has(url.pathname) ||
+      /^\/requests\/(new|token)\/ar_[A-Za-z0-9_-]+$/.test(url.pathname)
+        ? url.pathname
+        : "/connections";
     return `${url.origin}${path}`;
   } catch {
     return fallback;

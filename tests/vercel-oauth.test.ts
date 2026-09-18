@@ -22,13 +22,25 @@ describe("Vercel OAuth", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
-        json({ access_token: "access-1", refresh_token: "refresh-1", expires_in: 3600 }),
+        json({
+          access_token: "access-1",
+          refresh_token: "refresh-1",
+          expires_in: 3600,
+        }),
       )
       .mockResolvedValueOnce(
-        json({ sub: "user-1", preferred_username: "nishil", email: "nishil@example.com" }),
+        json({
+          sub: "user-1",
+          preferred_username: "nishil",
+          email: "nishil@example.com",
+        }),
       )
       .mockResolvedValueOnce(
-        json({ access_token: "access-2", refresh_token: "refresh-2", expires_in: 7200 }),
+        json({
+          access_token: "access-2",
+          refresh_token: "refresh-2",
+          expires_in: 7200,
+        }),
       )
       .mockResolvedValueOnce(new Response(null, { status: 200 }));
 

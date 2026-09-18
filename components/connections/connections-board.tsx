@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Alert02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -8,11 +9,7 @@ import { BoardShell } from "@/components/layout/board-shell";
 import { ConnectionsTable } from "@/components/connections/connections-table";
 import { ContentCard } from "@/components/shared/content-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  CONNECT_ERRORS,
-  ALL_APPS,
-  type AppId,
-} from "@/lib/connections";
+import { CONNECT_ERRORS, ALL_APPS, type AppId } from "@/lib/connections";
 
 function readOauthReturn(): { provider: AppId; message: string } | null {
   if (typeof window === "undefined") return null;
@@ -34,7 +31,7 @@ function readOauthReturn(): { provider: AppId; message: string } | null {
   return null;
 }
 
-export function ConnectionsBoard() {
+export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
   const [connectBanner] = useState(readOauthReturn);
 
   useEffect(() => {
@@ -62,6 +59,13 @@ export function ConnectionsBoard() {
   return (
     <BoardShell title="Connections">
       <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
+        {returnTo ? (
+          <div className="px-4 lg:px-6 text-sm">
+            <Link className="underline" href={returnTo}>
+              Return to request
+            </Link>
+          </div>
+        ) : null}
         {connectBanner ? (
           <div className="px-4 lg:px-6">
             <Alert variant="destructive">

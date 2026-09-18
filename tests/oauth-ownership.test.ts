@@ -106,8 +106,30 @@ describe("OAuth ownership", () => {
       );
     }
 
-    const ids = await test.run(async (ctx) => await ctx.db.query("connections").withIndex("by_user_provider_app_providerUserId", (q) => q.eq("userId", firstUserId).eq("provider", "github").eq("app", "github")).collect());
-    const secondIds = await test.run(async (ctx) => await ctx.db.query("connections").withIndex("by_user_provider_app_providerUserId", (q) => q.eq("userId", secondUserId).eq("provider", "github").eq("app", "github")).collect());
+    const ids = await test.run(
+      async (ctx) =>
+        await ctx.db
+          .query("connections")
+          .withIndex("by_user_provider_app_providerUserId", (q) =>
+            q
+              .eq("userId", firstUserId)
+              .eq("provider", "github")
+              .eq("app", "github"),
+          )
+          .collect(),
+    );
+    const secondIds = await test.run(
+      async (ctx) =>
+        await ctx.db
+          .query("connections")
+          .withIndex("by_user_provider_app_providerUserId", (q) =>
+            q
+              .eq("userId", secondUserId)
+              .eq("provider", "github")
+              .eq("app", "github"),
+          )
+          .collect(),
+    );
     const first = await test.query(
       internal.tables.connections.queries.getConnection,
       { userId: firstUserId, app: "github", connectionId: ids[0]._id },

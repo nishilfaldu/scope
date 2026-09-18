@@ -18,14 +18,23 @@ export const httpClaimHandler = httpAction(async (ctx, request) => {
 
   const decision = await ctx.runMutation(
     internal.tables.slices.accessRequestsMint.resolveClaim,
-    { sliceToken, sliceSecret, requestId: requestIdRaw as Id<"accessRequests"> },
+    {
+      sliceToken,
+      sliceSecret,
+      requestId: requestIdRaw as Id<"accessRequests">,
+    },
   );
-  if (!decision.ok) return errorResponse(decision.status, decision.reason, decision.code);
+  if (!decision.ok)
+    return errorResponse(decision.status, decision.reason, decision.code);
   if (decision.kind === "pending") {
     return jsonResponse(202, {
       error: "Operator approval required before this credential can be minted",
-      code: "APPROVAL_REQUIRED", ...AGENT_ERROR_GUIDANCE.APPROVAL_REQUIRED, requestId: decision.requestId,
-      status: decision.status, expiresAt: decision.expiresAt, app: decision.app,
+      code: "APPROVAL_REQUIRED",
+      ...AGENT_ERROR_GUIDANCE.APPROVAL_REQUIRED,
+      requestId: decision.requestId,
+      status: decision.status,
+      expiresAt: decision.expiresAt,
+      app: decision.app,
     });
   }
   return await mintCredential(ctx, decision);

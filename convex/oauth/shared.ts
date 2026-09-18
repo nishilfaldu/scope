@@ -61,7 +61,7 @@ export function refreshedFromPayload(
     refreshToken:
       typeof tokenRaw.refresh_token === "string"
         ? tokenRaw.refresh_token
-        : fallbackRefresh ?? undefined,
+        : (fallbackRefresh ?? undefined),
     tokenExpiresAt:
       expiresIn === null ? undefined : Date.now() + expiresIn * 1000,
   };

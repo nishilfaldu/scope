@@ -15,7 +15,10 @@ export const disconnect = authenticatedAction({
     );
     if (removed?.revokeUpstream) {
       try {
-        await revokeProviderGrant(providerForApp(args.app), await decryptToken(removed.storedAccessToken));
+        await revokeProviderGrant(
+          providerForApp(args.app),
+          await decryptToken(removed.storedAccessToken),
+        );
       } catch {
         // Local revocation has already committed. Provider revocation is best effort.
       }

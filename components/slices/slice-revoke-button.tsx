@@ -8,7 +8,10 @@ import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
-export function SliceRevokeButton({ sliceToken, sliceName }: {
+export function SliceRevokeButton({
+  sliceToken,
+  sliceName,
+}: {
   sliceToken: string;
   sliceName: string;
 }) {
@@ -27,15 +30,21 @@ export function SliceRevokeButton({ sliceToken, sliceName }: {
     }
   }
 
-  return <Button
-    type="button"
-    variant="destructive"
-    size="sm"
-    disabled={busy}
-    onClick={() => void handleRevoke()}
-    aria-label={`Revoke ${sliceName}`}
-  >
-    <HugeiconsIcon icon={Delete02Icon} strokeWidth={2} data-icon="inline-start" />
-    {busy ? "Revoking…" : "Revoke"}
-  </Button>;
+  return (
+    <Button
+      type="button"
+      variant="destructive"
+      size="sm"
+      disabled={busy}
+      onClick={() => void handleRevoke()}
+      aria-label={`Revoke ${sliceName}`}
+    >
+      <HugeiconsIcon
+        icon={Delete02Icon}
+        strokeWidth={2}
+        data-icon="inline-start"
+      />
+      {busy ? "Revoking…" : "Revoke"}
+    </Button>
+  );
 }

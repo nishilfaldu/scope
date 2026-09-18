@@ -1,7 +1,10 @@
 "use client";
 
 import { useFieldContext } from "@/components/form/context";
-import { fieldErrorItems, fieldIsInvalid } from "@/components/form/field-errors";
+import {
+  fieldErrorItems,
+  fieldIsInvalid,
+} from "@/components/form/field-errors";
 import {
   Field,
   FieldDescription,
@@ -42,7 +45,11 @@ export function SelectField({
           if (value != null) field.handleChange(value);
         }}
       >
-        <SelectTrigger id={field.name} aria-invalid={isInvalid} className="w-full">
+        <SelectTrigger
+          id={field.name}
+          aria-invalid={isInvalid}
+          className="w-full"
+        >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>

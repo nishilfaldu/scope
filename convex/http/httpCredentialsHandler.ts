@@ -21,21 +21,39 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
 
   const decision = await ctx.runMutation(
     internal.tables.slices.credentials.authorizeCreate,
-    { sliceToken, sliceSecret, app, bindingId: body.bindingId as string | undefined },
+    {
+      sliceToken,
+      sliceSecret,
+      app,
+      bindingId: body.bindingId as string | undefined,
+    },
   );
-  if (!decision.ok) return errorResponse(decision.status, decision.reason, decision.code);
+  if (!decision.ok)
+    return errorResponse(decision.status, decision.reason, decision.code);
 
   if (decision.mintPolicy === "approve") {
     const pending = await ctx.runMutation(
       internal.tables.slices.accessRequestsMint.createPending,
-      { sliceId: decision.sliceId, userId: decision.userId, app: decision.app, bindingId: decision.bindingId },
+      {
+        sliceId: decision.sliceId,
+        userId: decision.userId,
+        app: decision.app,
+        bindingId: decision.bindingId,
+      },
     );
-    if (!pending.ok) return errorResponse(pending.status, pending.reason, pending.code);
+    if (!pending.ok)
+      return errorResponse(pending.status, pending.reason, pending.code);
     const boardOrigin = parseBoardOrigin(env.BOARD_ORIGIN);
     return jsonResponse(202, {
-      error: pending.reason, code: pending.code, ...AGENT_ERROR_GUIDANCE.APPROVAL_REQUIRED, requestId: pending.requestId,
-      status: pending.status, expiresAt: pending.expiresAt, app: decision.app, bindingId: decision.bindingId,
-      approvalUrl: `${boardOrigin}/approvals/${pending.publicToken}`,
+      error: pending.reason,
+      code: pending.code,
+      ...AGENT_ERROR_GUIDANCE.APPROVAL_REQUIRED,
+      requestId: pending.requestId,
+      status: pending.status,
+      expiresAt: pending.expiresAt,
+      app: decision.app,
+      bindingId: decision.bindingId,
+      approvalUrl: `${boardOrigin}/requests/token/${pending.publicToken}`,
     });
   }
   return await mintCredential(ctx, decision);

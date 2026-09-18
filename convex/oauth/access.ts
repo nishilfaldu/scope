@@ -17,17 +17,20 @@ async function persistRefresh(
   connection: ConnectionSecrets,
   refreshed: RefreshedTokens,
 ): Promise<boolean> {
-  return await ctx.runMutation(internal.tables.connections.mutations.refreshConnection, {
-    userId,
-    app,
-    connectionId,
-    accessToken: refreshed.accessToken,
-    providerUserId: connection.providerUserId,
-    refreshToken:
-      refreshed.refreshToken ?? connection.refreshToken ?? undefined,
-    tokenExpiresAt:
-      refreshed.tokenExpiresAt ?? connection.tokenExpiresAt ?? undefined,
-  });
+  return await ctx.runMutation(
+    internal.tables.connections.mutations.refreshConnection,
+    {
+      userId,
+      app,
+      connectionId,
+      accessToken: refreshed.accessToken,
+      providerUserId: connection.providerUserId,
+      refreshToken:
+        refreshed.refreshToken ?? connection.refreshToken ?? undefined,
+      tokenExpiresAt:
+        refreshed.tokenExpiresAt ?? connection.tokenExpiresAt ?? undefined,
+    },
+  );
 }
 
 export type IssueShortLivedAccessResult =
@@ -59,7 +62,8 @@ export async function issueShortLivedAccess(
     internal.tables.connections.queries.getConnection,
     {
       userId,
-      app, connectionId,
+      app,
+      connectionId,
     },
   );
   if (!connection) {
@@ -87,13 +91,14 @@ export async function issueShortLivedAccess(
       minted.accessToken === connection.refreshToken)
   ) {
     return {
-      error:
-        "Refusing to hand off the vault standing upstream token to agents",
+      error: "Refusing to hand off the vault standing upstream token to agents",
       code: "SHORT_LIVED_UNAVAILABLE",
     };
   }
 
-  if (!await persistRefresh(ctx, userId, app, connectionId, connection, minted)) {
+  if (
+    !(await persistRefresh(ctx, userId, app, connectionId, connection, minted))
+  ) {
     return { error: `${app} is not connected`, code: "APP_UNAVAILABLE" };
   }
 

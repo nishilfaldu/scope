@@ -54,8 +54,12 @@ describe("slice ownership", () => {
     });
     const stored = await test.run(async (ctx) => ({
       slice: await ctx.db.get("slices", created.id),
-      bindings: await ctx.db.query("sliceBindings")
-        .withIndex("by_slice_app_connectionId", (q) => q.eq("sliceId", created.id)).collect(),
+      bindings: await ctx.db
+        .query("sliceBindings")
+        .withIndex("by_slice_app_connectionId", (q) =>
+          q.eq("sliceId", created.id),
+        )
+        .collect(),
     }));
     expect(stored.slice?.userId).toEqual(userId);
     expect(stored.slice).not.toHaveProperty("apps");
@@ -101,14 +105,22 @@ describe("slice ownership", () => {
     const test = t();
     const { backend } = await signedIn(test);
     const first = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "One", ttlMs: 60_000, apps: ["github"],
+      name: "One",
+      ttlMs: 60_000,
+      apps: ["github"],
     });
     const second = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Two", ttlMs: 60_000, apps: ["github"],
+      name: "Two",
+      ttlMs: 60_000,
+      apps: ["github"],
     });
-    const rows = await test.run(async (ctx) => ctx.db.query("sliceBindings").collect());
+    const rows = await test.run(async (ctx) =>
+      ctx.db.query("sliceBindings").collect(),
+    );
     expect(first.id).not.toEqual(second.id);
-    expect(rows.map((row) => row.sliceId).sort()).toEqual([first.id, second.id].sort());
+    expect(rows.map((row) => row.sliceId).sort()).toEqual(
+      [first.id, second.id].sort(),
+    );
   });
 
   test("create refuses a signed-out caller", async () => {
@@ -146,12 +158,18 @@ describe("slice ownership", () => {
         sliceId: created.id,
       }),
     ).toBeNull();
-    expect(await owner.query(api.tables.slices.queries.bindingsForApps, {
-      sliceId: created.id, apps: ["github"],
-    })).toMatchObject([{ app: "github", sliceId: created.id }]);
-    await expect(otherUser.query(api.tables.slices.queries.bindingsForApps, {
-      sliceId: created.id, apps: ["github"],
-    })).rejects.toThrow("Slice not found");
+    expect(
+      await owner.query(api.tables.slices.queries.bindingsForApps, {
+        sliceId: created.id,
+        apps: ["github"],
+      }),
+    ).toMatchObject([{ app: "github", sliceId: created.id }]);
+    await expect(
+      otherUser.query(api.tables.slices.queries.bindingsForApps, {
+        sliceId: created.id,
+        apps: ["github"],
+      }),
+    ).rejects.toThrow("Slice not found");
   });
 
   test("another user cannot change or revoke a slice", async () => {
@@ -168,7 +186,11 @@ describe("slice ownership", () => {
       otherUser.mutation(api.tables.slices.mutations.setBinding, {
         sliceToken: created.sliceToken,
         app: "gmail",
-        connectionId: (await owner.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail"] }))[0].accounts[0].id,
+        connectionId: (
+          await owner.query(api.tables.connections.queries.statusesForApps, {
+            apps: ["gmail"],
+          })
+        )[0].accounts[0].id,
         enabled: false,
       }),
     ).rejects.toThrow("Slice not found");
@@ -209,7 +231,11 @@ describe("slice ownership", () => {
       test.mutation(api.tables.slices.mutations.setBinding, {
         sliceToken: created.sliceToken,
         app: "github",
-        connectionId: (await owner.query(api.tables.connections.queries.statusesForApps, { apps: ["github"] }))[0].accounts[0].id,
+        connectionId: (
+          await owner.query(api.tables.connections.queries.statusesForApps, {
+            apps: ["github"],
+          })
+        )[0].accounts[0].id,
         enabled: false,
       }),
     ).rejects.toThrow("Sign in to continue");

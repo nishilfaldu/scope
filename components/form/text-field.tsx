@@ -3,7 +3,10 @@
 import type { ComponentProps } from "react";
 
 import { useFieldContext } from "@/components/form/context";
-import { fieldErrorItems, fieldIsInvalid } from "@/components/form/field-errors";
+import {
+  fieldErrorItems,
+  fieldIsInvalid,
+} from "@/components/form/field-errors";
 import {
   Field,
   FieldDescription,

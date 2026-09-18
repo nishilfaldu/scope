@@ -62,7 +62,7 @@ describe("agent onboarding approval link", () => {
     expect(body.status).toBe("pending");
     expect(body.claimHandle).toMatch(/^ch_/);
     expect(body.approvalUrl).toMatch(
-      /^http:\/\/localhost:3000\/approvals\/ar_/,
+      /^http:\/\/localhost:3000\/requests\/new\/ar_/,
     );
     expect(body.approvalUrl.startsWith("http://localhost:3000/")).toBe(true);
     expect(JSON.stringify(body)).not.toMatch(/ss_/);
@@ -79,15 +79,16 @@ describe("agent onboarding approval link", () => {
     expect(pendingBody.code).toBe("APPROVAL_REQUIRED");
     expect(pendingBody.approvalUrl).toBe(body.approvalUrl);
 
-    const publicToken = body.approvalUrl.split("/approvals/")[1];
+    const publicToken = body.approvalUrl.split("/requests/new/")[1];
     const preview = await backend.query(
-      api.tables.slices.accessRequests.getByPublicToken, { publicToken },
+      api.tables.slices.accessRequests.getNewSlice,
+      { publicToken },
     );
     expect(preview?.kind).toBe("onboarding");
     expect(preview?.agentName).toBe("Chat agent");
 
     await backend.mutation(api.tables.slices.accessRequests.decide, {
-      requestId: body.requestId,
+      publicToken: body.approvalUrl.split("/requests/new/")[1],
       decision: "approved",
     });
 
@@ -170,7 +171,7 @@ describe("agent onboarding approval link", () => {
     });
     const body = await created.json();
     await backend.mutation(api.tables.slices.accessRequests.decide, {
-      requestId: body.requestId,
+      publicToken: body.approvalUrl.split("/requests/new/")[1],
       decision: "denied",
     });
     const denied = await test.fetch("/api/access-requests/claim", {
@@ -221,6 +222,10 @@ describe("agent onboarding approval link", () => {
     expect(paths).toContain("POST /api/access-requests/status");
     expect(paths).toContain("POST /api/access-requests/claim");
     expect(body.summary.toLowerCase()).toContain("future credential mints");
-    expect(body.routes.some((route: { path: string }) => route.path === "/api/access-requests")).toBe(true);
+    expect(
+      body.routes.some(
+        (route: { path: string }) => route.path === "/api/access-requests",
+      ),
+    ).toBe(true);
   });
 });

@@ -8,9 +8,7 @@ import {
   useFieldContext,
   useFormContext,
 } from "@/components/form/context";
-import {
-  CheckboxGroupField,
-} from "@/components/form/checkbox-group-field";
+import { CheckboxGroupField } from "@/components/form/checkbox-group-field";
 import { Form } from "@/components/form/app-form";
 import { SelectField } from "@/components/form/select-field";
 import { SubmitButton } from "@/components/form/submit-button";

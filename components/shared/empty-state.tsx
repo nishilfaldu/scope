@@ -29,7 +29,9 @@ export function EmptyState({
           {icon ?? <HugeiconsIcon icon={Search01Icon} strokeWidth={2} />}
         </EmptyMedia>
         <EmptyTitle>{title}</EmptyTitle>
-        {description ? <EmptyDescription>{description}</EmptyDescription> : null}
+        {description ? (
+          <EmptyDescription>{description}</EmptyDescription>
+        ) : null}
       </EmptyHeader>
       {action ? <EmptyContent>{action}</EmptyContent> : null}
     </Empty>

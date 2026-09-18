@@ -2,7 +2,11 @@ import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import type { AppId, ProviderId } from "../../domain/apps";
-import { appValidator, providerForApp, providerValidator } from "../../domain/apps";
+import {
+  appValidator,
+  providerForApp,
+  providerValidator,
+} from "../../domain/apps";
 import { authenticatedMutation } from "../../functions";
 import { allowedReturnTo } from "../../http/helpers";
 

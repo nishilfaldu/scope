@@ -109,7 +109,8 @@ describe("connection secrets at rest", () => {
     await expect(
       test.query(internal.tables.connections.queries.getConnection, {
         userId,
-        app: "github", connectionId,
+        app: "github",
+        connectionId,
       }),
     ).rejects.toThrow(/not encrypted/);
   });

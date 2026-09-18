@@ -14,8 +14,7 @@ export function CreateSliceDialog({
 }: {
   children: (options: { openModal: () => void }) => ReactNode;
 }) {
-  const [createdSlice, setCreatedSlice] =
-    useState<CreatedSlice | null>(null);
+  const [createdSlice, setCreatedSlice] = useState<CreatedSlice | null>(null);
 
   function handleCreated(slice: CreatedSlice) {
     setCreatedSlice(slice);

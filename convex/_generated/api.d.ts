@@ -41,13 +41,13 @@ import type * as oauth_providers_vercel from "../oauth/providers/vercel.js";
 import type * as oauth_providers_zoom from "../oauth/providers/zoom.js";
 import type * as oauth_shared from "../oauth/shared.js";
 import type * as oauth_types from "../oauth/types.js";
+import type * as otp from "../otp.js";
 import type * as tables_connections_actions from "../tables/connections/actions.js";
 import type * as tables_connections_helpers from "../tables/connections/helpers.js";
 import type * as tables_connections_mutations from "../tables/connections/mutations.js";
 import type * as tables_connections_queries from "../tables/connections/queries.js";
 import type * as tables_oauthStates_mutations from "../tables/oauthStates/mutations.js";
 import type * as tables_oauthStates_queries from "../tables/oauthStates/queries.js";
-import type * as tables_slices_accessRequestPublic from "../tables/slices/accessRequestPublic.js";
 import type * as tables_slices_accessRequests from "../tables/slices/accessRequests.js";
 import type * as tables_slices_accessRequestsMint from "../tables/slices/accessRequestsMint.js";
 import type * as tables_slices_credentials from "../tables/slices/credentials.js";
@@ -97,13 +97,13 @@ declare const fullApi: ApiFromModules<{
   "oauth/providers/zoom": typeof oauth_providers_zoom;
   "oauth/shared": typeof oauth_shared;
   "oauth/types": typeof oauth_types;
+  otp: typeof otp;
   "tables/connections/actions": typeof tables_connections_actions;
   "tables/connections/helpers": typeof tables_connections_helpers;
   "tables/connections/mutations": typeof tables_connections_mutations;
   "tables/connections/queries": typeof tables_connections_queries;
   "tables/oauthStates/mutations": typeof tables_oauthStates_mutations;
   "tables/oauthStates/queries": typeof tables_oauthStates_queries;
-  "tables/slices/accessRequestPublic": typeof tables_slices_accessRequestPublic;
   "tables/slices/accessRequests": typeof tables_slices_accessRequests;
   "tables/slices/accessRequestsMint": typeof tables_slices_accessRequestsMint;
   "tables/slices/credentials": typeof tables_slices_credentials;
@@ -140,4 +140,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
+};

@@ -125,7 +125,11 @@ describe("accounts and slices", () => {
       ttlMs: 60_000,
       apps: ["github", "gmail", "slack"],
     });
-    const gmailId = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail"] }))[0].accounts[0].id;
+    const gmailId = (
+      await backend.query(api.tables.connections.queries.statusesForApps, {
+        apps: ["gmail"],
+      })
+    )[0].accounts[0].id;
     await backend.mutation(api.tables.slices.mutations.setBinding, {
       sliceToken: created.sliceToken,
       app: "gmail",
@@ -136,10 +140,17 @@ describe("accounts and slices", () => {
       sliceId: created.id,
     });
     const bindings = await test.run(async (ctx) =>
-      ctx.db.query("sliceBindings")
-        .withIndex("by_slice_app_connectionId", (q) => q.eq("sliceId", created.id)).collect(),
+      ctx.db
+        .query("sliceBindings")
+        .withIndex("by_slice_app_connectionId", (q) =>
+          q.eq("sliceId", created.id),
+        )
+        .collect(),
     );
-    expect(bindings.map((binding) => binding.app).sort()).toEqual(["github", "slack"]);
+    expect(bindings.map((binding) => binding.app).sort()).toEqual([
+      "github",
+      "slack",
+    ]);
     expect(slice).not.toHaveProperty("grantApps");
   });
 
@@ -152,8 +163,15 @@ describe("accounts and slices", () => {
       ttlMs: 60_000,
       apps: ["github"],
     });
-    const githubId = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["github"] })).find((row) => row.app === "github")!.accounts[0].id;
-    await backend.action(api.tables.connections.actions.disconnect, { app: "github", connectionId: githubId });
+    const githubId = (
+      await backend.query(api.tables.connections.queries.statusesForApps, {
+        apps: ["github"],
+      })
+    ).find((row) => row.app === "github")!.accounts[0].id;
+    await backend.action(api.tables.connections.actions.disconnect, {
+      app: "github",
+      connectionId: githubId,
+    });
     const slice = await backend.query(api.tables.slices.queries.get, {
       sliceId: created.id,
     });
@@ -187,7 +205,11 @@ describe("accounts and slices", () => {
       accounts: [],
     });
 
-    await other.action(api.tables.connections.actions.disconnect, { app: "github", connectionId: ownerStatuses.find((row) => row.app === "github")!.accounts[0].id });
+    await other.action(api.tables.connections.actions.disconnect, {
+      app: "github",
+      connectionId: ownerStatuses.find((row) => row.app === "github")!
+        .accounts[0].id,
+    });
     const stillConnected = await owner.query(
       api.tables.connections.queries.statusesForApps,
       { apps: ["github"] },
@@ -214,7 +236,7 @@ describe("credential authorization", () => {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
         app: "github",
-              },
+      },
     );
     expect(allowed).toMatchObject({
       ok: true,
@@ -225,7 +247,12 @@ describe("credential authorization", () => {
     if (!allowed.ok) throw new Error("expected authorization");
     const finalized = await test.mutation(
       internal.tables.slices.credentials.finalize,
-      { sliceId: allowed.sliceId, app: allowed.app, bindingId: allowed.bindingId, connectionId: allowed.connectionId },
+      {
+        sliceId: allowed.sliceId,
+        app: allowed.app,
+        bindingId: allowed.bindingId,
+        connectionId: allowed.connectionId,
+      },
     );
     expect(finalized).toEqual({ ok: true });
     expect(JSON.stringify(allowed)).not.toMatch(/ghs_/);
@@ -241,7 +268,11 @@ describe("credential authorization", () => {
       ttlMs: 60_000,
       apps: ["github"],
     });
-    const githubId = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["github"] }))[0].accounts[0].id;
+    const githubId = (
+      await backend.query(api.tables.connections.queries.statusesForApps, {
+        apps: ["github"],
+      })
+    )[0].accounts[0].id;
     await backend.mutation(api.tables.slices.mutations.setBinding, {
       sliceToken: created.sliceToken,
       app: "github",
@@ -254,7 +285,7 @@ describe("credential authorization", () => {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
         app: "github",
-              },
+      },
     );
     expect(denied).toMatchObject({
       ok: false,
@@ -284,7 +315,7 @@ describe("credential authorization", () => {
         sliceToken: revokedSlice.sliceToken,
         sliceSecret: revokedSlice.sliceSecret,
         app: "github",
-              },
+      },
     );
     expect(revoked).toMatchObject({ ok: false, code: "REVOKED" });
 
@@ -308,7 +339,7 @@ describe("credential authorization", () => {
         sliceToken: expiredSlice.sliceToken,
         sliceSecret: expiredSlice.sliceSecret,
         app: "github",
-              },
+      },
     );
     expect(expired).toMatchObject({ ok: false, code: "EXPIRED" });
   });
@@ -321,8 +352,15 @@ describe("credential authorization", () => {
       ttlMs: 60_000,
       apps: ["github"],
     });
-    const githubId = (await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["github"] })).find((row) => row.app === "github")!.accounts[0].id;
-    await backend.action(api.tables.connections.actions.disconnect, { app: "github", connectionId: githubId });
+    const githubId = (
+      await backend.query(api.tables.connections.queries.statusesForApps, {
+        apps: ["github"],
+      })
+    ).find((row) => row.app === "github")!.accounts[0].id;
+    await backend.action(api.tables.connections.actions.disconnect, {
+      app: "github",
+      connectionId: githubId,
+    });
     const unavailable = {
       ok: false,
       status: 403,
@@ -335,7 +373,7 @@ describe("credential authorization", () => {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
         app: "dropbox",
-              },
+      },
     );
     expect(unknown).toMatchObject(unavailable);
     const unconnected = await test.mutation(
@@ -344,7 +382,7 @@ describe("credential authorization", () => {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
         app: "github",
-              },
+      },
     );
     expect(unconnected).toMatchObject(unavailable);
   });
@@ -364,7 +402,7 @@ describe("credential authorization", () => {
         sliceToken: created.sliceToken,
         sliceSecret: "ss_wrong",
         app: "github",
-              },
+      },
     );
     expect(denied).toMatchObject({
       ok: false,
@@ -377,16 +415,27 @@ describe("credential authorization", () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     await test.mutation(internal.tables.connections.mutations.saveConnection, {
-      userId, provider: "google", app: "gmail", accessToken: "ya29.standing",
-      login: "user@gmail.com", providerUserId: "sub",
+      userId,
+      provider: "google",
+      app: "gmail",
+      accessToken: "ya29.standing",
+      login: "user@gmail.com",
+      providerUserId: "sub",
     });
-    const statuses = await backend.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail", "calendar", "drive", "docs", "sheets"] });
+    const statuses = await backend.query(
+      api.tables.connections.queries.statusesForApps,
+      { apps: ["gmail", "calendar", "drive", "docs", "sheets"] },
+    );
     expect(statuses.find((row) => row.app === "gmail")?.connected).toBe(true);
     for (const app of ["calendar", "drive", "docs", "sheets"] as const) {
       expect(statuses.find((row) => row.app === app)?.connected).toBe(false);
     }
-    await expect(backend.mutation(api.tables.slices.mutations.create, {
-      name: "Workspace", ttlMs: 60_000, apps: ["gmail", "calendar"],
-    })).rejects.toThrow("Select at least one account for every requested app");
-  });;
+    await expect(
+      backend.mutation(api.tables.slices.mutations.create, {
+        name: "Workspace",
+        ttlMs: 60_000,
+        apps: ["gmail", "calendar"],
+      }),
+    ).rejects.toThrow("Select at least one account for every requested app");
+  });
 });

@@ -8,14 +8,15 @@
     "build": "next build",
     "build:convex": "convex deploy --cmd 'next build'",
     "start": "next start",
+    "format": "prettier --write .",
     "lint": "eslint",
     "test": "vitest run",
     "prepare": "husky"
   },
   "dependencies": {
-    "@auth/core": "^0.41.3",
     "@base-ui/react": "^1.8.0",
     "@convex-dev/auth": "^0.0.95",
+    "@convex-dev/resend": "^0.2.8",
     "@hugeicons/core-free-icons": "^4.3.2",
     "@hugeicons/react": "^1.1.10",
     "@radix-ui/react-collapsible": "^1.1.20",
@@ -45,6 +46,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
     "husky": "^9.1.7",
+    "prettier": "^3.9.7",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^5.0.0"

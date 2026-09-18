@@ -150,9 +150,7 @@ describe("auto mint policy unchanged", () => {
     });
     vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
     vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(
-      new Error("network down"),
-    );
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
     const created = await backend.mutation(api.tables.slices.mutations.create, {
       name: "Refresh throw",
       ttlMs: 60_000,
@@ -179,27 +177,58 @@ describe("auto mint policy unchanged", () => {
 describe("approve-gated mint", () => {
   test("failed refresh leaves an approved request claimable", async () => {
     const test = t();
-    const { backend } = await signedIn(test, { refreshToken: "ghr_refresh_token" });
+    const { backend } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
     const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Retry agent", ttlMs: 60_000, apps: ["github"], mintPolicy: "approve",
+      name: "Retry agent",
+      ttlMs: 60_000,
+      apps: ["github"],
+      mintPolicy: "approve",
     });
     const requested = await test.fetch("/api/credentials", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "github" }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        app: "github",
+      }),
     });
-    const { requestId } = await requested.json();
-    await backend.mutation(api.tables.slices.accessRequests.decide, { requestId, decision: "approved" });
+    const { requestId, approvalUrl } = await requested.json();
+    await backend.mutation(api.tables.slices.accessRequests.decide, {
+      publicToken: approvalUrl.split("/requests/token/")[1],
+      decision: "approved",
+    });
     vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
     vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
-    const refresh = vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("temporary outage"))
-      .mockResolvedValue(json({ access_token: "ghu_retry", refresh_token: "ghr_next", expires_in: 3600 }));
-    const claim = () => test.fetch("/api/credentials/claim", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, requestId }),
-    });
+    const refresh = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Error("temporary outage"))
+      .mockResolvedValue(
+        json({
+          access_token: "ghu_retry",
+          refresh_token: "ghr_next",
+          expires_in: 3600,
+        }),
+      );
+    const claim = () =>
+      test.fetch("/api/credentials/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sliceToken: created.sliceToken,
+          sliceSecret: created.sliceSecret,
+          requestId,
+        }),
+      });
     const failed = await claim();
     expect(failed.status).toBe(503);
-    expect(await test.run(async (ctx) => (await ctx.db.get("accessRequests", requestId))?.status)).toBe("approved");
+    expect(
+      await test.run(
+        async (ctx) => (await ctx.db.get("accessRequests", requestId))?.status,
+      ),
+    ).toBe("approved");
     const retried = await claim();
     expect(retried.status).toBe(200);
     expect((await retried.json()).accessToken).toBe("ghu_retry");
@@ -208,19 +237,34 @@ describe("approve-gated mint", () => {
 
   test("revocation during refresh blocks delivery", async () => {
     const test = t();
-    const { backend } = await signedIn(test, { refreshToken: "ghr_refresh_token" });
+    const { backend } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
     const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Race agent", ttlMs: 60_000, apps: ["github"],
+      name: "Race agent",
+      ttlMs: 60_000,
+      apps: ["github"],
     });
     vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
     vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      await backend.mutation(api.tables.slices.mutations.revoke, { sliceToken: created.sliceToken });
-      return json({ access_token: "ghu_after_revoke", refresh_token: "ghr_next", expires_in: 3600 });
+      await backend.mutation(api.tables.slices.mutations.revoke, {
+        sliceToken: created.sliceToken,
+      });
+      return json({
+        access_token: "ghu_after_revoke",
+        refresh_token: "ghr_next",
+        expires_in: 3600,
+      });
     });
     const response = await test.fetch("/api/credentials", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "github" }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        app: "github",
+      }),
     });
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ code: "REVOKED" });
@@ -275,7 +319,7 @@ describe("approve-gated mint", () => {
     });
 
     await backend.mutation(api.tables.slices.accessRequests.decide, {
-      requestId: pendingBody.requestId,
+      publicToken: pendingBody.approvalUrl.split("/requests/token/")[1],
       decision: "approved",
     });
 
@@ -332,9 +376,9 @@ describe("approve-gated mint", () => {
         app: "github",
       }),
     });
-    const { requestId } = await requested.json();
+    const { requestId, approvalUrl } = await requested.json();
     await backend.mutation(api.tables.slices.accessRequests.decide, {
-      requestId,
+      publicToken: approvalUrl.split("/requests/token/")[1],
       decision: "denied",
     });
     const denied = await test.fetch("/api/credentials/claim", {
@@ -414,9 +458,9 @@ describe("approve-gated mint", () => {
         app: "github",
       }),
     });
-    const { requestId } = await requested.json();
+    const { requestId, approvalUrl } = await requested.json();
     await backend.mutation(api.tables.slices.accessRequests.decide, {
-      requestId,
+      publicToken: approvalUrl.split("/requests/token/")[1],
       decision: "approved",
     });
     await test.run(async (ctx) => {

@@ -7,10 +7,12 @@ export async function connectionsForApp(
   userId: Id<"users">,
   app: AppId,
 ) {
-  return await ctx.db.query("connections")
+  return await ctx.db
+    .query("connections")
     .withIndex("by_user_provider_app_providerUserId", (q) =>
       q.eq("userId", userId).eq("provider", providerForApp(app)).eq("app", app),
-    ).collect();
+    )
+    .collect();
 }
 
 export async function selectedConnection(
@@ -20,5 +22,10 @@ export async function selectedConnection(
   connectionId: Id<"connections">,
 ) {
   const row = await ctx.db.get("connections", connectionId);
-  return row && row.userId === userId && row.app === app && row.provider === providerForApp(app) ? row : null;
+  return row &&
+    row.userId === userId &&
+    row.app === app &&
+    row.provider === providerForApp(app)
+    ? row
+    : null;
 }

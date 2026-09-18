@@ -27,7 +27,10 @@ export function requiredString(
   return value;
 }
 
-export function requiredHeader(request: Request, key: string): string | Response {
+export function requiredHeader(
+  request: Request,
+  key: string,
+): string | Response {
   const value = request.headers.get(key);
   if (typeof value !== "string" || value.length === 0) {
     return errorResponse(400, `${key} must be a string`, "INVALID_REQUEST");

@@ -34,7 +34,10 @@ export function CheckboxGroupField<T extends string>({
   return (
     <FieldSet>
       <FieldLegend variant="label">{legend}</FieldLegend>
-      <div data-slot="checkbox-group" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div
+        data-slot="checkbox-group"
+        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+      >
         {options.map((option) => {
           const id = `${field.name}-${option.value}`;
           const selected = field.state.value.includes(option.value);

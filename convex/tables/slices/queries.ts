@@ -122,11 +122,20 @@ export const discoverApps = internalQuery({
       .withIndex("by_slice_app_connectionId", (q) => q.eq("sliceId", slice._id))
       .collect();
     const bound = new Set(bindings.map((item) => item.app));
-    const connected = new Set((await Promise.all(bindings.map(async (item) => {
-      const account = await ctx.db.get("connections", item.connectionId);
-      return account && account.userId === slice.userId && account.app === item.app
-        ? item.app : null;
-    }))).filter((app): app is NonNullable<typeof app> => app !== null));
+    const connected = new Set(
+      (
+        await Promise.all(
+          bindings.map(async (item) => {
+            const account = await ctx.db.get("connections", item.connectionId);
+            return account &&
+              account.userId === slice.userId &&
+              account.app === item.app
+              ? item.app
+              : null;
+          }),
+        )
+      ).filter((app): app is NonNullable<typeof app> => app !== null),
+    );
     return {
       ok: true as const,
       expiresAt: slice.expiresAt,
@@ -140,32 +149,66 @@ export const discoverApps = internalQuery({
 });
 
 export const discoverAccounts = internalQuery({
-  args: { sliceToken: v.string(), sliceSecret: v.string(), app: v.string(), now: v.number() },
+  args: {
+    sliceToken: v.string(),
+    sliceSecret: v.string(),
+    app: v.string(),
+    now: v.number(),
+  },
   returns: v.union(
     v.object({
-      ok: v.literal(true), app: appValidator,
-      accounts: v.array(v.object({ bindingId: v.id("sliceBindings"), login: v.string() })),
+      ok: v.literal(true),
+      app: appValidator,
+      accounts: v.array(
+        v.object({ bindingId: v.id("sliceBindings"), login: v.string() }),
+      ),
     }),
     denyResultValidator,
   ),
   handler: async (ctx, args) => {
     const slice = await sliceBySecret(ctx, args);
-    if (!slice) return { ok: false as const, status: 401, reason: UNAUTHORIZED_ERROR, code: "UNAUTHORIZED" as const };
+    if (!slice)
+      return {
+        ok: false as const,
+        status: 401,
+        reason: UNAUTHORIZED_ERROR,
+        code: "UNAUTHORIZED" as const,
+      };
     const status = effectiveStatus(slice, args.now);
-    if (status !== "active") return {
-      ok: false as const, status: 403,
-      reason: status === "revoked" ? REVOKED_ERROR : EXPIRED_ERROR,
-      code: status === "revoked" ? "REVOKED" as const : "EXPIRED" as const,
-    };
+    if (status !== "active")
+      return {
+        ok: false as const,
+        status: 403,
+        reason: status === "revoked" ? REVOKED_ERROR : EXPIRED_ERROR,
+        code:
+          status === "revoked" ? ("REVOKED" as const) : ("EXPIRED" as const),
+      };
     const app = args.app;
-    if (!isAppId(app)) return {
-      ok: false as const, status: 403, reason: APP_UNAVAILABLE_ERROR, code: "APP_UNAVAILABLE" as const,
-    };
+    if (!isAppId(app))
+      return {
+        ok: false as const,
+        status: 403,
+        reason: APP_UNAVAILABLE_ERROR,
+        code: "APP_UNAVAILABLE" as const,
+      };
     const bindings = await bindingsForApp(ctx, slice._id, app);
-    const accounts = (await Promise.all(bindings.map(async (binding) => {
-      const connection = await selectedConnection(ctx, slice.userId, app, binding.connectionId);
-      return connection ? { bindingId: binding._id, login: connection.login } : null;
-    }))).filter((account): account is NonNullable<typeof account> => account !== null);
+    const accounts = (
+      await Promise.all(
+        bindings.map(async (binding) => {
+          const connection = await selectedConnection(
+            ctx,
+            slice.userId,
+            app,
+            binding.connectionId,
+          );
+          return connection
+            ? { bindingId: binding._id, login: connection.login }
+            : null;
+        }),
+      )
+    ).filter(
+      (account): account is NonNullable<typeof account> => account !== null,
+    );
     return { ok: true as const, app, accounts };
   },
 });

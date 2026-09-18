@@ -75,11 +75,18 @@ function ConnectionRow({
 }) {
   const [open, setOpen] = useState(false);
   const count = app.accounts?.length;
-  const matchedAccount = searchTerm ? app.accounts?.find((account) =>
-    account.login.toLocaleLowerCase().includes(searchTerm)) : null;
+  const matchedAccount = searchTerm
+    ? app.accounts?.find((account) =>
+        account.login.toLocaleLowerCase().includes(searchTerm),
+      )
+    : null;
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="border-b last:border-b-0">
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className="border-b last:border-b-0"
+    >
       <div className="px-4 py-2">
         <CollapsibleTrigger
           className="flex w-full min-w-0 items-center gap-3 rounded-xl px-2 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
@@ -90,13 +97,19 @@ function ConnectionRow({
           </span>
           <span className="min-w-0 flex-1 sm:flex sm:items-baseline sm:gap-3">
             <span className="block font-medium">{app.name}</span>
-            <span className="block min-w-0 truncate text-sm text-muted-foreground sm:flex-1">{matchedAccount?.login ?? app.description}</span>
+            <span className="block min-w-0 truncate text-sm text-muted-foreground sm:flex-1">
+              {matchedAccount?.login ?? app.description}
+            </span>
           </span>
           <span className="shrink-0 text-sm text-muted-foreground">
-            {count === undefined ? <Skeleton className="h-5 w-6 sm:w-16" /> : (
+            {count === undefined ? (
+              <Skeleton className="h-5 w-6 sm:w-16" />
+            ) : (
               <>
                 <span className="sm:hidden">{count}</span>
-                <span className="hidden sm:inline">{count} {count === 1 ? "account" : "accounts"}</span>
+                <span className="hidden sm:inline">
+                  {count} {count === 1 ? "account" : "accounts"}
+                </span>
               </>
             )}
           </span>
@@ -123,8 +136,13 @@ function ConnectionRow({
         ) : count > 0 ? (
           <ul className="divide-y border-t px-6">
             {app.accounts?.map((account) => (
-              <li key={account.id} className="flex min-w-0 items-center justify-between gap-3 py-3 pl-9">
-                <span className="min-w-0 break-all text-sm">{account.login}</span>
+              <li
+                key={account.id}
+                className="flex min-w-0 items-center justify-between gap-3 py-3 pl-9"
+              >
+                <span className="min-w-0 break-all text-sm">
+                  {account.login}
+                </span>
                 <Button
                   variant="outline"
                   size="sm"
@@ -150,12 +168,20 @@ export function ConnectionsTable() {
     apps: CONNECTION_APPS.map((app) => app.id),
   });
   const term = search.trim().toLocaleLowerCase();
-  const filteredApps = term ? CONNECTION_APPS.filter((app) =>
-    app.name.toLocaleLowerCase().includes(term) ||
-    app.description.toLocaleLowerCase().includes(term) ||
-    (statuses?.find((status) => status.app === app.id)?.accounts ?? [])
-      .some((account) => account.login.toLocaleLowerCase().includes(term))) : CONNECTION_APPS;
-  const visibleApps = filteredApps.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const filteredApps = term
+    ? CONNECTION_APPS.filter(
+        (app) =>
+          app.name.toLocaleLowerCase().includes(term) ||
+          app.description.toLocaleLowerCase().includes(term) ||
+          (
+            statuses?.find((status) => status.app === app.id)?.accounts ?? []
+          ).some((account) => account.login.toLocaleLowerCase().includes(term)),
+      )
+    : CONNECTION_APPS;
+  const visibleApps = filteredApps.slice(
+    page * PAGE_SIZE,
+    (page + 1) * PAGE_SIZE,
+  );
   const disconnect = useAction(api.tables.connections.actions.disconnect);
   const startOAuth = useMutation(api.tables.oauthStates.mutations.start);
   const [busy, setBusy] = useState<string | null>(null);
@@ -194,13 +220,22 @@ export function ConnectionsTable() {
         <Input
           type="search"
           value={search}
-          onChange={(event) => { setSearch(event.target.value); setPage(0); }}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setPage(0);
+          }}
           placeholder="Search apps or connected accounts"
           aria-label="Search connections by app or account"
           className="max-w-sm"
         />
       </div>
-      {rows.length === 0 ? <p role="status" className="p-6 text-sm text-muted-foreground">{statuses === undefined ? "Loading connections…" : "No apps or accounts match."}</p> : null}
+      {rows.length === 0 ? (
+        <p role="status" className="p-6 text-sm text-muted-foreground">
+          {statuses === undefined
+            ? "Loading connections…"
+            : "No apps or accounts match."}
+        </p>
+      ) : null}
       {rows.map((app) => (
         <ConnectionRow
           key={app.id}
@@ -208,7 +243,9 @@ export function ConnectionsTable() {
           searchTerm={term}
           busy={busy !== null}
           onConnect={(appId) => void connect(appId)}
-          onDisconnect={(appId, connectionId) => void remove(appId, connectionId)}
+          onDisconnect={(appId, connectionId) =>
+            void remove(appId, connectionId)
+          }
         />
       ))}
       {filteredApps.length > PAGE_SIZE ? (

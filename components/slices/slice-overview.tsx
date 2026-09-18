@@ -6,17 +6,13 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { SliceApps } from "@/components/slices/slice-apps";
 import { SliceRevokeButton } from "@/components/slices/slice-revoke-button";
-import { SliceRequests } from "@/components/approvals/slice-requests";
 import { ContentCard } from "@/components/shared/content-card";
 import { CopyableField } from "@/components/shared/copyable-field";
 import { ExpiryTime } from "@/components/shared/expiry-time";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import {
-  effectiveSliceStatus,
-  STATUS_LABELS,
-} from "@/lib/capabilities";
+import { effectiveSliceStatus, STATUS_LABELS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 
 export function SliceOverview({ sliceId }: { sliceId: string }) {
@@ -60,7 +56,10 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
                   Require approval
                 </label>
               </div>
-              <SliceRevokeButton sliceToken={slice.token} sliceName={slice.name} />
+              <SliceRevokeButton
+                sliceToken={slice.token}
+                sliceName={slice.name}
+              />
             </div>
           ) : null
         }
@@ -83,7 +82,9 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Expires</p>
-            <div className="mt-1 text-sm"><ExpiryTime expiresAt={slice.expiresAt} now={now} stacked /></div>
+            <div className="mt-1 text-sm">
+              <ExpiryTime expiresAt={slice.expiresAt} now={now} stacked />
+            </div>
           </div>
           <CopyableField
             label="Slice token"
@@ -93,7 +94,6 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
         </div>
       </ContentCard>
       <SliceApps sliceId={sliceId} />
-      <SliceRequests sliceId={sliceId} />
     </div>
   );
 }

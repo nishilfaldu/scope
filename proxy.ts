@@ -6,8 +6,11 @@ import {
 
 const isSignInPage = createRouteMatcher(["/signin"]);
 const isAuthApiRoute = createRouteMatcher(["/api/auth(.*)"]);
-/** Deep links render a Link-style gate before auth — do not bounce away. */
-const isApprovalDeepLink = createRouteMatcher(["/approvals(.*)"]);
+/** Request links show the email verification form at the request URL. */
+const isRequestLink = createRouteMatcher([
+  "/requests/new/(.*)",
+  "/requests/token/(.*)",
+]);
 
 function safeRedirectPath(value: string | null): string {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
@@ -31,8 +34,7 @@ export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
     }
     return;
   }
-  if (isApprovalDeepLink(request)) {
-    // Signed-out users see the Link-style gate on the page itself.
+  if (isRequestLink(request)) {
     return;
   }
   if (!isAuthenticated) {

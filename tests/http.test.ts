@@ -17,7 +17,18 @@ async function createSlice(
     name: string;
     ttlMs: number;
     apps: (
-      "github" | "gmail" | "calendar" | "drive" | "docs" | "sheets" | "slack" | "airtable" | "notion" | "linear" | "vercel" | "zoom"
+      | "github"
+      | "gmail"
+      | "calendar"
+      | "drive"
+      | "docs"
+      | "sheets"
+      | "slack"
+      | "airtable"
+      | "notion"
+      | "linear"
+      | "vercel"
+      | "zoom"
     )[];
   },
 ) {
@@ -29,9 +40,22 @@ async function createSlice(
   });
   await test.run(async (ctx) => {
     for (const app of args.apps) {
-      const provider = ["gmail", "calendar", "drive", "docs", "sheets"].includes(app) ? "google" : app;
+      const provider = [
+        "gmail",
+        "calendar",
+        "drive",
+        "docs",
+        "sheets",
+      ].includes(app)
+        ? "google"
+        : app;
       await ctx.db.insert("connections", {
-        userId, provider, app, accessToken: `${app}-token`, login: "nishil", providerUserId: `${provider}-1`,
+        userId,
+        provider,
+        app,
+        accessToken: `${app}-token`,
+        login: "nishil",
+        providerUserId: `${provider}-1`,
       });
     }
   });
@@ -47,7 +71,16 @@ describe("GET /api/health", () => {
     const body = await response.json();
     expect(body).toEqual({
       ok: true,
-      oauth: { github: false, google: false, slack: false, airtable: false, notion: false, linear: false, vercel: false, zoom: false },
+      oauth: {
+        github: false,
+        google: false,
+        slack: false,
+        airtable: false,
+        notion: false,
+        linear: false,
+        vercel: false,
+        zoom: false,
+      },
     });
     expect(JSON.stringify(body)).not.toMatch(/ghs_|ya29|xoxp|CLIENT_SECRET/);
   });
@@ -105,7 +138,8 @@ describe("POST /api/credentials denials", () => {
     });
     expect(malformed.status).toBe(400);
     expect(await malformed.json()).toMatchObject({
-      error: "Invalid JSON body", code: "INVALID_REQUEST",
+      error: "Invalid JSON body",
+      code: "INVALID_REQUEST",
     });
   });
 
@@ -254,21 +288,36 @@ describe("GET /api/accounts", () => {
   test("returns only allowed accounts and requires the slice secret", async () => {
     const test = t();
     const created = await createSlice(test, {
-      name: "Account discovery", ttlMs: 60_000, apps: ["github"],
+      name: "Account discovery",
+      ttlMs: 60_000,
+      apps: ["github"],
     });
     const headers = {
       "x-slice-token": created.sliceToken,
       "x-slice-secret": created.sliceSecret,
     };
-    const response = await test.fetch("/api/accounts?app=github", { method: "GET", headers });
+    const response = await test.fetch("/api/accounts?app=github", {
+      method: "GET",
+      headers,
+    });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      app: "github", accounts: [expect.objectContaining({ login: "nishil", bindingId: expect.any(String) })],
+      app: "github",
+      accounts: [
+        expect.objectContaining({
+          login: "nishil",
+          bindingId: expect.any(String),
+        }),
+      ],
     });
-    const other = await test.fetch("/api/accounts?app=gmail", { method: "GET", headers });
+    const other = await test.fetch("/api/accounts?app=gmail", {
+      method: "GET",
+      headers,
+    });
     expect(await other.json()).toEqual({ app: "gmail", accounts: [] });
     const denied = await test.fetch("/api/accounts?app=github", {
-      method: "GET", headers: { ...headers, "x-slice-secret": "ss_wrong" },
+      method: "GET",
+      headers: { ...headers, "x-slice-secret": "ss_wrong" },
     });
     expect(denied.status).toBe(401);
     expect(await denied.json()).not.toHaveProperty("accounts");

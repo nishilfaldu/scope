@@ -10,10 +10,7 @@ import {
   httpCreateAccessRequestHandler,
 } from "./http/httpAccessRequestHandlers";
 import { discoverySpec } from "./http/contracts";
-import {
-  httpOAuthCallback,
-  httpOAuthConnect,
-} from "./http/oauth";
+import { httpOAuthCallback, httpOAuthConnect } from "./http/oauth";
 import { corsNoContent, jsonResponse } from "./lib/responses";
 import { ALL_APPS } from "./domain/apps";
 import { oauthConfigured } from "./oauth";
@@ -99,7 +96,11 @@ http.route({
   handler: httpAppsHandler,
 });
 http.route({ path: "/api/accounts", method: "OPTIONS", handler: optionsOk });
-http.route({ path: "/api/accounts", method: "GET", handler: httpAccountsHandler });
+http.route({
+  path: "/api/accounts",
+  method: "GET",
+  handler: httpAccountsHandler,
+});
 
 // Health check
 http.route({

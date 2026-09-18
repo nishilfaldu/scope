@@ -1,8 +1,4 @@
-import {
-  ALL_APPS,
-  providerForApp,
-  type AppId,
-} from "../convex/domain/apps";
+import { ALL_APPS, providerForApp, type AppId } from "../convex/domain/apps";
 
 export { ALL_APPS, providerForApp, type AppId };
 
@@ -24,14 +20,18 @@ export const APP_LABELS: Record<AppId, string> = {
 };
 
 export const APP_PERMISSIONS: Record<AppId, string> = {
-  github: "Repository, workflow, and account permissions granted by the GitHub connection.",
+  github:
+    "Repository, workflow, and account permissions granted by the GitHub connection.",
   gmail: "Read, send, and manage mail in the selected Gmail account.",
-  calendar: "Read and manage calendars and events in the selected Google account.",
+  calendar:
+    "Read and manage calendars and events in the selected Google account.",
   drive: "Read and manage Drive files in the selected Google account.",
   docs: "Read and edit documents in the selected Google account.",
   sheets: "Read and edit spreadsheets in the selected Google account.",
-  slack: "Read conversations and files and send messages with the connected Slack user.",
-  airtable: "Read and write records and schemas in bases approved during Airtable consent.",
+  slack:
+    "Read conversations and files and send messages with the connected Slack user.",
+  airtable:
+    "Read and write records and schemas in bases approved during Airtable consent.",
   notion: "Read and edit pages shared with the Notion integration.",
   linear: "Read and write issues, projects, and teams in Linear.",
   vercel: "Access the Vercel account authorized by its OAuth grant.",
@@ -40,11 +40,11 @@ export const APP_PERMISSIONS: Record<AppId, string> = {
 
 export const APP_HINTS: Record<AppId, string> = {
   github: "Create a short-lived GitHub token. The agent calls GitHub directly.",
-  gmail: "Gmail via the Google login.",
-  calendar: "Calendar via the Google login.",
-  drive: "Drive via the Google login.",
-  docs: "Docs via the Google login.",
-  sheets: "Sheets via the Google login.",
+  gmail: "Gmail via a connected Google account.",
+  calendar: "Calendar via a connected Google account.",
+  drive: "Drive via a connected Google account.",
+  docs: "Docs via a connected Google account.",
+  sheets: "Sheets via a connected Google account.",
   slack: "Create a short-lived Slack token. The agent calls Slack directly.",
   airtable: "Bases, schemas, records, and comments.",
   notion: "Pages and databases shared with the Notion connection.",
@@ -87,8 +87,11 @@ export function effectiveSliceStatus(
   slice: { status: "active" | "revoked" | "expired"; expiresAt: number },
   now: number,
 ) {
-  return slice.status === "revoked" ? "revoked" as const
-    : slice.expiresAt <= now ? "expired" as const : "active" as const;
+  return slice.status === "revoked"
+    ? ("revoked" as const)
+    : slice.expiresAt <= now
+      ? ("expired" as const)
+      : ("active" as const);
 }
 
 export function appLabel(id: string): string {

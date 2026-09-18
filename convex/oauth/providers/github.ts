@@ -32,7 +32,11 @@ async function githubIdentity(
   };
   const userResponse = await fetch("https://api.github.com/user", { headers });
   const userRaw: unknown = await userResponse.json();
-  if (isPlainObject(userRaw) && typeof userRaw.login === "string" && asFiniteNumber(userRaw.id) !== null) {
+  if (
+    isPlainObject(userRaw) &&
+    typeof userRaw.login === "string" &&
+    asFiniteNumber(userRaw.id) !== null
+  ) {
     return {
       login: userRaw.login,
       providerUserId: String(asFiniteNumber(userRaw.id)),
@@ -64,7 +68,10 @@ export const github: ProviderOAuth = {
       return { error: "config" };
     }
     const redirectUri = oauthCallbackUrl("github");
-    const attempts: Array<{ params: Record<string, string>; mode: "body" | "query" }> = [
+    const attempts: Array<{
+      params: Record<string, string>;
+      mode: "body" | "query";
+    }> = [
       {
         mode: "body",
         params: {
@@ -107,7 +114,10 @@ export const github: ProviderOAuth = {
               body: new URLSearchParams(attempt.params).toString(),
             });
       const tokenRaw: unknown = await tokenResponse.json();
-      if (isPlainObject(tokenRaw) && typeof tokenRaw.access_token === "string") {
+      if (
+        isPlainObject(tokenRaw) &&
+        typeof tokenRaw.access_token === "string"
+      ) {
         const identity = await githubIdentity(tokenRaw.access_token);
         return grantFromTokenPayload(tokenRaw, identity);
       }
@@ -158,14 +168,17 @@ export const github: ProviderOAuth = {
       return;
     }
     const basic = btoa(`${client.clientId}:${client.clientSecret}`);
-    await fetch(`https://api.github.com/applications/${client.clientId}/grant`, {
-      method: "DELETE",
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Basic ${basic}`,
-        "X-GitHub-Api-Version": "2022-11-28",
+    await fetch(
+      `https://api.github.com/applications/${client.clientId}/grant`,
+      {
+        method: "DELETE",
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Basic ${basic}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        body: JSON.stringify({ access_token: accessToken }),
       },
-      body: JSON.stringify({ access_token: accessToken }),
-    });
+    );
   },
 };

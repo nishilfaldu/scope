@@ -56,13 +56,22 @@ export const google: ProviderOAuth = {
       { headers: { Authorization: `Bearer ${tokenRaw.access_token}` } },
     );
     const userRaw: unknown = await userResponse.json();
-    if (!userResponse.ok || !isPlainObject(userRaw) || typeof userRaw.sub !== "string" || !userRaw.sub) return { error: "identity" };
+    if (
+      !userResponse.ok ||
+      !isPlainObject(userRaw) ||
+      typeof userRaw.sub !== "string" ||
+      !userRaw.sub
+    )
+      return { error: "identity" };
     const email =
       isPlainObject(userRaw) && typeof userRaw.email === "string"
         ? userRaw.email
         : "google";
     const sub = userRaw.sub;
-    return grantFromTokenPayload(tokenRaw, { login: email, providerUserId: sub });
+    return grantFromTokenPayload(tokenRaw, {
+      login: email,
+      providerUserId: sub,
+    });
   },
 
   /**
