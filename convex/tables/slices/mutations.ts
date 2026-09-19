@@ -3,10 +3,10 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { internalMutation } from "../../_generated/server";
 import { authenticatedMutation } from "../../functions";
 import { appValidator } from "../../domain/apps";
+import { effectiveSliceStatus } from "../../domain/slices";
 import {
   bindingForConnection,
   createSlice,
-  effectiveStatus,
   MAX_SLICE_NAME,
   MAX_TTL_MS,
   validatedBindings,
@@ -101,7 +101,7 @@ export const setMintPolicy = authenticatedMutation({
       .unique();
     if (!slice || slice.userId !== ctx.userId)
       throw new Error("Slice not found");
-    if (effectiveStatus(slice) !== "active")
+    if (effectiveSliceStatus(slice) !== "active")
       throw new Error("Slice is not live");
     await ctx.db.patch("slices", slice._id, { mintPolicy: args.mintPolicy });
     return null;
@@ -123,7 +123,7 @@ export const setBinding = authenticatedMutation({
       .unique();
     if (!slice || slice.userId !== ctx.userId)
       throw new Error("Slice not found");
-    if (effectiveStatus(slice) !== "active")
+    if (effectiveSliceStatus(slice) !== "active")
       throw new Error("Slice is not live");
     const binding = await bindingForConnection(
       ctx,

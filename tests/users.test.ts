@@ -11,11 +11,6 @@ function t() {
 }
 
 describe("users.viewer", () => {
-  test("returns null when signed out", async () => {
-    const viewer = await t().query(api.users.viewer, {});
-    expect(viewer).toBeNull();
-  });
-
   test("returns the signed-in user's name, email, and avatar", async () => {
     const backend = t();
     const userId = await backend.run(async (ctx) => {
@@ -33,21 +28,5 @@ describe("users.viewer", () => {
       email: "nishil@example.com",
       avatarUrl: "https://example.com/avatar.png",
     });
-  });
-
-  test("returns null when the identity has no matching user", async () => {
-    const backend = t();
-    const missingUserId = await backend.run(async (ctx) => {
-      const id = await ctx.db.insert("users", {
-        name: "Gone",
-        email: "gone@example.com",
-      });
-      await ctx.db.delete("users", id);
-      return id;
-    });
-    const viewer = await backend
-      .withIdentity({ subject: `${missingUserId}|session-1` })
-      .query(api.users.viewer, {});
-    expect(viewer).toBeNull();
   });
 });

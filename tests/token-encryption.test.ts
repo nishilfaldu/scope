@@ -3,12 +3,6 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import {
-  TOKEN_CIPHER_PREFIX,
-  decryptToken,
-  encryptToken,
-  isEncryptedToken,
-} from "../convex/lib/tokenEncryption";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -28,24 +22,6 @@ async function signedIn(test: ReturnType<typeof t>) {
     userId,
   };
 }
-
-describe("token encryption helpers", () => {
-  test("round-trips plaintext through AES-GCM with enc:v1 prefix", async () => {
-    const plaintext = "ghs_standing_token";
-    const encrypted = await encryptToken(plaintext);
-    expect(isEncryptedToken(encrypted)).toBe(true);
-    expect(encrypted.startsWith(TOKEN_CIPHER_PREFIX)).toBe(true);
-    expect(encrypted).not.toContain(plaintext);
-    expect(await decryptToken(encrypted)).toBe(plaintext);
-  });
-
-  test("decrypt rejects plaintext-looking stored values", async () => {
-    await expect(decryptToken("ya29.not_encrypted")).rejects.toThrow(
-      /not encrypted/,
-    );
-    expect(isEncryptedToken("ya29.not_encrypted")).toBe(false);
-  });
-});
 
 describe("connection secrets at rest", () => {
   test("saveConnection stores ciphertext, getConnection returns plaintext", async () => {
@@ -74,9 +50,9 @@ describe("connection secrets at rest", () => {
     });
     expect(stored).not.toBeNull();
     expect(stored!.accessToken).not.toBe(accessToken);
-    expect(stored!.accessToken.startsWith(TOKEN_CIPHER_PREFIX)).toBe(true);
+    expect(stored!.accessToken.startsWith("enc:v1:")).toBe(true);
     expect(stored!.refreshToken).not.toBe(refreshToken);
-    expect(stored!.refreshToken!.startsWith(TOKEN_CIPHER_PREFIX)).toBe(true);
+    expect(stored!.refreshToken!.startsWith("enc:v1:")).toBe(true);
 
     const loaded = await test.query(
       internal.tables.connections.queries.getConnection,

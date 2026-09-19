@@ -1,6 +1,7 @@
 import type { Doc, Id } from "../../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../../_generated/server";
 import type { AppId } from "../../domain/apps";
+import { effectiveSliceStatus } from "../../domain/slices";
 import type { AgentErrorCode } from "../../lib/errors";
 import { hashesEqual, randomSecret, sha256Hex } from "../../lib/secrets";
 import { connectionsForApp, selectedConnection } from "../connections/helpers";
@@ -11,17 +12,6 @@ export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export type MintPolicy = "auto" | "approve";
 export type Binding = { app: AppId; connectionId: Id<"connections"> };
 
-export function effectiveStatus(
-  slice: Pick<Doc<"slices">, "status" | "expiresAt">,
-  now = Date.now(),
-) {
-  return slice.status === "revoked"
-    ? ("revoked" as const)
-    : slice.expiresAt <= now
-      ? ("expired" as const)
-      : ("active" as const);
-}
-
 export function withoutSecretHash(slice: Doc<"slices">) {
   return {
     _id: slice._id,
@@ -29,7 +19,7 @@ export function withoutSecretHash(slice: Doc<"slices">) {
     userId: slice.userId,
     name: slice.name,
     token: slice.token,
-    status: effectiveStatus(slice),
+    status: effectiveSliceStatus(slice),
     expiresAt: slice.expiresAt,
     mintPolicy: slice.mintPolicy,
   };

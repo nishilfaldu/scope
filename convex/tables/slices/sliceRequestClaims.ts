@@ -196,7 +196,7 @@ export const createSliceRequest = internalMutation({
     if (idempotencyKeyHash) {
       await ctx.scheduler.runAfter(
         SLICE_REQUEST_TTL_MS,
-        internal.tables.slices.sliceRequestClaims.clearClaimSecret,
+        internal.tables.slices.sliceRequestExpiry.clearClaimSecret,
         { requestId },
       );
     }
@@ -381,21 +381,6 @@ export const resolveSliceRequestClaim = internalMutation({
       apps: request.apps,
       mintPolicy: "auto" as const,
     };
-  },
-});
-
-export const clearClaimSecret = internalMutation({
-  args: { requestId: v.id("sliceRequests") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const request = await ctx.db.get("sliceRequests", args.requestId);
-    if (request && request.expiresAt <= Date.now()) {
-      await ctx.db.patch("sliceRequests", request._id, {
-        issuedSliceSecretCipher: "",
-        claimHandleCipher: "",
-      });
-    }
-    return null;
   },
 });
 

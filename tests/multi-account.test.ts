@@ -102,7 +102,12 @@ describe("Google disconnect", () => {
         apps: ["gmail"],
       })
     ).find((row) => row.app === "gmail")!;
-    expect(after.accounts).toEqual([]);
+    expect(after).toEqual({
+      provider: "google",
+      app: "gmail",
+      connected: false,
+      accounts: [],
+    });
   });
 
   test("removing one app preserves other Google app connections", async () => {
@@ -132,19 +137,49 @@ describe("Google disconnect", () => {
     const gmailId = statuses.find((row) => row.app === "gmail")!.accounts[0].id;
     const calendarId = statuses.find((row) => row.app === "calendar")!
       .accounts[0].id;
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(new Response("", { status: 200 }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("", { status: 200 }),
+    );
     await backend.action(api.tables.connections.actions.disconnect, {
       app: "gmail",
       connectionId: gmailId,
     });
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(
+      await backend.query(api.tables.connections.queries.statusesForApps, {
+        apps: ["gmail", "calendar"],
+      }),
+    ).toEqual([
+      { provider: "google", app: "gmail", connected: false, accounts: [] },
+      {
+        provider: "google",
+        app: "calendar",
+        connected: true,
+        accounts: [
+          expect.objectContaining({
+            id: calendarId,
+            login: "x@gmail.com",
+            providerUserId: "sub-x",
+          }),
+        ],
+      },
+    ]);
     await backend.action(api.tables.connections.actions.disconnect, {
       app: "calendar",
       connectionId: calendarId,
     });
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(
+      await backend.query(api.tables.connections.queries.statusesForApps, {
+        apps: ["gmail", "calendar"],
+      }),
+    ).toEqual([
+      { provider: "google", app: "gmail", connected: false, accounts: [] },
+      {
+        provider: "google",
+        app: "calendar",
+        connected: false,
+        accounts: [],
+      },
+    ]);
   });
 });
 

@@ -1,11 +1,13 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
+
+afterEach(() => vi.useRealTimers());
 
 describe("agent connections", () => {
   test("rotation keeps the old connection live until idempotent activation", async () => {
@@ -204,54 +206,68 @@ describe("agent connections", () => {
       }),
     );
     const ownerSession = t.withIdentity({ subject: `${owner}|session` });
-    const currentId = await t.run((ctx) =>
-      ctx.db.insert("agentConnections", {
-        userId: owner,
-        agentId: "ag_stable",
-        name: "Codex",
-        secretHash: "current-hash",
-        status: "active",
-      }),
-    );
-    const stagedId = await t.run((ctx) =>
-      ctx.db.insert("agentConnections", {
-        userId: owner,
-        agentId: "ag_stable",
-        name: "Codex",
-        secretHash: "staged-hash",
-        status: "staged",
-      }),
-    );
-    await t.run((ctx) =>
-      ctx.db.insert("agentConnectionInvites", {
-        publicToken: "ac_expiring_rotation",
-        claimSecretHash: "claim-hash",
-        agentId: "ag_stable",
-        agentName: "Codex",
-        status: "approved",
-        expiresAt: Date.now() - 1,
-        userId: owner,
-        replacesAgentConnectionId: currentId,
-        agentConnectionId: stagedId,
-        issuedSecretCipher: "cipher",
-      }),
-    );
-
-    await t.mutation(internal.tables.agentConnections.expireInvite, {
-      publicToken: "ac_expiring_rotation",
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    const inviteResponse = await t.fetch("/api/agent-connections", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentName: "Codex" }),
     });
+    const invite = await inviteResponse.json();
+    await ownerSession.mutation(api.tables.agentConnections.decideInvite, {
+      publicToken: invite.connectUrl.split("/connect/")[1],
+      decision: "approved",
+    });
+    const firstClaim = await t.fetch("/api/agent-connections/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claimHandle: invite.claimHandle }),
+    });
+    const current = await firstClaim.json();
+
+    const reconnectResponse = await t.fetch("/api/agent-connections", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": current.agentConnectionId,
+        "x-agent-connection-secret": current.agentConnectionSecret,
+      },
+      body: "{}",
+    });
+    const reconnect = await reconnectResponse.json();
+    await ownerSession.mutation(api.tables.agentConnections.decideInvite, {
+      publicToken: reconnect.connectUrl.split("/connect/")[1],
+      decision: "approved",
+    });
+    const replacementClaim = await t.fetch("/api/agent-connections/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claimHandle: reconnect.claimHandle }),
+    });
+    const replacement = await replacementClaim.json();
+
+    await t.finishAllScheduledFunctions(() =>
+      vi.advanceTimersByTime(15 * 60 * 1000 + 1),
+    );
 
     expect(
-      await t.run(async (ctx) => (await ctx.db.get(currentId))?.status),
-    ).toBe("active");
-    expect(
-      await t.run(async (ctx) => (await ctx.db.get(stagedId))?.status),
-    ).toBe("revoked");
-    expect(
-      await ownerSession.query(api.tables.agentConnections.list, {}),
+      await ownerSession.query(api.tables.agentDashboard.list, {}),
     ).toMatchObject([
-      { _id: currentId, status: "active", agentId: "ag_stable" },
+      {
+        _id: current.agentConnectionId,
+        status: "active",
+        agentId: current.agentId,
+        name: "Codex",
+      },
     ]);
+    const activation = await t.fetch("/api/agent-connections/activate", {
+      method: "POST",
+      headers: {
+        "x-agent-connection-id": replacement.agentConnectionId,
+        "x-agent-connection-secret": replacement.agentConnectionSecret,
+      },
+    });
+    expect(activation.status).toBe(401);
   });
 
   test("the owner can reconnect a credential-less agent to an active lineage", async () => {
@@ -435,7 +451,7 @@ describe("agent connections", () => {
     });
     const slice = await sliceResponse.json();
     expect(
-      await ownerSession.query(api.tables.agentConnections.list, {}),
+      await ownerSession.query(api.tables.agentDashboard.list, {}),
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -1,10 +1,9 @@
-import { httpAction } from "../_generated/server";
+import { env, httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { exchangeAuthorizationCode, startAuthorize } from "../oauth";
 import { providerForApp, type AppId } from "../domain/apps";
-import { allowedReturnTo, redirectTo } from "./helpers";
-
-export { parseBoardOrigin, resolveReturnTo } from "./helpers";
+import { normalizeReturnTo } from "../domain/returnPaths";
+import { redirectTo } from "./helpers";
 
 export function httpOAuthConnect(app: AppId) {
   const provider = providerForApp(app);
@@ -35,7 +34,7 @@ export function httpOAuthCallback(app: AppId) {
   const provider = providerForApp(app);
   return httpAction(async (ctx, request) => {
     const requestUrl = new URL(request.url);
-    const returnFallback = allowedReturnTo(null);
+    const returnFallback = normalizeReturnTo(null, env.BOARD_ORIGIN);
     const errorParam = requestUrl.searchParams.get("error");
     const code = requestUrl.searchParams.get("code");
     const state = requestUrl.searchParams.get("state");

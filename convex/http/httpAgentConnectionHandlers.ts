@@ -1,12 +1,12 @@
-import { httpAction, env } from "../_generated/server";
 import { internal } from "../_generated/api";
+import { env, httpAction } from "../_generated/server";
+import { parseBoardOrigin } from "../domain/returnPaths";
 import {
   readObjectBody,
   requiredHeader,
   requiredString,
 } from "../lib/requests";
 import { errorResponse, jsonResponse } from "../lib/responses";
-import { parseBoardOrigin } from "./helpers";
 
 export const httpCreateAgentConnectionHandler = httpAction(
   async (ctx, request) => {
