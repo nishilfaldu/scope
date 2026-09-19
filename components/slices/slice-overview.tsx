@@ -1,99 +1,106 @@
 "use client";
 
-import { useNow } from "@/hooks/use-now";
-
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { SliceApps } from "@/components/slices/slice-apps";
 import { SliceRevokeButton } from "@/components/slices/slice-revoke-button";
-import { SliceRequests } from "@/components/approvals/slice-requests";
-import { ContentCard } from "@/components/shared/content-card";
 import { CopyableField } from "@/components/shared/copyable-field";
 import { ExpiryTime } from "@/components/shared/expiry-time";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import {
-  effectiveSliceStatus,
-  STATUS_LABELS,
-} from "@/lib/capabilities";
+import { effectiveSliceStatus, STATUS_LABELS } from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
+import { useNow } from "@/hooks/use-now";
 
 export function SliceOverview({ sliceId }: { sliceId: string }) {
-  const slice = useQuery(api.tables.slices.queries.get, { sliceId: sliceId });
+  const slice = useQuery(api.tables.slices.queries.get, { sliceId });
   const [setMintPolicy, isSettingPolicy] = useErrorCatchingMutation(
     api.tables.slices.mutations.setMintPolicy,
-    { successMessage: "Mint policy updated" },
+    { successMessage: "Approval policy updated" },
   );
   const now = useNow();
 
-  if (slice === undefined) {
-    return <Skeleton className="h-28 w-full" />;
-  }
+  if (slice === undefined)
+    return <Skeleton className="h-48 w-full rounded-xl" />;
+  if (slice === null) return null;
 
-  if (slice === null) {
-    return null;
-  }
-
-  const isActive = effectiveSliceStatus(slice, now) === "active";
+  const status = effectiveSliceStatus(slice, now);
+  const isActive = status === "active";
 
   return (
-    <div className="flex flex-col gap-4">
-      <ContentCard
-        title={slice.name}
-        action={
-          isActive ? (
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              <div className="flex items-center gap-2">
-                <Switch
-                  id={`mint-policy-${sliceId}`}
-                  checked={slice.mintPolicy === "approve"}
-                  disabled={isSettingPolicy}
-                  onCheckedChange={(checked) =>
-                    void setMintPolicy({
-                      sliceToken: slice.token,
-                      mintPolicy: checked ? "approve" : "auto",
-                    })
-                  }
-                />
-                <label htmlFor={`mint-policy-${sliceId}`} className="text-sm">
-                  Require approval
-                </label>
-              </div>
-              <SliceRevokeButton sliceToken={slice.token} sliceName={slice.name} />
+    <div className="flex flex-col gap-8">
+      <section className="overflow-hidden rounded-xl border bg-card">
+        <div className="flex flex-col justify-between gap-5 px-5 py-5 sm:flex-row sm:items-start sm:px-6">
+          <div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {slice.name}
+              </h1>
+              <Badge
+                variant={
+                  status === "active"
+                    ? "secondary"
+                    : status === "revoked"
+                      ? "destructive"
+                      : "outline"
+                }
+              >
+                {STATUS_LABELS[status]}
+              </Badge>
             </div>
-          ) : null
-        }
-      >
-        <div className="grid gap-4 p-6 sm:grid-cols-3">
-          <div>
-            <p className="text-xs text-muted-foreground">Status</p>
-            <Badge
-              className="mt-1"
-              variant={
-                effectiveSliceStatus(slice, now) === "active"
-                  ? "secondary"
-                  : effectiveSliceStatus(slice, now) === "revoked"
-                    ? "destructive"
-                    : "outline"
-              }
-            >
-              {STATUS_LABELS[effectiveSliceStatus(slice, now)]}
-            </Badge>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Access granted to a connected agent
+            </p>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Expires</p>
-            <div className="mt-1 text-sm"><ExpiryTime expiresAt={slice.expiresAt} now={now} stacked /></div>
-          </div>
-          <CopyableField
-            label="Slice token"
-            value={slice.token}
-            successMessage="Slice token copied"
-          />
+          {isActive ? (
+            <SliceRevokeButton
+              sliceToken={slice.token}
+              sliceName={slice.name}
+            />
+          ) : null}
         </div>
-      </ContentCard>
+        <Separator />
+        <div className="grid divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="p-5">
+            <p className="text-xs text-muted-foreground">Token approvals</p>
+            <div className="mt-2 flex items-center gap-2.5">
+              <Switch
+                id={`mint-policy-${sliceId}`}
+                checked={slice.mintPolicy === "approve"}
+                disabled={!isActive || isSettingPolicy}
+                onCheckedChange={(checked) =>
+                  void setMintPolicy({
+                    sliceToken: slice.token,
+                    mintPolicy: checked ? "approve" : "auto",
+                  })
+                }
+              />
+              <label
+                htmlFor={`mint-policy-${sliceId}`}
+                className="text-sm font-medium"
+              >
+                {slice.mintPolicy === "approve" ? "Required" : "Automatic"}
+              </label>
+            </div>
+          </div>
+          <div className="p-5">
+            <p className="text-xs text-muted-foreground">Expires</p>
+            <div className="mt-1 text-sm font-medium">
+              <ExpiryTime expiresAt={slice.expiresAt} now={now} stacked />
+            </div>
+          </div>
+          <div className="p-5">
+            <CopyableField
+              label="Slice token"
+              value={slice.token}
+              successMessage="Slice token copied"
+            />
+          </div>
+        </div>
+      </section>
       <SliceApps sliceId={sliceId} />
-      <SliceRequests sliceId={sliceId} />
     </div>
   );
 }

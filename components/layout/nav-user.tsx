@@ -40,11 +40,7 @@ function isThemeOption(value: string): value is ThemeOption {
   return (THEMES as readonly string[]).includes(value);
 }
 
-export function NavUser({
-  user,
-}: {
-  user: UserInfo;
-}) {
+export function NavUser({ user }: { user: UserInfo }) {
   const { isMobile } = useSidebar();
   const { theme, setTheme } = useTheme();
   const { signOut } = useAuthActions();

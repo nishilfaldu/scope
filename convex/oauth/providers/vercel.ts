@@ -65,10 +65,7 @@ export const vercel: ProviderOAuth = {
     authorize.searchParams.set("client_id", client.clientId);
     authorize.searchParams.set("redirect_uri", oauthCallbackUrl("vercel"));
     authorize.searchParams.set("response_type", "code");
-    authorize.searchParams.set(
-      "scope",
-      "openid email profile offline_access",
-    );
+    authorize.searchParams.set("scope", "openid email profile offline_access");
     authorize.searchParams.set("state", state);
     return { url: authorize.toString() };
   },

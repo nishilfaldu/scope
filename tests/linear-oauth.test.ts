@@ -8,15 +8,15 @@ describe("Linear OAuth", () => {
   test("authorizes as the user with read and write scopes", () => {
     vi.stubEnv("LINEAR_CLIENT_ID", "linear-client");
     vi.stubEnv("LINEAR_CLIENT_SECRET", "linear-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     expect(linear.authorize("state-1")).toEqual({
-      url: "https://linear.app/oauth/authorize?client_id=linear-client&redirect_uri=https%3A%2F%2Fpassport.convex.site%2Fapi%2Flinear%2Fcallback&response_type=code&scope=read%2Cwrite&actor=user&state=state-1",
+      url: "https://linear.app/oauth/authorize?client_id=linear-client&redirect_uri=https%3A%2F%2Fscope.convex.site%2Fapi%2Flinear%2Fcallback&response_type=code&scope=read%2Cwrite&actor=user&state=state-1",
     });
   });
   test("exchanges, reads viewer identity, refreshes, and revokes", async () => {
     vi.stubEnv("LINEAR_CLIENT_ID", "linear-client");
     vi.stubEnv("LINEAR_CLIENT_SECRET", "linear-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(

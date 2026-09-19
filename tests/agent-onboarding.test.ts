@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { sha256Hex } from "../convex/lib/secrets";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -35,23 +36,101 @@ async function signedIn(
   };
 }
 
+async function connectedAgent(
+  test: ReturnType<typeof t>,
+  userId: Awaited<ReturnType<typeof signedIn>>["userId"],
+  name: string,
+) {
+  const secret = `acs_${name.replaceAll(" ", "_")}`;
+  const id = await test.run(async (ctx) =>
+    ctx.db.insert("agentConnections", {
+      userId,
+      agentId: `ag_${name}`,
+      name,
+      secretHash: await sha256Hex(secret),
+      status: "active",
+    }),
+  );
+  return { id, secret };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
 
 describe("agent onboarding approval link", () => {
+  test("reason is required", async () => {
+    const test = t();
+    const { userId } = await signedIn(test);
+    const agent = await connectedAgent(test, userId, "Reasonless agent");
+    const response = await test.fetch("/api/access-requests", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
+      body: JSON.stringify({ apps: ["github"], ttlMs: 60_000 }),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "INVALID_REQUEST" });
+  });
+
+  test("the connected agent can cancel its pending slice request", async () => {
+    const test = t();
+    const { userId } = await signedIn(test);
+    const agent = await connectedAgent(test, userId, "Cancelling agent");
+    const created = await test.fetch("/api/access-requests", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
+      body: JSON.stringify({
+        apps: ["github"],
+        ttlMs: 60_000,
+        reason: "No longer needed",
+      }),
+    });
+    const request = await created.json();
+    const cancelled = await test.fetch("/api/access-requests/cancel", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
+      body: JSON.stringify({ claimHandle: request.claimHandle }),
+    });
+    expect(cancelled.status).toBe(200);
+    expect(await cancelled.json()).toEqual({ status: "cancelled" });
+
+    const claim = await test.fetch("/api/access-requests/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claimHandle: request.claimHandle }),
+    });
+    expect(claim.status).toBe(403);
+    expect(await claim.json()).toMatchObject({ code: "APPROVAL_EXPIRED" });
+  });
+
   test("create → approvalUrl is board origin → approve → claim returns slice creds without prior ss_", async () => {
     const test = t();
-    const { backend } = await signedIn(test, {
+    const { backend, userId } = await signedIn(test, {
       refreshToken: "ghr_refresh_token",
     });
+    const agent = await connectedAgent(test, userId, "Chat agent");
 
     const created = await test.fetch("/api/access-requests", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
       body: JSON.stringify({
-        agentName: "Chat agent",
         apps: ["github"],
         ttlMs: 60_000,
         reason: "triage inbox",
@@ -62,7 +141,7 @@ describe("agent onboarding approval link", () => {
     expect(body.status).toBe("pending");
     expect(body.claimHandle).toMatch(/^ch_/);
     expect(body.approvalUrl).toMatch(
-      /^http:\/\/localhost:3000\/approvals\/ar_/,
+      /^http:\/\/localhost:3000\/requests\/new\/ar_/,
     );
     expect(body.approvalUrl.startsWith("http://localhost:3000/")).toBe(true);
     expect(JSON.stringify(body)).not.toMatch(/ss_/);
@@ -79,15 +158,14 @@ describe("agent onboarding approval link", () => {
     expect(pendingBody.code).toBe("APPROVAL_REQUIRED");
     expect(pendingBody.approvalUrl).toBe(body.approvalUrl);
 
-    const publicToken = body.approvalUrl.split("/approvals/")[1];
-    const preview = await backend.query(
-      api.tables.slices.accessRequests.getByPublicToken, { publicToken },
-    );
-    expect(preview?.kind).toBe("onboarding");
+    const publicToken = body.approvalUrl.split("/requests/new/")[1];
+    const preview = await backend.query(api.tables.slices.sliceRequests.get, {
+      publicToken,
+    });
     expect(preview?.agentName).toBe("Chat agent");
 
-    await backend.mutation(api.tables.slices.accessRequests.decide, {
-      requestId: body.requestId,
+    await backend.mutation(api.tables.slices.sliceRequests.decide, {
+      publicToken: body.approvalUrl.split("/requests/new/")[1],
       decision: "approved",
     });
 
@@ -156,21 +234,26 @@ describe("agent onboarding approval link", () => {
 
   test("deny returns APPROVAL_DENIED on claim", async () => {
     const test = t();
-    const { backend } = await signedIn(test, {
+    const { backend, userId } = await signedIn(test, {
       refreshToken: "ghr_refresh_token",
     });
+    const agent = await connectedAgent(test, userId, "Denied agent");
     const created = await test.fetch("/api/access-requests", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
       body: JSON.stringify({
-        agentName: "Denied agent",
         apps: ["github"],
         ttlMs: 60_000,
+        reason: "Test denial",
       }),
     });
     const body = await created.json();
-    await backend.mutation(api.tables.slices.accessRequests.decide, {
-      requestId: body.requestId,
+    await backend.mutation(api.tables.slices.sliceRequests.decide, {
+      publicToken: body.approvalUrl.split("/requests/new/")[1],
       decision: "denied",
     });
     const denied = await test.fetch("/api/access-requests/claim", {
@@ -184,19 +267,26 @@ describe("agent onboarding approval link", () => {
 
   test("expire returns APPROVAL_EXPIRED", async () => {
     const test = t();
-    await signedIn(test, { refreshToken: "ghr_refresh_token" });
+    const { userId } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
+    const agent = await connectedAgent(test, userId, "Expired agent");
     const created = await test.fetch("/api/access-requests", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
       body: JSON.stringify({
-        agentName: "Expired agent",
         apps: ["github"],
         ttlMs: 60_000,
+        reason: "Test expiry",
       }),
     });
     const body = await created.json();
     await test.run(async (ctx) => {
-      await ctx.db.patch("accessRequests", body.requestId, {
+      await ctx.db.patch("sliceRequests", body.requestId, {
         expiresAt: Date.now() - 1_000,
       });
     });
@@ -221,6 +311,10 @@ describe("agent onboarding approval link", () => {
     expect(paths).toContain("POST /api/access-requests/status");
     expect(paths).toContain("POST /api/access-requests/claim");
     expect(body.summary.toLowerCase()).toContain("future credential mints");
-    expect(body.routes.some((route: { path: string }) => route.path === "/api/access-requests")).toBe(true);
+    expect(
+      body.routes.some(
+        (route: { path: string }) => route.path === "/api/access-requests",
+      ),
+    ).toBe(true);
   });
 });

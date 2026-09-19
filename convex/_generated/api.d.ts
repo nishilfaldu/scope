@@ -9,6 +9,7 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as devSeed from "../devSeed.js";
 import type * as domain_apps from "../domain/apps.js";
 import type * as domain_requests from "../domain/requests.js";
 import type * as functions from "../functions.js";
@@ -17,6 +18,8 @@ import type * as http_contracts from "../http/contracts.js";
 import type * as http_helpers from "../http/helpers.js";
 import type * as http_httpAccessRequestHandlers from "../http/httpAccessRequestHandlers.js";
 import type * as http_httpAccountsHandler from "../http/httpAccountsHandler.js";
+import type * as http_httpAgentConnectionHandlers from "../http/httpAgentConnectionHandlers.js";
+import type * as http_httpAgentSliceHandlers from "../http/httpAgentSliceHandlers.js";
 import type * as http_httpAppsHandler from "../http/httpAppsHandler.js";
 import type * as http_httpClaimHandler from "../http/httpClaimHandler.js";
 import type * as http_httpCredentialsHandler from "../http/httpCredentialsHandler.js";
@@ -41,20 +44,21 @@ import type * as oauth_providers_vercel from "../oauth/providers/vercel.js";
 import type * as oauth_providers_zoom from "../oauth/providers/zoom.js";
 import type * as oauth_shared from "../oauth/shared.js";
 import type * as oauth_types from "../oauth/types.js";
+import type * as tables_agentConnections from "../tables/agentConnections.js";
 import type * as tables_connections_actions from "../tables/connections/actions.js";
 import type * as tables_connections_helpers from "../tables/connections/helpers.js";
 import type * as tables_connections_mutations from "../tables/connections/mutations.js";
 import type * as tables_connections_queries from "../tables/connections/queries.js";
 import type * as tables_oauthStates_mutations from "../tables/oauthStates/mutations.js";
 import type * as tables_oauthStates_queries from "../tables/oauthStates/queries.js";
-import type * as tables_slices_accessRequestPublic from "../tables/slices/accessRequestPublic.js";
-import type * as tables_slices_accessRequests from "../tables/slices/accessRequests.js";
-import type * as tables_slices_accessRequestsMint from "../tables/slices/accessRequestsMint.js";
 import type * as tables_slices_credentials from "../tables/slices/credentials.js";
 import type * as tables_slices_helpers from "../tables/slices/helpers.js";
 import type * as tables_slices_mutations from "../tables/slices/mutations.js";
-import type * as tables_slices_onboardingAccess from "../tables/slices/onboardingAccess.js";
 import type * as tables_slices_queries from "../tables/slices/queries.js";
+import type * as tables_slices_sliceRequestClaims from "../tables/slices/sliceRequestClaims.js";
+import type * as tables_slices_sliceRequests from "../tables/slices/sliceRequests.js";
+import type * as tables_slices_tokenRequestClaims from "../tables/slices/tokenRequestClaims.js";
+import type * as tables_slices_tokenRequests from "../tables/slices/tokenRequests.js";
 import type * as users from "../users.js";
 
 import type {
@@ -65,6 +69,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  devSeed: typeof devSeed;
   "domain/apps": typeof domain_apps;
   "domain/requests": typeof domain_requests;
   functions: typeof functions;
@@ -73,6 +78,8 @@ declare const fullApi: ApiFromModules<{
   "http/helpers": typeof http_helpers;
   "http/httpAccessRequestHandlers": typeof http_httpAccessRequestHandlers;
   "http/httpAccountsHandler": typeof http_httpAccountsHandler;
+  "http/httpAgentConnectionHandlers": typeof http_httpAgentConnectionHandlers;
+  "http/httpAgentSliceHandlers": typeof http_httpAgentSliceHandlers;
   "http/httpAppsHandler": typeof http_httpAppsHandler;
   "http/httpClaimHandler": typeof http_httpClaimHandler;
   "http/httpCredentialsHandler": typeof http_httpCredentialsHandler;
@@ -97,20 +104,21 @@ declare const fullApi: ApiFromModules<{
   "oauth/providers/zoom": typeof oauth_providers_zoom;
   "oauth/shared": typeof oauth_shared;
   "oauth/types": typeof oauth_types;
+  "tables/agentConnections": typeof tables_agentConnections;
   "tables/connections/actions": typeof tables_connections_actions;
   "tables/connections/helpers": typeof tables_connections_helpers;
   "tables/connections/mutations": typeof tables_connections_mutations;
   "tables/connections/queries": typeof tables_connections_queries;
   "tables/oauthStates/mutations": typeof tables_oauthStates_mutations;
   "tables/oauthStates/queries": typeof tables_oauthStates_queries;
-  "tables/slices/accessRequestPublic": typeof tables_slices_accessRequestPublic;
-  "tables/slices/accessRequests": typeof tables_slices_accessRequests;
-  "tables/slices/accessRequestsMint": typeof tables_slices_accessRequestsMint;
   "tables/slices/credentials": typeof tables_slices_credentials;
   "tables/slices/helpers": typeof tables_slices_helpers;
   "tables/slices/mutations": typeof tables_slices_mutations;
-  "tables/slices/onboardingAccess": typeof tables_slices_onboardingAccess;
   "tables/slices/queries": typeof tables_slices_queries;
+  "tables/slices/sliceRequestClaims": typeof tables_slices_sliceRequestClaims;
+  "tables/slices/sliceRequests": typeof tables_slices_sliceRequests;
+  "tables/slices/tokenRequestClaims": typeof tables_slices_tokenRequestClaims;
+  "tables/slices/tokenRequests": typeof tables_slices_tokenRequests;
   users: typeof users;
 }>;
 
@@ -140,4 +148,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
+};

@@ -12,17 +12,17 @@ describe("Notion OAuth", () => {
   test("builds a user-owned authorization request", () => {
     vi.stubEnv("NOTION_CLIENT_ID", "notion-client");
     vi.stubEnv("NOTION_CLIENT_SECRET", "notion-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     const started = notion.authorize("state-1");
     expect(started).toEqual({
-      url: "https://api.notion.com/v1/oauth/authorize?client_id=notion-client&redirect_uri=https%3A%2F%2Fpassport.convex.site%2Fapi%2Fnotion%2Fcallback&response_type=code&owner=user&state=state-1",
+      url: "https://api.notion.com/v1/oauth/authorize?client_id=notion-client&redirect_uri=https%3A%2F%2Fscope.convex.site%2Fapi%2Fnotion%2Fcallback&response_type=code&owner=user&state=state-1",
     });
   });
 
   test("exchanges, refreshes, and revokes with Notion's OAuth contract", async () => {
     vi.stubEnv("NOTION_CLIENT_ID", "notion-client");
     vi.stubEnv("NOTION_CLIENT_SECRET", "notion-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
@@ -70,7 +70,7 @@ describe("Notion OAuth", () => {
         body: JSON.stringify({
           grant_type: "authorization_code",
           code: "code-1",
-          redirect_uri: "https://passport.convex.site/api/notion/callback",
+          redirect_uri: "https://scope.convex.site/api/notion/callback",
         }),
       }),
     );

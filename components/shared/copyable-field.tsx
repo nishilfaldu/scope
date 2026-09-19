@@ -22,7 +22,10 @@ export function CopyableField({
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
-      toast.add({ title: successMessage ?? `${label} copied`, type: "success" });
+      toast.add({
+        title: successMessage ?? `${label} copied`,
+        type: "success",
+      });
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
       toast.add({

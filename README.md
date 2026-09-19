@@ -1,21 +1,32 @@
-# Agent Passport
+# Scope
 
-Agent Passport lets a user connect OAuth accounts and give an agent a slice that can request provider credentials for selected apps.
+Scope lets a user connect OAuth accounts and give an agent a slice that can request provider credentials for selected apps.
 
 ## How it works
 
 - A **connection** stores one provider account's encrypted OAuth tokens. Google has separate Gmail, Calendar, Drive, Docs, and Sheets connections, each with its own consent scopes and callback. One user can connect multiple accounts to the same app.
-- A **slice** belongs to a user, has a token and secret, an expiry, a revocation state, and an `auto` or `approve` mint policy.
+- A **slice** belongs to a user and stable agent lineage, has a token and secret, an expiry, a revocation state, and an `auto` or `approve` mint policy.
+- An **agent connection** is an operator-approved relationship with an opaque ID and secret. It identifies the Scope account that later slice requests must address. Revoking it blocks new requests and every slice created through it.
 - Each allowed account has one indexed **slice binding** that selects a connection. A slice can allow several accounts for the same app. Bindings are separate rows; the slice does not store an array of apps or accounts.
 - An agent presents its slice token and secret to `POST /api/credentials`. When several accounts are allowed for an app, it chooses a `bindingId` from `GET /api/accounts?app=<app>`. The backend checks that exact binding, refreshes its provider connection, checks permissions again, then returns the newly issued provider access token. Under `approve`, the operator first approves a one-time mint request for that account.
 
-**Revocation boundary:** Revoking a slice or disconnecting an account immediately blocks *future* credential mints. An already issued provider-native access token remains usable until that provider expires or revokes it. Agent Passport does not proxy provider requests and cannot shorten an upstream token's lifetime. The credential response reports the provider's expiry, or `null` if the provider did not give one.
+**Revocation boundary:** Revoking an agent connection, revoking a slice, or disconnecting an account immediately blocks _future_ credential mints. An already issued provider-native access token remains usable until that provider expires or revokes it. Scope does not proxy provider requests and cannot shorten an upstream token's lifetime. The credential response reports the provider's expiry, or `null` if the provider did not give one.
 
 The vault never hands out its stored access token or refresh token. Providers without a refresh-capable grant cannot mint agent credentials and return `SHORT_LIVED_UNAVAILABLE`.
 
 ## Agent approval
 
-An agent calls `POST /api/access-requests`, sends only the returned `approvalUrl` to the operator, and stores its private `claimHandle` in its own runtime. The operator signs in through that link, connects missing apps directly from the account picker, returns to the same approval, chooses an account per app, and approves or denies. Agent names and reasons are supplied by the requester and are not verified identities.
+An agent first calls `POST /api/agent-connections`, sends only the returned `connectUrl` to the operator, and keeps the private claim handle. The operator verifies their email in Scope and explicitly connects the agent. The agent claims a stable agent ID plus an opaque connection ID and secret once. The pairing name is requester supplied and is not a verified identity.
+
+For planned rotation, the agent calls the same endpoint with its active connection ID and secret in the connection headers. The link is bound to the original Scope account. Approval stages replacement credentials while the current connection remains active. The agent may retry the claim until it receives those credentials, then proves possession through `POST /api/agent-connections/activate`. Activation atomically swaps the active credential generation and revokes the previous one; slices and slice requests remain attached to the stable agent lineage. Retrying activation is safe.
+
+If an agent loses its credentials, it creates an ordinary connection link. The operator may explicitly replace one of their active agents and preserve that agent's grants. A deliberately revoked connection cannot rotate or be selected for reconnection; it must connect as new and request new grants.
+
+Every later `POST /api/access-requests` includes that connection ID and secret in `x-agent-connection-id` and `x-agent-connection-secret`. The backend derives the owner from the connection before issuing the request link. The operator reviews requested apps and permissions, chooses connected accounts, and explicitly approves or denies. OTP verification only creates a session. If an account is missing, the operator adds it in `/connections` and returns to the request.
+
+For an existing slice with approval policy, `POST /api/credentials` returns a `/requests/token/[token]` link. The decision screen shows the slice, app, and specific connected account. Only the slice owner's Scope user ID can read or decide it. A connected provider login is never used to establish ownership. Approval permits one short-lived credential claim through the existing private agent claim path; the browser never receives provider tokens or slice secrets.
+
+Google OAuth remains available for connecting Gmail, Calendar, Drive, Docs, and Sheets. It is not a Scope sign-in method. Email codes expire in 10 minutes and are single use.
 
 Use a random, task-stable `Idempotency-Key` header (32–128 characters) when creating an access request. The same key and payload return the same pending or approved request and private handle before it is claimed. A different payload with that key returns `IDEMPOTENCY_CONFLICT`. Treat this key as a secret because a caller holding it can recover the claim handle while the request is live. Agent errors include stable `code`, `retryable`, and `nextAction` fields. A denied, expired, or claimed request needs a fresh task and key.
 
@@ -33,12 +44,15 @@ For Google, register five redirects on the same OAuth client:
 
 Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` once. Disconnect removes local access first. Provider revocation is attempted afterward; for Google it is attempted when the last app connection for that Google account is removed.
 
-## Agent onboarding and minting
+## Agent pairing, onboarding, and minting
 
-1. The agent calls `POST /api/access-requests` with `agentName`, `apps`, `ttlMs`, and optional `reason`.
-2. The response contains a chat-safe `approvalUrl` and a private `claimHandle`. The operator opens the URL, selects one or more accounts for each app, and approves or denies. Opening the link alone does not assign it to an operator.
-3. The agent polls `POST /api/access-requests/status` and claims slice credentials once with `POST /api/access-requests/claim`.
-4. The agent calls `GET /api/accounts?app=<app>` with `x-slice-token` and `x-slice-secret` to see the accounts allowed for that app. It sends `sliceToken`, `sliceSecret`, `app`, and the chosen `bindingId` to `POST /api/credentials`. With a single allowed account, `bindingId` may be omitted. With several, omitting it returns `ACCOUNT_SELECTION_REQUIRED`. An auto slice mints immediately. An approve slice returns a request ID and approval URL for the exact account; after approval the agent calls `POST /api/credentials/claim`.
+1. The agent calls `POST /api/agent-connections` with `agentName`, gives the operator the `connectUrl`, and privately retains the `claimHandle`.
+2. After the operator approves, the agent calls `POST /api/agent-connections/claim` and securely stores the returned connection ID and secret. Replacement claims are retryable until activation. When `activationRequired` is true, the agent calls `POST /api/agent-connections/activate` with the replacement credentials; this endpoint is idempotent.
+3. The agent calls `POST /api/access-requests` with `apps`, `ttlMs`, a requester-supplied `reason`, and the connection credentials in headers. The response contains a chat-safe owner-bound `approvalUrl` and private `claimHandle`.
+4. The operator opens the URL, selects one or more accounts for each app, and approves or denies. The agent polls `POST /api/access-requests/status` and claims slice credentials once with `POST /api/access-requests/claim`.
+5. The agent calls `GET /api/accounts?app=<app>` with `x-slice-token` and `x-slice-secret` to see the accounts allowed for that app. It sends `sliceToken`, `sliceSecret`, `app`, and the chosen `bindingId` to `POST /api/credentials`. With a single allowed account, `bindingId` may be omitted. With several, omitting it returns `ACCOUNT_SELECTION_REQUIRED`. An auto slice mints immediately. An approve slice returns a request ID and approval URL for the exact account; after approval the agent calls `POST /api/credentials/claim`.
+
+An agent may reduce its own authority without operator approval. Connection credentials authorize `POST /api/agent-connections/revoke`; slice credentials authorize `POST /api/slices/revoke`. Private request credentials authorize cancellation through `/api/agent-connections/cancel`, `/api/access-requests/cancel`, and `/api/credentials/cancel`. Revocation and cancellation never expand access. Request fields are immutable after a link is created.
 
 A failed provider refresh leaves an approved mint request available to retry until its claim window expires. The backend consumes the request only after refresh and the final slice, account, and binding check succeed.
 
@@ -55,7 +69,7 @@ Open [http://localhost:3000](http://localhost:3000). Convex HTTP routes live on 
 
 ## Deploy
 
-Set OAuth client IDs and secrets on the Convex deployment. Set `BOARD_ORIGIN` to the board's origin, such as `http://localhost:3000` in development, so OAuth can return there.
+Set OAuth client IDs and secrets on the Convex deployment. Set `BOARD_ORIGIN` to the board's origin, such as `http://localhost:3000` in development, so OAuth can return there. Set `RESEND_API_KEY` and verify `nishilfaldu.site` in Resend. OTP mail defaults to `Scope <login@nishilfaldu.site>`; set `RESEND_FROM` to override that sender.
 
 All connection secrets (upstream OAuth access and refresh tokens) are stored encrypted at rest with AES-256-GCM using `TOKEN_ENCRYPTION_KEY` in Convex env. Generate a base64-encoded 32-byte key and set it before connecting services:
 
@@ -91,23 +105,20 @@ pnpm test
 
 Official references: [Airtable OAuth](https://airtable.com/developers/web/api/oauth-reference) and [token identity](https://airtable.com/developers/web/api/get-user-id-scopes).
 
-
 ### Notion OAuth setup
 
 Notion support uses a public OAuth connection. Until the app is registered, the Notion tile is present but connect returns a configuration error.
 
-1. Open [My integrations](https://www.notion.so/profile/integrations) and create a new public integration for Agent Passport.
+1. Open [My integrations](https://www.notion.so/profile/integrations) and create a new public integration for Scope.
 2. Enable the content capabilities agents should receive; users select shared pages and databases on Notion's consent screen.
 3. Register `https://<deployment>.convex.site/api/notion/callback`.
 4. Set `NOTION_CLIENT_ID` and `NOTION_CLIENT_SECRET` on the Convex deployment, deploy, then connect from `/connections`.
 
 Notion references: [Authorization](https://developers.notion.com/guides/get-started/authorization), [token exchange](https://developers.notion.com/reference/create-a-token), [refresh](https://developers.notion.com/reference/refresh-a-token), and [revoke](https://developers.notion.com/reference/revoke-token).
 
-
 ### Linear OAuth setup
 
 Create an OAuth application in Linear settings, register `https://<deployment>.convex.site/api/linear/callback`, set `LINEAR_CLIENT_ID` and `LINEAR_CLIENT_SECRET` on the Convex deployment, deploy, then connect from `/connections`.
-
 
 ### Vercel OAuth setup
 
@@ -117,7 +128,7 @@ Create a Sign in with Vercel application, register `https://<deployment>.convex.
 
 1. Create a user-managed OAuth app in the [Zoom App Marketplace](https://marketplace.zoom.us/develop/create).
 2. Register `https://<deployment>.convex.site/api/zoom/callback` as both the redirect URL and the allow-list URL.
-3. Add the smallest scopes required by the product, including `user:read:user` so Agent Passport can identify the connection. Zoom issues refresh tokens with the authorization-code grant.
+3. Add the smallest scopes required by the product, including `user:read:user` so Scope can identify the connection. Zoom issues refresh tokens with the authorization-code grant.
 4. Set the confidential client credentials and deploy:
 
    ```bash

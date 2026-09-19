@@ -64,11 +64,14 @@ describe("auto mint policy unchanged", () => {
     const { backend } = await signedIn(test, {
       refreshToken: "ghr_refresh_token",
     });
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Auto agent",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Auto agent",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
     expect(created.mintPolicy).toBe("auto");
     const allowed = await test.mutation(
       internal.tables.slices.credentials.authorizeCreate,
@@ -91,12 +94,15 @@ describe("auto mint policy unchanged", () => {
       refreshToken: "ghr_refresh_token",
     });
     stubGithubRefresh("ghu_auto_minted");
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Auto http",
-      ttlMs: 60_000,
-      apps: ["github"],
-      mintPolicy: "auto",
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Auto http",
+        ttlMs: 60_000,
+        apps: ["github"],
+        mintPolicy: "auto",
+      },
+    );
     const response = await test.fetch("/api/credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -121,12 +127,15 @@ describe("auto mint policy unchanged", () => {
   test("standing-only GitHub connection hard-fails auto mint", async () => {
     const test = t();
     const { backend } = await signedIn(test);
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Standing only",
-      ttlMs: 60_000,
-      apps: ["github"],
-      mintPolicy: "auto",
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Standing only",
+        ttlMs: 60_000,
+        apps: ["github"],
+        mintPolicy: "auto",
+      },
+    );
     const response = await test.fetch("/api/credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -150,15 +159,16 @@ describe("auto mint policy unchanged", () => {
     });
     vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
     vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(
-      new Error("network down"),
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network down"));
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Refresh throw",
+        ttlMs: 60_000,
+        apps: ["github"],
+        mintPolicy: "auto",
+      },
     );
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Refresh throw",
-      ttlMs: 60_000,
-      apps: ["github"],
-      mintPolicy: "auto",
-    });
     const response = await test.fetch("/api/credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -177,29 +187,112 @@ describe("auto mint policy unchanged", () => {
 });
 
 describe("approve-gated mint", () => {
-  test("failed refresh leaves an approved request claimable", async () => {
+  test("the slice can cancel its pending token request", async () => {
     const test = t();
-    const { backend } = await signedIn(test, { refreshToken: "ghr_refresh_token" });
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Retry agent", ttlMs: 60_000, apps: ["github"], mintPolicy: "approve",
+    const { backend } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
     });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Cancel request",
+        ttlMs: 60_000,
+        apps: ["github"],
+        mintPolicy: "approve",
+      },
+    );
     const requested = await test.fetch("/api/credentials", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "github" }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        app: "github",
+      }),
     });
     const { requestId } = await requested.json();
-    await backend.mutation(api.tables.slices.accessRequests.decide, { requestId, decision: "approved" });
+    const cancelled = await test.fetch("/api/credentials/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        requestId,
+      }),
+    });
+    expect(cancelled.status).toBe(200);
+    expect(await cancelled.json()).toEqual({ status: "cancelled" });
+
+    const claim = await test.fetch("/api/credentials/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        requestId,
+      }),
+    });
+    expect(claim.status).toBe(403);
+    expect(await claim.json()).toMatchObject({ code: "APPROVAL_EXPIRED" });
+  });
+
+  test("failed refresh leaves an approved request claimable", async () => {
+    const test = t();
+    const { backend } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Retry agent",
+        ttlMs: 60_000,
+        apps: ["github"],
+        mintPolicy: "approve",
+      },
+    );
+    const requested = await test.fetch("/api/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        app: "github",
+      }),
+    });
+    const { requestId, approvalUrl } = await requested.json();
+    await backend.mutation(api.tables.slices.tokenRequests.decide, {
+      publicToken: approvalUrl.split("/requests/token/")[1],
+      decision: "approved",
+    });
     vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
     vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
-    const refresh = vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("temporary outage"))
-      .mockResolvedValue(json({ access_token: "ghu_retry", refresh_token: "ghr_next", expires_in: 3600 }));
-    const claim = () => test.fetch("/api/credentials/claim", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, requestId }),
-    });
+    const refresh = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Error("temporary outage"))
+      .mockResolvedValue(
+        json({
+          access_token: "ghu_retry",
+          refresh_token: "ghr_next",
+          expires_in: 3600,
+        }),
+      );
+    const claim = () =>
+      test.fetch("/api/credentials/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sliceToken: created.sliceToken,
+          sliceSecret: created.sliceSecret,
+          requestId,
+        }),
+      });
     const failed = await claim();
     expect(failed.status).toBe(503);
-    expect(await test.run(async (ctx) => (await ctx.db.get("accessRequests", requestId))?.status)).toBe("approved");
+    expect(
+      await test.run(
+        async (ctx) => (await ctx.db.get("tokenRequests", requestId))?.status,
+      ),
+    ).toBe("approved");
     const retried = await claim();
     expect(retried.status).toBe(200);
     expect((await retried.json()).accessToken).toBe("ghu_retry");
@@ -208,19 +301,37 @@ describe("approve-gated mint", () => {
 
   test("revocation during refresh blocks delivery", async () => {
     const test = t();
-    const { backend } = await signedIn(test, { refreshToken: "ghr_refresh_token" });
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Race agent", ttlMs: 60_000, apps: ["github"],
+    const { backend } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
     });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Race agent",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
     vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
     vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
-      await backend.mutation(api.tables.slices.mutations.revoke, { sliceToken: created.sliceToken });
-      return json({ access_token: "ghu_after_revoke", refresh_token: "ghr_next", expires_in: 3600 });
+      await backend.mutation(api.tables.slices.mutations.revoke, {
+        sliceToken: created.sliceToken,
+      });
+      return json({
+        access_token: "ghu_after_revoke",
+        refresh_token: "ghr_next",
+        expires_in: 3600,
+      });
     });
     const response = await test.fetch("/api/credentials", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sliceToken: created.sliceToken, sliceSecret: created.sliceSecret, app: "github" }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        app: "github",
+      }),
     });
     expect(response.status).toBe(403);
     expect(await response.json()).toMatchObject({ code: "REVOKED" });
@@ -232,12 +343,15 @@ describe("approve-gated mint", () => {
       refreshToken: "ghr_refresh_token",
     });
     stubGithubRefresh("ghu_claim_minted");
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Approve agent",
-      ttlMs: 60_000,
-      apps: ["github"],
-      mintPolicy: "approve",
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Approve agent",
+        ttlMs: 60_000,
+        apps: ["github"],
+        mintPolicy: "approve",
+      },
+    );
     expect(created.mintPolicy).toBe("approve");
 
     const requested = await test.fetch("/api/credentials", {
@@ -274,8 +388,8 @@ describe("approve-gated mint", () => {
       status: "pending",
     });
 
-    await backend.mutation(api.tables.slices.accessRequests.decide, {
-      requestId: pendingBody.requestId,
+    await backend.mutation(api.tables.slices.tokenRequests.decide, {
+      publicToken: pendingBody.approvalUrl.split("/requests/token/")[1],
       decision: "approved",
     });
 
@@ -317,12 +431,15 @@ describe("approve-gated mint", () => {
     const { backend } = await signedIn(test, {
       refreshToken: "ghr_refresh_token",
     });
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Deny agent",
-      ttlMs: 60_000,
-      apps: ["github"],
-      mintPolicy: "approve",
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Deny agent",
+        ttlMs: 60_000,
+        apps: ["github"],
+        mintPolicy: "approve",
+      },
+    );
     const requested = await test.fetch("/api/credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -332,9 +449,9 @@ describe("approve-gated mint", () => {
         app: "github",
       }),
     });
-    const { requestId } = await requested.json();
-    await backend.mutation(api.tables.slices.accessRequests.decide, {
-      requestId,
+    const { requestId, approvalUrl } = await requested.json();
+    await backend.mutation(api.tables.slices.tokenRequests.decide, {
+      publicToken: approvalUrl.split("/requests/token/")[1],
       decision: "denied",
     });
     const denied = await test.fetch("/api/credentials/claim", {
@@ -358,12 +475,15 @@ describe("approve-gated mint", () => {
     const { backend } = await signedIn(test, {
       refreshToken: "ghr_refresh_token",
     });
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Expire agent",
-      ttlMs: 60_000,
-      apps: ["github"],
-      mintPolicy: "approve",
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Expire agent",
+        ttlMs: 60_000,
+        apps: ["github"],
+        mintPolicy: "approve",
+      },
+    );
     const requested = await test.fetch("/api/credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -375,7 +495,7 @@ describe("approve-gated mint", () => {
     });
     const { requestId } = await requested.json();
     await test.run(async (ctx) => {
-      await ctx.db.patch("accessRequests", requestId, {
+      await ctx.db.patch("tokenRequests", requestId, {
         expiresAt: Date.now() - 1_000,
       });
     });
@@ -399,12 +519,15 @@ describe("approve-gated mint", () => {
     const { backend } = await signedIn(test, {
       refreshToken: "ghr_refresh_token",
     });
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Claim window",
-      ttlMs: 60_000,
-      apps: ["github"],
-      mintPolicy: "approve",
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Claim window",
+        ttlMs: 60_000,
+        apps: ["github"],
+        mintPolicy: "approve",
+      },
+    );
     const requested = await test.fetch("/api/credentials", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -414,13 +537,13 @@ describe("approve-gated mint", () => {
         app: "github",
       }),
     });
-    const { requestId } = await requested.json();
-    await backend.mutation(api.tables.slices.accessRequests.decide, {
-      requestId,
+    const { requestId, approvalUrl } = await requested.json();
+    await backend.mutation(api.tables.slices.tokenRequests.decide, {
+      publicToken: approvalUrl.split("/requests/token/")[1],
       decision: "approved",
     });
     await test.run(async (ctx) => {
-      await ctx.db.patch("accessRequests", requestId, {
+      await ctx.db.patch("tokenRequests", requestId, {
         expiresAt: Date.now() - 1_000,
       });
     });

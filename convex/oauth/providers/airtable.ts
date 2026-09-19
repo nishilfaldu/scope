@@ -9,7 +9,8 @@ import {
 } from "../shared";
 import type { ProviderOAuth } from "../types";
 
-const SCOPES = "data.records:read data.records:write schema.bases:read schema.bases:write user.email:read";
+const SCOPES =
+  "data.records:read data.records:write schema.bases:read schema.bases:write user.email:read";
 
 function credentials() {
   const clientId = envTrimmed(env.AIRTABLE_CLIENT_ID);
@@ -22,7 +23,10 @@ function codeVerifier(state: string) {
 }
 
 async function codeChallenge(verifier: string) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(verifier),
+  );
   return btoa(String.fromCharCode(...new Uint8Array(digest)))
     .replaceAll("+", "-")
     .replaceAll("/", "_")
@@ -54,7 +58,10 @@ async function identity(accessToken: string) {
   const raw: unknown = await response.json();
   const value = isPlainObject(raw) ? raw : {};
   const login = typeof value.email === "string" ? value.email : "airtable";
-  return { login, providerUserId: typeof value.id === "string" && value.id ? value.id : "" };
+  return {
+    login,
+    providerUserId: typeof value.id === "string" && value.id ? value.id : "",
+  };
 }
 
 export const airtable: ProviderOAuth = {
@@ -85,7 +92,10 @@ export const airtable: ProviderOAuth = {
   },
   async refresh(connection) {
     if (connection.refreshToken === null) return null;
-    const raw = await tokenRequest({ grant_type: "refresh_token", refresh_token: connection.refreshToken });
+    const raw = await tokenRequest({
+      grant_type: "refresh_token",
+      refresh_token: connection.refreshToken,
+    });
     if ("error" in raw) return null;
     return refreshedFromPayload(raw, connection.refreshToken);
   },

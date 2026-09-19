@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -20,7 +20,6 @@ async function signedIn(test: ReturnType<typeof t>) {
   await test.run(async (ctx) => {
     await ctx.db.insert("connections", {
       userId,
-      provider: "github",
       app: "github",
       accessToken: "github-token",
       login: "nishil",
@@ -30,7 +29,6 @@ async function signedIn(test: ReturnType<typeof t>) {
   await test.run(async (ctx) => {
     await ctx.db.insert("connections", {
       userId,
-      provider: "google",
       app: "gmail",
       accessToken: "google-token",
       login: "nishil@example.com",
@@ -44,18 +42,47 @@ async function signedIn(test: ReturnType<typeof t>) {
 }
 
 describe("slice ownership", () => {
-  test("create binds the slice to the signed-in user's passport and grant", async () => {
+  test("an agent can revoke its own slice with its private credentials", async () => {
+    const test = t();
+    const { backend } = await signedIn(test);
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      { name: "Self revoke", ttlMs: 60_000, apps: ["github"] },
+    );
+    const response = await test.fetch("/api/slices/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: "revoked" });
+    expect(
+      (await test.run((ctx) => ctx.db.get("slices", created.id)))?.status,
+    ).toBe("revoked");
+  });
+
+  test("create binds the slice to the signed-in user's Scope account and grant", async () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "PR agent",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "PR agent",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
     const stored = await test.run(async (ctx) => ({
       slice: await ctx.db.get("slices", created.id),
-      bindings: await ctx.db.query("sliceBindings")
-        .withIndex("by_slice_app_connectionId", (q) => q.eq("sliceId", created.id)).collect(),
+      bindings: await ctx.db
+        .query("sliceBindings")
+        .withIndex("by_slice_app_connectionId", (q) =>
+          q.eq("sliceId", created.id),
+        )
+        .collect(),
     }));
     expect(stored.slice?.userId).toEqual(userId);
     expect(stored.slice).not.toHaveProperty("apps");
@@ -72,7 +99,7 @@ describe("slice ownership", () => {
     );
     const backend = test.withIdentity({ subject: `${userId}|session-1` });
     await expect(
-      backend.mutation(api.tables.slices.mutations.create, {
+      backend.mutation(internal.tables.slices.mutations.createFixture, {
         name: "Blocked",
         ttlMs: 60_000,
         apps: ["github"],
@@ -81,7 +108,6 @@ describe("slice ownership", () => {
     await test.run(async (ctx) => {
       await ctx.db.insert("connections", {
         userId,
-        provider: "github",
         app: "github",
         accessToken: "github-token",
         login: "nishil",
@@ -89,7 +115,7 @@ describe("slice ownership", () => {
       });
     });
     await expect(
-      backend.mutation(api.tables.slices.mutations.create, {
+      backend.mutation(internal.tables.slices.mutations.createFixture, {
         name: "Blocked",
         ttlMs: 60_000,
         apps: ["slack"],
@@ -100,21 +126,35 @@ describe("slice ownership", () => {
   test("each slice owns indexed bindings", async () => {
     const test = t();
     const { backend } = await signedIn(test);
-    const first = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "One", ttlMs: 60_000, apps: ["github"],
-    });
-    const second = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Two", ttlMs: 60_000, apps: ["github"],
-    });
-    const rows = await test.run(async (ctx) => ctx.db.query("sliceBindings").collect());
+    const first = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "One",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
+    const second = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Two",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
+    const rows = await test.run(async (ctx) =>
+      ctx.db.query("sliceBindings").collect(),
+    );
     expect(first.id).not.toEqual(second.id);
-    expect(rows.map((row) => row.sliceId).sort()).toEqual([first.id, second.id].sort());
+    expect(rows.map((row) => row.sliceId).sort()).toEqual(
+      [first.id, second.id].sort(),
+    );
   });
 
   test("create refuses a signed-out caller", async () => {
     const test = t();
     await expect(
-      test.mutation(api.tables.slices.mutations.create, {
+      test.mutation(internal.tables.slices.mutations.createFixture, {
         name: "Nope",
         ttlMs: 60_000,
         apps: ["github"],
@@ -122,53 +162,65 @@ describe("slice ownership", () => {
     ).rejects.toThrow(/Sign in/);
   });
 
-  test("list and get only return the signed-in user's slices", async () => {
+  test("get only returns the signed-in user's slice", async () => {
     const test = t();
     const { backend: owner } = await signedIn(test);
-    const created = await owner.mutation(api.tables.slices.mutations.create, {
-      name: "Owner agent",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
+    const created = await owner.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Owner agent",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
     const { backend: otherUser } = await signedIn(test);
 
-    const ownerList = await owner.query(api.tables.slices.queries.list, {
-      paginationOpts: { numItems: 10, cursor: null },
-    });
-    const otherList = await otherUser.query(api.tables.slices.queries.list, {
-      paginationOpts: { numItems: 10, cursor: null },
-    });
-
-    expect(ownerList.page).toHaveLength(1);
-    expect(otherList.page).toHaveLength(0);
+    expect(
+      await owner.query(api.tables.slices.queries.get, {
+        sliceId: created.id,
+      }),
+    ).toMatchObject({ _id: created.id });
     expect(
       await otherUser.query(api.tables.slices.queries.get, {
         sliceId: created.id,
       }),
     ).toBeNull();
-    expect(await owner.query(api.tables.slices.queries.bindingsForApps, {
-      sliceId: created.id, apps: ["github"],
-    })).toMatchObject([{ app: "github", sliceId: created.id }]);
-    await expect(otherUser.query(api.tables.slices.queries.bindingsForApps, {
-      sliceId: created.id, apps: ["github"],
-    })).rejects.toThrow("Slice not found");
+    expect(
+      await owner.query(api.tables.slices.queries.bindingsForApps, {
+        sliceId: created.id,
+        apps: ["github"],
+      }),
+    ).toMatchObject([{ app: "github", sliceId: created.id }]);
+    await expect(
+      otherUser.query(api.tables.slices.queries.bindingsForApps, {
+        sliceId: created.id,
+        apps: ["github"],
+      }),
+    ).rejects.toThrow("Slice not found");
   });
 
   test("another user cannot change or revoke a slice", async () => {
     const test = t();
     const { backend: owner } = await signedIn(test);
-    const created = await owner.mutation(api.tables.slices.mutations.create, {
-      name: "Owner agent",
-      ttlMs: 60_000,
-      apps: ["github", "gmail"],
-    });
+    const created = await owner.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Owner agent",
+        ttlMs: 60_000,
+        apps: ["github", "gmail"],
+      },
+    );
     const { backend: otherUser } = await signedIn(test);
 
     await expect(
       otherUser.mutation(api.tables.slices.mutations.setBinding, {
         sliceToken: created.sliceToken,
         app: "gmail",
-        connectionId: (await owner.query(api.tables.connections.queries.statusesForApps, { apps: ["gmail"] }))[0].accounts[0].id,
+        connectionId: (
+          await owner.query(api.tables.connections.queries.statusesForApps, {
+            apps: ["gmail"],
+          })
+        )[0].accounts[0].id,
         enabled: false,
       }),
     ).rejects.toThrow("Slice not found");
@@ -189,17 +241,15 @@ describe("slice ownership", () => {
   test("signed-out callers cannot read or mutate slices", async () => {
     const test = t();
     const { backend: owner } = await signedIn(test);
-    const created = await owner.mutation(api.tables.slices.mutations.create, {
-      name: "Owner agent",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
+    const created = await owner.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Owner agent",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
 
-    await expect(
-      test.query(api.tables.slices.queries.list, {
-        paginationOpts: { numItems: 10, cursor: null },
-      }),
-    ).rejects.toThrow("Sign in to continue");
     await expect(
       test.query(api.tables.slices.queries.get, {
         sliceId: created.id,
@@ -209,7 +259,11 @@ describe("slice ownership", () => {
       test.mutation(api.tables.slices.mutations.setBinding, {
         sliceToken: created.sliceToken,
         app: "github",
-        connectionId: (await owner.query(api.tables.connections.queries.statusesForApps, { apps: ["github"] }))[0].accounts[0].id,
+        connectionId: (
+          await owner.query(api.tables.connections.queries.statusesForApps, {
+            apps: ["github"],
+          })
+        )[0].accounts[0].id,
         enabled: false,
       }),
     ).rejects.toThrow("Sign in to continue");

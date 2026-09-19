@@ -9,26 +9,38 @@ describe("Vercel OAuth", () => {
   test("authorizes with OpenID identity and offline access", () => {
     vi.stubEnv("VERCEL_CLIENT_ID", "vercel-client");
     vi.stubEnv("VERCEL_CLIENT_SECRET", "vercel-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     expect(vercel.authorize("state-1")).toEqual({
-      url: "https://vercel.com/oauth/authorize?client_id=vercel-client&redirect_uri=https%3A%2F%2Fpassport.convex.site%2Fapi%2Fvercel%2Fcallback&response_type=code&scope=openid+email+profile+offline_access&state=state-1",
+      url: "https://vercel.com/oauth/authorize?client_id=vercel-client&redirect_uri=https%3A%2F%2Fscope.convex.site%2Fapi%2Fvercel%2Fcallback&response_type=code&scope=openid+email+profile+offline_access&state=state-1",
     });
   });
 
   test("exchanges, reads user info, refreshes, and revokes", async () => {
     vi.stubEnv("VERCEL_CLIENT_ID", "vercel-client");
     vi.stubEnv("VERCEL_CLIENT_SECRET", "vercel-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
-        json({ access_token: "access-1", refresh_token: "refresh-1", expires_in: 3600 }),
+        json({
+          access_token: "access-1",
+          refresh_token: "refresh-1",
+          expires_in: 3600,
+        }),
       )
       .mockResolvedValueOnce(
-        json({ sub: "user-1", preferred_username: "nishil", email: "nishil@example.com" }),
+        json({
+          sub: "user-1",
+          preferred_username: "nishil",
+          email: "nishil@example.com",
+        }),
       )
       .mockResolvedValueOnce(
-        json({ access_token: "access-2", refresh_token: "refresh-2", expires_in: 7200 }),
+        json({
+          access_token: "access-2",
+          refresh_token: "refresh-2",
+          expires_in: 7200,
+        }),
       )
       .mockResolvedValueOnce(new Response(null, { status: 200 }));
 

@@ -1,5 +1,5 @@
-import { SliceDashboard } from "@/components/slices/slice-dashboard";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <SliceDashboard />;
+  redirect("/agents");
 }
