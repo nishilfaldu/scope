@@ -19,7 +19,10 @@ import {
 import { decryptToken, encryptToken } from "../../lib/tokenEncryption";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
 import { denyCreate, MAX_TTL_MS } from "./helpers";
-import { activeAgentConnection } from "../agentConnections";
+import {
+  activeAgentConnection,
+  activeConnectionForAgent,
+} from "../agentConnections";
 
 export const SLICE_REQUEST_TTL_MS = 24 * 60 * 60 * 1000;
 export const MAX_PENDING_SLICE_REQUESTS = 100;
@@ -106,7 +109,7 @@ export const createSliceRequest = internalMutation({
     }
 
     const idempotencyKeyHash = args.idempotencyKey
-      ? await sha256Hex(`${agentConnection._id}:${args.idempotencyKey}`)
+      ? await sha256Hex(`${agentConnection.agentId}:${args.idempotencyKey}`)
       : undefined;
     if (idempotencyKeyHash) {
       const existing = await ctx.db
@@ -117,7 +120,7 @@ export const createSliceRequest = internalMutation({
         .unique();
       if (existing) {
         if (
-          existing.agentConnectionId !== agentConnection._id ||
+          existing.agentId !== agentConnection.agentId ||
           existing.ttlMs !== args.ttlMs ||
           existing.reason !== reason ||
           JSON.stringify(existing.apps) !== JSON.stringify(uniqueApps)
@@ -174,7 +177,7 @@ export const createSliceRequest = internalMutation({
     const { publicToken, claimHandle, claimSecretHash } =
       await issuePublicPair();
     const requestId = await ctx.db.insert("sliceRequests", {
-      agentConnectionId: agentConnection._id,
+      agentId: agentConnection.agentId,
       apps: uniqueApps,
       ttlMs: args.ttlMs,
       reason,
@@ -259,11 +262,11 @@ export const resolveSliceRequestStatus = internalQuery({
     const request = await sliceRequestByClaim(ctx, args.claimHandle);
     if (!request)
       return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
-    const agentConnection = await ctx.db.get(
-      "agentConnections",
-      request.agentConnectionId,
+    const agentConnection = await activeConnectionForAgent(
+      ctx,
+      request.agentId,
     );
-    if (agentConnection?.status !== "active") {
+    if (!agentConnection) {
       return denyCreate(403, "Agent connection has been revoked", "REVOKED");
     }
     const denied = claimDenial(request);
@@ -313,11 +316,11 @@ export const resolveSliceRequestClaim = internalMutation({
     const request = await sliceRequestByClaim(ctx, args.claimHandle);
     if (!request)
       return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
-    const agentConnection = await ctx.db.get(
-      "agentConnections",
-      request.agentConnectionId,
+    const agentConnection = await activeConnectionForAgent(
+      ctx,
+      request.agentId,
     );
-    if (agentConnection?.status !== "active") {
+    if (!agentConnection) {
       return denyCreate(403, "Agent connection has been revoked", "REVOKED");
     }
     const denied = claimDenial(request);
@@ -413,7 +416,7 @@ export const cancelSliceRequest = internalMutation({
     const request = await sliceRequestByClaim(ctx, args.claimHandle);
     if (
       !request ||
-      request.agentConnectionId !== agentConnection._id ||
+      request.agentId !== agentConnection.agentId ||
       request.status !== "pending"
     ) {
       return false;

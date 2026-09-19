@@ -8,6 +8,7 @@ import {
 } from "../../domain/requests";
 import { encryptToken } from "../../lib/tokenEncryption";
 import { createSlice, validatedBindings } from "./helpers";
+import { activeConnectionForAgent } from "../agentConnections";
 
 const sliceRequest = v.object({
   publicToken: v.string(),
@@ -28,11 +29,8 @@ export const get = authenticatedQuery({
       .withIndex("by_public_token", (q) => q.eq("publicToken", publicToken))
       .unique();
     if (!request) return null;
-    const connection = await ctx.db.get(
-      "agentConnections",
-      request.agentConnectionId,
-    );
-    if (connection?.status !== "active" || connection.userId !== ctx.userId) {
+    const connection = await activeConnectionForAgent(ctx, request.agentId);
+    if (!connection || connection.userId !== ctx.userId) {
       return null;
     }
     return {
@@ -69,14 +67,11 @@ export const decide = authenticatedMutation({
     if (effectiveRequestStatus(request, Date.now()) !== "pending") {
       throw new Error("Request is no longer pending");
     }
-    const agentConnection = await ctx.db.get(
-      "agentConnections",
-      request.agentConnectionId,
+    const agentConnection = await activeConnectionForAgent(
+      ctx,
+      request.agentId,
     );
-    if (
-      agentConnection?.status !== "active" ||
-      agentConnection.userId !== ctx.userId
-    ) {
+    if (!agentConnection || agentConnection.userId !== ctx.userId) {
       throw new Error("Agent connection has been revoked");
     }
     if (args.decision === "denied") {
@@ -98,7 +93,7 @@ export const decide = authenticatedMutation({
       ttlMs: request.ttlMs,
       mintPolicy: "auto",
       bindings,
-      agentConnectionId: request.agentConnectionId,
+      agentId: request.agentId,
     });
     await ctx.db.patch("sliceRequests", request._id, {
       status: "approved",

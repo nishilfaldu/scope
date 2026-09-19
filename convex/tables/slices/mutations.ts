@@ -13,6 +13,7 @@ import {
   sliceBySecret,
 } from "./helpers";
 import { selectedConnection } from "../connections/helpers";
+import { randomSecret, sha256Hex } from "../../lib/secrets";
 
 export { MAX_SLICE_NAME, MAX_TTL_MS };
 
@@ -60,8 +61,25 @@ export const createFixture = internalMutation({
       args.bindings,
       args.apps,
     );
+    const agentId = `fixture:${userId}`;
+    const fixtureAgent = await ctx.db
+      .query("agentConnections")
+      .withIndex("by_user_agent_status", (q) =>
+        q.eq("userId", userId).eq("agentId", agentId).eq("status", "active"),
+      )
+      .unique();
+    if (!fixtureAgent) {
+      await ctx.db.insert("agentConnections", {
+        userId,
+        agentId,
+        name,
+        secretHash: await sha256Hex(randomSecret("fixture_")),
+        status: "active",
+      });
+    }
     return await createSlice(ctx, {
       userId,
+      agentId,
       name,
       ttlMs: args.ttlMs,
       mintPolicy: args.mintPolicy ?? "auto",

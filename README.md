@@ -5,7 +5,7 @@ Scope lets a user connect OAuth accounts and give an agent a slice that can requ
 ## How it works
 
 - A **connection** stores one provider account's encrypted OAuth tokens. Google has separate Gmail, Calendar, Drive, Docs, and Sheets connections, each with its own consent scopes and callback. One user can connect multiple accounts to the same app.
-- A **slice** belongs to a user, has a token and secret, an expiry, a revocation state, and an `auto` or `approve` mint policy.
+- A **slice** belongs to a user and stable agent lineage, has a token and secret, an expiry, a revocation state, and an `auto` or `approve` mint policy.
 - An **agent connection** is an operator-approved relationship with an opaque ID and secret. It identifies the Scope account that later slice requests must address. Revoking it blocks new requests and every slice created through it.
 - Each allowed account has one indexed **slice binding** that selects a connection. A slice can allow several accounts for the same app. Bindings are separate rows; the slice does not store an array of apps or accounts.
 - An agent presents its slice token and secret to `POST /api/credentials`. When several accounts are allowed for an app, it chooses a `bindingId` from `GET /api/accounts?app=<app>`. The backend checks that exact binding, refreshes its provider connection, checks permissions again, then returns the newly issued provider access token. Under `approve`, the operator first approves a one-time mint request for that account.
@@ -18,7 +18,7 @@ The vault never hands out its stored access token or refresh token. Providers wi
 
 An agent first calls `POST /api/agent-connections`, sends only the returned `connectUrl` to the operator, and keeps the private claim handle. The operator verifies their email in Scope and explicitly connects the agent. The agent claims a stable agent ID plus an opaque connection ID and secret once. The pairing name is requester supplied and is not a verified identity.
 
-For planned rotation, the agent calls the same endpoint with its active connection ID and secret in the connection headers. The link is bound to the original Scope account. Approval stages replacement credentials while the current connection remains active. The agent may retry the claim until it receives those credentials, then proves possession through `POST /api/agent-connections/activate`. Activation atomically moves existing slices to the replacement and revokes the previous connection; retrying activation is safe.
+For planned rotation, the agent calls the same endpoint with its active connection ID and secret in the connection headers. The link is bound to the original Scope account. Approval stages replacement credentials while the current connection remains active. The agent may retry the claim until it receives those credentials, then proves possession through `POST /api/agent-connections/activate`. Activation atomically swaps the active credential generation and revokes the previous one; slices and slice requests remain attached to the stable agent lineage. Retrying activation is safe.
 
 If an agent loses its credentials, it creates an ordinary connection link. The operator may explicitly replace one of their active agents and preserve that agent's grants. A deliberately revoked connection cannot rotate or be selected for reconnection; it must connect as new and request new grants.
 

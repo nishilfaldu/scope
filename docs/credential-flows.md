@@ -46,7 +46,7 @@ The browser never receives an agent connection secret, an OAuth access token, or
 | [`httpAgentConnectionClaimHandler`](../convex/http/httpAgentConnectionHandlers.ts)    | `POST /api/agent-connections/claim`    | `claim`                                                                      |
 | [`claim`](../convex/tables/agentConnections.ts)                                       | Claim HTTP handler                     | Claim-handle lookup and staged-secret decryption                             |
 | [`httpActivateAgentConnectionHandler`](../convex/http/httpAgentConnectionHandlers.ts) | `POST /api/agent-connections/activate` | `activateReplacement`                                                        |
-| [`activateReplacement`](../convex/tables/agentConnections.ts)                         | Activation HTTP handler                | Secret verification, grant transfer, generation swap                         |
+| [`activateReplacement`](../convex/tables/agentConnections.ts)                         | Activation HTTP handler                | Secret verification and credential-generation swap                           |
 | [`expireInvite`](../convex/tables/agentConnections.ts)                                | Convex scheduler                       | Invite expiry and unclaimed/staged connection revocation                     |
 | [`oauthStates.start`](../convex/tables/oauthStates/mutations.ts)                      | Connections UI                         | OAuth state generation and insert                                            |
 | [`httpOAuthConnect`](../convex/http/oauth.ts)                                         | `GET /api/:app/connect`                | State validation and `startAuthorize`                                        |
@@ -207,7 +207,6 @@ sequenceDiagram
   M->>M: hash and compare replacement secret
   M->>D: read invite by replacement connection ID
   M->>D: read current active generation
-  M->>D: move slices and live sliceRequests to replacement
   M->>D: revoke current; activate replacement
   M->>D: mark invite claimed; clear encrypted secret
   M-->>A: active
@@ -220,12 +219,12 @@ sequenceDiagram
 3. Otherwise it requires `status === "staged"`.
 4. It reads the invite through `agentConnectionInvites.by_agent_connection_id` and requires `approved`, unexpired, and a `replacesAgentConnectionId`.
 5. It reads the previous generation and requires it still be `active`.
-6. It reads every `slices` row through `slices.by_agentConnectionId` and moves it to the replacement.
-7. It reads `sliceRequests` through `sliceRequests.by_agentConnectionId` and moves pending or approved requests to the replacement.
-8. It marks the previous generation `revoked` and the replacement `active`.
-9. It marks the invite `claimed` and clears `issuedSecretCipher`.
+6. It marks the previous generation `revoked` and the replacement `active`.
+7. It marks the invite `claimed` and clears `issuedSecretCipher`.
 
-The previous credentials remain usable until step 8 commits. The replacement credentials cannot authenticate ordinary agent operations while their row is `staged`, because `activeAgentConnection` requires `active`.
+No slice or slice-request rows are read or written during activation. They carry the stable `agentId`, so the credential swap cannot change their ownership or origin.
+
+The previous credentials remain usable until step 6 commits. The replacement credentials cannot authenticate ordinary agent operations while their row is `staged`, because `activeAgentConnection` requires `active`.
 
 If activation never happens, `expireInvite` revokes the staged row and clears the encrypted replacement secret. It does not modify the previous active generation, its slices, or its pending requests.
 
@@ -235,13 +234,13 @@ Rotation applies when the agent still has valid credentials and wants a new cred
 
 ### Timeline and holdings
 
-| Step              | Agent holds                                          | Database holds                                                                                                     |
-| ----------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Before rotation   | Current connection ID and secret                     | Current `agentConnections` row is `active`; slices point to it                                                     |
-| Create invite     | Current credentials, new `claimHandle`, `connectUrl` | Pending invite is already bound to current `userId`, `agentId`, and `replacesAgentConnectionId`                    |
-| Operator approves | Current credentials and `claimHandle`                | Current remains `active`; replacement row is `staged`; replacement secret is hashed and encrypted                  |
-| Agent claims      | Current credentials plus replacement ID and secret   | Same staged replacement; encrypted secret retained for claim retry                                                 |
-| Agent activates   | Replacement ID and secret                            | Slices and live requests point to replacement; old row is `revoked`; new row is `active`; encrypted secret cleared |
+| Step              | Agent holds                                          | Database holds                                                                                     |
+| ----------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Before rotation   | Current connection ID and secret                     | Current `agentConnections` row is `active`; slices and requests carry the lineage `agentId`        |
+| Create invite     | Current credentials, new `claimHandle`, `connectUrl` | Pending invite is already bound to current `userId`, `agentId`, and `replacesAgentConnectionId`    |
+| Operator approves | Current credentials and `claimHandle`                | Current remains `active`; replacement row is `staged`; replacement secret is hashed and encrypted  |
+| Agent claims      | Current credentials plus replacement ID and secret   | Same staged replacement; encrypted secret retained for claim retry                                 |
+| Agent activates   | Replacement ID and secret                            | Lineage records are unchanged; old row is `revoked`; new row is `active`; encrypted secret cleared |
 
 ### Call chain
 
@@ -410,12 +409,13 @@ erDiagram
   users ||--o{ agentConnections : owns
   users ||--o{ agentConnectionInvites : approves
   agentConnections ||--o{ agentConnectionInvites : "replaced by"
-  agentConnections ||--o{ slices : authorizes
-  agentConnections ||--o{ sliceRequests : creates
+  agentLineage ||--o{ agentConnections : authenticates_through
+  agentLineage ||--o{ slices : owns
+  agentLineage ||--o{ sliceRequests : creates
   users ||--o{ oauthStates : starts
   users ||--o{ connections : owns
   connections ||--o{ sliceBindings : selected_by
   slices ||--o{ sliceBindings : allows
 ```
 
-`agentId` provides stable lineage across connection generations. `agentConnectionId` identifies the currently usable credential generation. Replacement activation changes the generation referenced by slices and live slice requests without changing their operator-approved permissions.
+`agentLineage` is conceptual rather than a separate table; its key is `agentId`. That ownership key is shared by connection generations, slices, and slice requests. `agentConnectionId` identifies only one credential generation. Replacement activation changes which generation can authenticate the lineage without rewriting any grant or request.

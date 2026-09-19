@@ -159,7 +159,7 @@ export const seedUiDemo = internalMutation({
       status: "active",
       lastUsedAt: now - 12 * 60 * 1000,
     });
-    const researchId = await ctx.db.insert("agentConnections", {
+    await ctx.db.insert("agentConnections", {
       userId,
       agentId: "ag_demo_research",
       name: "Research Agent Demo",
@@ -171,7 +171,7 @@ export const seedUiDemo = internalMutation({
     async function insertSlice(args: {
       token: (typeof sliceTokens)[number];
       name: string;
-      agentConnectionId: Id<"agentConnections">;
+      agentId: string;
       status: "active" | "revoked";
       expiresAt: number;
       mintPolicy: "auto" | "approve";
@@ -179,7 +179,7 @@ export const seedUiDemo = internalMutation({
     }) {
       const id = await ctx.db.insert("slices", {
         userId,
-        agentConnectionId: args.agentConnectionId,
+        agentId: args.agentId,
         name: args.name,
         token: args.token,
         secretHash: await sha256Hex(`ss_${args.token}`),
@@ -204,7 +204,7 @@ export const seedUiDemo = internalMutation({
     const activeAuto = await insertSlice({
       token: "st_demo_active_auto",
       name: "Inbox triage · auto",
-      agentConnectionId: codexId,
+      agentId: "ag_demo_codex",
       status: "active",
       expiresAt: now + 7 * 24 * 60 * 60 * 1000,
       mintPolicy: "auto",
@@ -213,7 +213,7 @@ export const seedUiDemo = internalMutation({
     const activeApprove = await insertSlice({
       token: "st_demo_active_approve",
       name: "Slack release helper · approval",
-      agentConnectionId: codexId,
+      agentId: "ag_demo_codex",
       status: "active",
       expiresAt: now + 2 * 24 * 60 * 60 * 1000,
       mintPolicy: "approve",
@@ -222,7 +222,7 @@ export const seedUiDemo = internalMutation({
     const revoked = await insertSlice({
       token: "st_demo_revoked",
       name: "Revoked production helper",
-      agentConnectionId: codexId,
+      agentId: "ag_demo_codex",
       status: "revoked",
       expiresAt: now + 24 * 60 * 60 * 1000,
       mintPolicy: "auto",
@@ -231,7 +231,7 @@ export const seedUiDemo = internalMutation({
     const expired = await insertSlice({
       token: "st_demo_expired",
       name: "Expired weekly report",
-      agentConnectionId: codexId,
+      agentId: "ag_demo_codex",
       status: "active",
       expiresAt: now - 60 * 60 * 1000,
       mintPolicy: "approve",
@@ -240,7 +240,7 @@ export const seedUiDemo = internalMutation({
     const research = await insertSlice({
       token: "st_demo_research",
       name: "Research sources",
-      agentConnectionId: researchId,
+      agentId: "ag_demo_research",
       status: "active",
       expiresAt: now + 5 * 24 * 60 * 60 * 1000,
       mintPolicy: "auto",
@@ -323,7 +323,7 @@ export const seedUiDemo = internalMutation({
       await ctx.db.insert("sliceRequests", {
         publicToken: request.token,
         claimSecretHash: await sha256Hex(`ch_${request.token}`),
-        agentConnectionId: codexId,
+        agentId: "ag_demo_codex",
         apps: ["github", "gmail"],
         ttlMs: 3 * 24 * 60 * 60 * 1000,
         reason: request.reason,

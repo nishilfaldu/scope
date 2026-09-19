@@ -26,6 +26,18 @@ export async function activeAgentConnection(
     : null;
 }
 
+export async function activeConnectionForAgent(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  agentId: string,
+) {
+  return await ctx.db
+    .query("agentConnections")
+    .withIndex("by_agentId_status", (q) =>
+      q.eq("agentId", agentId).eq("status", "active"),
+    )
+    .unique();
+}
+
 async function agentConnectionBySecret(
   ctx: QueryCtx | MutationCtx,
   connectionId: string,
@@ -369,30 +381,6 @@ export const activateReplacement = internalMutation({
       return { ok: false as const };
     }
     const now = Date.now();
-    const slices = await ctx.db
-      .query("slices")
-      .withIndex("by_agentConnectionId", (q) =>
-        q.eq("agentConnectionId", previous._id),
-      )
-      .collect();
-    for (const slice of slices) {
-      await ctx.db.patch("slices", slice._id, {
-        agentConnectionId: replacement._id,
-      });
-    }
-    const requests = await ctx.db
-      .query("sliceRequests")
-      .withIndex("by_agentConnectionId", (q) =>
-        q.eq("agentConnectionId", previous._id),
-      )
-      .collect();
-    for (const request of requests) {
-      if (request.status === "pending" || request.status === "approved") {
-        await ctx.db.patch("sliceRequests", request._id, {
-          agentConnectionId: replacement._id,
-        });
-      }
-    }
     await ctx.db.patch("agentConnections", previous._id, {
       status: "revoked",
       revokedAt: now,
@@ -470,17 +458,26 @@ export const list = authenticatedQuery({
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .order("desc")
       .take(100);
-    const visibleRows = rows.filter(
-      (row): row is typeof row & { status: "active" | "revoked" } =>
-        row.status !== "staged",
-    );
+    type VisibleConnection = (typeof rows)[number] & {
+      status: "active" | "revoked";
+    };
+    const byAgent = new Map<string, VisibleConnection>();
+    for (const row of rows) {
+      if (row.status === "staged") continue;
+      const current = byAgent.get(row.agentId);
+      if (
+        !current ||
+        (row.status === "active" && current.status !== "active")
+      ) {
+        byAgent.set(row.agentId, row as VisibleConnection);
+      }
+    }
+    const visibleRows = [...byAgent.values()];
     return await Promise.all(
       visibleRows.map(async (row) => {
         const slices = await ctx.db
           .query("slices")
-          .withIndex("by_agentConnectionId", (q) =>
-            q.eq("agentConnectionId", row._id),
-          )
+          .withIndex("by_agentId", (q) => q.eq("agentId", row.agentId))
           .collect();
         return {
           _id: row._id,

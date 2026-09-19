@@ -72,7 +72,7 @@ describe("request link decisions", () => {
     if (!created.ok) throw new Error("request creation failed");
     expect(
       await t.run((ctx) => ctx.db.get("sliceRequests", created.requestId)),
-    ).toMatchObject({ agentConnectionId: agent.id });
+    ).toMatchObject({ agentId: "ag_Agent" });
     expect(
       await ownerSession.query(api.tables.slices.sliceRequests.get, {
         publicToken: created.publicToken,

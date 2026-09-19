@@ -37,7 +37,8 @@ export default defineSchema({
     // Keep creation-time ordering within one stable agent lineage.
     // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user_agent", ["userId", "agentId"])
-    .index("by_user_agent_status", ["userId", "agentId", "status"]),
+    .index("by_user_agent_status", ["userId", "agentId", "status"])
+    .index("by_agentId_status", ["agentId", "status"]),
 
   agentConnectionInvites: defineTable({
     publicToken: v.string(),
@@ -64,7 +65,7 @@ export default defineSchema({
   // A slice owns its lifecycle; individual app permissions are indexed below.
   slices: defineTable({
     userId: v.id("users"),
-    agentConnectionId: v.optional(v.id("agentConnections")),
+    agentId: v.string(),
     name: v.string(),
     token: v.string(),
     secretHash: v.string(),
@@ -73,7 +74,7 @@ export default defineSchema({
     mintPolicy: mintPolicyValidator,
   })
     .index("by_token", ["token"])
-    .index("by_agentConnectionId", ["agentConnectionId"]),
+    .index("by_agentId", ["agentId"]),
 
   sliceBindings: defineTable({
     sliceId: v.id("slices"),
@@ -84,7 +85,7 @@ export default defineSchema({
   sliceRequests: defineTable({
     ...requestLifecycle,
     claimSecretHash: v.string(),
-    agentConnectionId: v.id("agentConnections"),
+    agentId: v.string(),
     createdSliceId: v.optional(v.id("slices")),
     apps: v.array(appValidator),
     ttlMs: v.number(),
@@ -96,7 +97,7 @@ export default defineSchema({
     .index("by_public_token", ["publicToken"])
     .index("by_claim_secret_hash", ["claimSecretHash"])
     .index("by_idempotency_key_hash", ["idempotencyKeyHash"])
-    .index("by_agentConnectionId", ["agentConnectionId"])
+    .index("by_agentId", ["agentId"])
     .index("by_status_expiresAt", ["status", "expiresAt"]),
 
   tokenRequests: defineTable({

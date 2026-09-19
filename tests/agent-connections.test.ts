@@ -42,6 +42,29 @@ describe("agent connections", () => {
       body: JSON.stringify({ claimHandle: firstInvite.claimHandle }),
     });
     const first = await firstClaimResponse.json();
+    const lineageRecords = await t.run(async (ctx) => {
+      const sliceId = await ctx.db.insert("slices", {
+        userId: owner,
+        agentId: first.agentId,
+        name: "Existing grant",
+        token: "st_existing_grant",
+        secretHash: "slice-secret-hash",
+        status: "active",
+        expiresAt: Date.now() + 60_000,
+        mintPolicy: "auto",
+      });
+      const requestId = await ctx.db.insert("sliceRequests", {
+        publicToken: "ar_existing_request",
+        claimSecretHash: "claim-secret-hash",
+        agentId: first.agentId,
+        apps: ["github"],
+        ttlMs: 60_000,
+        reason: "Existing request",
+        status: "pending",
+        expiresAt: Date.now() + 60_000,
+      });
+      return { sliceId, requestId };
+    });
 
     const reconnectResponse = await t.fetch("/api/agent-connections", {
       method: "POST",
@@ -132,6 +155,22 @@ describe("agent connections", () => {
         (connection) => connection._id === first.agentConnectionId,
       )?.status,
     ).toBe("revoked");
+    const unchangedLineageRecords = await t.run(async (ctx) => ({
+      slice: await ctx.db.get("slices", lineageRecords.sliceId),
+      request: await ctx.db.get("sliceRequests", lineageRecords.requestId),
+    }));
+    expect(unchangedLineageRecords.slice).toMatchObject({
+      agentId: first.agentId,
+    });
+    expect(unchangedLineageRecords.request).toMatchObject({
+      agentId: first.agentId,
+    });
+    expect(unchangedLineageRecords.slice).not.toHaveProperty(
+      "agentConnectionId",
+    );
+    expect(unchangedLineageRecords.request).not.toHaveProperty(
+      "agentConnectionId",
+    );
 
     const staleReconnect = await t.fetch("/api/agent-connections", {
       method: "POST",
@@ -163,6 +202,7 @@ describe("agent connections", () => {
         emailVerificationTime: Date.now(),
       }),
     );
+    const ownerSession = t.withIdentity({ subject: `${owner}|session` });
     const currentId = await t.run((ctx) =>
       ctx.db.insert("agentConnections", {
         userId: owner,
@@ -206,6 +246,11 @@ describe("agent connections", () => {
     expect(
       await t.run(async (ctx) => (await ctx.db.get(stagedId))?.status),
     ).toBe("revoked");
+    expect(
+      await ownerSession.query(api.tables.agentConnections.list, {}),
+    ).toMatchObject([
+      { _id: currentId, status: "active", agentId: "ag_stable" },
+    ]);
   });
 
   test("the owner can reconnect a credential-less agent to an active lineage", async () => {

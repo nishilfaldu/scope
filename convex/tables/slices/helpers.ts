@@ -4,6 +4,7 @@ import type { AppId } from "../../domain/apps";
 import type { AgentErrorCode } from "../../lib/errors";
 import { hashesEqual, randomSecret, sha256Hex } from "../../lib/secrets";
 import { connectionsForApp, selectedConnection } from "../connections/helpers";
+import { activeConnectionForAgent } from "../agentConnections";
 
 export const MAX_SLICE_NAME = 80;
 export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -53,13 +54,9 @@ export async function sliceBySecret(
 
 export async function hasActiveAgentConnection(
   ctx: Pick<QueryCtx | MutationCtx, "db">,
-  slice: Pick<Doc<"slices">, "userId" | "agentConnectionId">,
+  slice: Pick<Doc<"slices">, "userId" | "agentId">,
 ) {
-  if (!slice.agentConnectionId) return true;
-  const connection = await ctx.db.get(
-    "agentConnections",
-    slice.agentConnectionId,
-  );
+  const connection = await activeConnectionForAgent(ctx, slice.agentId);
   return connection?.status === "active" && connection.userId === slice.userId;
 }
 
@@ -148,7 +145,7 @@ export async function createSlice(
     ttlMs: number;
     mintPolicy: MintPolicy;
     bindings: Binding[];
-    agentConnectionId?: Id<"agentConnections">;
+    agentId: string;
   },
 ) {
   const token = randomSecret("st_");
@@ -156,7 +153,7 @@ export async function createSlice(
   const expiresAt = Date.now() + args.ttlMs;
   const id = await ctx.db.insert("slices", {
     userId: args.userId,
-    agentConnectionId: args.agentConnectionId,
+    agentId: args.agentId,
     name: args.name,
     token,
     secretHash: await sha256Hex(sliceSecret),
