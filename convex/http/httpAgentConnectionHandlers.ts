@@ -86,6 +86,30 @@ export const httpRevokeAgentConnectionHandler = httpAction(
   },
 );
 
+export const httpActivateAgentConnectionHandler = httpAction(
+  async (ctx, request) => {
+    const agentConnectionId = requiredHeader(request, "x-agent-connection-id");
+    if (agentConnectionId instanceof Response) return agentConnectionId;
+    const agentConnectionSecret = requiredHeader(
+      request,
+      "x-agent-connection-secret",
+    );
+    if (agentConnectionSecret instanceof Response) return agentConnectionSecret;
+    const result = await ctx.runMutation(
+      internal.tables.agentConnections.activateReplacement,
+      { agentConnectionId, agentConnectionSecret },
+    );
+    if (!result.ok) {
+      return errorResponse(
+        401,
+        "Replacement cannot be activated",
+        "UNAUTHORIZED",
+      );
+    }
+    return jsonResponse(200, result);
+  },
+);
+
 export const httpCancelAgentConnectionInviteHandler = httpAction(
   async (ctx, request) => {
     const body = await readObjectBody(request);

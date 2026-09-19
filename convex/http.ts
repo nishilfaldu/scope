@@ -18,6 +18,7 @@ import { oauthConfigured } from "./oauth";
 import { auth } from "./auth";
 import {
   httpAgentConnectionClaimHandler,
+  httpActivateAgentConnectionHandler,
   httpCancelAgentConnectionInviteHandler,
   httpRevokeAgentConnectionHandler,
   httpAgentConnectionStatusHandler,
@@ -45,6 +46,7 @@ for (const [path, handler] of [
   ["/api/agent-connections", httpCreateAgentConnectionHandler],
   ["/api/agent-connections/status", httpAgentConnectionStatusHandler],
   ["/api/agent-connections/claim", httpAgentConnectionClaimHandler],
+  ["/api/agent-connections/activate", httpActivateAgentConnectionHandler],
   ["/api/agent-connections/cancel", httpCancelAgentConnectionInviteHandler],
   ["/api/agent-connections/revoke", httpRevokeAgentConnectionHandler],
 ] as const) {

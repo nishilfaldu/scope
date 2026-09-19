@@ -6,6 +6,11 @@ import { AGENT_ERROR_CODES, AGENT_ERROR_GUIDANCE } from "../lib/errors";
 const routes = [
   { method: "GET", path: "/", summary: "API route index." },
   {
+    method: "POST",
+    path: "/api/agent-connections/activate",
+    summary: "Activate claimed replacement credentials idempotently.",
+  },
+  {
     method: "GET",
     path: "/api/health",
     summary: "Liveness and OAuth configuration.",
@@ -34,7 +39,8 @@ const routes = [
   {
     method: "POST",
     path: "/api/agent-connections/claim",
-    summary: "Claim an approved agent connection ID and secret once.",
+    summary:
+      "Claim approved credentials; replacement claims retry until activation.",
   },
   {
     method: "POST",

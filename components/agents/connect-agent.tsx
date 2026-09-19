@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { SignIn } from "@/components/auth/sign-in";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
   const decide = useMutation(api.tables.agentConnections.decideInvite);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [replacementId, setReplacementId] = useState<string>("new");
   const now = useNow();
   const currentPath = `/connect/${publicToken}`;
 
@@ -65,12 +67,22 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
   }
 
   const pending = invite.status === "pending" && invite.expiresAt > now;
+  const resolvedInvite = invite;
 
   async function submit(decision: "approved" | "denied") {
     setBusy(true);
     setError("");
     try {
-      await decide({ publicToken, decision });
+      await decide({
+        publicToken,
+        decision,
+        replaceAgentConnectionId:
+          decision === "approved" &&
+          !resolvedInvite.reconnecting &&
+          replacementId !== "new"
+            ? (replacementId as Id<"agentConnections">)
+            : undefined,
+      });
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -91,10 +103,10 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
           </div>
           <div className="min-w-0 flex-1">
             <Badge variant="secondary" className="mb-2">
-              {invite.reconnecting ? "Reconnect" : "New agent"}
+              {invite.reconnecting ? "Rotate credentials" : "New connection"}
             </Badge>
             <h1 className="text-balance text-2xl font-semibold tracking-tight">
-              {invite.reconnecting ? "Reconnect" : "Connect"} {invite.agentName}
+              {invite.reconnecting ? "Rotate" : "Connect"} {invite.agentName}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Name provided by the requester
@@ -105,8 +117,8 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
         <div className="rounded-xl bg-muted/70 px-4 py-3.5 text-sm leading-6">
           {invite.reconnecting ? (
             <p>
-              This replaces the previous connection. Its existing access stays
-              revoked.
+              The current connection stays active until the agent claims and
+              activates its replacement credentials.
             </p>
           ) : (
             <p>
@@ -115,6 +127,37 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
             </p>
           )}
         </div>
+        {!invite.reconnecting && invite.replacementOptions.length > 0 ? (
+          <div className="mt-5">
+            <p className="text-sm font-medium">How should this connect?</p>
+            <div className="mt-2 grid gap-2">
+              <button
+                type="button"
+                className={`rounded-xl border px-4 py-3 text-left text-sm transition-colors ${replacementId === "new" ? "border-primary bg-primary/10" : "hover:bg-muted/60"}`}
+                onClick={() => setReplacementId("new")}
+              >
+                <span className="font-medium">Connect as a new agent</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Starts without existing grants.
+                </span>
+              </button>
+              {invite.replacementOptions.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className={`rounded-xl border px-4 py-3 text-left text-sm transition-colors ${replacementId === option.id ? "border-primary bg-primary/10" : "hover:bg-muted/60"}`}
+                  onClick={() => setReplacementId(option.id)}
+                >
+                  <span className="font-medium">Replace {option.name}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Keeps its existing grants after the new credentials
+                    activate.
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {error ? (
           <Alert variant="destructive" className="mt-5">
             <AlertDescription>{error}</AlertDescription>
@@ -130,8 +173,10 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
               {busy
                 ? "Working…"
                 : invite.reconnecting
-                  ? "Reconnect agent"
-                  : "Connect agent"}
+                  ? "Approve rotation"
+                  : replacementId !== "new"
+                    ? "Reconnect agent"
+                    : "Connect agent"}
             </Button>
             <Button
               variant="ghost"

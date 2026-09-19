@@ -64,7 +64,7 @@ export const createInvite = internalMutation({
     }
     const previous =
       args.previousConnectionId && args.previousConnectionSecret
-        ? await agentConnectionBySecret(
+        ? await activeAgentConnection(
             ctx,
             args.previousConnectionId,
             args.previousConnectionSecret,
@@ -72,18 +72,6 @@ export const createInvite = internalMutation({
         : null;
     if (args.previousConnectionId && !previous) {
       throw new Error("Invalid previous agent connection");
-    }
-    if (previous) {
-      const latest = await ctx.db
-        .query("agentConnections")
-        .withIndex("by_user_agent", (q) =>
-          q.eq("userId", previous.userId).eq("agentId", previous.agentId),
-        )
-        .order("desc")
-        .first();
-      if (latest?._id !== previous._id) {
-        throw new Error("Only the latest agent connection can reconnect");
-      }
     }
     const agentName = previous?.name ?? args.agentName.trim();
     if (!agentName || agentName.length > 80)
@@ -130,6 +118,9 @@ const inviteView = v.object({
     v.literal("expired"),
   ),
   expiresAt: v.number(),
+  replacementOptions: v.array(
+    v.object({ id: v.id("agentConnections"), name: v.string() }),
+  ),
 });
 
 export const getInvite = authenticatedQuery({
@@ -143,6 +134,17 @@ export const getInvite = authenticatedQuery({
       )
       .unique();
     if (!invite || (invite.userId && invite.userId !== ctx.userId)) return null;
+    const replacementOptions = invite.replacesAgentConnectionId
+      ? []
+      : (
+          await ctx.db
+            .query("agentConnections")
+            .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
+            .order("desc")
+            .take(100)
+        )
+          .filter((connection) => connection.status === "active")
+          .map((connection) => ({ id: connection._id, name: connection.name }));
     return {
       agentId: invite.agentId,
       agentName: invite.agentName,
@@ -153,6 +155,7 @@ export const getInvite = authenticatedQuery({
           ? ("expired" as const)
           : invite.status,
       expiresAt: invite.expiresAt,
+      replacementOptions,
     };
   },
 });
@@ -161,6 +164,7 @@ export const decideInvite = authenticatedMutation({
   args: {
     publicToken: v.string(),
     decision: v.union(v.literal("approved"), v.literal("denied")),
+    replaceAgentConnectionId: v.optional(v.id("agentConnections")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -187,49 +191,54 @@ export const decideInvite = authenticatedMutation({
       });
       return null;
     }
-    if (invite.replacesAgentConnectionId) {
-      const latest = await ctx.db
-        .query("agentConnections")
-        .withIndex("by_user_agent", (q) =>
-          q.eq("userId", ctx.userId).eq("agentId", invite.agentId),
-        )
-        .order("desc")
-        .first();
-      if (latest?._id !== invite.replacesAgentConnectionId) {
-        throw new Error("This reconnect link has been superseded");
-      }
+    const replacementId =
+      invite.replacesAgentConnectionId ?? args.replaceAgentConnectionId;
+    const replacement = replacementId
+      ? await ctx.db.get("agentConnections", replacementId)
+      : null;
+    if (
+      replacementId &&
+      (!replacement ||
+        replacement.userId !== ctx.userId ||
+        replacement.status !== "active")
+    ) {
+      throw new Error("The connection being replaced is no longer active");
     }
+    if (
+      invite.replacesAgentConnectionId &&
+      replacementId !== invite.replacesAgentConnectionId
+    ) {
+      throw new Error("Rotation target cannot be changed");
+    }
+    const agentId = replacement?.agentId ?? invite.agentId;
+    const agentName = replacement?.name ?? invite.agentName;
     const activeConnections = await ctx.db
       .query("agentConnections")
       .withIndex("by_user_agent_status", (q) =>
         q
           .eq("userId", ctx.userId)
-          .eq("agentId", invite.agentId)
+          .eq("agentId", agentId)
           .eq("status", "active"),
       )
       .take(2);
     if (activeConnections.length > 1) {
       throw new Error("Agent has more than one active connection");
     }
-    const now = Date.now();
-    if (activeConnections[0]) {
-      await ctx.db.patch("agentConnections", activeConnections[0]._id, {
-        status: "revoked",
-        revokedAt: now,
-      });
-    }
     const secret = randomSecret("acs_");
     const agentConnectionId = await ctx.db.insert("agentConnections", {
       userId: ctx.userId,
-      agentId: invite.agentId,
-      name: invite.agentName,
+      agentId,
+      name: agentName,
       secretHash: await sha256Hex(secret),
-      status: "active",
+      status: replacement ? "staged" : "active",
     });
     await ctx.db.patch("agentConnectionInvites", invite._id, {
       status: "approved",
       userId: ctx.userId,
       agentConnectionId,
+      replacesAgentConnectionId: replacement?._id,
+      agentId,
+      agentName,
       issuedSecretCipher: await encryptToken(secret),
     });
     return null;
@@ -283,6 +292,7 @@ export const claim = internalMutation({
       agentConnectionId: v.id("agentConnections"),
       agentConnectionSecret: v.string(),
       agentName: v.string(),
+      activationRequired: v.boolean(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -302,17 +312,99 @@ export const claim = internalMutation({
       throw new Error("Connection invite is unavailable");
     }
     const agentConnectionSecret = await decryptToken(invite.issuedSecretCipher);
-    await ctx.db.patch("agentConnectionInvites", invite._id, {
-      status: "claimed",
-      issuedSecretCipher: "",
-    });
+    const activationRequired = invite.replacesAgentConnectionId !== undefined;
+    if (!activationRequired) {
+      await ctx.db.patch("agentConnectionInvites", invite._id, {
+        status: "claimed",
+        issuedSecretCipher: "",
+      });
+    }
     return {
       kind: "connected" as const,
       agentConnectionId: invite.agentConnectionId,
       agentId: invite.agentId,
       agentConnectionSecret,
       agentName: invite.agentName,
+      activationRequired,
     };
+  },
+});
+
+export const activateReplacement = internalMutation({
+  args: { agentConnectionId: v.string(), agentConnectionSecret: v.string() },
+  returns: v.union(
+    v.object({ ok: v.literal(true), status: v.literal("active") }),
+    v.object({ ok: v.literal(false) }),
+  ),
+  handler: async (ctx, args) => {
+    const replacement = await agentConnectionBySecret(
+      ctx,
+      args.agentConnectionId,
+      args.agentConnectionSecret,
+    );
+    if (!replacement) return { ok: false as const };
+    if (replacement.status === "active") {
+      return { ok: true as const, status: "active" as const };
+    }
+    if (replacement.status !== "staged") return { ok: false as const };
+    const invite = await ctx.db
+      .query("agentConnectionInvites")
+      .withIndex("by_agent_connection_id", (q) =>
+        q.eq("agentConnectionId", replacement._id),
+      )
+      .unique();
+    if (
+      !invite ||
+      invite.status !== "approved" ||
+      invite.expiresAt <= Date.now() ||
+      !invite.replacesAgentConnectionId
+    ) {
+      return { ok: false as const };
+    }
+    const previous = await ctx.db.get(
+      "agentConnections",
+      invite.replacesAgentConnectionId,
+    );
+    if (!previous || previous.status !== "active") {
+      return { ok: false as const };
+    }
+    const now = Date.now();
+    const slices = await ctx.db
+      .query("slices")
+      .withIndex("by_agentConnectionId", (q) =>
+        q.eq("agentConnectionId", previous._id),
+      )
+      .collect();
+    for (const slice of slices) {
+      await ctx.db.patch("slices", slice._id, {
+        agentConnectionId: replacement._id,
+      });
+    }
+    const requests = await ctx.db
+      .query("sliceRequests")
+      .withIndex("by_agentConnectionId", (q) =>
+        q.eq("agentConnectionId", previous._id),
+      )
+      .collect();
+    for (const request of requests) {
+      if (request.status === "pending" || request.status === "approved") {
+        await ctx.db.patch("sliceRequests", request._id, {
+          agentConnectionId: replacement._id,
+        });
+      }
+    }
+    await ctx.db.patch("agentConnections", previous._id, {
+      status: "revoked",
+      revokedAt: now,
+    });
+    await ctx.db.patch("agentConnections", replacement._id, {
+      status: "active",
+    });
+    await ctx.db.patch("agentConnectionInvites", invite._id, {
+      status: "claimed",
+      issuedSecretCipher: "",
+    });
+    return { ok: true as const, status: "active" as const };
   },
 });
 
@@ -378,8 +470,12 @@ export const list = authenticatedQuery({
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .order("desc")
       .take(100);
+    const visibleRows = rows.filter(
+      (row): row is typeof row & { status: "active" | "revoked" } =>
+        row.status !== "staged",
+    );
     return await Promise.all(
-      rows.map(async (row) => {
+      visibleRows.map(async (row) => {
         const slices = await ctx.db
           .query("slices")
           .withIndex("by_agentConnectionId", (q) =>

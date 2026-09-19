@@ -8,6 +8,7 @@ const sliceStatusValidator = v.union(v.literal("active"), v.literal("revoked"));
 
 const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
 const agentConnectionStatusValidator = v.union(
+  v.literal("staged"),
   v.literal("active"),
   v.literal("revoked"),
 );
@@ -57,7 +58,8 @@ export default defineSchema({
     issuedSecretCipher: v.optional(v.string()),
   })
     .index("by_public_token", ["publicToken"])
-    .index("by_claim_secret_hash", ["claimSecretHash"]),
+    .index("by_claim_secret_hash", ["claimSecretHash"])
+    .index("by_agent_connection_id", ["agentConnectionId"]),
 
   // A slice owns its lifecycle; individual app permissions are indexed below.
   slices: defineTable({

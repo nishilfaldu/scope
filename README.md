@@ -18,7 +18,9 @@ The vault never hands out its stored access token or refresh token. Providers wi
 
 An agent first calls `POST /api/agent-connections`, sends only the returned `connectUrl` to the operator, and keeps the private claim handle. The operator verifies their email in Scope and explicitly connects the agent. The agent claims a stable agent ID plus an opaque connection ID and secret once. The pairing name is requester supplied and is not a verified identity.
 
-To reconnect, the agent calls the same endpoint with its latest connection ID and secret in the connection headers. The link is bound to the original Scope account. Approval creates a new connection in the same agent lineage and atomically revokes the previous connection, so only one connection per agent is active. Superseded credentials cannot reconnect. The user can still connect several distinct agents.
+For planned rotation, the agent calls the same endpoint with its active connection ID and secret in the connection headers. The link is bound to the original Scope account. Approval stages replacement credentials while the current connection remains active. The agent may retry the claim until it receives those credentials, then proves possession through `POST /api/agent-connections/activate`. Activation atomically moves existing slices to the replacement and revokes the previous connection; retrying activation is safe.
+
+If an agent loses its credentials, it creates an ordinary connection link. The operator may explicitly replace one of their active agents and preserve that agent's grants. A deliberately revoked connection cannot rotate or be selected for reconnection; it must connect as new and request new grants.
 
 Every later `POST /api/access-requests` includes that connection ID and secret in `x-agent-connection-id` and `x-agent-connection-secret`. The backend derives the owner from the connection before issuing the request link. The operator reviews requested apps and permissions, chooses connected accounts, and explicitly approves or denies. OTP verification only creates a session. If an account is missing, the operator adds it in `/connections` and returns to the request.
 
@@ -45,7 +47,7 @@ Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` once. Disconnect removes local
 ## Agent pairing, onboarding, and minting
 
 1. The agent calls `POST /api/agent-connections` with `agentName`, gives the operator the `connectUrl`, and privately retains the `claimHandle`.
-2. After the operator approves, the agent calls `POST /api/agent-connections/claim` once and securely stores the returned connection ID and secret.
+2. After the operator approves, the agent calls `POST /api/agent-connections/claim` and securely stores the returned connection ID and secret. Replacement claims are retryable until activation. When `activationRequired` is true, the agent calls `POST /api/agent-connections/activate` with the replacement credentials; this endpoint is idempotent.
 3. The agent calls `POST /api/access-requests` with `apps`, `ttlMs`, a requester-supplied `reason`, and the connection credentials in headers. The response contains a chat-safe owner-bound `approvalUrl` and private `claimHandle`.
 4. The operator opens the URL, selects one or more accounts for each app, and approves or denies. The agent polls `POST /api/access-requests/status` and claims slice credentials once with `POST /api/access-requests/claim`.
 5. The agent calls `GET /api/accounts?app=<app>` with `x-slice-token` and `x-slice-secret` to see the accounts allowed for that app. It sends `sliceToken`, `sliceSecret`, `app`, and the chosen `bindingId` to `POST /api/credentials`. With a single allowed account, `bindingId` may be omitted. With several, omitting it returns `ACCOUNT_SELECTION_REQUIRED`. An auto slice mints immediately. An approve slice returns a request ID and approval URL for the exact account; after approval the agent calls `POST /api/credentials/claim`.
