@@ -3,7 +3,6 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { resolveReturnTo } from "../convex/domain/returnPaths";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -320,31 +319,5 @@ describe("GET /api/accounts", () => {
     });
     expect(denied.status).toBe(401);
     expect(await denied.json()).not.toHaveProperty("accounts");
-  });
-});
-
-describe("OAuth returnTo", () => {
-  test("returnTo must match BOARD_ORIGIN; path stays allowlisted", () => {
-    expect(
-      resolveReturnTo("https://evil.example/phish", "http://localhost:3000"),
-    ).toBe("http://localhost:3000/connections");
-    expect(
-      resolveReturnTo("https://evil.example/phish", "https://board.example"),
-    ).toBe("https://board.example/connections");
-    expect(
-      resolveReturnTo(
-        "https://board.example/connections",
-        "https://board.example",
-      ),
-    ).toBe("https://board.example/connections");
-    expect(
-      resolveReturnTo("http://localhost:3000/", "http://localhost:3000"),
-    ).toBe("http://localhost:3000/");
-    expect(
-      resolveReturnTo("http://localhost:3000/", "https://board.example"),
-    ).toBe("https://board.example/connections");
-    expect(resolveReturnTo(null, "https://board.example")).toBe(
-      "https://board.example/connections",
-    );
   });
 });

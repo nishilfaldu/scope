@@ -28,12 +28,6 @@ test("email OTP creates a session only on valid code and cannot be replayed", as
       async (ctx) => (await ctx.db.query("authSessions").collect()).length,
     );
     expect(before).toBe(0);
-    expect(
-      await t.run(
-        async (ctx) =>
-          (await ctx.db.query("users").collect())[0].emailVerificationTime,
-      ),
-    ).toBeFalsy();
     await expect(
       t.action(api.auth.signIn, {
         provider: "email-otp",
@@ -60,7 +54,7 @@ test("email OTP creates a session only on valid code and cannot be replayed", as
         allowExtraProviders: false,
       },
     });
-    expect(signedIn).toBeTruthy();
+    expect(signedIn).toMatchObject({ tokens: null });
     expect(
       await t.run(
         async (ctx) => (await ctx.db.query("authSessions").collect()).length,

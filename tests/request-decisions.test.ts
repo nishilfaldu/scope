@@ -96,10 +96,20 @@ describe("request link decisions", () => {
       decision: "approved",
       bindings: [{ app: "gmail", connectionId: connection }],
     });
-    const saved = await t.run((ctx) =>
-      ctx.db.get("sliceRequests", created.requestId),
-    );
-    expect(saved?.createdSliceId).toBeTruthy();
+    const approved = await t.run(async (ctx) => {
+      const request = await ctx.db.get("sliceRequests", created.requestId);
+      const slice = request?.createdSliceId
+        ? await ctx.db.get("slices", request.createdSliceId)
+        : null;
+      return { request, slice };
+    });
+    expect(approved.request?.status).toBe("approved");
+    expect(approved.slice).toMatchObject({
+      userId: owner,
+      agentId: "ag_Agent",
+      name: "Agent",
+      status: "active",
+    });
     await expect(
       ownerSession.mutation(api.tables.slices.sliceRequests.decide, {
         publicToken: created.publicToken,
@@ -225,7 +235,17 @@ describe("request link decisions", () => {
       ctx.db.get("sliceRequests", denied.requestId),
     );
     expect(saved?.status).toBe("denied");
-    expect(saved?.createdSliceId).toBeUndefined();
+    expect(
+      await t.run(
+        async (ctx) =>
+          (
+            await ctx.db
+              .query("slices")
+              .withIndex("by_agentId", (q) => q.eq("agentId", "ag_Agent"))
+              .collect()
+          ).length,
+      ),
+    ).toBe(0);
     const expired = await t.mutation(
       internal.tables.slices.sliceRequestClaims.createSliceRequest,
       {

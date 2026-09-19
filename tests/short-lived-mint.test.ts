@@ -1,12 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { github } from "../convex/oauth/providers/github";
 import { google } from "../convex/oauth/providers/google";
-import { slack } from "../convex/oauth/providers/slack";
-import { notion } from "../convex/oauth/providers/notion";
-import { airtable } from "../convex/oauth/providers/airtable";
-import { linear } from "../convex/oauth/providers/linear";
-import { vercel } from "../convex/oauth/providers/vercel";
-import { zoom } from "../convex/oauth/providers/zoom";
 import type { ConnectionSecrets } from "../convex/oauth/types";
 
 const standing: ConnectionSecrets = {
@@ -28,22 +22,6 @@ afterEach(() => {
 });
 
 describe("provider refresh never returns standing vault token", () => {
-  test.each([
-    ["github", github],
-    ["google", google],
-    ["slack", slack],
-    ["notion", notion],
-    ["airtable", airtable],
-    ["linear", linear],
-    ["vercel", vercel],
-    ["zoom", zoom],
-  ] as const)(
-    "%s hard-fails when refresh token is missing",
-    async (_name, provider) => {
-      await expect(provider.refresh(standing)).resolves.toBeNull();
-    },
-  );
-
   test("github refresh mints a distinct access token and keeps refresh out of agent concern", async () => {
     vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
     vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");

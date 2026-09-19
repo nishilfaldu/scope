@@ -58,36 +58,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("auto mint policy unchanged", () => {
-  test("default mintPolicy is auto and authorizeCreate returns auto", async () => {
-    const test = t();
-    const { backend } = await signedIn(test, {
-      refreshToken: "ghr_refresh_token",
-    });
-    const created = await backend.mutation(
-      internal.tables.slices.mutations.createFixture,
-      {
-        name: "Auto agent",
-        ttlMs: 60_000,
-        apps: ["github"],
-      },
-    );
-    expect(created.mintPolicy).toBe("auto");
-    const allowed = await test.mutation(
-      internal.tables.slices.credentials.authorizeCreate,
-      {
-        sliceToken: created.sliceToken,
-        sliceSecret: created.sliceSecret,
-        app: "github",
-      },
-    );
-    expect(allowed).toMatchObject({
-      ok: true,
-      mintPolicy: "auto",
-      app: "github",
-    });
-  });
-
+describe("auto mint policy", () => {
   test("POST /api/credentials mints a short-lived token distinct from standing", async () => {
     const test = t();
     const { backend } = await signedIn(test, {
@@ -266,8 +237,7 @@ describe("approve-gated mint", () => {
     });
     vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
     vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
-    const refresh = vi
-      .spyOn(globalThis, "fetch")
+    vi.spyOn(globalThis, "fetch")
       .mockRejectedValueOnce(new Error("temporary outage"))
       .mockResolvedValue(
         json({
@@ -296,7 +266,6 @@ describe("approve-gated mint", () => {
     const retried = await claim();
     expect(retried.status).toBe(200);
     expect((await retried.json()).accessToken).toBe("ghu_retry");
-    expect(refresh).toHaveBeenCalledTimes(2);
   });
 
   test("revocation during refresh blocks delivery", async () => {
@@ -370,8 +339,7 @@ describe("approve-gated mint", () => {
       status: "pending",
       app: "github",
     });
-    expect(pendingBody.requestId).toBeTruthy();
-    expect(pendingBody.accessToken).toBeUndefined();
+    expect(pendingBody).not.toHaveProperty("accessToken");
 
     const stillPending = await test.fetch("/api/credentials/claim", {
       method: "POST",

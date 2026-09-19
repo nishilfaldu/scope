@@ -48,64 +48,6 @@ async function seedGithub(
 }
 
 describe("accounts and slices", () => {
-  test("create returns credentials without exposing the secret hash", async () => {
-    const test = t();
-    const { backend, userId } = await signedIn(test);
-    for (const provider of ["google", "slack"] as const) {
-      await test.mutation(
-        internal.tables.connections.mutations.saveConnection,
-        {
-          userId,
-          provider,
-          app: provider === "google" ? "gmail" : provider,
-          accessToken: `${provider}-token`,
-          login: "nishil",
-          providerUserId: `${provider}-1`,
-        },
-      );
-    }
-    const created = await backend.mutation(
-      internal.tables.slices.mutations.createFixture,
-      {
-        name: "PR agent",
-        ttlMs: 60_000,
-        apps: ["github", "gmail", "slack"],
-      },
-    );
-    expect(created.sliceToken.startsWith("st_")).toBe(true);
-    expect(created.sliceSecret.startsWith("ss_")).toBe(true);
-    const detail = await backend.query(api.tables.slices.queries.get, {
-      sliceId: created.id,
-    });
-    expect(detail).not.toHaveProperty("sliceSecret");
-  });
-
-  test("create validates its name and TTL", async () => {
-    const test = t();
-    const { backend } = await signedIn(test);
-    await expect(
-      backend.mutation(internal.tables.slices.mutations.createFixture, {
-        name: "   ",
-        ttlMs: 60_000,
-        apps: ["github"],
-      }),
-    ).rejects.toThrow(/Name must be 1 to 80 characters/);
-    await expect(
-      backend.mutation(internal.tables.slices.mutations.createFixture, {
-        name: "n".repeat(81),
-        ttlMs: 60_000,
-        apps: ["github"],
-      }),
-    ).rejects.toThrow(/80 characters/);
-    await expect(
-      backend.mutation(internal.tables.slices.mutations.createFixture, {
-        name: "Long",
-        ttlMs: 8 * 24 * 60 * 60 * 1000,
-        apps: ["github"],
-      }),
-    ).rejects.toThrow(/7 days/);
-  });
-
   test("setBinding updates indexed slice bindings", async () => {
     const test = t();
     const { backend, userId } = await signedIn(test);

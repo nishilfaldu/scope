@@ -55,6 +55,7 @@ async function connectedAgent(
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
@@ -143,7 +144,6 @@ describe("agent onboarding approval link", () => {
     expect(body.approvalUrl).toMatch(
       /^http:\/\/localhost:3000\/requests\/new\/ar_/,
     );
-    expect(body.approvalUrl.startsWith("http://localhost:3000/")).toBe(true);
     expect(JSON.stringify(body)).not.toMatch(/ss_/);
     expect(body).not.toHaveProperty("sliceSecret");
     expect(body).not.toHaveProperty("sliceToken");
@@ -230,6 +230,48 @@ describe("agent onboarding approval link", () => {
       accessToken: "ghu_after_onboarding",
       app: "github",
     });
+  });
+
+  test("an expired idempotent request clears its recoverable claim handle", async () => {
+    const test = t();
+    const { userId } = await signedIn(test);
+    const agent = await connectedAgent(test, userId, "Idempotent agent");
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+
+    const response = await test.fetch("/api/access-requests", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": "daily-inbox-request-00000000000001",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
+      body: JSON.stringify({
+        apps: ["github"],
+        ttlMs: 60_000,
+        reason: "Summarize the inbox",
+      }),
+    });
+    const created = await response.json();
+    expect({ status: response.status, body: created }).toMatchObject({
+      status: 201,
+      body: { status: "pending" },
+    });
+
+    await test.finishAllScheduledFunctions(() =>
+      vi.advanceTimersByTime(24 * 60 * 60 * 1000 + 1),
+    );
+
+    expect(
+      await test.run(async (ctx) => {
+        const request = await ctx.db.get("sliceRequests", created.requestId);
+        return {
+          status: request?.status,
+          claimHandleCipher: request?.claimHandleCipher,
+        };
+      }),
+    ).toEqual({ status: "pending", claimHandleCipher: "" });
   });
 
   test("deny returns APPROVAL_DENIED on claim", async () => {
