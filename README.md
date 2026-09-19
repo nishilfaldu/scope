@@ -6,20 +6,23 @@ Agent Passport lets a user connect OAuth accounts and give an agent a slice that
 
 - A **connection** stores one provider account's encrypted OAuth tokens. Google has separate Gmail, Calendar, Drive, Docs, and Sheets connections, each with its own consent scopes and callback. One user can connect multiple accounts to the same app.
 - A **slice** belongs to a user, has a token and secret, an expiry, a revocation state, and an `auto` or `approve` mint policy.
+- An **agent connection** is an operator-approved relationship with an opaque ID and secret. It identifies the passport that later slice requests must address. Revoking it blocks new requests and every slice created through it.
 - Each allowed account has one indexed **slice binding** that selects a connection. A slice can allow several accounts for the same app. Bindings are separate rows; the slice does not store an array of apps or accounts.
 - An agent presents its slice token and secret to `POST /api/credentials`. When several accounts are allowed for an app, it chooses a `bindingId` from `GET /api/accounts?app=<app>`. The backend checks that exact binding, refreshes its provider connection, checks permissions again, then returns the newly issued provider access token. Under `approve`, the operator first approves a one-time mint request for that account.
 
-**Revocation boundary:** Revoking a slice or disconnecting an account immediately blocks _future_ credential mints. An already issued provider-native access token remains usable until that provider expires or revokes it. Agent Passport does not proxy provider requests and cannot shorten an upstream token's lifetime. The credential response reports the provider's expiry, or `null` if the provider did not give one.
+**Revocation boundary:** Revoking an agent connection, revoking a slice, or disconnecting an account immediately blocks _future_ credential mints. An already issued provider-native access token remains usable until that provider expires or revokes it. Agent Passport does not proxy provider requests and cannot shorten an upstream token's lifetime. The credential response reports the provider's expiry, or `null` if the provider did not give one.
 
 The vault never hands out its stored access token or refresh token. Providers without a refresh-capable grant cannot mint agent credentials and return `SHORT_LIVED_UNAVAILABLE`.
 
 ## Agent approval
 
-An agent calls `POST /api/access-requests`, sends only the returned `approvalUrl` to the operator, and stores its private `claimHandle` in its own runtime. The link opens `/requests/new/[token]`. The operator verifies an Agent Passport email with an eight digit code, reviews requested apps and permissions, chooses connected accounts, and explicitly approves or denies. Verification only creates a session. If an account is missing, the operator adds it in `/connections` and returns to the request. Agent names and reasons are supplied by the requester and are not verified identities.
+An agent first calls `POST /api/agent-connections`, sends only the returned `connectUrl` to the operator, and keeps the private claim handle. The operator verifies an Agent Passport email and explicitly connects the agent. The agent claims an opaque connection ID and secret once. The pairing name is requester supplied and is not a verified identity.
+
+Every later `POST /api/access-requests` includes that connection ID and secret in `x-agent-connection-id` and `x-agent-connection-secret`. The backend derives the owner from the connection before issuing the request link. The operator reviews requested apps and permissions, chooses connected accounts, and explicitly approves or denies. OTP verification only creates a session. If an account is missing, the operator adds it in `/connections` and returns to the request.
 
 For an existing slice with approval policy, `POST /api/credentials` returns a `/requests/token/[token]` link. The decision screen shows the slice, app, and specific connected account. Only the slice owner's Agent Passport user ID can read or decide it. A connected provider login is never used to establish ownership. Approval permits one short-lived credential claim through the existing private agent claim path; the browser never receives provider tokens or slice secrets.
 
-Google OAuth remains available for connecting Gmail, Calendar, Drive, Docs, and Sheets. It is not an Agent Passport sign-in method. Email codes expire in 10 minutes and are single use. Failed code attempts are limited to five per hour. Sending is limited to one email per minute and five per hour per normalized address, plus 100 emails per hour across the deployment.
+Google OAuth remains available for connecting Gmail, Calendar, Drive, Docs, and Sheets. It is not an Agent Passport sign-in method. Email codes expire in 10 minutes and are single use. Failed code attempts are limited to five per hour.
 
 Use a random, task-stable `Idempotency-Key` header (32–128 characters) when creating an access request. The same key and payload return the same pending or approved request and private handle before it is claimed. A different payload with that key returns `IDEMPOTENCY_CONFLICT`. Treat this key as a secret because a caller holding it can recover the claim handle while the request is live. Agent errors include stable `code`, `retryable`, and `nextAction` fields. A denied, expired, or claimed request needs a fresh task and key.
 
@@ -37,12 +40,13 @@ For Google, register five redirects on the same OAuth client:
 
 Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` once. Disconnect removes local access first. Provider revocation is attempted afterward; for Google it is attempted when the last app connection for that Google account is removed.
 
-## Agent onboarding and minting
+## Agent pairing, onboarding, and minting
 
-1. The agent calls `POST /api/access-requests` with `agentName`, `apps`, `ttlMs`, and optional `reason`.
-2. The response contains a chat-safe `approvalUrl` and a private `claimHandle`. The operator opens the URL, selects one or more accounts for each app, and approves or denies. Opening the link alone does not assign it to an operator.
-3. The agent polls `POST /api/access-requests/status` and claims slice credentials once with `POST /api/access-requests/claim`.
-4. The agent calls `GET /api/accounts?app=<app>` with `x-slice-token` and `x-slice-secret` to see the accounts allowed for that app. It sends `sliceToken`, `sliceSecret`, `app`, and the chosen `bindingId` to `POST /api/credentials`. With a single allowed account, `bindingId` may be omitted. With several, omitting it returns `ACCOUNT_SELECTION_REQUIRED`. An auto slice mints immediately. An approve slice returns a request ID and approval URL for the exact account; after approval the agent calls `POST /api/credentials/claim`.
+1. The agent calls `POST /api/agent-connections` with `agentName`, gives the operator the `connectUrl`, and privately retains the `claimHandle`.
+2. After the operator approves, the agent calls `POST /api/agent-connections/claim` once and securely stores the returned connection ID and secret.
+3. The agent calls `POST /api/access-requests` with `apps`, `ttlMs`, optional `reason`, and the connection credentials in headers. The response contains a chat-safe owner-bound `approvalUrl` and private `claimHandle`.
+4. The operator opens the URL, selects one or more accounts for each app, and approves or denies. The agent polls `POST /api/access-requests/status` and claims slice credentials once with `POST /api/access-requests/claim`.
+5. The agent calls `GET /api/accounts?app=<app>` with `x-slice-token` and `x-slice-secret` to see the accounts allowed for that app. It sends `sliceToken`, `sliceSecret`, `app`, and the chosen `bindingId` to `POST /api/credentials`. With a single allowed account, `bindingId` may be omitted. With several, omitting it returns `ACCOUNT_SELECTION_REQUIRED`. An auto slice mints immediately. An approve slice returns a request ID and approval URL for the exact account; after approval the agent calls `POST /api/credentials/claim`.
 
 A failed provider refresh leaves an approved mint request available to retry until its claim window expires. The backend consumes the request only after refresh and the final slice, account, and binding check succeed.
 

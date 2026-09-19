@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRouter } from "next/navigation";
+import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function SignIn({
   redirectTo = "/",
@@ -78,10 +78,6 @@ export function SignIn({
           <CardTitle>{title}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Enter your email to receive an eight digit sign-in code. Signing in
-            does not approve a request.
-          </p>
           {sent ? (
             <p className="text-sm text-muted-foreground">
               If a code can be sent to this address, it will arrive shortly.

@@ -18,7 +18,8 @@ import {
 } from "../../lib/errors";
 import { decryptToken, encryptToken } from "../../lib/tokenEncryption";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
-import { denyCreate, MAX_SLICE_NAME, MAX_TTL_MS } from "./helpers";
+import { denyCreate, MAX_TTL_MS } from "./helpers";
+import { activeAgentConnection } from "../agentConnections";
 
 export const ONBOARDING_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 export const MAX_PENDING_ONBOARDING = 100;
@@ -33,7 +34,8 @@ export async function issuePublicPair() {
 
 export const createOnboarding = internalMutation({
   args: {
-    agentName: v.string(),
+    agentConnectionId: v.string(),
+    agentConnectionSecret: v.string(),
     apps: v.array(appValidator),
     ttlMs: v.number(),
     reason: v.optional(v.string()),
@@ -56,17 +58,19 @@ export const createOnboarding = internalMutation({
     denyResultValidator,
   ),
   handler: async (ctx, args) => {
-    const agentName = args.agentName.trim();
-    if (agentName.length === 0) {
-      return denyCreate(400, "agentName must be non-empty", "INVALID_REQUEST");
-    }
-    if (agentName.length > MAX_SLICE_NAME) {
+    const agentConnection = await activeAgentConnection(
+      ctx,
+      args.agentConnectionId,
+      args.agentConnectionSecret,
+    );
+    if (!agentConnection) {
       return denyCreate(
-        400,
-        "agentName must be 80 characters or fewer",
-        "INVALID_REQUEST",
+        401,
+        "Invalid or revoked agent connection",
+        "UNAUTHORIZED",
       );
     }
+    const agentName = agentConnection.name;
     if (!Number.isFinite(args.ttlMs) || args.ttlMs <= 0) {
       return denyCreate(
         400,
@@ -102,7 +106,7 @@ export const createOnboarding = internalMutation({
     }
 
     const idempotencyKeyHash = args.idempotencyKey
-      ? await sha256Hex(args.idempotencyKey)
+      ? await sha256Hex(`${agentConnection._id}:${args.idempotencyKey}`)
       : undefined;
     if (idempotencyKeyHash) {
       const existing = await ctx.db
@@ -114,6 +118,7 @@ export const createOnboarding = internalMutation({
       if (existing) {
         if (
           existing.kind !== "onboarding" ||
+          existing.agentConnectionId !== agentConnection._id ||
           existing.agentName !== agentName ||
           existing.ttlMs !== args.ttlMs ||
           existing.reason !== reason ||
@@ -172,6 +177,8 @@ export const createOnboarding = internalMutation({
       await issuePublicPair();
     const requestId = await ctx.db.insert("accessRequests", {
       kind: "onboarding",
+      userId: agentConnection.userId,
+      agentConnectionId: agentConnection._id,
       agentName,
       apps: uniqueApps,
       ttlMs: args.ttlMs,
@@ -184,6 +191,9 @@ export const createOnboarding = internalMutation({
       claimHandleCipher: idempotencyKeyHash
         ? await encryptToken(claimHandle)
         : undefined,
+    });
+    await ctx.db.patch("agentConnections", agentConnection._id, {
+      lastUsedAt: now,
     });
     if (idempotencyKeyHash) {
       await ctx.scheduler.runAfter(
@@ -254,6 +264,13 @@ export const resolveOnboardingStatus = internalQuery({
     const request = await onboardingByClaim(ctx, args.claimHandle);
     if (!request)
       return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
+    const agentConnection = await ctx.db.get(
+      "agentConnections",
+      request.agentConnectionId,
+    );
+    if (agentConnection?.status !== "active") {
+      return denyCreate(403, "Agent connection has been revoked", "REVOKED");
+    }
     const denied = claimDenial(request);
     if (denied) return denied;
     return {
@@ -301,6 +318,13 @@ export const resolveOnboardingClaim = internalMutation({
     const request = await onboardingByClaim(ctx, args.claimHandle);
     if (!request)
       return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
+    const agentConnection = await ctx.db.get(
+      "agentConnections",
+      request.agentConnectionId,
+    );
+    if (agentConnection?.status !== "active") {
+      return denyCreate(403, "Agent connection has been revoked", "REVOKED");
+    }
     const denied = claimDenial(request);
     if (denied) return denied;
     const now = Date.now();

@@ -8,6 +8,7 @@ const isSignInPage = createRouteMatcher(["/signin"]);
 const isAuthApiRoute = createRouteMatcher(["/api/auth(.*)"]);
 /** Request links show the email verification form at the request URL. */
 const isRequestLink = createRouteMatcher([
+  "/connect/(.*)",
   "/requests/new/(.*)",
   "/requests/token/(.*)",
 ]);

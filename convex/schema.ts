@@ -7,6 +7,10 @@ import { storedRequestStatusValidator } from "./domain/requests";
 const sliceStatusValidator = v.union(v.literal("active"), v.literal("revoked"));
 
 const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
+const agentConnectionStatusValidator = v.union(
+  v.literal("active"),
+  v.literal("revoked"),
+);
 
 const requestBase = {
   publicToken: v.string(),
@@ -20,16 +24,40 @@ const requestBase = {
 export default defineSchema({
   ...authTables,
 
-  otpSendLimits: defineTable({
-    email: v.string(),
-    windowStart: v.number(),
-    sent: v.number(),
-    lastSentAt: v.number(),
-  }).index("by_email", ["email"]),
+  agentConnections: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    secretHash: v.string(),
+    status: agentConnectionStatusValidator,
+    lastUsedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+  }).index("by_user", ["userId"]),
+
+  agentConnectionInvites: defineTable({
+    publicToken: v.string(),
+    claimSecretHash: v.string(),
+    agentName: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("approved"),
+      v.literal("denied"),
+      v.literal("claimed"),
+      v.literal("expired"),
+    ),
+    expiresAt: v.number(),
+    userId: v.optional(v.id("users")),
+    agentConnectionId: v.optional(v.id("agentConnections")),
+    issuedSecretCipher: v.optional(v.string()),
+    decidedAt: v.optional(v.number()),
+    claimedAt: v.optional(v.number()),
+  })
+    .index("by_public_token", ["publicToken"])
+    .index("by_claim_secret_hash", ["claimSecretHash"]),
 
   // A slice owns its lifecycle; individual app permissions are indexed below.
   slices: defineTable({
     userId: v.id("users"),
+    agentConnectionId: v.optional(v.id("agentConnections")),
     name: v.string(),
     token: v.string(),
     secretHash: v.string(),
@@ -38,7 +66,8 @@ export default defineSchema({
     mintPolicy: mintPolicyValidator,
   })
     .index("by_token", ["token"])
-    .index("by_user", ["userId"]),
+    .index("by_user", ["userId"])
+    .index("by_agentConnectionId", ["agentConnectionId"]),
 
   sliceBindings: defineTable({
     sliceId: v.id("slices"),
@@ -55,7 +84,8 @@ export default defineSchema({
       v.object({
         ...requestBase,
         kind: v.literal("onboarding"),
-        userId: v.optional(v.id("users")),
+        userId: v.id("users"),
+        agentConnectionId: v.id("agentConnections"),
         sliceId: v.optional(v.id("slices")),
         agentName: v.string(),
         apps: v.array(appValidator),
@@ -79,6 +109,7 @@ export default defineSchema({
     .index("by_public_token", ["publicToken"])
     .index("by_claim_secret_hash", ["claimSecretHash"])
     .index("by_idempotency_key_hash", ["idempotencyKeyHash"])
+    .index("by_agentConnectionId", ["agentConnectionId"])
     .index("by_slice_status_expiresAt", ["sliceId", "status", "expiresAt"])
     .index("by_kind_status_expiresAt", ["kind", "status", "expiresAt"]),
 

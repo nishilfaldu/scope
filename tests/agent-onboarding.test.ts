@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { sha256Hex } from "../convex/lib/secrets";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -35,6 +36,23 @@ async function signedIn(
   };
 }
 
+async function connectedAgent(
+  test: ReturnType<typeof t>,
+  userId: Awaited<ReturnType<typeof signedIn>>["userId"],
+  name: string,
+) {
+  const secret = `acs_${name.replaceAll(" ", "_")}`;
+  const id = await test.run(async (ctx) =>
+    ctx.db.insert("agentConnections", {
+      userId,
+      name,
+      secretHash: await sha256Hex(secret),
+      status: "active",
+    }),
+  );
+  return { id, secret };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
@@ -43,15 +61,19 @@ afterEach(() => {
 describe("agent onboarding approval link", () => {
   test("create → approvalUrl is board origin → approve → claim returns slice creds without prior ss_", async () => {
     const test = t();
-    const { backend } = await signedIn(test, {
+    const { backend, userId } = await signedIn(test, {
       refreshToken: "ghr_refresh_token",
     });
+    const agent = await connectedAgent(test, userId, "Chat agent");
 
     const created = await test.fetch("/api/access-requests", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
       body: JSON.stringify({
-        agentName: "Chat agent",
         apps: ["github"],
         ttlMs: 60_000,
         reason: "triage inbox",
@@ -157,14 +179,18 @@ describe("agent onboarding approval link", () => {
 
   test("deny returns APPROVAL_DENIED on claim", async () => {
     const test = t();
-    const { backend } = await signedIn(test, {
+    const { backend, userId } = await signedIn(test, {
       refreshToken: "ghr_refresh_token",
     });
+    const agent = await connectedAgent(test, userId, "Denied agent");
     const created = await test.fetch("/api/access-requests", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
       body: JSON.stringify({
-        agentName: "Denied agent",
         apps: ["github"],
         ttlMs: 60_000,
       }),
@@ -185,12 +211,18 @@ describe("agent onboarding approval link", () => {
 
   test("expire returns APPROVAL_EXPIRED", async () => {
     const test = t();
-    await signedIn(test, { refreshToken: "ghr_refresh_token" });
+    const { userId } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
+    const agent = await connectedAgent(test, userId, "Expired agent");
     const created = await test.fetch("/api/access-requests", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
       body: JSON.stringify({
-        agentName: "Expired agent",
         apps: ["github"],
         ttlMs: 60_000,
       }),

@@ -47,7 +47,20 @@ export async function sliceBySecret(
     !hashesEqual(await sha256Hex(args.sliceSecret), slice.secretHash)
   )
     return null;
+  if (!(await hasActiveAgentConnection(ctx, slice))) return null;
   return slice;
+}
+
+export async function hasActiveAgentConnection(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  slice: Pick<Doc<"slices">, "userId" | "agentConnectionId">,
+) {
+  if (!slice.agentConnectionId) return true;
+  const connection = await ctx.db.get(
+    "agentConnections",
+    slice.agentConnectionId,
+  );
+  return connection?.status === "active" && connection.userId === slice.userId;
 }
 
 export async function bindingsForApp(
@@ -135,6 +148,7 @@ export async function createSlice(
     ttlMs: number;
     mintPolicy: MintPolicy;
     bindings: Binding[];
+    agentConnectionId?: Id<"agentConnections">;
   },
 ) {
   const token = randomSecret("st_");
@@ -142,6 +156,7 @@ export async function createSlice(
   const expiresAt = Date.now() + args.ttlMs;
   const id = await ctx.db.insert("slices", {
     userId: args.userId,
+    agentConnectionId: args.agentConnectionId,
     name: args.name,
     token,
     secretHash: await sha256Hex(sliceSecret),

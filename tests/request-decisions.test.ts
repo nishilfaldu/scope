@@ -1,14 +1,33 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
+import { sha256Hex } from "../convex/lib/secrets";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const backend = () => convexTest(schema, modules);
 
+async function connectAgent(
+  t: ReturnType<typeof backend>,
+  userId: Id<"users">,
+  name = "Agent",
+) {
+  const secret = `acs_${name}`;
+  const id = await t.run(async (ctx) =>
+    ctx.db.insert("agentConnections", {
+      userId,
+      name,
+      secretHash: await sha256Hex(secret),
+      status: "active",
+    }),
+  );
+  return { id, secret };
+}
+
 describe("request link decisions", () => {
-  test("an unowned new-slice link requires a signed-in decision and attaches only on approval", async () => {
+  test("a new-slice link is bound to its connected passport before approval", async () => {
     const t = backend();
     const owner = await t.run((ctx) =>
       ctx.db.insert("users", {
@@ -38,10 +57,12 @@ describe("request link decisions", () => {
         apps: ["gmail"],
       })
     )[0].accounts[0].id;
+    const agent = await connectAgent(t, owner);
     const created = await t.mutation(
       internal.tables.slices.onboardingAccess.createOnboarding,
       {
-        agentName: "Agent",
+        agentConnectionId: agent.id,
+        agentConnectionSecret: agent.secret,
         apps: ["gmail"],
         ttlMs: 60_000,
       },
@@ -49,7 +70,7 @@ describe("request link decisions", () => {
     if (!created.ok) throw new Error("request creation failed");
     expect(
       await t.run((ctx) => ctx.db.get("accessRequests", created.requestId)),
-    ).not.toHaveProperty("userId");
+    ).toMatchObject({ userId: owner, agentConnectionId: agent.id });
     expect(
       await ownerSession.query(api.tables.slices.accessRequests.getNewSlice, {
         publicToken: created.publicToken,
@@ -175,30 +196,6 @@ describe("request link decisions", () => {
     ).toBe("denied");
   });
 
-  test("OTP send throttle uses canonical email and bounds sends", async () => {
-    vi.useFakeTimers();
-    try {
-      const t = backend();
-      for (let attempt = 0; attempt < 5; attempt++) {
-        expect(
-          await t.mutation(internal.otp.allowSend, {
-            email: attempt % 2 ? "ME@example.com" : "me@example.com",
-          }),
-        ).toBe(true);
-        vi.advanceTimersByTime(60_001);
-      }
-      expect(
-        await t.mutation(internal.otp.allowSend, { email: "me@example.com" }),
-      ).toBe(false);
-      vi.advanceTimersByTime(60 * 60 * 1000);
-      expect(
-        await t.mutation(internal.otp.allowSend, { email: "me@example.com" }),
-      ).toBe(true);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   test("denial creates no slice and expired links cannot be decided", async () => {
     const t = backend();
     const userId = await t.run((ctx) =>
@@ -208,10 +205,12 @@ describe("request link decisions", () => {
       }),
     );
     const session = t.withIdentity({ subject: `${userId}|session` });
+    const agent = await connectAgent(t, userId);
     const denied = await t.mutation(
       internal.tables.slices.onboardingAccess.createOnboarding,
       {
-        agentName: "Agent",
+        agentConnectionId: agent.id,
+        agentConnectionSecret: agent.secret,
         apps: ["github"],
         ttlMs: 60_000,
       },
@@ -225,12 +224,13 @@ describe("request link decisions", () => {
       ctx.db.get("accessRequests", denied.requestId),
     );
     expect(saved?.status).toBe("denied");
-    expect(saved?.userId).toBeUndefined();
+    expect(saved?.userId).toBe(userId);
     expect(saved?.sliceId).toBeUndefined();
     const expired = await t.mutation(
       internal.tables.slices.onboardingAccess.createOnboarding,
       {
-        agentName: "Other",
+        agentConnectionId: agent.id,
+        agentConnectionSecret: agent.secret,
         apps: ["github"],
         ttlMs: 60_000,
       },

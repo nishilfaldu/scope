@@ -18,6 +18,7 @@ import {
   bindingsForApp,
   denyCreate,
   effectiveStatus,
+  hasActiveAgentConnection,
   sliceBySecret,
 } from "./helpers";
 
@@ -106,6 +107,9 @@ export const finalize = internalMutation({
   handler: async (ctx, args) => {
     const slice = await ctx.db.get("slices", args.sliceId);
     if (!slice) return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
+    if (!(await hasActiveAgentConnection(ctx, slice))) {
+      return denyCreate(403, REVOKED_ERROR, "REVOKED");
+    }
     const status = effectiveStatus(slice);
     if (status === "revoked") return denyCreate(403, REVOKED_ERROR, "REVOKED");
     if (status === "expired") return denyCreate(403, EXPIRED_ERROR, "EXPIRED");

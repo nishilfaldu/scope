@@ -15,6 +15,11 @@ import { corsNoContent, jsonResponse } from "./lib/responses";
 import { ALL_APPS } from "./domain/apps";
 import { oauthConfigured } from "./oauth";
 import { auth } from "./auth";
+import {
+  httpAgentConnectionClaimHandler,
+  httpAgentConnectionStatusHandler,
+  httpCreateAgentConnectionHandler,
+} from "./http/httpAgentConnectionHandlers";
 
 const http = httpRouter();
 const optionsOk = httpAction(async () => corsNoContent());
@@ -29,6 +34,15 @@ http.route({
   handler: httpAction(async () => jsonResponse(200, discoverySpec)),
 });
 // Agent-initiated onboarding (approval link)
+for (const [path, handler] of [
+  ["/api/agent-connections", httpCreateAgentConnectionHandler],
+  ["/api/agent-connections/status", httpAgentConnectionStatusHandler],
+  ["/api/agent-connections/claim", httpAgentConnectionClaimHandler],
+] as const) {
+  http.route({ path, method: "OPTIONS", handler: optionsOk });
+  http.route({ path, method: "POST", handler });
+}
+
 http.route({
   path: "/api/access-requests",
   method: "OPTIONS",

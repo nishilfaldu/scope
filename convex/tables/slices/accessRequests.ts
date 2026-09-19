@@ -6,7 +6,11 @@ import {
   effectiveRequestStatus,
 } from "../../domain/requests";
 import { encryptToken } from "../../lib/tokenEncryption";
-import { createSlice, validatedBindings } from "./helpers";
+import {
+  createSlice,
+  hasActiveAgentConnection,
+  validatedBindings,
+} from "./helpers";
 import { selectedConnection } from "../connections/helpers";
 
 export const CLAIM_WINDOW_MS = 60 * 1000;
@@ -42,9 +46,16 @@ export const getNewSlice = authenticatedQuery({
     if (
       !request ||
       request.kind !== "onboarding" ||
-      (request.userId && request.userId !== ctx.userId)
+      request.userId !== ctx.userId
     )
       return null;
+    const connection = await ctx.db.get(
+      "agentConnections",
+      request.agentConnectionId,
+    );
+    if (connection?.status !== "active" || connection.userId !== ctx.userId) {
+      return null;
+    }
     return {
       kind: "onboarding" as const,
       publicToken,
@@ -69,7 +80,12 @@ export const getToken = authenticatedQuery({
     if (!request || request.kind !== "mint" || request.userId !== ctx.userId)
       return null;
     const slice = await ctx.db.get("slices", request.sliceId);
-    if (!slice || slice.userId !== ctx.userId) return null;
+    if (
+      !slice ||
+      slice.userId !== ctx.userId ||
+      !(await hasActiveAgentConnection(ctx, slice))
+    )
+      return null;
     const binding = request.bindingId
       ? await ctx.db.get("sliceBindings", request.bindingId)
       : null;
@@ -112,7 +128,7 @@ export const decide = authenticatedMutation({
         q.eq("publicToken", args.publicToken),
       )
       .unique();
-    if (!request || (request.userId && request.userId !== ctx.userId))
+    if (!request || request.userId !== ctx.userId)
       throw new Error("Request unavailable");
     if (request.kind === "mint") {
       const slice = await ctx.db.get("slices", request.sliceId);
@@ -125,6 +141,18 @@ export const decide = authenticatedMutation({
     }
     if (effectiveRequestStatus(request, Date.now()) !== "pending")
       throw new Error("Request is no longer pending");
+    if (request.kind === "onboarding") {
+      const agentConnection = await ctx.db.get(
+        "agentConnections",
+        request.agentConnectionId,
+      );
+      if (
+        agentConnection?.status !== "active" ||
+        agentConnection.userId !== ctx.userId
+      ) {
+        throw new Error("Agent connection has been revoked");
+      }
+    }
     const now = Date.now();
     if (args.decision === "denied") {
       await ctx.db.patch("accessRequests", request._id, {
@@ -172,6 +200,7 @@ export const decide = authenticatedMutation({
       ttlMs: request.ttlMs,
       mintPolicy: "auto",
       bindings,
+      agentConnectionId: request.agentConnectionId,
     });
     await ctx.db.patch("accessRequests", request._id, {
       status: "approved",

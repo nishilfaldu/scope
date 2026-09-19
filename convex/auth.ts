@@ -2,7 +2,7 @@ import { Email } from "@convex-dev/auth/providers/Email";
 import type { EmailConfig } from "@convex-dev/auth/server";
 import { convexAuth } from "@convex-dev/auth/server";
 import { Resend } from "@convex-dev/resend";
-import { components, internal } from "./_generated/api";
+import { components } from "./_generated/api";
 import { type ActionCtx, env } from "./_generated/server";
 
 const resend = new Resend(components.resend, { testMode: false });
@@ -32,15 +32,4 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     }),
   ],
   signIn: { maxFailedAttempsPerHour: 5 },
-  callbacks: {
-    afterUserCreatedOrUpdated: async (ctx, args) => {
-      if (args.type !== "email" || !args.profile.email) return;
-      // This runs before Convex Auth replaces the active code for the address.
-      const allowed = await ctx.runMutation(internal.otp.allowSend, {
-        email: args.profile.email,
-      });
-      if (!allowed)
-        throw new Error("Please wait before requesting another code");
-    },
-  },
 });

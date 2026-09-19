@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  AiChat02Icon,
   CreditCardIcon,
   PassportIcon,
   Plug01Icon,
@@ -26,6 +27,7 @@ import {
 const NAV = [
   { title: "Slices", href: "/", icon: CreditCardIcon },
   { title: "Connections", href: "/connections", icon: Plug01Icon },
+  { title: "Agents", href: "/agents", icon: AiChat02Icon },
 ] as const;
 
 export function AppSidebar({ ...props }: ComponentProps<typeof Sidebar>) {

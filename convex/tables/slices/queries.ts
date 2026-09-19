@@ -17,6 +17,7 @@ import {
 import {
   bindingsForApp,
   effectiveStatus,
+  hasActiveAgentConnection,
   sliceBySecret,
   withoutSecretHash,
 } from "./helpers";
@@ -45,7 +46,15 @@ export const list = authenticatedQuery({
       .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
       .order("desc")
       .paginate(args.paginationOpts);
-    return { ...results, page: results.page.map(withoutSecretHash) };
+    const page = await Promise.all(
+      results.page.map(async (slice) => ({
+        ...withoutSecretHash(slice),
+        status: (await hasActiveAgentConnection(ctx, slice))
+          ? effectiveStatus(slice)
+          : ("revoked" as const),
+      })),
+    );
+    return { ...results, page };
   },
 });
 
@@ -55,9 +64,13 @@ export const get = authenticatedQuery({
   handler: async (ctx, args) => {
     const id = ctx.db.normalizeId("slices", args.sliceId);
     const slice = id ? await ctx.db.get("slices", id) : null;
-    return slice && slice.userId === ctx.userId
-      ? withoutSecretHash(slice)
-      : null;
+    if (!slice || slice.userId !== ctx.userId) return null;
+    return {
+      ...withoutSecretHash(slice),
+      status: (await hasActiveAgentConnection(ctx, slice))
+        ? effectiveStatus(slice)
+        : ("revoked" as const),
+    };
   },
 });
 

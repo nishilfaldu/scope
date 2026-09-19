@@ -2,7 +2,11 @@ import { httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { env } from "../_generated/server";
 import { isAppId, type AppId } from "../domain/apps";
-import { readObjectBody, requiredString } from "../lib/requests";
+import {
+  readObjectBody,
+  requiredHeader,
+  requiredString,
+} from "../lib/requests";
 import { errorResponse, jsonResponse } from "../lib/responses";
 import { AGENT_ERROR_GUIDANCE } from "../lib/errors";
 import { parseBoardOrigin } from "./helpers";
@@ -49,10 +53,13 @@ export const httpCreateAccessRequestHandler = httpAction(
     if (body instanceof Response) {
       return body;
     }
-    const agentName = requiredString(body, "agentName");
-    if (agentName instanceof Response) {
-      return agentName;
-    }
+    const agentConnectionId = requiredHeader(request, "x-agent-connection-id");
+    if (agentConnectionId instanceof Response) return agentConnectionId;
+    const agentConnectionSecret = requiredHeader(
+      request,
+      "x-agent-connection-secret",
+    );
+    if (agentConnectionSecret instanceof Response) return agentConnectionSecret;
     const apps = readApps(body);
     if (apps instanceof Response) {
       return apps;
@@ -79,7 +86,14 @@ export const httpCreateAccessRequestHandler = httpAction(
 
     const created = await ctx.runMutation(
       internal.tables.slices.onboardingAccess.createOnboarding,
-      { agentName, apps, ttlMs, reason, idempotencyKey },
+      {
+        agentConnectionId,
+        agentConnectionSecret,
+        apps,
+        ttlMs,
+        reason,
+        idempotencyKey,
+      },
     );
     if (!created.ok) {
       return errorResponse(created.status, created.reason, created.code);

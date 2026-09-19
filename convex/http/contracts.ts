@@ -12,9 +12,25 @@ const routes = [
   },
   {
     method: "POST",
+    path: "/api/agent-connections",
+    summary:
+      "Create a short-lived operator pairing link and private claim handle.",
+  },
+  {
+    method: "POST",
+    path: "/api/agent-connections/status",
+    summary: "Poll an agent pairing decision with its private claim handle.",
+  },
+  {
+    method: "POST",
+    path: "/api/agent-connections/claim",
+    summary: "Claim an approved agent connection ID and secret once.",
+  },
+  {
+    method: "POST",
     path: "/api/access-requests",
     summary:
-      "Start agent onboarding; returns an approval URL and private claim handle.",
+      "Create an owner-bound slice request using an active agent connection.",
   },
   {
     method: "POST",
