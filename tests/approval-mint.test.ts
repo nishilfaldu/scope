@@ -2,6 +2,7 @@
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
+import type { AppId, ProviderId } from "../convex/domain/apps";
 import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -95,33 +96,71 @@ describe("auto mint policy", () => {
     expect(JSON.stringify(body)).not.toMatch(/ghr_/);
   });
 
-  test("standing-only GitHub connection hard-fails auto mint", async () => {
-    const test = t();
-    const { backend } = await signedIn(test);
-    const created = await backend.mutation(
-      internal.tables.slices.mutations.createFixture,
-      {
-        name: "Standing only",
-        ttlMs: 60_000,
-        apps: ["github"],
-        mintPolicy: "auto",
-      },
-    );
-    const response = await test.fetch("/api/credentials", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sliceToken: created.sliceToken,
-        sliceSecret: created.sliceSecret,
-        app: "github",
-      }),
-    });
-    expect(response.status).toBe(503);
-    const body = await response.json();
-    expect(body.code).toBe("SHORT_LIVED_UNAVAILABLE");
-    expect(body).not.toHaveProperty("accessToken");
-    expect(JSON.stringify(body)).not.toMatch(/ghs_standing_token/);
-  });
+  test.each([
+    ["github", "github"],
+    ["google", "gmail"],
+    ["slack", "slack"],
+    ["airtable", "airtable"],
+    ["notion", "notion"],
+    ["linear", "linear"],
+    ["vercel", "vercel"],
+    ["zoom", "zoom"],
+  ] satisfies readonly (readonly [ProviderId, AppId])[])(
+    "%s standing token is refused for %s",
+    async (provider, app) => {
+      const test = t();
+      const standingToken = `standing-${provider}-must-not-leak`;
+      const userId = await test.run(async (ctx) => {
+        return await ctx.db.insert("users", {
+          name: "Standing Token Owner",
+          email: `${provider}@example.com`,
+        });
+      });
+      await test.mutation(
+        internal.tables.connections.mutations.saveConnection,
+        {
+          userId,
+          provider,
+          app,
+          accessToken: standingToken,
+          login: `${provider}-account`,
+          providerUserId: `${provider}-account-1`,
+        },
+      );
+      const backend = test.withIdentity({ subject: `${userId}|session-1` });
+      const created = await backend.mutation(
+        internal.tables.slices.mutations.createFixture,
+        {
+          name: `${provider} standing only`,
+          ttlMs: 60_000,
+          apps: [app],
+          mintPolicy: "auto",
+        },
+      );
+
+      const response = await test.fetch("/api/credentials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sliceToken: created.sliceToken,
+          sliceSecret: created.sliceSecret,
+          app,
+        }),
+      });
+
+      expect(response.status).toBe(503);
+      const body = await response.json();
+      expect(body).toEqual({
+        error:
+          "Provider cannot mint a short-lived access token for agents. Reconnect with a refresh-capable OAuth grant, or this provider hard-fails standing-token handoff.",
+        code: "SHORT_LIVED_UNAVAILABLE",
+        retryable: false,
+        nextAction:
+          "Use a provider connection that supports fresh short-lived tokens.",
+      });
+      expect(JSON.stringify(body)).not.toContain(standingToken);
+    },
+  );
 
   test("refresh fetch rejection yields SHORT_LIVED_UNAVAILABLE not 500", async () => {
     const test = t();
