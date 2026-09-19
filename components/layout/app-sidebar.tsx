@@ -3,15 +3,11 @@
 import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  AiChat02Icon,
-  CreditCardIcon,
-  PassportIcon,
-  Plug01Icon,
-} from "@hugeicons/core-free-icons";
+import { AiChat02Icon, Plug01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { SidebarUser } from "@/components/layout/sidebar-user";
+import { BrandMark } from "@/components/shared/brand-mark";
 import {
   Sidebar,
   SidebarContent,
@@ -25,9 +21,8 @@ import {
 } from "@/components/ui/sidebar";
 
 const NAV = [
-  { title: "Slices", href: "/", icon: CreditCardIcon },
-  { title: "Connections", href: "/connections", icon: Plug01Icon },
   { title: "Agents", href: "/agents", icon: AiChat02Icon },
+  { title: "Connections", href: "/connections", icon: Plug01Icon },
 ] as const;
 
 export function AppSidebar({ ...props }: ComponentProps<typeof Sidebar>) {
@@ -40,18 +35,12 @@ export function AppSidebar({ ...props }: ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
-              render={<Link href="/" />}
-              tooltip="Agent Passport"
+              render={<Link href="/agents" />}
+              tooltip="Scope"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                <HugeiconsIcon
-                  icon={PassportIcon}
-                  strokeWidth={2}
-                  className="size-4"
-                />
-              </div>
+              <BrandMark className="size-8" />
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">Agent Passport</span>
+                <span className="truncate font-medium">Scope</span>
               </div>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -65,10 +54,10 @@ export function AppSidebar({ ...props }: ComponentProps<typeof Sidebar>) {
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton
                     isActive={
-                      item.href === "/"
-                        ? pathname === "/" || pathname.startsWith("/slices/")
-                        : pathname === item.href ||
-                          pathname.startsWith(`${item.href}/`)
+                      pathname === item.href ||
+                      pathname.startsWith(`${item.href}/`) ||
+                      (item.href === "/agents" &&
+                        pathname.startsWith("/slices/"))
                     }
                     tooltip={item.title}
                     render={<Link href={item.href} />}

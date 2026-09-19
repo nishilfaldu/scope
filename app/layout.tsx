@@ -21,8 +21,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Agent Passport",
-  description: "Create and revoke slices for agents",
+  title: "Scope",
+  description: "Control agent access to your connected accounts",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

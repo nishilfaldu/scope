@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -11,9 +10,16 @@ import {
   bindingsFor,
 } from "@/components/connections/account-bindings";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { APP_LABELS, APP_PERMISSIONS, type AppId } from "@/lib/capabilities";
 import { useNow } from "@/hooks/use-now";
+import { AuthorizationShell } from "@/components/shared/authorization-shell";
+import { AppIcon } from "@/components/shared/app-icon";
+import { Clock01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 
 function duration(ms: number) {
   const hours = ms / 3_600_000;
@@ -33,14 +39,15 @@ export function RequestDecision({
 }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const newRequest = useQuery(
-    api.tables.slices.accessRequests.getNewSlice,
+    api.tables.slices.sliceRequests.get,
     isAuthenticated && kind === "new" ? { publicToken } : "skip",
   );
   const tokenRequest = useQuery(
-    api.tables.slices.accessRequests.getToken,
+    api.tables.slices.tokenRequests.get,
     isAuthenticated && kind === "token" ? { publicToken } : "skip",
   );
-  const decide = useMutation(api.tables.slices.accessRequests.decide);
+  const decideSlice = useMutation(api.tables.slices.sliceRequests.decide);
+  const decideToken = useMutation(api.tables.slices.tokenRequests.decide);
   const [selected, setSelected] = useState<
     Partial<Record<AppId, Id<"connections">[]>>
   >({});
@@ -50,17 +57,42 @@ export function RequestDecision({
   const request = kind === "new" ? newRequest : tokenRequest;
   const currentPath = `/requests/${kind}/${publicToken}`;
 
-  if (isLoading) return <p className="p-8">Loading…</p>;
+  if (isLoading)
+    return (
+      <AuthorizationShell>
+        <div className="space-y-5 p-8">
+          <Skeleton className="h-5 w-28" />
+          <Skeleton className="h-8 w-72" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      </AuthorizationShell>
+    );
   if (!isAuthenticated)
     return (
       <SignIn redirectTo={currentPath} title="Verify your email to review" />
     );
-  if (request === undefined) return <p className="p-8">Loading request…</p>;
+  if (request === undefined)
+    return (
+      <AuthorizationShell>
+        <div className="space-y-5 p-8">
+          <Skeleton className="h-5 w-28" />
+          <Skeleton className="h-8 w-72" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      </AuthorizationShell>
+    );
   if (request === null)
     return (
-      <p className="mx-auto max-w-xl p-8">
-        This request is unavailable to this Agent Passport account.
-      </p>
+      <AuthorizationShell>
+        <div className="px-8 py-12 text-center">
+          <h1 className="text-xl font-semibold">Request unavailable</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This link is invalid, expired, or belongs to another Scope account.
+          </p>
+        </div>
+      </AuthorizationShell>
     );
   const pending = request.status === "pending" && request.expiresAt > now;
 
@@ -69,14 +101,18 @@ export function RequestDecision({
     setBusy(true);
     setError("");
     try {
-      await decide({
-        publicToken,
-        decision,
-        bindings:
-          kind === "new" && decision === "approved" && newRequest
-            ? bindingsFor(newRequest.apps, selected)
-            : undefined,
-      });
+      if (kind === "new" && newRequest) {
+        await decideSlice({
+          publicToken,
+          decision,
+          bindings:
+            decision === "approved"
+              ? bindingsFor(newRequest.apps, selected)
+              : undefined,
+        });
+      } else {
+        await decideToken({ publicToken, decision });
+      }
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -89,123 +125,145 @@ export function RequestDecision({
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl p-4 py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {kind === "new" ? "New slice request" : "Token request"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {kind === "new" && newRequest ? (
-            <>
-              <p>
-                <strong>{newRequest.agentName}</strong> requests a new slice for{" "}
-                {duration(newRequest.ttlMs)}.
+    <AuthorizationShell>
+      <div className="px-6 pt-7 sm:px-8 sm:pt-8">
+        {kind === "new" && newRequest ? (
+          <>
+            <Badge variant="secondary" className="mb-3">
+              Connected agent
+            </Badge>
+            <h1 className="text-balance text-2xl font-semibold tracking-tight">
+              {newRequest.agentName} requests access
+            </h1>
+            <div className="mt-6 rounded-xl bg-muted/70 px-4 py-3.5">
+              <p className="text-xs font-medium text-muted-foreground">
+                Purpose
               </p>
-              <p className="text-sm text-muted-foreground">
-                The requester supplied this agent name and reason. Agent
-                Passport has not verified the requester.
-              </p>
-              {newRequest.reason ? (
-                <blockquote className="border-l-2 pl-4">
-                  Reason: {newRequest.reason}
-                </blockquote>
-              ) : null}
-              <div className="space-y-2">
+              <p className="mt-1 text-sm leading-6">{newRequest.reason}</p>
+            </div>
+            <div className="mt-6">
+              <h2 className="text-sm font-semibold">Requested access</h2>
+              <div className="mt-2 divide-y rounded-xl border bg-background">
                 {newRequest.apps.map((app) => (
-                  <div key={app} className="rounded-md border p-3">
-                    <strong>{APP_LABELS[app]}</strong>
-                    <p className="text-sm">{APP_PERMISSIONS[app]}</p>
+                  <div key={app} className="flex gap-3 px-3.5 py-3">
+                    <AppIcon app={app} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{APP_LABELS[app]}</p>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                        {APP_PERMISSIONS[app]}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
-              {pending ? (
-                <>
-                  <AccountBindings
-                    apps={newRequest.apps}
-                    selected={selected}
-                    compact
-                    allowConnect={false}
-                    onChange={(app, ids) =>
-                      setSelected((current) => ({ ...current, [app]: ids }))
-                    }
-                  />
-                  <p className="text-sm">
-                    Need another account? Add it in{" "}
-                    <Link
-                      className="underline"
-                      href={`/connections?returnTo=${encodeURIComponent(currentPath)}`}
-                    >
-                      Connections
-                    </Link>
-                    , then return here.
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Approval creates a slice for the selected accounts. The
-                    agent can request provider tokens until the slice expires or
-                    is revoked. Tokens already issued may remain valid until
-                    their own expiry.
-                  </p>
-                </>
-              ) : null}
-            </>
-          ) : null}
-          {kind === "token" && tokenRequest ? (
-            <>
-              <p>
-                <strong>{tokenRequest.sliceName}</strong> requests a short-lived{" "}
-                {APP_LABELS[tokenRequest.app]} token.
-              </p>
-              <p>
-                Connected account:{" "}
-                <strong>
-                  {tokenRequest.accountLogin ?? "No longer connected"}
-                </strong>
-              </p>
-              <p className="text-sm">{APP_PERMISSIONS[tokenRequest.app]}</p>
-              <p className="text-sm text-muted-foreground">
-                Approval lets the agent claim a short-lived provider token for
-                this specific account. The token may work until its expiry even
-                if the slice is later revoked.
-              </p>
-            </>
-          ) : null}
-          <p className="text-xs text-muted-foreground">
-            Request expires {new Date(request.expiresAt).toLocaleString()}.
-          </p>
-          {error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
-            </p>
-          ) : null}
-          {pending ? (
-            <div className="flex gap-2">
-              <Button
-                disabled={
-                  busy ||
-                  (kind === "token" && !tokenRequest?.accountLogin) ||
-                  (kind === "new" &&
-                    !!newRequest &&
-                    newRequest.apps.some((app) => !selected[app]?.length))
-                }
-                onClick={() => void submit("approved")}
-              >
-                Approve
-              </Button>
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => void submit("denied")}
-              >
-                Deny
-              </Button>
             </div>
-          ) : (
-            <p>This request is {request.status}.</p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+            {pending ? (
+              <div className="mt-6">
+                <AccountBindings
+                  apps={newRequest.apps}
+                  selected={selected}
+                  compact
+                  allowConnect={false}
+                  onChange={(app, ids) =>
+                    setSelected((current) => ({ ...current, [app]: ids }))
+                  }
+                />
+              </div>
+            ) : null}
+            <div className="mt-6 flex items-center gap-3 rounded-xl border px-3.5 py-3">
+              <span className="flex size-9 items-center justify-center rounded-lg bg-muted">
+                <HugeiconsIcon
+                  icon={Clock01Icon}
+                  className="size-4"
+                  strokeWidth={2}
+                />
+              </span>
+              <div>
+                <p className="text-sm font-medium">
+                  Valid for {duration(newRequest.ttlMs)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Expires automatically
+                </p>
+              </div>
+            </div>
+          </>
+        ) : null}
+        {kind === "token" && tokenRequest ? (
+          <>
+            <Badge variant="secondary" className="mb-3">
+              One-time approval
+            </Badge>
+            <h1 className="text-balance text-2xl font-semibold tracking-tight">
+              Allow {APP_LABELS[tokenRequest.app]} access?
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Requested by {tokenRequest.sliceName}
+            </p>
+            <div className="mt-6 rounded-xl border bg-background">
+              <div className="flex gap-3 px-4 py-4">
+                <AppIcon app={tokenRequest.app} className="size-10" />
+                <div>
+                  <p className="font-medium">
+                    {tokenRequest.accountLogin ?? "Account disconnected"}
+                  </p>
+                  <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                    {APP_PERMISSIONS[tokenRequest.app]}
+                  </p>
+                </div>
+              </div>
+              <Separator />
+              <p className="px-4 py-3 text-xs text-muted-foreground">
+                Approval applies to this token request only.
+              </p>
+            </div>
+          </>
+        ) : null}
+        {error ? (
+          <Alert variant="destructive" className="mt-5">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+      </div>
+      <div className="mt-7 border-t bg-muted/25 px-6 py-5 sm:px-8">
+        {pending ? (
+          <div className="flex flex-col gap-2 sm:flex-row-reverse">
+            <Button
+              className="h-11 sm:min-w-40"
+              disabled={
+                busy ||
+                (kind === "token" && !tokenRequest?.accountLogin) ||
+                (kind === "new" &&
+                  !!newRequest &&
+                  newRequest.apps.some((app) => !selected[app]?.length))
+              }
+              onClick={() => void submit("approved")}
+            >
+              {busy
+                ? "Working…"
+                : kind === "new" && newRequest
+                  ? `Allow for ${duration(newRequest.ttlMs)}`
+                  : "Approve once"}
+            </Button>
+            <Button
+              variant="ghost"
+              className="h-11 sm:min-w-24"
+              disabled={busy}
+              onClick={() => void submit("denied")}
+            >
+              Decline
+            </Button>
+          </div>
+        ) : (
+          <p className="text-sm">
+            This request is{" "}
+            <span className="font-medium">{request.status}</span>.
+          </p>
+        )}
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          Link expires {new Date(request.expiresAt).toLocaleString()}.
+        </p>
+      </div>
+    </AuthorizationShell>
   );
 }

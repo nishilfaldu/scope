@@ -6,20 +6,20 @@ describe("Zoom OAuth", () => {
   test("authorizes with board-minted state", () => {
     vi.stubEnv("ZOOM_CLIENT_ID", "zoom-client");
     vi.stubEnv("ZOOM_CLIENT_SECRET", "zoom-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     const started = zoom.authorize("state-1");
     if (!("url" in started)) throw new Error("expected URL");
     const url = new URL(started.url);
     expect(url.origin + url.pathname).toBe("https://zoom.us/oauth/authorize");
     expect(url.searchParams.get("state")).toBe("state-1");
     expect(url.searchParams.get("redirect_uri")).toBe(
-      "https://passport.convex.site/api/zoom/callback",
+      "https://scope.convex.site/api/zoom/callback",
     );
   });
   test("exchanges, identifies, refreshes, and revokes", async () => {
     vi.stubEnv("ZOOM_CLIENT_ID", "zoom-client");
     vi.stubEnv("ZOOM_CLIENT_SECRET", "zoom-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(

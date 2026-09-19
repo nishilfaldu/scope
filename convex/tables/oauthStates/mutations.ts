@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
-import type { AppId, ProviderId } from "../../domain/apps";
+import type { AppId } from "../../domain/apps";
 import {
   appValidator,
   providerForApp,
@@ -16,7 +16,6 @@ async function insertState(
   ctx: Pick<MutationCtx, "db">,
   args: {
     userId: Id<"users">;
-    provider: ProviderId;
     app: AppId;
     state: string;
     returnTo: string;
@@ -35,7 +34,6 @@ export const start = authenticatedMutation({
     const state = crypto.randomUUID();
     await insertState(ctx, {
       userId: ctx.userId,
-      provider: providerForApp(args.app),
       app: args.app,
       state,
       returnTo: allowedReturnTo(args.returnTo),
@@ -54,7 +52,15 @@ export const put = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await insertState(ctx, args);
+    if (args.provider !== providerForApp(args.app)) {
+      throw new Error("Provider/app mismatch");
+    }
+    await insertState(ctx, {
+      userId: args.userId,
+      app: args.app,
+      state: args.state,
+      returnTo: args.returnTo,
+    });
     return null;
   },
 });
@@ -80,7 +86,7 @@ export const consume = internalMutation({
     if (row.expiresAt <= Date.now()) return null;
     return {
       userId: row.userId,
-      provider: row.provider,
+      provider: providerForApp(row.app),
       app: row.app,
       returnTo: row.returnTo,
     };

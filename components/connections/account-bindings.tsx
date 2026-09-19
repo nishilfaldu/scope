@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { APP_LABELS, APP_PERMISSIONS, type AppId } from "@/lib/capabilities";
 import { APP_CONNECT_URL } from "@/lib/connections";
+import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AppIcon } from "@/components/shared/app-icon";
+import { usePathname } from "next/navigation";
 
 const PAGE_SIZE = 50;
 export type Binding = { app: AppId; connectionId: Id<"connections"> };
@@ -37,6 +41,7 @@ export function AccountBindings({
 }) {
   const [page, setPage] = useState(0);
   const [connecting, setConnecting] = useState<AppId | null>(null);
+  const pathname = usePathname();
   const startOAuth = useMutation(api.tables.oauthStates.mutations.start);
   const lastPage = Math.max(0, Math.ceil(apps.length / PAGE_SIZE) - 1);
   const currentPage = Math.min(page, lastPage);
@@ -73,95 +78,113 @@ export function AccountBindings({
     }
   }
   return (
-    <div className="space-y-3">
-      <p className="text-sm font-medium">Accounts ({chosen} selected)</p>
-      {visibleApps.map((app) => {
-        const accounts =
-          statuses?.find((entry) => entry.app === app)?.accounts ?? [];
-        return (
-          <div
-            key={app}
-            className={
-              compact
-                ? "grid gap-2 rounded-lg border p-3 text-sm sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] sm:items-center"
-                : "space-y-1 text-sm"
-            }
-          >
-            <div>
-              <span className="font-medium">{APP_LABELS[app]}</span>
-              {!compact ? (
-                <p className="text-muted-foreground">{APP_PERMISSIONS[app]}</p>
-              ) : null}
-            </div>
-            <div className="space-y-2">
-              {statuses === undefined ? (
-                <p className="text-muted-foreground">Loading accounts…</p>
-              ) : accounts.length === 0 ? (
-                <p className="text-muted-foreground">
-                  Connect an account first
-                </p>
-              ) : (
-                accounts.map((account) => {
-                  const checked = selected[app]?.includes(account.id) ?? false;
-                  const id = `account-${app}-${account.id}`;
-                  return (
-                    <div
-                      key={account.id}
-                      className="flex min-w-0 items-center gap-2"
-                    >
-                      <Checkbox
-                        id={id}
-                        checked={checked}
-                        onCheckedChange={(next) =>
-                          onChange(
-                            app,
-                            next
-                              ? [...(selected[app] ?? []), account.id]
-                              : (selected[app] ?? []).filter(
-                                  (value) => value !== account.id,
-                                ),
-                          )
-                        }
-                      />
-                      <label htmlFor={id} className="min-w-0 break-all">
-                        {account.login}
-                      </label>
+    <div>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold">Choose accounts</h2>
+        <span className="text-xs text-muted-foreground">{chosen} selected</span>
+      </div>
+      <div className="divide-y rounded-xl border bg-background">
+        {visibleApps.map((app) => {
+          const accounts =
+            statuses?.find((entry) => entry.app === app)?.accounts ?? [];
+          return (
+            <div key={app} className="flex gap-3 px-3.5 py-3 text-sm">
+              <AppIcon app={app} />
+              <div className="min-w-0 flex-1">
+                <span className="font-medium">{APP_LABELS[app]}</span>
+                {!compact ? (
+                  <p className="text-muted-foreground">
+                    {APP_PERMISSIONS[app]}
+                  </p>
+                ) : null}
+                <div className="mt-2 space-y-2">
+                  {statuses === undefined ? (
+                    <>
+                      <Skeleton className="h-5 w-40" />
+                      <Skeleton className="h-5 w-32" />
+                    </>
+                  ) : accounts.length === 0 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/70 px-3 py-2">
+                      <span className="text-xs text-muted-foreground">
+                        No connected account
+                      </span>
+                      {!allowConnect ? (
+                        <Link
+                          className="text-xs font-medium underline underline-offset-4"
+                          href={`/connections?returnTo=${encodeURIComponent(pathname)}`}
+                        >
+                          Open Connections
+                        </Link>
+                      ) : null}
                     </div>
-                  );
-                })
-              )}
+                  ) : (
+                    accounts.map((account) => {
+                      const checked =
+                        selected[app]?.includes(account.id) ?? false;
+                      const id = `account-${app}-${account.id}`;
+                      return (
+                        <div
+                          key={account.id}
+                          className="flex min-w-0 items-center gap-2.5"
+                        >
+                          <Checkbox
+                            id={id}
+                            checked={checked}
+                            onCheckedChange={(next) =>
+                              onChange(
+                                app,
+                                next
+                                  ? [...(selected[app] ?? []), account.id]
+                                  : (selected[app] ?? []).filter(
+                                      (value) => value !== account.id,
+                                    ),
+                              )
+                            }
+                          />
+                          <label
+                            htmlFor={id}
+                            className="min-w-0 break-all text-sm"
+                          >
+                            {account.login}
+                          </label>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+                {allowConnect &&
+                !compact &&
+                statuses !== undefined &&
+                accounts.length === 0 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={connecting !== null}
+                    onClick={() => void connect(app)}
+                  >
+                    Connect {APP_LABELS[app]}
+                  </Button>
+                ) : null}
+                {allowConnect &&
+                !compact &&
+                statuses !== undefined &&
+                accounts.length > 0 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={connecting !== null}
+                    onClick={() => void connect(app)}
+                  >
+                    Add another account
+                  </Button>
+                ) : null}
+              </div>
             </div>
-            {allowConnect &&
-            !compact &&
-            statuses !== undefined &&
-            accounts.length === 0 ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={connecting !== null}
-                onClick={() => void connect(app)}
-              >
-                Connect {APP_LABELS[app]}
-              </Button>
-            ) : null}
-            {allowConnect &&
-            !compact &&
-            statuses !== undefined &&
-            accounts.length > 0 ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={connecting !== null}
-                onClick={() => void connect(app)}
-              >
-                Add another account
-              </Button>
-            ) : null}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
       {apps.length > PAGE_SIZE ? (
         <div className="flex items-center gap-2">
           <Button

@@ -67,8 +67,8 @@ describe("connection secrets at rest", () => {
     const stored = await test.run(async (ctx) => {
       return await ctx.db
         .query("connections")
-        .withIndex("by_user_provider_app_providerUserId", (q) =>
-          q.eq("userId", userId).eq("provider", "github").eq("app", "github"),
+        .withIndex("by_user_app_providerUserId", (q) =>
+          q.eq("userId", userId).eq("app", "github"),
         )
         .unique();
     });
@@ -97,7 +97,6 @@ describe("connection secrets at rest", () => {
     const connectionId = await test.run(async (ctx) => {
       return await ctx.db.insert("connections", {
         userId,
-        provider: "github",
         app: "github",
         accessToken: "ghs_plaintext_stored",
         login: "octocat",

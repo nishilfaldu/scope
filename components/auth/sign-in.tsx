@@ -5,11 +5,15 @@ import { useConvexAuth } from "convex/react";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AuthorizationShell } from "@/components/shared/authorization-shell";
+import { Mail01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 
 export function SignIn({
   redirectTo = "/",
-  title = "Agent Passport",
+  title = "Scope",
 }: {
   redirectTo?: string;
   title?: string;
@@ -72,65 +76,83 @@ export function SignIn({
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {sent ? (
-            <p className="text-sm text-muted-foreground">
-              If a code can be sent to this address, it will arrive shortly.
-              Codes expire after 10 minutes.
+    <AuthorizationShell>
+      <div className="px-6 py-7 sm:px-8 sm:py-8">
+        <div className="mb-7 flex items-start gap-4">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-foreground">
+            <HugeiconsIcon
+              icon={Mail01Icon}
+              className="size-5"
+              strokeWidth={2}
+            />
+          </span>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              {sent
+                ? `Enter the code sent to ${email}.`
+                : "Use your email to continue."}
             </p>
-          ) : null}
+          </div>
+        </div>
+        <div className="space-y-5">
           <form
             onSubmit={sent ? verifyCode : requestCode}
-            className="space-y-3"
+            className="space-y-4"
           >
-            <label className="block text-sm font-medium" htmlFor="email">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              disabled={sent}
-              className="w-full rounded-md border bg-background px-3 py-2"
-            />
-            {sent ? (
-              <>
-                <label className="block text-sm font-medium" htmlFor="code">
-                  Code
+            {!sent ? (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium" htmlFor="email">
+                  Email address
                 </label>
-                <input
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  autoFocus
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                />
+              </div>
+            ) : null}
+            {sent ? (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium" htmlFor="code">
+                  Verification code
+                </label>
+                <Input
                   id="code"
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   pattern="[0-9]{8}"
                   maxLength={8}
                   required
+                  autoFocus
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
-                  className="w-full rounded-md border bg-background px-3 py-2"
+                  placeholder="00000000"
+                  className="h-12 text-center font-mono text-lg tracking-[0.35em]"
                 />
-              </>
+                <p className="text-xs text-muted-foreground">
+                  Expires in 10 minutes.
+                </p>
+              </div>
             ) : null}
             {error ? (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             ) : null}
-            <Button className="w-full" disabled={busy} type="submit">
-              {sent ? "Verify code" : "Email me a code"}
+            <Button className="h-11 w-full" disabled={busy} type="submit">
+              {busy ? "Working…" : sent ? "Continue" : "Continue with email"}
             </Button>
           </form>
           {sent ? (
             <Button
               variant="ghost"
+              className="w-full"
               disabled={busy}
               onClick={() => {
                 setSent(false);
@@ -138,11 +160,11 @@ export function SignIn({
                 setError("");
               }}
             >
-              Use another email
+              Change email address
             </Button>
           ) : null}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+    </AuthorizationShell>
   );
 }

@@ -24,7 +24,7 @@ export function BoardShell({
         } as CSSProperties
       }
     >
-      <AppSidebar variant="inset" />
+      <AppSidebar />
       <SidebarInset>
         <SiteHeader title={title} crumbs={crumbs} />
         <div className="flex flex-1 flex-col">{children}</div>

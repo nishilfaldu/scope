@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { resolveReturnTo } from "../convex/http/helpers";
 
@@ -51,7 +51,6 @@ async function createSlice(
         : app;
       await ctx.db.insert("connections", {
         userId,
-        provider,
         app,
         accessToken: `${app}-token`,
         login: "nishil",
@@ -61,7 +60,7 @@ async function createSlice(
   });
   return await test
     .withIdentity({ subject: `${userId}|session-1` })
-    .mutation(api.tables.slices.mutations.create, args);
+    .mutation(internal.tables.slices.mutations.createFixture, args);
 }
 
 describe("GET /api/health", () => {

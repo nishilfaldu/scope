@@ -7,7 +7,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 
 import { BoardShell } from "@/components/layout/board-shell";
 import { ConnectionsTable } from "@/components/connections/connections-table";
-import { ContentCard } from "@/components/shared/content-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CONNECT_ERRORS, ALL_APPS, type AppId } from "@/lib/connections";
 
@@ -58,16 +57,29 @@ export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
 
   return (
     <BoardShell title="Connections">
-      <div className="@container/main flex flex-1 flex-col gap-4 py-4 md:gap-6 md:py-6">
-        {returnTo ? (
-          <div className="px-4 lg:px-6 text-sm">
-            <Link className="underline" href={returnTo}>
-              Return to request
-            </Link>
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-8 lg:px-8 lg:py-10">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Connections
+            </h1>
+            <p className="mt-1 max-w-xl text-sm leading-6 text-muted-foreground">
+              Accounts available when you approve agent access.
+            </p>
           </div>
-        ) : null}
+          {returnTo ? (
+            <div className="text-sm">
+              <Link
+                className="font-medium underline underline-offset-4"
+                href={returnTo}
+              >
+                Return to request
+              </Link>
+            </div>
+          ) : null}
+        </div>
         {connectBanner ? (
-          <div className="px-4 lg:px-6">
+          <div className="mt-6">
             <Alert variant="destructive">
               <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
               <AlertTitle>Connect failed</AlertTitle>
@@ -76,10 +88,14 @@ export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
           </div>
         ) : null}
 
-        <div className="px-4 lg:px-6">
-          <ContentCard title="Connections">
-            <ConnectionsTable />
-          </ContentCard>
+        <div className="mt-8 overflow-hidden rounded-xl border bg-card">
+          <div className="border-b px-5 py-4">
+            <h2 className="font-semibold">Apps and accounts</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Connect more than one account when you need separate identities.
+            </p>
+          </div>
+          <ConnectionsTable />
         </div>
       </div>
     </BoardShell>

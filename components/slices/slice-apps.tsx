@@ -4,13 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useQuery } from "convex/react";
-
 import { api } from "@/convex/_generated/api";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { ContentCard } from "@/components/shared/content-card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AppIcon } from "@/components/shared/app-icon";
+import { EmptyState } from "@/components/shared/empty-state";
+import { BrandMark } from "@/components/shared/brand-mark";
 import {
   ALL_APPS,
   APP_LABELS,
@@ -20,55 +21,43 @@ import {
 import { useErrorCatchingMutation } from "@/lib/errors";
 import { useNow } from "@/hooks/use-now";
 
-const PAGE_SIZE = 50;
-const INITIAL_ACCOUNTS = 4;
+const INITIAL_ACCOUNTS = 5;
 
 export function SliceApps({ sliceId }: { sliceId: string }) {
   const now = useNow();
-  const [page, setPage] = useState(0);
   const [accountSearch, setAccountSearch] = useState("");
-  const visibleApps = ALL_APPS.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const statuses = useQuery(api.tables.connections.queries.statusesForApps, {
-    apps: visibleApps,
+    apps: [...ALL_APPS],
   });
   const bindings = useQuery(api.tables.slices.queries.bindingsForApps, {
     sliceId: sliceId as Id<"slices">,
-    apps: visibleApps,
+    apps: [...ALL_APPS],
   });
-  const slice = useQuery(api.tables.slices.queries.get, { sliceId: sliceId });
+  const slice = useQuery(api.tables.slices.queries.get, { sliceId });
   const [setBinding, isToggling] = useErrorCatchingMutation(
     api.tables.slices.mutations.setBinding,
     {
       successMessage: (args) =>
         args.enabled
-          ? `${APP_LABELS[args.app]} enabled`
-          : `${APP_LABELS[args.app]} disabled`,
+          ? `${APP_LABELS[args.app]} added`
+          : `${APP_LABELS[args.app]} removed`,
     },
   );
 
-  function handleToggle(
+  if (slice === undefined)
+    return <Skeleton className="h-72 w-full rounded-xl" />;
+  if (slice === null) return null;
+  const sliceToken = slice.token;
+
+  function toggle(
     app: AppId,
     connectionId: Id<"connections">,
     enabled: boolean,
   ) {
-    if (!slice) return;
-    void setBinding({
-      connectionId,
-      sliceToken: slice.token,
-      app,
-      enabled,
-    });
+    void setBinding({ connectionId, sliceToken, app, enabled });
   }
 
-  if (slice === undefined) {
-    return <Skeleton className="h-28 w-full" />;
-  }
-
-  if (slice === null) {
-    return null;
-  }
-
-  const groups = visibleApps.map((app) => {
+  const groups = ALL_APPS.map((app) => {
     const accounts =
       statuses?.find((status) => status.app === app)?.accounts ?? [];
     const appBindings =
@@ -87,171 +76,157 @@ export function SliceApps({ sliceId }: { sliceId: string }) {
       ),
     };
   });
-  const allowedGroups = groups.filter((group) => group.allowed.length > 0);
-  const allowedCount = allowedGroups.reduce(
-    (count, group) => count + group.allowed.length,
-    0,
+  const allowed = groups.flatMap((group) =>
+    group.allowed.map((account) => ({ app: group.app, ...account })),
   );
-  const availableAccounts = groups.flatMap(({ app, available }) =>
-    available.map((account) => ({ app, ...account })),
+  const available = groups.flatMap((group) =>
+    group.available.map((account) => ({ app: group.app, ...account })),
   );
-  const availableCount = availableAccounts.length;
   const search = accountSearch.trim().toLocaleLowerCase();
-  const shownAccounts = search
-    ? availableAccounts.filter(
+  const shownAvailable = search
+    ? available.filter(
         ({ app, login }) =>
           APP_LABELS[app].toLocaleLowerCase().includes(search) ||
           login.toLocaleLowerCase().includes(search),
       )
-    : availableAccounts.slice(0, INITIAL_ACCOUNTS);
-  const shownGroups = visibleApps
-    .map((app) => ({
-      app,
-      accounts: shownAccounts.filter((account) => account.app === app),
-    }))
-    .filter((group) => group.accounts.length > 0);
-  const active = effectiveSliceStatus(slice, now) === "active";
+    : available.slice(0, INITIAL_ACCOUNTS);
   const loaded = statuses !== undefined && bindings !== undefined;
+  const active = effectiveSliceStatus(slice, now) === "active";
 
   return (
-    <div className="flex flex-col gap-4">
-      <ContentCard
-        title={`Allowed accounts${loaded ? ` (${allowedCount})` : ""}`}
-      >
-        {!loaded ? (
-          <div className="grid gap-3 p-6 sm:grid-cols-2">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
-          </div>
-        ) : allowedCount === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground">
-            No accounts allowed on this slice.
+    <section className="overflow-hidden rounded-xl border bg-card">
+      <div className="flex items-start justify-between gap-4 px-5 py-4 sm:px-6">
+        <div>
+          <h2 className="font-semibold">Account access</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Accounts this agent can use through this grant.
           </p>
+        </div>
+        <Link
+          href="/connections"
+          className="text-sm font-medium underline underline-offset-4"
+        >
+          Connections
+        </Link>
+      </div>
+      <div className="border-t">
+        {!loaded ? (
+          <div className="divide-y">
+            {[0, 1].map((item) => (
+              <div key={item} className="flex items-center gap-3 px-5 py-4">
+                <Skeleton className="size-9 rounded-lg" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-3 w-44" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : allowed.length === 0 ? (
+          <EmptyState
+            title="No accounts allowed"
+            description="This grant currently cannot access any connected account."
+            icon={<BrandMark className="size-6" />}
+          />
         ) : (
-          <div className="grid gap-3 p-6 sm:grid-cols-2">
-            {allowedGroups.map(({ app, allowed }) => (
-              <div key={app} className="space-y-2 rounded-xl border px-3 py-3">
-                <p className="text-sm font-medium">{APP_LABELS[app]}</p>
-                {allowed.map((account) => (
-                  <div
-                    key={account.connectionId}
-                    className="flex items-center justify-between gap-3"
+          <div className="divide-y">
+            {allowed.map((account) => (
+              <div
+                key={`${account.app}:${account.connectionId}`}
+                className="flex items-center gap-3 px-5 py-3.5 sm:px-6"
+              >
+                <AppIcon app={account.app} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">
+                    {APP_LABELS[account.app]}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {account.login ?? "Disconnected account"}
+                  </p>
+                </div>
+                {account.login ? (
+                  <Switch
+                    checked
+                    disabled={!active || isToggling}
+                    onCheckedChange={() =>
+                      toggle(account.app, account.connectionId, false)
+                    }
+                    aria-label={`Remove ${account.login}`}
+                  />
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={!active || isToggling}
+                    onClick={() =>
+                      toggle(account.app, account.connectionId, false)
+                    }
                   >
-                    <span className="min-w-0 break-all text-xs">
-                      {account.login ?? "Disconnected account"}
-                    </span>
-                    {account.login !== null ? (
-                      <Switch
-                        checked
-                        disabled={!active || isToggling}
-                        onCheckedChange={() =>
-                          handleToggle(app, account.connectionId, false)
-                        }
-                        aria-label={`Remove ${APP_LABELS[app]} for ${account.login} from this slice`}
-                      />
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="xs"
-                        disabled={!active || isToggling}
-                        onClick={() =>
-                          handleToggle(app, account.connectionId, false)
-                        }
-                      >
-                        Remove
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                    Remove
+                  </Button>
+                )}
               </div>
             ))}
           </div>
         )}
-      </ContentCard>
+      </div>
       {active ? (
-        <ContentCard
-          title={`Add accounts${loaded ? ` (${availableCount})` : ""}`}
-          action={
-            <Link
-              href="/connections"
-              className="text-sm text-primary hover:underline"
-            >
-              Manage connections
-            </Link>
-          }
-        >
-          <div className="space-y-3 p-6">
-            <Input
-              type="search"
-              value={accountSearch}
-              onChange={(event) => setAccountSearch(event.target.value)}
-              placeholder="Search connected accounts"
-              aria-label="Search connected accounts by app or login"
-              className="max-w-sm"
-            />
-            {!loaded ? (
-              <Skeleton className="h-20 w-full" />
-            ) : shownGroups.length === 0 ? (
-              <p role="status" className="text-sm text-muted-foreground">
-                {availableCount === 0
-                  ? "No other connected accounts."
-                  : "No matching connected accounts."}
+        <div className="border-t bg-muted/20 px-5 py-5 sm:px-6">
+          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+            <div>
+              <h3 className="text-sm font-semibold">Add a connected account</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                This expands the agent’s access immediately.
               </p>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {shownGroups.map(({ app, accounts }) => (
-                  <div
-                    key={app}
-                    className="space-y-2 rounded-xl border px-3 py-3"
-                  >
-                    <p className="text-sm font-medium">{APP_LABELS[app]}</p>
-                    {accounts.map((account) => (
-                      <div
-                        key={account.id}
-                        className="flex items-center justify-between gap-3"
-                      >
-                        <span className="min-w-0 break-all text-xs">
-                          {account.login}
-                        </span>
-                        <Switch
-                          checked={false}
-                          disabled={isToggling}
-                          onCheckedChange={() =>
-                            handleToggle(app, account.id, true)
-                          }
-                          aria-label={`Allow ${APP_LABELS[app]} for ${account.login} on this slice`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
+            </div>
+            {available.length > 4 ? (
+              <Input
+                type="search"
+                value={accountSearch}
+                onChange={(event) => setAccountSearch(event.target.value)}
+                placeholder="Search accounts"
+                className="h-9 sm:max-w-56"
+              />
+            ) : null}
           </div>
-        </ContentCard>
-      ) : null}
-      {ALL_APPS.length > PAGE_SIZE ? (
-        <div className="mt-4 flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page === 0}
-            onClick={() => setPage(page - 1)}
-          >
-            Previous
-          </Button>
-          <span className="text-sm">Page {page + 1}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={(page + 1) * PAGE_SIZE >= ALL_APPS.length}
-            onClick={() => setPage(page + 1)}
-          >
-            Next
-          </Button>
+          {!loaded ? (
+            <Skeleton className="mt-4 h-12 w-full" />
+          ) : shownAvailable.length === 0 ? (
+            <p className="mt-4 text-sm text-muted-foreground">
+              {available.length === 0
+                ? "No other connected accounts."
+                : "No matching accounts."}
+            </p>
+          ) : (
+            <div className="mt-4 divide-y rounded-lg border bg-background">
+              {shownAvailable.map((account) => (
+                <div
+                  key={account.id}
+                  className="flex items-center gap-3 px-3 py-2.5"
+                >
+                  <AppIcon app={account.app} className="size-8" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">
+                      {APP_LABELS[account.app]}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {account.login}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isToggling}
+                    onClick={() => toggle(account.app, account.id, true)}
+                  >
+                    Add
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : null}
-    </div>
+    </section>
   );
 }

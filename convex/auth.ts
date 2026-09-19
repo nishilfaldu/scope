@@ -23,10 +23,10 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         ctx: ActionCtx,
       ) => {
         await resend.sendEmail(ctx, {
-          from: env.RESEND_FROM ?? "Agent Passport <login@nishilfaldu.site>",
+          from: env.RESEND_FROM ?? "Scope <login@nishilfaldu.site>",
           to: identifier,
-          subject: "Your Agent Passport sign-in code",
-          text: `Your Agent Passport code is ${token}. It expires in 10 minutes. If you did not request it, ignore this email.`,
+          subject: "Your Scope sign-in code",
+          text: `Your Scope code is ${token}. It expires in 10 minutes. If you did not request it, ignore this email.`,
         });
       }) as unknown as EmailConfig["sendVerificationRequest"],
     }),

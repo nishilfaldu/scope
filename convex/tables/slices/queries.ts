@@ -1,7 +1,3 @@
-import {
-  paginationOptsValidator,
-  paginationResultValidator,
-} from "convex/server";
 import { v } from "convex/values";
 import { internalQuery } from "../../_generated/server";
 import { authenticatedQuery } from "../../functions";
@@ -35,27 +31,6 @@ const boardSlice = v.object({
   ),
   expiresAt: v.number(),
   mintPolicy: v.union(v.literal("auto"), v.literal("approve")),
-});
-
-export const list = authenticatedQuery({
-  args: { paginationOpts: paginationOptsValidator },
-  returns: paginationResultValidator(boardSlice),
-  handler: async (ctx, args) => {
-    const results = await ctx.db
-      .query("slices")
-      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-      .order("desc")
-      .paginate(args.paginationOpts);
-    const page = await Promise.all(
-      results.page.map(async (slice) => ({
-        ...withoutSecretHash(slice),
-        status: (await hasActiveAgentConnection(ctx, slice))
-          ? effectiveStatus(slice)
-          : ("revoked" as const),
-      })),
-    );
-    return { ...results, page };
-  },
 });
 
 export const get = authenticatedQuery({

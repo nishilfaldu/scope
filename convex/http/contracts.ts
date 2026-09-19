@@ -12,6 +12,16 @@ const routes = [
   },
   {
     method: "POST",
+    path: "/api/agent-connections/cancel",
+    summary: "Cancel a pending agent connection invitation.",
+  },
+  {
+    method: "POST",
+    path: "/api/agent-connections/revoke",
+    summary: "Revoke the calling agent connection and all of its slices.",
+  },
+  {
+    method: "POST",
     path: "/api/agent-connections",
     summary:
       "Create a short-lived operator pairing link and private claim handle.",
@@ -44,6 +54,11 @@ const routes = [
   },
   {
     method: "POST",
+    path: "/api/access-requests/cancel",
+    summary: "Cancel the calling agent's pending slice request.",
+  },
+  {
+    method: "POST",
     path: "/api/credentials",
     summary:
       "Mint a provider-native token for an allowed app and account binding.",
@@ -52,6 +67,16 @@ const routes = [
     method: "POST",
     path: "/api/credentials/claim",
     summary: "Claim an approved credential request.",
+  },
+  {
+    method: "POST",
+    path: "/api/credentials/cancel",
+    summary: "Cancel a pending token request using its slice credentials.",
+  },
+  {
+    method: "POST",
+    path: "/api/slices/revoke",
+    summary: "Revoke a slice using that slice's credentials.",
   },
   {
     method: "GET",
@@ -79,7 +104,7 @@ const routes = [
 ];
 
 export const discoverySpec = {
-  name: "Agent Passport API",
+  name: "Scope API",
   summary:
     "Slices control future credential mints. Issued provider tokens remain valid until their provider expires or revokes them.",
   errors: AGENT_ERROR_CODES,

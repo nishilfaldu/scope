@@ -14,7 +14,7 @@ export async function mintCredential(
     app: AppId;
     bindingId: Id<"sliceBindings">;
     connectionId: Id<"connections">;
-    requestId?: Id<"accessRequests">;
+    requestId?: Id<"tokenRequests">;
   },
 ): Promise<Response> {
   const issued = await issueShortLivedAccess(

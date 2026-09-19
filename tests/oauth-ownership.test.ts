@@ -110,11 +110,8 @@ describe("OAuth ownership", () => {
       async (ctx) =>
         await ctx.db
           .query("connections")
-          .withIndex("by_user_provider_app_providerUserId", (q) =>
-            q
-              .eq("userId", firstUserId)
-              .eq("provider", "github")
-              .eq("app", "github"),
+          .withIndex("by_user_app_providerUserId", (q) =>
+            q.eq("userId", firstUserId).eq("app", "github"),
           )
           .collect(),
     );
@@ -122,11 +119,8 @@ describe("OAuth ownership", () => {
       async (ctx) =>
         await ctx.db
           .query("connections")
-          .withIndex("by_user_provider_app_providerUserId", (q) =>
-            q
-              .eq("userId", secondUserId)
-              .eq("provider", "github")
-              .eq("app", "github"),
+          .withIndex("by_user_app_providerUserId", (q) =>
+            q.eq("userId", secondUserId).eq("app", "github"),
           )
           .collect(),
     );

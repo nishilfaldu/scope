@@ -21,7 +21,7 @@ export const clearConnection = internalMutation({
     const row = await ctx.db.get("connections", args.connectionId);
     if (!row || row.userId !== args.userId || row.app !== args.app) return null;
     let revokeUpstream = true;
-    if (row.provider === "google") {
+    if (providerForApp(row.app) === "google") {
       for (const app of [
         "gmail",
         "calendar",
@@ -31,10 +31,9 @@ export const clearConnection = internalMutation({
       ] as const) {
         const others = await ctx.db
           .query("connections")
-          .withIndex("by_user_provider_app_providerUserId", (q) =>
+          .withIndex("by_user_app_providerUserId", (q) =>
             q
               .eq("userId", args.userId)
-              .eq("provider", "google")
               .eq("app", app)
               .eq("providerUserId", row.providerUserId),
           )
@@ -67,10 +66,9 @@ export const saveConnection = internalMutation({
       throw new Error("Provider account ID is required");
     const existing = await ctx.db
       .query("connections")
-      .withIndex("by_user_provider_app_providerUserId", (q) =>
+      .withIndex("by_user_app_providerUserId", (q) =>
         q
           .eq("userId", args.userId)
-          .eq("provider", args.provider)
           .eq("app", args.app)
           .eq("providerUserId", args.providerUserId),
       )
@@ -84,7 +82,6 @@ export const saveConnection = internalMutation({
         : await encryptToken(args.refreshToken);
     const doc = {
       userId: args.userId,
-      provider: args.provider,
       app: args.app,
       accessToken,
       login: args.login,

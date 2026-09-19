@@ -17,11 +17,11 @@ export const httpClaimHandler = httpAction(async (ctx, request) => {
   if (requestIdRaw instanceof Response) return requestIdRaw;
 
   const decision = await ctx.runMutation(
-    internal.tables.slices.accessRequestsMint.resolveClaim,
+    internal.tables.slices.tokenRequestClaims.resolveClaim,
     {
       sliceToken,
       sliceSecret,
-      requestId: requestIdRaw as Id<"accessRequests">,
+      requestId: requestIdRaw as Id<"tokenRequests">,
     },
   );
   if (!decision.ok)

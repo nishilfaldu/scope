@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { SignIn } from "@/components/auth/sign-in";
 
 export const metadata: Metadata = {
-  title: "Sign in · Agent Passport",
+  title: "Sign in · Scope",
 };
 
 function safeRedirectPath(value: string | string[] | undefined): string {
@@ -25,7 +25,7 @@ export default async function SignInPage({
   return (
     <SignIn
       redirectTo={redirectTo}
-      title={returningToApproval ? "Continue to approve" : "Agent Passport"}
+      title={returningToApproval ? "Continue to approve" : "Scope"}
     />
   );
 }

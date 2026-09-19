@@ -45,6 +45,7 @@ async function connectedAgent(
   const id = await test.run(async (ctx) =>
     ctx.db.insert("agentConnections", {
       userId,
+      agentId: `ag_${name}`,
       name,
       secretHash: await sha256Hex(secret),
       status: "active",
@@ -59,6 +60,62 @@ afterEach(() => {
 });
 
 describe("agent onboarding approval link", () => {
+  test("reason is required", async () => {
+    const test = t();
+    const { userId } = await signedIn(test);
+    const agent = await connectedAgent(test, userId, "Reasonless agent");
+    const response = await test.fetch("/api/access-requests", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
+      body: JSON.stringify({ apps: ["github"], ttlMs: 60_000 }),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "INVALID_REQUEST" });
+  });
+
+  test("the connected agent can cancel its pending slice request", async () => {
+    const test = t();
+    const { userId } = await signedIn(test);
+    const agent = await connectedAgent(test, userId, "Cancelling agent");
+    const created = await test.fetch("/api/access-requests", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
+      body: JSON.stringify({
+        apps: ["github"],
+        ttlMs: 60_000,
+        reason: "No longer needed",
+      }),
+    });
+    const request = await created.json();
+    const cancelled = await test.fetch("/api/access-requests/cancel", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-agent-connection-id": agent.id,
+        "x-agent-connection-secret": agent.secret,
+      },
+      body: JSON.stringify({ claimHandle: request.claimHandle }),
+    });
+    expect(cancelled.status).toBe(200);
+    expect(await cancelled.json()).toEqual({ status: "cancelled" });
+
+    const claim = await test.fetch("/api/access-requests/claim", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claimHandle: request.claimHandle }),
+    });
+    expect(claim.status).toBe(403);
+    expect(await claim.json()).toMatchObject({ code: "APPROVAL_EXPIRED" });
+  });
+
   test("create → approvalUrl is board origin → approve → claim returns slice creds without prior ss_", async () => {
     const test = t();
     const { backend, userId } = await signedIn(test, {
@@ -102,14 +159,12 @@ describe("agent onboarding approval link", () => {
     expect(pendingBody.approvalUrl).toBe(body.approvalUrl);
 
     const publicToken = body.approvalUrl.split("/requests/new/")[1];
-    const preview = await backend.query(
-      api.tables.slices.accessRequests.getNewSlice,
-      { publicToken },
-    );
-    expect(preview?.kind).toBe("onboarding");
+    const preview = await backend.query(api.tables.slices.sliceRequests.get, {
+      publicToken,
+    });
     expect(preview?.agentName).toBe("Chat agent");
 
-    await backend.mutation(api.tables.slices.accessRequests.decide, {
+    await backend.mutation(api.tables.slices.sliceRequests.decide, {
       publicToken: body.approvalUrl.split("/requests/new/")[1],
       decision: "approved",
     });
@@ -193,10 +248,11 @@ describe("agent onboarding approval link", () => {
       body: JSON.stringify({
         apps: ["github"],
         ttlMs: 60_000,
+        reason: "Test denial",
       }),
     });
     const body = await created.json();
-    await backend.mutation(api.tables.slices.accessRequests.decide, {
+    await backend.mutation(api.tables.slices.sliceRequests.decide, {
       publicToken: body.approvalUrl.split("/requests/new/")[1],
       decision: "denied",
     });
@@ -225,11 +281,12 @@ describe("agent onboarding approval link", () => {
       body: JSON.stringify({
         apps: ["github"],
         ttlMs: 60_000,
+        reason: "Test expiry",
       }),
     });
     const body = await created.json();
     await test.run(async (ctx) => {
-      await ctx.db.patch("accessRequests", body.requestId, {
+      await ctx.db.patch("sliceRequests", body.requestId, {
         expiresAt: Date.now() - 1_000,
       });
     });

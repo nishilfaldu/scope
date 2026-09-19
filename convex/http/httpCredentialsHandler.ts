@@ -33,10 +33,9 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
 
   if (decision.mintPolicy === "approve") {
     const pending = await ctx.runMutation(
-      internal.tables.slices.accessRequestsMint.createPending,
+      internal.tables.slices.tokenRequestClaims.createPending,
       {
         sliceId: decision.sliceId,
-        userId: decision.userId,
         app: decision.app,
         bindingId: decision.bindingId,
       },

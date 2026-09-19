@@ -21,8 +21,8 @@ import { randomSecret, sha256Hex } from "../../lib/secrets";
 import { denyCreate, MAX_TTL_MS } from "./helpers";
 import { activeAgentConnection } from "../agentConnections";
 
-export const ONBOARDING_PENDING_TTL_MS = 24 * 60 * 60 * 1000;
-export const MAX_PENDING_ONBOARDING = 100;
+export const SLICE_REQUEST_TTL_MS = 24 * 60 * 60 * 1000;
+export const MAX_PENDING_SLICE_REQUESTS = 100;
 export const MAX_REASON_LENGTH = 280;
 
 export async function issuePublicPair() {
@@ -32,19 +32,19 @@ export async function issuePublicPair() {
   return { publicToken, claimHandle, claimSecretHash };
 }
 
-export const createOnboarding = internalMutation({
+export const createSliceRequest = internalMutation({
   args: {
     agentConnectionId: v.string(),
     agentConnectionSecret: v.string(),
     apps: v.array(appValidator),
     ttlMs: v.number(),
-    reason: v.optional(v.string()),
+    reason: v.string(),
     idempotencyKey: v.optional(v.string()),
   },
   returns: v.union(
     v.object({
       ok: v.literal(true),
-      requestId: v.id("accessRequests"),
+      requestId: v.id("sliceRequests"),
       publicToken: v.string(),
       claimHandle: v.string(),
       expiresAt: v.number(),
@@ -52,7 +52,7 @@ export const createOnboarding = internalMutation({
       agentName: v.string(),
       apps: v.array(appValidator),
       ttlMs: v.number(),
-      reason: v.optional(v.string()),
+      reason: v.string(),
       reused: v.boolean(),
     }),
     denyResultValidator,
@@ -93,11 +93,11 @@ export const createOnboarding = internalMutation({
         "INVALID_REQUEST",
       );
     }
-    let reason = args.reason?.trim();
-    if (reason !== undefined && reason.length === 0) {
-      reason = undefined;
+    const reason = args.reason.trim();
+    if (reason.length === 0) {
+      return denyCreate(400, "reason must be non-empty", "INVALID_REQUEST");
     }
-    if (reason !== undefined && reason.length > MAX_REASON_LENGTH) {
+    if (reason.length > MAX_REASON_LENGTH) {
       return denyCreate(
         400,
         `reason must be ${MAX_REASON_LENGTH} characters or fewer`,
@@ -110,16 +110,14 @@ export const createOnboarding = internalMutation({
       : undefined;
     if (idempotencyKeyHash) {
       const existing = await ctx.db
-        .query("accessRequests")
+        .query("sliceRequests")
         .withIndex("by_idempotency_key_hash", (q) =>
           q.eq("idempotencyKeyHash", idempotencyKeyHash),
         )
         .unique();
       if (existing) {
         if (
-          existing.kind !== "onboarding" ||
           existing.agentConnectionId !== agentConnection._id ||
-          existing.agentName !== agentName ||
           existing.ttlMs !== args.ttlMs ||
           existing.reason !== reason ||
           JSON.stringify(existing.apps) !== JSON.stringify(uniqueApps)
@@ -160,26 +158,23 @@ export const createOnboarding = internalMutation({
 
     const now = Date.now();
     const open = await ctx.db
-      .query("accessRequests")
-      .withIndex("by_kind_status_expiresAt", (q) =>
-        q.eq("kind", "onboarding").eq("status", "pending").gt("expiresAt", now),
+      .query("sliceRequests")
+      .withIndex("by_status_expiresAt", (q) =>
+        q.eq("status", "pending").gt("expiresAt", now),
       )
-      .take(MAX_PENDING_ONBOARDING);
-    if (open.length >= MAX_PENDING_ONBOARDING) {
+      .take(MAX_PENDING_SLICE_REQUESTS);
+    if (open.length >= MAX_PENDING_SLICE_REQUESTS) {
       return denyCreate(
         429,
         "Too many pending onboarding requests",
         "INVALID_REQUEST",
       );
     }
-    const expiresAt = now + ONBOARDING_PENDING_TTL_MS;
+    const expiresAt = now + SLICE_REQUEST_TTL_MS;
     const { publicToken, claimHandle, claimSecretHash } =
       await issuePublicPair();
-    const requestId = await ctx.db.insert("accessRequests", {
-      kind: "onboarding",
-      userId: agentConnection.userId,
+    const requestId = await ctx.db.insert("sliceRequests", {
       agentConnectionId: agentConnection._id,
-      agentName,
       apps: uniqueApps,
       ttlMs: args.ttlMs,
       reason,
@@ -197,8 +192,8 @@ export const createOnboarding = internalMutation({
     });
     if (idempotencyKeyHash) {
       await ctx.scheduler.runAfter(
-        ONBOARDING_PENDING_TTL_MS,
-        internal.tables.slices.onboardingAccess.clearClaimSecret,
+        SLICE_REQUEST_TTL_MS,
+        internal.tables.slices.sliceRequestClaims.clearClaimSecret,
         { requestId },
       );
     }
@@ -218,22 +213,22 @@ export const createOnboarding = internalMutation({
   },
 });
 
-async function onboardingByClaim(
+async function sliceRequestByClaim(
   ctx: MutationCtx | QueryCtx,
   claimHandle: string,
 ) {
   const claimSecretHash = await sha256Hex(claimHandle);
   const request = await ctx.db
-    .query("accessRequests")
+    .query("sliceRequests")
     .withIndex("by_claim_secret_hash", (q) =>
       q.eq("claimSecretHash", claimSecretHash),
     )
     .unique();
-  return request?.kind === "onboarding" ? request : null;
+  return request;
 }
 
 function claimDenial(
-  request: NonNullable<Awaited<ReturnType<typeof onboardingByClaim>>>,
+  request: NonNullable<Awaited<ReturnType<typeof sliceRequestByClaim>>>,
 ) {
   const status = effectiveRequestStatus(request, Date.now());
   if (status === "denied")
@@ -244,24 +239,24 @@ function claimDenial(
   return null;
 }
 
-export const resolveOnboardingStatus = internalQuery({
+export const resolveSliceRequestStatus = internalQuery({
   args: { claimHandle: v.string() },
   returns: v.union(
     v.object({
       ok: v.literal(true),
-      requestId: v.id("accessRequests"),
+      requestId: v.id("sliceRequests"),
       publicToken: v.string(),
       status: requestStatusValidator,
       expiresAt: v.number(),
       agentName: v.string(),
       apps: v.array(appValidator),
       ttlMs: v.number(),
-      reason: v.optional(v.string()),
+      reason: v.string(),
     }),
     denyResultValidator,
   ),
   handler: async (ctx, args) => {
-    const request = await onboardingByClaim(ctx, args.claimHandle);
+    const request = await sliceRequestByClaim(ctx, args.claimHandle);
     if (!request)
       return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
     const agentConnection = await ctx.db.get(
@@ -279,7 +274,7 @@ export const resolveOnboardingStatus = internalQuery({
       publicToken: request.publicToken,
       status: request.status,
       expiresAt: request.expiresAt,
-      agentName: request.agentName,
+      agentName: agentConnection.name,
       apps: request.apps,
       ttlMs: request.ttlMs,
       reason: request.reason,
@@ -287,13 +282,13 @@ export const resolveOnboardingStatus = internalQuery({
   },
 });
 
-export const resolveOnboardingClaim = internalMutation({
+export const resolveSliceRequestClaim = internalMutation({
   args: { claimHandle: v.string() },
   returns: v.union(
     v.object({
       ok: v.literal(true),
       kind: v.literal("pending"),
-      requestId: v.id("accessRequests"),
+      requestId: v.id("sliceRequests"),
       publicToken: v.string(),
       status: v.literal("pending"),
       expiresAt: v.number(),
@@ -303,7 +298,7 @@ export const resolveOnboardingClaim = internalMutation({
     v.object({
       ok: v.literal(true),
       kind: v.literal("slice"),
-      requestId: v.id("accessRequests"),
+      requestId: v.id("sliceRequests"),
       sliceId: v.id("slices"),
       sliceToken: v.string(),
       sliceSecret: v.string(),
@@ -315,7 +310,7 @@ export const resolveOnboardingClaim = internalMutation({
     denyResultValidator,
   ),
   handler: async (ctx, args) => {
-    const request = await onboardingByClaim(ctx, args.claimHandle);
+    const request = await sliceRequestByClaim(ctx, args.claimHandle);
     if (!request)
       return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
     const agentConnection = await ctx.db.get(
@@ -327,7 +322,6 @@ export const resolveOnboardingClaim = internalMutation({
     }
     const denied = claimDenial(request);
     if (denied) return denied;
-    const now = Date.now();
     if (request.status === "pending") {
       return {
         ok: true as const,
@@ -336,17 +330,13 @@ export const resolveOnboardingClaim = internalMutation({
         publicToken: request.publicToken,
         status: "pending" as const,
         expiresAt: request.expiresAt,
-        agentName: request.agentName,
+        agentName: agentConnection.name,
         apps: request.apps,
       };
     }
 
     // approved → return slice creds once
-    if (
-      !request.issuedSliceToken ||
-      !request.issuedSliceSecretCipher ||
-      !request.sliceId
-    ) {
+    if (!request.issuedSliceSecretCipher || !request.createdSliceId) {
       return denyCreate(
         500,
         "Approved request is missing issued slice credentials",
@@ -363,7 +353,7 @@ export const resolveOnboardingClaim = internalMutation({
         "PROVIDER_ERROR",
       );
     }
-    const slice = await ctx.db.get("slices", request.sliceId);
+    const slice = await ctx.db.get("slices", request.createdSliceId);
     if (!slice) {
       return denyCreate(
         404,
@@ -371,9 +361,8 @@ export const resolveOnboardingClaim = internalMutation({
         "INVALID_REQUEST",
       );
     }
-    await ctx.db.patch("accessRequests", request._id, {
+    await ctx.db.patch("sliceRequests", request._id, {
       status: "claimed",
-      claimedAt: now,
       issuedSliceSecretCipher: "",
       claimHandleCipher: "",
     });
@@ -382,7 +371,7 @@ export const resolveOnboardingClaim = internalMutation({
       kind: "slice" as const,
       requestId: request._id,
       sliceId: slice._id,
-      sliceToken: request.issuedSliceToken,
+      sliceToken: slice.token,
       sliceSecret,
       expiresAt: slice.expiresAt,
       name: slice.name,
@@ -393,16 +382,46 @@ export const resolveOnboardingClaim = internalMutation({
 });
 
 export const clearClaimSecret = internalMutation({
-  args: { requestId: v.id("accessRequests") },
+  args: { requestId: v.id("sliceRequests") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const request = await ctx.db.get("accessRequests", args.requestId);
-    if (request?.kind === "onboarding" && request.expiresAt <= Date.now()) {
-      await ctx.db.patch("accessRequests", request._id, {
+    const request = await ctx.db.get("sliceRequests", args.requestId);
+    if (request && request.expiresAt <= Date.now()) {
+      await ctx.db.patch("sliceRequests", request._id, {
         issuedSliceSecretCipher: "",
         claimHandleCipher: "",
       });
     }
     return null;
+  },
+});
+
+export const cancelSliceRequest = internalMutation({
+  args: {
+    agentConnectionId: v.string(),
+    agentConnectionSecret: v.string(),
+    claimHandle: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const agentConnection = await activeAgentConnection(
+      ctx,
+      args.agentConnectionId,
+      args.agentConnectionSecret,
+    );
+    if (!agentConnection) return false;
+    const request = await sliceRequestByClaim(ctx, args.claimHandle);
+    if (
+      !request ||
+      request.agentConnectionId !== agentConnection._id ||
+      request.status !== "pending"
+    ) {
+      return false;
+    }
+    await ctx.db.patch("sliceRequests", request._id, {
+      expiresAt: Date.now(),
+      claimHandleCipher: "",
+    });
+    return true;
   },
 });

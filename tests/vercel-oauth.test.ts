@@ -9,16 +9,16 @@ describe("Vercel OAuth", () => {
   test("authorizes with OpenID identity and offline access", () => {
     vi.stubEnv("VERCEL_CLIENT_ID", "vercel-client");
     vi.stubEnv("VERCEL_CLIENT_SECRET", "vercel-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     expect(vercel.authorize("state-1")).toEqual({
-      url: "https://vercel.com/oauth/authorize?client_id=vercel-client&redirect_uri=https%3A%2F%2Fpassport.convex.site%2Fapi%2Fvercel%2Fcallback&response_type=code&scope=openid+email+profile+offline_access&state=state-1",
+      url: "https://vercel.com/oauth/authorize?client_id=vercel-client&redirect_uri=https%3A%2F%2Fscope.convex.site%2Fapi%2Fvercel%2Fcallback&response_type=code&scope=openid+email+profile+offline_access&state=state-1",
     });
   });
 
   test("exchanges, reads user info, refreshes, and revokes", async () => {
     vi.stubEnv("VERCEL_CLIENT_ID", "vercel-client");
     vi.stubEnv("VERCEL_CLIENT_SECRET", "vercel-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(

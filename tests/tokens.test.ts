@@ -64,39 +64,41 @@ describe("accounts and slices", () => {
         },
       );
     }
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "PR agent",
-      ttlMs: 60_000,
-      apps: ["github", "gmail", "slack"],
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "PR agent",
+        ttlMs: 60_000,
+        apps: ["github", "gmail", "slack"],
+      },
+    );
     expect(created.sliceToken.startsWith("st_")).toBe(true);
     expect(created.sliceSecret.startsWith("ss_")).toBe(true);
-    const listed = await backend.query(api.tables.slices.queries.list, {
-      paginationOpts: { numItems: 10, cursor: null },
+    const detail = await backend.query(api.tables.slices.queries.get, {
+      sliceId: created.id,
     });
-    expect(listed.page).toHaveLength(1);
-    expect(listed.page[0]).not.toHaveProperty("sliceSecret");
+    expect(detail).not.toHaveProperty("sliceSecret");
   });
 
   test("create validates its name and TTL", async () => {
     const test = t();
     const { backend } = await signedIn(test);
     await expect(
-      backend.mutation(api.tables.slices.mutations.create, {
+      backend.mutation(internal.tables.slices.mutations.createFixture, {
         name: "   ",
         ttlMs: 60_000,
         apps: ["github"],
       }),
     ).rejects.toThrow(/Name must be 1 to 80 characters/);
     await expect(
-      backend.mutation(api.tables.slices.mutations.create, {
+      backend.mutation(internal.tables.slices.mutations.createFixture, {
         name: "n".repeat(81),
         ttlMs: 60_000,
         apps: ["github"],
       }),
     ).rejects.toThrow(/80 characters/);
     await expect(
-      backend.mutation(api.tables.slices.mutations.create, {
+      backend.mutation(internal.tables.slices.mutations.createFixture, {
         name: "Long",
         ttlMs: 8 * 24 * 60 * 60 * 1000,
         apps: ["github"],
@@ -120,11 +122,14 @@ describe("accounts and slices", () => {
         },
       );
     }
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Multi",
-      ttlMs: 60_000,
-      apps: ["github", "gmail", "slack"],
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Multi",
+        ttlMs: 60_000,
+        apps: ["github", "gmail", "slack"],
+      },
+    );
     const gmailId = (
       await backend.query(api.tables.connections.queries.statusesForApps, {
         apps: ["gmail"],
@@ -158,11 +163,14 @@ describe("accounts and slices", () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     await seedGithub(test, userId);
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Keep me",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Keep me",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
     const githubId = (
       await backend.query(api.tables.connections.queries.statusesForApps, {
         apps: ["github"],
@@ -225,11 +233,14 @@ describe("credential authorization", () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     await seedGithub(test, userId);
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "GitHub agent",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "GitHub agent",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
     const allowed = await test.mutation(
       internal.tables.slices.credentials.authorizeCreate,
       {
@@ -263,11 +274,14 @@ describe("credential authorization", () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     await seedGithub(test, userId);
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "GitHub agent",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "GitHub agent",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
     const githubId = (
       await backend.query(api.tables.connections.queries.statusesForApps, {
         apps: ["github"],
@@ -299,7 +313,7 @@ describe("credential authorization", () => {
     const { backend, userId } = await signedIn(test);
     await seedGithub(test, userId);
     const revokedSlice = await backend.mutation(
-      api.tables.slices.mutations.create,
+      internal.tables.slices.mutations.createFixture,
       {
         name: "Revoked",
         ttlMs: 60_000,
@@ -321,7 +335,7 @@ describe("credential authorization", () => {
 
     const { backend: secondAccount } = await signedIn(test);
     const expiredSlice = await secondAccount.mutation(
-      api.tables.slices.mutations.create,
+      internal.tables.slices.mutations.createFixture,
       {
         name: "Expired",
         ttlMs: 60_000,
@@ -347,11 +361,14 @@ describe("credential authorization", () => {
   test("unknown and unconnected apps share the unavailable denial", async () => {
     const test = t();
     const { backend } = await signedIn(test);
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "GitHub only",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "GitHub only",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
     const githubId = (
       await backend.query(api.tables.connections.queries.statusesForApps, {
         apps: ["github"],
@@ -391,11 +408,14 @@ describe("credential authorization", () => {
     const test = t();
     const { backend, userId } = await signedIn(test);
     await seedGithub(test, userId);
-    const created = await backend.mutation(api.tables.slices.mutations.create, {
-      name: "Keyed",
-      ttlMs: 60_000,
-      apps: ["github"],
-    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Keyed",
+        ttlMs: 60_000,
+        apps: ["github"],
+      },
+    );
     const denied = await test.mutation(
       internal.tables.slices.credentials.authorizeCreate,
       {
@@ -431,7 +451,7 @@ describe("credential authorization", () => {
       expect(statuses.find((row) => row.app === app)?.connected).toBe(false);
     }
     await expect(
-      backend.mutation(api.tables.slices.mutations.create, {
+      backend.mutation(internal.tables.slices.mutations.createFixture, {
         name: "Workspace",
         ttlMs: 60_000,
         apps: ["gmail", "calendar"],

@@ -13,10 +13,7 @@ export const requestStatusValidator = v.union(
   v.literal("claimed"),
   v.literal("expired"),
 );
-export const requestKindValidator = v.union(
-  v.literal("onboarding"),
-  v.literal("mint"),
-);
+export const CLAIM_WINDOW_MS = 60 * 1000;
 
 export function effectiveRequestStatus<
   T extends {

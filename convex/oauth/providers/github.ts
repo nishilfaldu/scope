@@ -27,7 +27,7 @@ async function githubIdentity(
   const headers = {
     Accept: "application/vnd.github+json",
     Authorization: `Bearer ${accessToken}`,
-    "User-Agent": "agent-passport",
+    "User-Agent": "scope-app",
     "X-GitHub-Api-Version": "2022-11-28",
   };
   const userResponse = await fetch("https://api.github.com/user", { headers });
@@ -100,7 +100,7 @@ export const github: ProviderOAuth = {
                 method: "POST",
                 headers: {
                   Accept: "application/json",
-                  "User-Agent": "agent-passport",
+                  "User-Agent": "scope-app",
                 },
               },
             )
@@ -108,7 +108,7 @@ export const github: ProviderOAuth = {
               method: "POST",
               headers: {
                 Accept: "application/json",
-                "User-Agent": "agent-passport",
+                "User-Agent": "scope-app",
                 "Content-Type": "application/x-www-form-urlencoded",
               },
               body: new URLSearchParams(attempt.params).toString(),

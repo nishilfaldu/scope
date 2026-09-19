@@ -18,6 +18,7 @@ async function connectAgent(
   const id = await t.run(async (ctx) =>
     ctx.db.insert("agentConnections", {
       userId,
+      agentId: `ag_${name}`,
       name,
       secretHash: await sha256Hex(secret),
       status: "active",
@@ -27,7 +28,7 @@ async function connectAgent(
 }
 
 describe("request link decisions", () => {
-  test("a new-slice link is bound to its connected passport before approval", async () => {
+  test("a new-slice link is bound to its connected Scope account before approval", async () => {
     const t = backend();
     const owner = await t.run((ctx) =>
       ctx.db.insert("users", {
@@ -59,48 +60,48 @@ describe("request link decisions", () => {
     )[0].accounts[0].id;
     const agent = await connectAgent(t, owner);
     const created = await t.mutation(
-      internal.tables.slices.onboardingAccess.createOnboarding,
+      internal.tables.slices.sliceRequestClaims.createSliceRequest,
       {
         agentConnectionId: agent.id,
         agentConnectionSecret: agent.secret,
         apps: ["gmail"],
         ttlMs: 60_000,
+        reason: "Read the inbox",
       },
     );
     if (!created.ok) throw new Error("request creation failed");
     expect(
-      await t.run((ctx) => ctx.db.get("accessRequests", created.requestId)),
-    ).toMatchObject({ userId: owner, agentConnectionId: agent.id });
+      await t.run((ctx) => ctx.db.get("sliceRequests", created.requestId)),
+    ).toMatchObject({ agentConnectionId: agent.id });
     expect(
-      await ownerSession.query(api.tables.slices.accessRequests.getNewSlice, {
+      await ownerSession.query(api.tables.slices.sliceRequests.get, {
         publicToken: created.publicToken,
       }),
     ).toMatchObject({ agentName: "Agent", apps: ["gmail"] });
     await expect(
-      t.mutation(api.tables.slices.accessRequests.decide, {
+      t.mutation(api.tables.slices.sliceRequests.decide, {
         publicToken: created.publicToken,
         decision: "approved",
       }),
     ).rejects.toThrow();
     await expect(
-      otherSession.mutation(api.tables.slices.accessRequests.decide, {
+      otherSession.mutation(api.tables.slices.sliceRequests.decide, {
         publicToken: created.publicToken,
         decision: "approved",
         bindings: [{ app: "gmail", connectionId: connection }],
       }),
     ).rejects.toThrow();
-    await ownerSession.mutation(api.tables.slices.accessRequests.decide, {
+    await ownerSession.mutation(api.tables.slices.sliceRequests.decide, {
       publicToken: created.publicToken,
       decision: "approved",
       bindings: [{ app: "gmail", connectionId: connection }],
     });
     const saved = await t.run((ctx) =>
-      ctx.db.get("accessRequests", created.requestId),
+      ctx.db.get("sliceRequests", created.requestId),
     );
-    expect(saved?.userId).toBe(owner);
-    expect(saved?.sliceId).toBeTruthy();
+    expect(saved?.createdSliceId).toBeTruthy();
     await expect(
-      ownerSession.mutation(api.tables.slices.accessRequests.decide, {
+      ownerSession.mutation(api.tables.slices.sliceRequests.decide, {
         publicToken: created.publicToken,
         decision: "approved",
         bindings: [{ app: "gmail", connectionId: connection }],
@@ -139,7 +140,7 @@ describe("request link decisions", () => {
       })
     )[0].accounts[0].id;
     const slice = await ownerSession.mutation(
-      api.tables.slices.mutations.create,
+      internal.tables.slices.mutations.createFixture,
       {
         name: "Agent",
         apps: ["gmail"],
@@ -158,40 +159,39 @@ describe("request link decisions", () => {
           .unique())!,
     );
     const pending = await t.mutation(
-      internal.tables.slices.accessRequestsMint.createPending,
+      internal.tables.slices.tokenRequestClaims.createPending,
       {
         sliceId: slice.id,
-        userId: owner,
         app: "gmail",
         bindingId: binding._id,
       },
     );
     if (!pending.ok) throw new Error("request creation failed");
     expect(
-      await otherSession.query(api.tables.slices.accessRequests.getToken, {
+      await otherSession.query(api.tables.slices.tokenRequests.get, {
         publicToken: pending.publicToken,
       }),
     ).toBeNull();
     await expect(
-      otherSession.mutation(api.tables.slices.accessRequests.decide, {
+      otherSession.mutation(api.tables.slices.tokenRequests.decide, {
         publicToken: pending.publicToken,
         decision: "denied",
       }),
     ).rejects.toThrow(/unavailable/);
     expect(
-      await ownerSession.query(api.tables.slices.accessRequests.getToken, {
+      await ownerSession.query(api.tables.slices.tokenRequests.get, {
         publicToken: pending.publicToken,
       }),
     ).toMatchObject({
       accountLogin: "connected@gmail.com",
       sliceName: "Agent",
     });
-    await ownerSession.mutation(api.tables.slices.accessRequests.decide, {
+    await ownerSession.mutation(api.tables.slices.tokenRequests.decide, {
       publicToken: pending.publicToken,
       decision: "denied",
     });
     expect(
-      (await t.run((ctx) => ctx.db.get("accessRequests", pending.requestId)))
+      (await t.run((ctx) => ctx.db.get("tokenRequests", pending.requestId)))
         ?.status,
     ).toBe("denied");
   });
@@ -207,42 +207,43 @@ describe("request link decisions", () => {
     const session = t.withIdentity({ subject: `${userId}|session` });
     const agent = await connectAgent(t, userId);
     const denied = await t.mutation(
-      internal.tables.slices.onboardingAccess.createOnboarding,
+      internal.tables.slices.sliceRequestClaims.createSliceRequest,
       {
         agentConnectionId: agent.id,
         agentConnectionSecret: agent.secret,
         apps: ["github"],
         ttlMs: 60_000,
+        reason: "Test denial",
       },
     );
     if (!denied.ok) throw new Error("request creation failed");
-    await session.mutation(api.tables.slices.accessRequests.decide, {
+    await session.mutation(api.tables.slices.sliceRequests.decide, {
       publicToken: denied.publicToken,
       decision: "denied",
     });
     const saved = await t.run((ctx) =>
-      ctx.db.get("accessRequests", denied.requestId),
+      ctx.db.get("sliceRequests", denied.requestId),
     );
     expect(saved?.status).toBe("denied");
-    expect(saved?.userId).toBe(userId);
-    expect(saved?.sliceId).toBeUndefined();
+    expect(saved?.createdSliceId).toBeUndefined();
     const expired = await t.mutation(
-      internal.tables.slices.onboardingAccess.createOnboarding,
+      internal.tables.slices.sliceRequestClaims.createSliceRequest,
       {
         agentConnectionId: agent.id,
         agentConnectionSecret: agent.secret,
         apps: ["github"],
         ttlMs: 60_000,
+        reason: "Test expiry",
       },
     );
     if (!expired.ok) throw new Error("request creation failed");
     await t.run((ctx) =>
-      ctx.db.patch("accessRequests", expired.requestId, {
+      ctx.db.patch("sliceRequests", expired.requestId, {
         expiresAt: Date.now() - 1,
       }),
     );
     await expect(
-      session.mutation(api.tables.slices.accessRequests.decide, {
+      session.mutation(api.tables.slices.sliceRequests.decide, {
         publicToken: expired.publicToken,
         decision: "denied",
       }),

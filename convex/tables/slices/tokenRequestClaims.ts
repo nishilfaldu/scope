@@ -11,8 +11,8 @@ import {
   UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
 import { selectedConnection } from "../connections/helpers";
+import { randomSecret } from "../../lib/secrets";
 import { denyCreate, effectiveStatus, sliceBySecret } from "./helpers";
-import { issuePublicPair } from "./onboardingAccess";
 
 export const PENDING_TTL_MS = 5 * 60 * 1000;
 export const MAX_PENDING_PER_SLICE = 5;
@@ -20,14 +20,13 @@ export const MAX_PENDING_PER_SLICE = 5;
 export const createPending = internalMutation({
   args: {
     sliceId: v.id("slices"),
-    userId: v.id("users"),
     app: appValidator,
     bindingId: v.id("sliceBindings"),
   },
   returns: v.union(
     v.object({
       ok: v.literal(true),
-      requestId: v.id("accessRequests"),
+      requestId: v.id("tokenRequests"),
       publicToken: v.string(),
       expiresAt: v.number(),
       status: v.literal("pending"),
@@ -38,11 +37,7 @@ export const createPending = internalMutation({
   ),
   handler: async (ctx, args) => {
     const slice = await ctx.db.get("slices", args.sliceId);
-    if (
-      !slice ||
-      slice.userId !== args.userId ||
-      effectiveStatus(slice) !== "active"
-    ) {
+    if (!slice || effectiveStatus(slice) !== "active") {
       return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
     }
     const binding = await ctx.db.get("sliceBindings", args.bindingId);
@@ -64,7 +59,7 @@ export const createPending = internalMutation({
       );
     }
     const pending = await ctx.db
-      .query("accessRequests")
+      .query("tokenRequests")
       .withIndex("by_slice_status_expiresAt", (q) =>
         q
           .eq("sliceId", args.sliceId)
@@ -79,16 +74,13 @@ export const createPending = internalMutation({
         "INVALID_REQUEST",
       );
     }
-    const { publicToken, claimSecretHash } = await issuePublicPair();
+    const publicToken = randomSecret("ar_");
     const expiresAt = Date.now() + PENDING_TTL_MS;
-    const requestId = await ctx.db.insert("accessRequests", {
-      kind: "mint",
+    const requestId = await ctx.db.insert("tokenRequests", {
       sliceId: args.sliceId,
-      userId: args.userId,
       app: args.app,
       bindingId: args.bindingId,
       publicToken,
-      claimSecretHash,
       status: "pending",
       expiresAt,
     });
@@ -108,13 +100,13 @@ export const resolveClaim = internalMutation({
   args: {
     sliceToken: v.string(),
     sliceSecret: v.string(),
-    requestId: v.id("accessRequests"),
+    requestId: v.id("tokenRequests"),
   },
   returns: v.union(
     v.object({
       ok: v.literal(true),
       kind: v.literal("pending"),
-      requestId: v.id("accessRequests"),
+      requestId: v.id("tokenRequests"),
       status: v.literal("pending"),
       expiresAt: v.number(),
       app: appValidator,
@@ -122,7 +114,7 @@ export const resolveClaim = internalMutation({
     v.object({
       ok: v.literal(true),
       kind: v.literal("mint"),
-      requestId: v.id("accessRequests"),
+      requestId: v.id("tokenRequests"),
       sliceId: v.id("slices"),
       userId: v.id("users"),
       app: appValidator,
@@ -134,8 +126,8 @@ export const resolveClaim = internalMutation({
   handler: async (ctx, args) => {
     const slice = await sliceBySecret(ctx, args);
     if (!slice) return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
-    const request = await ctx.db.get("accessRequests", args.requestId);
-    if (!request || request.kind !== "mint" || request.sliceId !== slice._id) {
+    const request = await ctx.db.get("tokenRequests", args.requestId);
+    if (!request || request.sliceId !== slice._id) {
       return denyCreate(404, "Unknown credential request", "INVALID_REQUEST");
     }
     if (request.status === "denied")
@@ -184,5 +176,30 @@ export const resolveClaim = internalMutation({
       bindingId: binding!._id,
       connectionId: connection._id,
     };
+  },
+});
+
+export const cancelTokenRequest = internalMutation({
+  args: {
+    sliceToken: v.string(),
+    sliceSecret: v.string(),
+    requestId: v.id("tokenRequests"),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const slice = await sliceBySecret(ctx, args);
+    if (!slice) return false;
+    const request = await ctx.db.get("tokenRequests", args.requestId);
+    if (
+      !request ||
+      request.sliceId !== slice._id ||
+      request.status !== "pending"
+    ) {
+      return false;
+    }
+    await ctx.db.patch("tokenRequests", request._id, {
+      expiresAt: Date.now(),
+    });
+    return true;
   },
 });

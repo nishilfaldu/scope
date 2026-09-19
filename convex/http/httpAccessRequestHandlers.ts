@@ -68,10 +68,8 @@ export const httpCreateAccessRequestHandler = httpAction(
     if (ttlMs instanceof Response) {
       return ttlMs;
     }
-    if (body.reason !== undefined && typeof body.reason !== "string") {
-      return errorResponse(400, "reason must be a string", "INVALID_REQUEST");
-    }
-    const reason = typeof body.reason === "string" ? body.reason : undefined;
+    const reason = requiredString(body, "reason");
+    if (reason instanceof Response) return reason;
     const idempotencyKey = request.headers.get("idempotency-key")?.trim();
     if (
       idempotencyKey !== undefined &&
@@ -85,7 +83,7 @@ export const httpCreateAccessRequestHandler = httpAction(
     }
 
     const created = await ctx.runMutation(
-      internal.tables.slices.onboardingAccess.createOnboarding,
+      internal.tables.slices.sliceRequestClaims.createSliceRequest,
       {
         agentConnectionId,
         agentConnectionSecret,
@@ -129,7 +127,7 @@ export const httpAccessRequestStatusHandler = httpAction(
     }
 
     const status = await ctx.runQuery(
-      internal.tables.slices.onboardingAccess.resolveOnboardingStatus,
+      internal.tables.slices.sliceRequestClaims.resolveSliceRequestStatus,
       { claimHandle },
     );
     if (!status.ok) {
@@ -161,7 +159,7 @@ export const httpAccessRequestClaimHandler = httpAction(
     }
 
     const decision = await ctx.runMutation(
-      internal.tables.slices.onboardingAccess.resolveOnboardingClaim,
+      internal.tables.slices.sliceRequestClaims.resolveSliceRequestClaim,
       { claimHandle },
     );
     if (!decision.ok) {
@@ -193,5 +191,33 @@ export const httpAccessRequestClaimHandler = httpAction(
       apps: decision.apps,
       mintPolicy: decision.mintPolicy,
     });
+  },
+);
+
+export const httpCancelAccessRequestHandler = httpAction(
+  async (ctx, request) => {
+    const body = await readObjectBody(request);
+    if (body instanceof Response) return body;
+    const claimHandle = requiredString(body, "claimHandle");
+    if (claimHandle instanceof Response) return claimHandle;
+    const agentConnectionId = requiredHeader(request, "x-agent-connection-id");
+    if (agentConnectionId instanceof Response) return agentConnectionId;
+    const agentConnectionSecret = requiredHeader(
+      request,
+      "x-agent-connection-secret",
+    );
+    if (agentConnectionSecret instanceof Response) return agentConnectionSecret;
+    const cancelled = await ctx.runMutation(
+      internal.tables.slices.sliceRequestClaims.cancelSliceRequest,
+      { agentConnectionId, agentConnectionSecret, claimHandle },
+    );
+    if (!cancelled) {
+      return errorResponse(
+        409,
+        "Slice request cannot be cancelled",
+        "INVALID_REQUEST",
+      );
+    }
+    return jsonResponse(200, { status: "cancelled" });
   },
 );

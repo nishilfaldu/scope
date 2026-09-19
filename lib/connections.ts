@@ -25,7 +25,7 @@ export const CONNECTION_APPS = [
   {
     id: "notion",
     name: "Notion",
-    description: "Pages and databases shared with Agent Passport.",
+    description: "Pages and databases shared with Scope.",
   },
   {
     id: "linear",

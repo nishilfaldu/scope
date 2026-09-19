@@ -1,4 +1,6 @@
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import { internalMutation } from "../../_generated/server";
 import { authenticatedMutation } from "../../functions";
 import { appValidator } from "../../domain/apps";
 import {
@@ -8,6 +10,7 @@ import {
   MAX_SLICE_NAME,
   MAX_TTL_MS,
   validatedBindings,
+  sliceBySecret,
 } from "./helpers";
 import { selectedConnection } from "../connections/helpers";
 
@@ -19,7 +22,9 @@ const bindingValidator = v.object({
   connectionId: v.id("connections"),
 });
 
-export const create = authenticatedMutation({
+// Internal fixture used by backend tests. Product slices are created only by
+// approving an owner-bound slice request.
+export const createFixture = internalMutation({
   args: {
     name: v.string(),
     ttlMs: v.number(),
@@ -37,6 +42,8 @@ export const create = authenticatedMutation({
     mintPolicy: mintPolicyValidator,
   }),
   handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Sign in to continue");
     const name = args.name.trim();
     if (!name || name.length > MAX_SLICE_NAME)
       throw new Error("Name must be 1 to 80 characters");
@@ -49,12 +56,12 @@ export const create = authenticatedMutation({
     }
     const bindings = await validatedBindings(
       ctx,
-      ctx.userId,
+      userId,
       args.bindings,
       args.apps,
     );
     return await createSlice(ctx, {
-      userId: ctx.userId,
+      userId,
       name,
       ttlMs: args.ttlMs,
       mintPolicy: args.mintPolicy ?? "auto",
@@ -137,5 +144,18 @@ export const revoke = authenticatedMutation({
       await ctx.db.patch("slices", slice._id, { status: "revoked" });
     }
     return null;
+  },
+});
+
+export const revokeBySecret = internalMutation({
+  args: { sliceToken: v.string(), sliceSecret: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const slice = await sliceBySecret(ctx, args);
+    if (!slice) return false;
+    if (slice.status !== "revoked") {
+      await ctx.db.patch("slices", slice._id, { status: "revoked" });
+    }
+    return true;
   },
 });

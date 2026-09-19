@@ -8,7 +8,7 @@ describe("Airtable OAuth", () => {
   test("authorizes with resource scopes and PKCE", async () => {
     vi.stubEnv("AIRTABLE_CLIENT_ID", "airtable-client");
     vi.stubEnv("AIRTABLE_CLIENT_SECRET", "airtable-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     const started = await airtable.authorize("state-1");
     if (!("url" in started)) throw new Error("expected URL");
     const url = new URL(started.url);
@@ -22,7 +22,7 @@ describe("Airtable OAuth", () => {
   test("exchanges with state-bound verifier, identifies the user, refreshes", async () => {
     vi.stubEnv("AIRTABLE_CLIENT_ID", "airtable-client");
     vi.stubEnv("AIRTABLE_CLIENT_SECRET", "airtable-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://passport.convex.site");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(

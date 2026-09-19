@@ -101,7 +101,7 @@ export const finalize = internalMutation({
     app: appValidator,
     bindingId: v.id("sliceBindings"),
     connectionId: v.id("connections"),
-    requestId: v.optional(v.id("accessRequests")),
+    requestId: v.optional(v.id("tokenRequests")),
   },
   returns: v.union(v.object({ ok: v.literal(true) }), denyResultValidator),
   handler: async (ctx, args) => {
@@ -128,10 +128,9 @@ export const finalize = internalMutation({
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
     }
     if (args.requestId) {
-      const request = await ctx.db.get("accessRequests", args.requestId);
+      const request = await ctx.db.get("tokenRequests", args.requestId);
       if (
         !request ||
-        request.kind !== "mint" ||
         request.sliceId !== slice._id ||
         request.app !== args.app ||
         request.bindingId !== args.bindingId ||
@@ -144,9 +143,8 @@ export const finalize = internalMutation({
           "APPROVAL_EXPIRED",
         );
       }
-      await ctx.db.patch("accessRequests", request._id, {
+      await ctx.db.patch("tokenRequests", request._id, {
         status: "claimed",
-        claimedAt: Date.now(),
       });
     } else if (slice.mintPolicy !== "auto") {
       return denyCreate(403, "Operator approval required", "APPROVAL_REQUIRED");

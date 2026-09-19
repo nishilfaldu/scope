@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Scope</title>
+  <desc id="desc">A keyhole held within four boundary corners on a lime rounded square.</desc>
+  <rect x="112" y="112" width="800" height="800" rx="216" fill="#A3E635"/>
+  <g fill="none" stroke="#24310F" stroke-width="64" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M418 292H316c-13 0-24 11-24 24v102"/>
+    <path d="M606 292h102c13 0 24 11 24 24v102"/>
+    <path d="M732 606v102c0 13-11 24-24 24H606"/>
+    <path d="M418 732H316c-13 0-24-11-24-24V606"/>
+  </g>
+  <circle cx="512" cy="456" r="78" fill="#24310F"/>
+  <path d="M480 500h64l39 133c6 21-10 42-32 42h-78c-22 0-38-21-32-42l39-133Z" fill="#24310F"/>
+</svg>

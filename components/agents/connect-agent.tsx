@@ -6,8 +6,12 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { SignIn } from "@/components/auth/sign-in";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AuthorizationShell } from "@/components/shared/authorization-shell";
 import { useNow } from "@/hooks/use-now";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function ConnectAgent({ publicToken }: { publicToken: string }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -21,18 +25,42 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
   const now = useNow();
   const currentPath = `/connect/${publicToken}`;
 
-  if (isLoading) return <p className="p-8">Loading…</p>;
+  if (isLoading)
+    return (
+      <AuthorizationShell>
+        <div className="space-y-5 p-8">
+          <Skeleton className="size-14 rounded-2xl" />
+          <Skeleton className="h-7 w-64" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-11 w-full" />
+        </div>
+      </AuthorizationShell>
+    );
   if (!isAuthenticated) {
     return (
       <SignIn redirectTo={currentPath} title="Verify your email to connect" />
     );
   }
-  if (invite === undefined) return <p className="p-8">Loading connection…</p>;
+  if (invite === undefined)
+    return (
+      <AuthorizationShell>
+        <div className="space-y-5 p-8">
+          <Skeleton className="size-14 rounded-2xl" />
+          <Skeleton className="h-7 w-64" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      </AuthorizationShell>
+    );
   if (invite === null) {
     return (
-      <p className="mx-auto max-w-xl p-8">
-        This connection link is unavailable.
-      </p>
+      <AuthorizationShell>
+        <div className="px-8 py-12 text-center">
+          <h1 className="text-xl font-semibold">Connection unavailable</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            This link is invalid, expired, or belongs to another Scope account.
+          </p>
+        </div>
+      </AuthorizationShell>
     );
   }
 
@@ -55,52 +83,72 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl p-4 py-10">
-      <Card>
-        <CardHeader>
-          <CardTitle>Connect agent</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          <p>
-            <strong>{invite.agentName}</strong> wants to connect to your Agent
-            Passport.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            The requester supplied this name. Agent Passport has not verified
-            who operates it.
-          </p>
-          <p className="text-sm">
-            Connecting lets this agent address future slice requests to your
-            passport. You will still review each request, including its apps,
-            accounts, duration, and reason.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Verifying your email only proves which passport is present. The
-            connection is created only when you approve below.
-          </p>
-          {error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {error}
+    <AuthorizationShell>
+      <div className="px-6 pb-6 pt-7 sm:px-8 sm:pb-8">
+        <div className="flex items-start gap-4">
+          <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-foreground text-lg font-semibold text-background shadow-sm">
+            {invite.agentName.slice(0, 2).toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <Badge variant="secondary" className="mb-2">
+              {invite.reconnecting ? "Reconnect" : "New agent"}
+            </Badge>
+            <h1 className="text-balance text-2xl font-semibold tracking-tight">
+              {invite.reconnecting ? "Reconnect" : "Connect"} {invite.agentName}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Name provided by the requester
             </p>
-          ) : null}
-          {pending ? (
-            <div className="flex gap-2">
-              <Button disabled={busy} onClick={() => void submit("approved")}>
-                Connect
-              </Button>
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => void submit("denied")}
-              >
-                Deny
-              </Button>
-            </div>
+          </div>
+        </div>
+        <Separator className="my-6" />
+        <div className="rounded-xl bg-muted/70 px-4 py-3.5 text-sm leading-6">
+          {invite.reconnecting ? (
+            <p>
+              This replaces the previous connection. Its existing access stays
+              revoked.
+            </p>
           ) : (
-            <p>This connection is {invite.status}.</p>
+            <p>
+              This agent can send access requests to your Scope account. You
+              decide what to allow each time.
+            </p>
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+        {error ? (
+          <Alert variant="destructive" className="mt-5">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
+        {pending ? (
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row-reverse">
+            <Button
+              className="h-11 sm:min-w-36"
+              disabled={busy}
+              onClick={() => void submit("approved")}
+            >
+              {busy
+                ? "Working…"
+                : invite.reconnecting
+                  ? "Reconnect agent"
+                  : "Connect agent"}
+            </Button>
+            <Button
+              variant="ghost"
+              className="h-11 sm:min-w-24"
+              disabled={busy}
+              onClick={() => void submit("denied")}
+            >
+              Decline
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-6 rounded-xl border px-4 py-3 text-sm">
+            This connection is{" "}
+            <span className="font-medium">{invite.status}</span>.
+          </div>
+        )}
+      </div>
+    </AuthorizationShell>
   );
 }

@@ -6,6 +6,7 @@ import { httpClaimHandler } from "./http/httpClaimHandler";
 import { httpCredentialsHandler } from "./http/httpCredentialsHandler";
 import {
   httpAccessRequestClaimHandler,
+  httpCancelAccessRequestHandler,
   httpAccessRequestStatusHandler,
   httpCreateAccessRequestHandler,
 } from "./http/httpAccessRequestHandlers";
@@ -17,9 +18,15 @@ import { oauthConfigured } from "./oauth";
 import { auth } from "./auth";
 import {
   httpAgentConnectionClaimHandler,
+  httpCancelAgentConnectionInviteHandler,
+  httpRevokeAgentConnectionHandler,
   httpAgentConnectionStatusHandler,
   httpCreateAgentConnectionHandler,
 } from "./http/httpAgentConnectionHandlers";
+import {
+  httpCancelTokenRequestHandler,
+  httpRevokeSliceHandler,
+} from "./http/httpAgentSliceHandlers";
 
 const http = httpRouter();
 const optionsOk = httpAction(async () => corsNoContent());
@@ -38,6 +45,8 @@ for (const [path, handler] of [
   ["/api/agent-connections", httpCreateAgentConnectionHandler],
   ["/api/agent-connections/status", httpAgentConnectionStatusHandler],
   ["/api/agent-connections/claim", httpAgentConnectionClaimHandler],
+  ["/api/agent-connections/cancel", httpCancelAgentConnectionInviteHandler],
+  ["/api/agent-connections/revoke", httpRevokeAgentConnectionHandler],
 ] as const) {
   http.route({ path, method: "OPTIONS", handler: optionsOk });
   http.route({ path, method: "POST", handler });
@@ -49,10 +58,28 @@ http.route({
   handler: optionsOk,
 });
 http.route({
+  path: "/api/access-requests/cancel",
+  method: "OPTIONS",
+  handler: optionsOk,
+});
+http.route({
+  path: "/api/access-requests/cancel",
+  method: "POST",
+  handler: httpCancelAccessRequestHandler,
+});
+http.route({
   path: "/api/access-requests",
   method: "POST",
   handler: httpCreateAccessRequestHandler,
 });
+
+for (const [path, handler] of [
+  ["/api/slices/revoke", httpRevokeSliceHandler],
+  ["/api/credentials/cancel", httpCancelTokenRequestHandler],
+] as const) {
+  http.route({ path, method: "OPTIONS", handler: optionsOk });
+  http.route({ path, method: "POST", handler });
+}
 http.route({
   path: "/api/access-requests/status",
   method: "OPTIONS",
@@ -98,7 +125,7 @@ http.route({
   handler: httpClaimHandler,
 });
 
-// Passport app discovery
+// Scope app discovery
 http.route({
   path: "/api/apps",
   method: "OPTIONS",
