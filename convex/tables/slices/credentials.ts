@@ -6,6 +6,7 @@ import {
   providerForApp,
   providerValidator,
 } from "../../domain/apps";
+import { effectiveSliceStatus } from "../../domain/slices";
 import {
   denyResultValidator,
   APP_UNAVAILABLE_ERROR,
@@ -17,7 +18,6 @@ import { selectedConnection } from "../connections/helpers";
 import {
   bindingsForApp,
   denyCreate,
-  effectiveStatus,
   hasActiveAgentConnection,
   sliceBySecret,
 } from "./helpers";
@@ -49,7 +49,7 @@ export const authorizeCreate = internalMutation({
     if (!slice) return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
     if (!isAppId(args.app))
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
-    const status = effectiveStatus(slice);
+    const status = effectiveSliceStatus(slice);
     if (status === "revoked") return denyCreate(403, REVOKED_ERROR, "REVOKED");
     if (status === "expired") return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
     const bindingId =
@@ -110,7 +110,7 @@ export const finalize = internalMutation({
     if (!(await hasActiveAgentConnection(ctx, slice))) {
       return denyCreate(403, REVOKED_ERROR, "REVOKED");
     }
-    const status = effectiveStatus(slice);
+    const status = effectiveSliceStatus(slice);
     if (status === "revoked") return denyCreate(403, REVOKED_ERROR, "REVOKED");
     if (status === "expired") return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
     const binding = await ctx.db.get("sliceBindings", args.bindingId);

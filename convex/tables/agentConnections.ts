@@ -9,7 +9,6 @@ import {
 import { authenticatedMutation, authenticatedQuery } from "../functions";
 import { decryptToken, encryptToken } from "../lib/tokenEncryption";
 import { hashesEqual, randomSecret, sha256Hex } from "../lib/secrets";
-import { effectiveStatus } from "./slices/helpers";
 
 const INVITE_TTL_MS = 15 * 60 * 1000;
 
@@ -104,7 +103,7 @@ export const createInvite = internalMutation({
     });
     await ctx.scheduler.runAfter(
       INVITE_TTL_MS,
-      internal.tables.agentConnections.expireInvite,
+      internal.tables.agentConnectionExpiry.expireInvite,
       { publicToken },
     );
     return {
@@ -393,112 +392,6 @@ export const activateReplacement = internalMutation({
       issuedSecretCipher: "",
     });
     return { ok: true as const, status: "active" as const };
-  },
-});
-
-export const expireInvite = internalMutation({
-  args: { publicToken: v.string() },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const invite = await ctx.db
-      .query("agentConnectionInvites")
-      .withIndex("by_public_token", (q) =>
-        q.eq("publicToken", args.publicToken),
-      )
-      .unique();
-    if (
-      !invite ||
-      invite.expiresAt > Date.now() ||
-      (invite.status !== "pending" && invite.status !== "approved")
-    ) {
-      return null;
-    }
-    if (invite.agentConnectionId) {
-      await ctx.db.patch("agentConnections", invite.agentConnectionId, {
-        status: "revoked",
-        revokedAt: Date.now(),
-      });
-    }
-    await ctx.db.patch("agentConnectionInvites", invite._id, {
-      status: "expired",
-      issuedSecretCipher: "",
-    });
-    return null;
-  },
-});
-
-const boardConnection = v.object({
-  _id: v.id("agentConnections"),
-  _creationTime: v.number(),
-  name: v.string(),
-  agentId: v.string(),
-  status: v.union(v.literal("active"), v.literal("revoked")),
-  lastUsedAt: v.optional(v.number()),
-  revokedAt: v.optional(v.number()),
-  slices: v.array(
-    v.object({
-      _id: v.id("slices"),
-      name: v.string(),
-      status: v.union(
-        v.literal("active"),
-        v.literal("revoked"),
-        v.literal("expired"),
-      ),
-      expiresAt: v.number(),
-    }),
-  ),
-});
-
-export const list = authenticatedQuery({
-  args: {},
-  returns: v.array(boardConnection),
-  handler: async (ctx) => {
-    const rows = await ctx.db
-      .query("agentConnections")
-      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-      .order("desc")
-      .take(100);
-    type VisibleConnection = (typeof rows)[number] & {
-      status: "active" | "revoked";
-    };
-    const byAgent = new Map<string, VisibleConnection>();
-    for (const row of rows) {
-      if (row.status === "staged") continue;
-      const current = byAgent.get(row.agentId);
-      if (
-        !current ||
-        (row.status === "active" && current.status !== "active")
-      ) {
-        byAgent.set(row.agentId, row as VisibleConnection);
-      }
-    }
-    const visibleRows = [...byAgent.values()];
-    return await Promise.all(
-      visibleRows.map(async (row) => {
-        const slices = await ctx.db
-          .query("slices")
-          .withIndex("by_agentId", (q) => q.eq("agentId", row.agentId))
-          .collect();
-        return {
-          _id: row._id,
-          _creationTime: row._creationTime,
-          name: row.name,
-          agentId: row.agentId,
-          status: row.status,
-          lastUsedAt: row.lastUsedAt,
-          revokedAt: row.revokedAt,
-          slices: slices.map((slice) => ({
-            _id: slice._id,
-            name: slice.name,
-            status:
-              row.status === "revoked"
-                ? ("revoked" as const)
-                : effectiveStatus(slice),
-            expiresAt: slice.expiresAt,
-          })),
-        };
-      }),
-    );
   },
 });
 

@@ -1,5 +1,9 @@
 import { v } from "convex/values";
-import { internalMutation, type MutationCtx } from "../../_generated/server";
+import {
+  env,
+  internalMutation,
+  type MutationCtx,
+} from "../../_generated/server";
 import type { Id } from "../../_generated/dataModel";
 import type { AppId } from "../../domain/apps";
 import {
@@ -8,7 +12,7 @@ import {
   providerValidator,
 } from "../../domain/apps";
 import { authenticatedMutation } from "../../functions";
-import { allowedReturnTo } from "../../http/helpers";
+import { normalizeReturnTo } from "../../domain/returnPaths";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -36,7 +40,7 @@ export const start = authenticatedMutation({
       userId: ctx.userId,
       app: args.app,
       state,
-      returnTo: allowedReturnTo(args.returnTo),
+      returnTo: normalizeReturnTo(args.returnTo, env.BOARD_ORIGIN),
     });
     return { state };
   },
@@ -59,7 +63,7 @@ export const put = internalMutation({
       userId: args.userId,
       app: args.app,
       state: args.state,
-      returnTo: args.returnTo,
+      returnTo: normalizeReturnTo(args.returnTo, env.BOARD_ORIGIN),
     });
     return null;
   },

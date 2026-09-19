@@ -237,7 +237,7 @@ describe("agent connections", () => {
       }),
     );
 
-    await t.mutation(internal.tables.agentConnections.expireInvite, {
+    await t.mutation(internal.tables.agentConnectionExpiry.expireInvite, {
       publicToken: "ac_expiring_rotation",
     });
 
@@ -248,7 +248,7 @@ describe("agent connections", () => {
       await t.run(async (ctx) => (await ctx.db.get(stagedId))?.status),
     ).toBe("revoked");
     expect(
-      await ownerSession.query(api.tables.agentConnections.list, {}),
+      await ownerSession.query(api.tables.agentDashboard.list, {}),
     ).toMatchObject([
       { _id: currentId, status: "active", agentId: "ag_stable" },
     ]);
@@ -435,7 +435,7 @@ describe("agent connections", () => {
     });
     const slice = await sliceResponse.json();
     expect(
-      await ownerSession.query(api.tables.agentConnections.list, {}),
+      await ownerSession.query(api.tables.agentDashboard.list, {}),
     ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalQuery } from "../../_generated/server";
 import { authenticatedQuery } from "../../functions";
 import { appValidator, ALL_APPS, isAppId } from "../../domain/apps";
+import { effectiveSliceStatus } from "../../domain/slices";
 import { selectedConnection } from "../connections/helpers";
 import {
   denyResultValidator,
@@ -12,7 +13,6 @@ import {
 } from "../../lib/errors";
 import {
   bindingsForApp,
-  effectiveStatus,
   hasActiveAgentConnection,
   sliceBySecret,
   withoutSecretHash,
@@ -43,7 +43,7 @@ export const get = authenticatedQuery({
     return {
       ...withoutSecretHash(slice),
       status: (await hasActiveAgentConnection(ctx, slice))
-        ? effectiveStatus(slice)
+        ? effectiveSliceStatus(slice)
         : ("revoked" as const),
     };
   },
@@ -96,7 +96,7 @@ export const discoverApps = internalQuery({
         reason: UNAUTHORIZED_ERROR,
         code: "UNAUTHORIZED" as const,
       };
-    const status = effectiveStatus(slice, args.now);
+    const status = effectiveSliceStatus(slice, args.now);
     if (status !== "active")
       return {
         ok: false as const,
@@ -162,7 +162,7 @@ export const discoverAccounts = internalQuery({
         reason: UNAUTHORIZED_ERROR,
         code: "UNAUTHORIZED" as const,
       };
-    const status = effectiveStatus(slice, args.now);
+    const status = effectiveSliceStatus(slice, args.now);
     if (status !== "active")
       return {
         ok: false as const,

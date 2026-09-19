@@ -9,7 +9,7 @@ import {
 } from "../lib/requests";
 import { errorResponse, jsonResponse } from "../lib/responses";
 import { AGENT_ERROR_GUIDANCE } from "../lib/errors";
-import { parseBoardOrigin } from "./helpers";
+import { parseBoardOrigin } from "../domain/returnPaths";
 
 function approvalUrlFor(publicToken: string): string {
   const origin = parseBoardOrigin(env.BOARD_ORIGIN);

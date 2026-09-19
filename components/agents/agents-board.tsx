@@ -34,7 +34,7 @@ function statusVariant(status: "active" | "revoked" | "expired") {
 }
 
 export function AgentsBoard() {
-  const agents = useQuery(api.tables.agentConnections.list);
+  const agents = useQuery(api.tables.agentDashboard.list);
   const revoke = useMutation(api.tables.agentConnections.revoke);
   const [busy, setBusy] = useState<Id<"agentConnections"> | null>(null);
 

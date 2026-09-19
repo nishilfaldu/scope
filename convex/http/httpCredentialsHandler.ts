@@ -3,7 +3,7 @@ import { internal } from "../_generated/api";
 import { readObjectBody, requiredString } from "../lib/requests";
 import { errorResponse, jsonResponse } from "../lib/responses";
 import { AGENT_ERROR_GUIDANCE } from "../lib/errors";
-import { parseBoardOrigin } from "./helpers";
+import { parseBoardOrigin } from "../domain/returnPaths";
 import { mintCredential } from "./mint";
 
 export const httpCredentialsHandler = httpAction(async (ctx, request) => {

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation } from "../../_generated/server";
 import { appValidator } from "../../domain/apps";
+import { effectiveSliceStatus } from "../../domain/slices";
 import {
   APPROVAL_DENIED_ERROR,
   APPROVAL_EXPIRED_ERROR,
@@ -12,7 +13,7 @@ import {
 } from "../../lib/errors";
 import { selectedConnection } from "../connections/helpers";
 import { randomSecret } from "../../lib/secrets";
-import { denyCreate, effectiveStatus, sliceBySecret } from "./helpers";
+import { denyCreate, sliceBySecret } from "./helpers";
 
 export const PENDING_TTL_MS = 5 * 60 * 1000;
 export const MAX_PENDING_PER_SLICE = 5;
@@ -37,7 +38,7 @@ export const createPending = internalMutation({
   ),
   handler: async (ctx, args) => {
     const slice = await ctx.db.get("slices", args.sliceId);
-    if (!slice || effectiveStatus(slice) !== "active") {
+    if (!slice || effectiveSliceStatus(slice) !== "active") {
       return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
     }
     const binding = await ctx.db.get("sliceBindings", args.bindingId);
@@ -145,7 +146,7 @@ export const resolveClaim = internalMutation({
         app: request.app,
       };
     }
-    const status = effectiveStatus(slice);
+    const status = effectiveSliceStatus(slice);
     if (status === "revoked") return denyCreate(403, REVOKED_ERROR, "REVOKED");
     if (status === "expired") return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
     const binding = request.bindingId

@@ -18,6 +18,7 @@ async function user(test: ReturnType<typeof t>, email: string) {
 
 describe("OAuth ownership", () => {
   test("state keeps the account that started the flow", async () => {
+    vi.stubEnv("BOARD_ORIGIN", "https://board.example");
     const test = t();
     const userId = await user(test, "owner@example.com");
     await test.mutation(internal.tables.oauthStates.mutations.put, {
@@ -43,6 +44,27 @@ describe("OAuth ownership", () => {
         state: "state-1",
       }),
     ).resolves.toBeNull();
+  });
+
+  test("internal state creation enforces the shared return-path policy", async () => {
+    vi.stubEnv("BOARD_ORIGIN", "https://board.example");
+    const test = t();
+    const userId = await user(test, "owner@example.com");
+    await test.mutation(internal.tables.oauthStates.mutations.put, {
+      userId,
+      provider: "github",
+      app: "github",
+      state: "state-policy",
+      returnTo: "https://attacker.example/steal",
+    });
+
+    await expect(
+      test.mutation(internal.tables.oauthStates.mutations.consume, {
+        state: "state-policy",
+      }),
+    ).resolves.toMatchObject({
+      returnTo: "https://board.example/connections",
+    });
   });
 
   test("signed-in board user creates state for the connect redirect", async () => {

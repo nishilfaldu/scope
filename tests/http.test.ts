@@ -3,7 +3,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { resolveReturnTo } from "../convex/http/helpers";
+import { resolveReturnTo } from "../convex/domain/returnPaths";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
