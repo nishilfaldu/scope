@@ -91,12 +91,12 @@ export const seedUiDemo = internalMutation({
     for (const agentId of agentIds) {
       const rows = await ctx.db
         .query("agentConnections")
-        .withIndex("by_user_agent", (q) =>
-          q.eq("userId", userId).eq("agentId", agentId),
-        )
+        .withIndex("by_agentId_status", (q) => q.eq("agentId", agentId))
         .take(20);
       for (const row of rows) {
-        await ctx.db.delete("agentConnections", row._id);
+        if (row.userId === userId) {
+          await ctx.db.delete("agentConnections", row._id);
+        }
       }
     }
 

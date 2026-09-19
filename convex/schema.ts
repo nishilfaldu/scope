@@ -31,13 +31,7 @@ export default defineSchema({
     lastUsedAt: v.optional(v.number()),
     revokedAt: v.optional(v.number()),
   })
-    // Keep creation-time ordering for the dashboard's per-user history.
-    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user", ["userId"])
-    // Keep creation-time ordering within one stable agent lineage.
-    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
-    .index("by_user_agent", ["userId", "agentId"])
-    .index("by_user_agent_status", ["userId", "agentId", "status"])
     .index("by_agentId_status", ["agentId", "status"]),
 
   agentConnectionInvites: defineTable({

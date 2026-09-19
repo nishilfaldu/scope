@@ -142,10 +142,11 @@ describe("agent connections", () => {
     const connections = await t.run((ctx) =>
       ctx.db
         .query("agentConnections")
-        .withIndex("by_user_agent", (q) =>
-          q.eq("userId", owner).eq("agentId", first.agentId),
-        )
+        .withIndex("by_agentId_status", (q) => q.eq("agentId", first.agentId))
         .collect(),
+    );
+    expect(connections.every((connection) => connection.userId === owner)).toBe(
+      true,
     );
     expect(
       connections.filter((connection) => connection.status === "active"),

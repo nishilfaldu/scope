@@ -1,4 +1,4 @@
-import { ALL_APPS, providerForApp, type AppId } from "../convex/domain/apps";
+import { ALL_APPS, type AppId } from "../convex/domain/apps";
 
 export { ALL_APPS, type AppId };
 export const CONNECTION_APPS = [
@@ -61,4 +61,3 @@ export const CONNECT_ERRORS: Record<string, string> = {
   code: "The provider did not return an authorization code.",
   config: "OAuth client id/secret are missing on Convex.",
 };
-export { providerForApp };

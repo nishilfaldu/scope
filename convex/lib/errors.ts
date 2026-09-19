@@ -101,9 +101,6 @@ export const APPROVAL_DENIED_ERROR = "Credential request was denied";
 
 export const APPROVAL_EXPIRED_ERROR = "Credential request expired";
 
-export const SHORT_LIVED_UNAVAILABLE_ERROR =
-  "Provider cannot mint a short-lived access token without handing off the vault standing token";
-
 export const denyResultValidator = v.object({
   ok: v.literal(false),
   status: v.number(),

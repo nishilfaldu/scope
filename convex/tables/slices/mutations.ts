@@ -64,10 +64,13 @@ export const createFixture = internalMutation({
     const agentId = `fixture:${userId}`;
     const fixtureAgent = await ctx.db
       .query("agentConnections")
-      .withIndex("by_user_agent_status", (q) =>
-        q.eq("userId", userId).eq("agentId", agentId).eq("status", "active"),
+      .withIndex("by_agentId_status", (q) =>
+        q.eq("agentId", agentId).eq("status", "active"),
       )
       .unique();
+    if (fixtureAgent && fixtureAgent.userId !== userId) {
+      throw new Error("Fixture agent belongs to another user");
+    }
     if (!fixtureAgent) {
       await ctx.db.insert("agentConnections", {
         userId,

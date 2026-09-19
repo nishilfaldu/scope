@@ -226,14 +226,14 @@ export const decideInvite = authenticatedMutation({
     const agentName = replacement?.name ?? invite.agentName;
     const activeConnections = await ctx.db
       .query("agentConnections")
-      .withIndex("by_user_agent_status", (q) =>
-        q
-          .eq("userId", ctx.userId)
-          .eq("agentId", agentId)
-          .eq("status", "active"),
+      .withIndex("by_agentId_status", (q) =>
+        q.eq("agentId", agentId).eq("status", "active"),
       )
       .take(2);
-    if (activeConnections.length > 1) {
+    if (
+      activeConnections.length > 1 ||
+      activeConnections.some((connection) => connection.userId !== ctx.userId)
+    ) {
       throw new Error("Agent has more than one active connection");
     }
     const secret = randomSecret("acs_");

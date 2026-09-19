@@ -11,7 +11,7 @@ import type {
 
 import { toast } from "@/components/ui/toast";
 
-export function getErrorMessage(error: unknown): string {
+function getErrorMessage(error: unknown): string {
   if (error instanceof ConvexError) {
     const data = error.data as unknown;
     if (

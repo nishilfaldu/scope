@@ -1,8 +1,6 @@
-import { ALL_APPS, providerForApp, type AppId } from "../convex/domain/apps";
+import { ALL_APPS, type AppId } from "../convex/domain/apps";
 
-export { ALL_APPS, providerForApp, type AppId };
-
-export type MintPolicy = "auto" | "approve";
+export { ALL_APPS, type AppId };
 
 export const APP_LABELS: Record<AppId, string> = {
   github: "GitHub",
@@ -38,45 +36,6 @@ export const APP_PERMISSIONS: Record<AppId, string> = {
   zoom: "Access meetings and other data allowed by the configured Zoom app scopes.",
 };
 
-export const APP_HINTS: Record<AppId, string> = {
-  github: "Create a short-lived GitHub token. The agent calls GitHub directly.",
-  gmail: "Gmail via a connected Google account.",
-  calendar: "Calendar via a connected Google account.",
-  drive: "Drive via a connected Google account.",
-  docs: "Docs via a connected Google account.",
-  sheets: "Sheets via a connected Google account.",
-  slack: "Create a short-lived Slack token. The agent calls Slack directly.",
-  airtable: "Bases, schemas, records, and comments.",
-  notion: "Pages and databases shared with the Notion connection.",
-  linear: "Issues, projects, teams, and workflow updates.",
-  vercel: "Projects, deployments, domains, and team profile.",
-  zoom: "Meetings, webinars, recordings, and account profile.",
-};
-
-export const TTL_OPTIONS = [
-  { label: "15 minutes", ttlMs: 15 * 60 * 1000 },
-  { label: "1 hour", ttlMs: 60 * 60 * 1000 },
-  { label: "8 hours", ttlMs: 8 * 60 * 60 * 1000 },
-  { label: "24 hours", ttlMs: 24 * 60 * 60 * 1000 },
-  { label: "7 days", ttlMs: 7 * 24 * 60 * 60 * 1000 },
-] as const;
-
-export const MINT_POLICY_LABELS: Record<MintPolicy, string> = {
-  auto: "Auto",
-  approve: "Approve",
-};
-
-export const MINT_POLICY_ITEMS = [
-  {
-    value: "auto",
-    label: "Auto — mint immediately on request",
-  },
-  {
-    value: "approve",
-    label: "Approve — operator must approve on the board first",
-  },
-] as const;
-
 export const STATUS_LABELS = {
   active: "Active",
   revoked: "Revoked",
@@ -94,12 +53,6 @@ export function effectiveSliceStatus(
       : ("active" as const);
 }
 
-export function appLabel(id: string): string {
-  return (ALL_APPS as readonly string[]).includes(id)
-    ? APP_LABELS[id as AppId]
-    : id;
-}
-
 export function formatRemaining(expiresAt: number, now: number): string {
   const ms = expiresAt - now;
   if (ms <= 0) return "expired";
@@ -111,15 +64,4 @@ export function formatRemaining(expiresAt: number, now: number): string {
   if (hours < 48) return `${hours}h ${remainingMinutes}m left`;
   const days = Math.floor(hours / 24);
   return `${days}d ${hours % 24}h ${remainingMinutes}m left`;
-}
-
-export function formatRelativeTime(ts: number, now: number): string {
-  const seconds = Math.floor((now - ts) / 1000);
-  if (seconds < 5) return "just now";
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 48) return `${hours}h ago`;
-  return new Date(ts).toLocaleString();
 }
