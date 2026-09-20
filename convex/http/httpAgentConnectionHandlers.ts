@@ -1,6 +1,6 @@
 import { internal } from "../_generated/api";
 import { env, httpAction } from "../_generated/server";
-import { parseBoardOrigin } from "../domain/returnPaths";
+import { resolveBoardOrigin } from "../domain/returnPaths";
 import {
   readObjectBody,
   requiredHeader,
@@ -50,7 +50,7 @@ export const httpCreateAgentConnectionHandler = httpAction(
         agentId: created.agentId,
         reconnecting: created.reconnecting,
         connectUrl:
-          parseBoardOrigin(env.BOARD_ORIGIN) +
+          resolveBoardOrigin(env.BOARD_ORIGIN, request.headers.get("origin")) +
           "/connect/" +
           created.publicToken,
         claimHandle: created.claimHandle,
