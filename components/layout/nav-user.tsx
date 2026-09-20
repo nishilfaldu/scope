@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/sidebar";
 import type { UserInfo } from "@/lib/user";
 
+const SHOW_THEME_SWITCHER = false;
 const THEMES = ["light", "dark", "system"] as const;
 
 type ThemeOption = (typeof THEMES)[number];
@@ -79,29 +80,33 @@ export function NavUser({ user }: { user: UserInfo }) {
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuRadioGroup
-              value={theme}
-              onValueChange={(value) => {
-                if (typeof value === "string" && isThemeOption(value)) {
-                  setTheme(value);
-                }
-              }}
-            >
-              <DropdownMenuLabel>Theme</DropdownMenuLabel>
-              <DropdownMenuRadioItem value="light">
-                <HugeiconsIcon icon={Sun01Icon} strokeWidth={2} />
-                Light
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="dark">
-                <HugeiconsIcon icon={Moon02Icon} strokeWidth={2} />
-                Dark
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="system">
-                <HugeiconsIcon icon={ComputerIcon} strokeWidth={2} />
-                System
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
+            {SHOW_THEME_SWITCHER ? (
+              <>
+                <DropdownMenuRadioGroup
+                  value={theme}
+                  onValueChange={(value) => {
+                    if (typeof value === "string" && isThemeOption(value)) {
+                      setTheme(value);
+                    }
+                  }}
+                >
+                  <DropdownMenuLabel>Theme</DropdownMenuLabel>
+                  <DropdownMenuRadioItem value="light">
+                    <HugeiconsIcon icon={Sun01Icon} strokeWidth={2} />
+                    Light
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="dark">
+                    <HugeiconsIcon icon={Moon02Icon} strokeWidth={2} />
+                    Dark
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="system">
+                    <HugeiconsIcon icon={ComputerIcon} strokeWidth={2} />
+                    System
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+              </>
+            ) : null}
             <DropdownMenuGroup>
               <DropdownMenuItem
                 onClick={() =>
