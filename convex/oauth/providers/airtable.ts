@@ -9,8 +9,19 @@ import {
 } from "../shared";
 import type { ProviderOAuth } from "../types";
 
-const SCOPES =
-  "data.records:read data.records:write schema.bases:read schema.bases:write user.email:read";
+const SCOPES = [
+  "data.recordComments:read",
+  "data.recordComments:write",
+  "data.records:read",
+  "data.records:write",
+  "schema.bases:read",
+  "schema.bases:write",
+  "user.email:read",
+  "workspacesAndBases:read",
+  "workspacesAndBases:write",
+  "workspacesAndBases.shares:manage",
+  "webhook:manage",
+].join(" ");
 
 function credentials() {
   const clientId = envTrimmed(env.AIRTABLE_CLIENT_ID);

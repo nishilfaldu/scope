@@ -12,33 +12,33 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("per-app Google consent", () => {
-  test.each([
-    ["gmail", "gmail.modify"],
-    ["calendar", "/calendar"],
-    ["drive", "/drive"],
-    ["docs", "/documents"],
-    ["sheets", "/spreadsheets"],
-  ] as const)("%s requests only its app scope", (app, scopeSuffix) => {
-    vi.stubEnv("GOOGLE_CLIENT_ID", "shared-client");
-    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
-    const started = google.authorize("state-1", app);
-    if (started instanceof Promise || "error" in started)
-      throw new Error("authorization failed");
-    const url = new URL(started.url);
-    expect(url.searchParams.get("client_id")).toBe("shared-client");
-    expect(url.searchParams.get("redirect_uri")).toBe(
-      `https://scope.convex.site/api/${app}/callback`,
-    );
-    const scopes = url.searchParams.get("scope")!.split(" ");
-    expect(scopes).toHaveLength(4);
-    expect(
-      scopes.filter((scope) =>
-        scope.startsWith("https://www.googleapis.com/auth/"),
-      ),
-    ).toEqual([expect.stringContaining(scopeSuffix)]);
-    expect(url.searchParams.get("include_granted_scopes")).toBe("false");
-  });
+describe("provider-wide Google consent", () => {
+  test.each(["gmail", "calendar", "drive", "docs", "sheets"] as const)(
+    "%s requests the full Google provider scope set",
+    (app) => {
+      vi.stubEnv("GOOGLE_CLIENT_ID", "shared-client");
+      vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
+      const started = google.authorize("state-1", app);
+      if (started instanceof Promise || "error" in started)
+        throw new Error("authorization failed");
+      const url = new URL(started.url);
+      expect(url.searchParams.get("client_id")).toBe("shared-client");
+      expect(url.searchParams.get("redirect_uri")).toBe(
+        `https://scope.convex.site/api/${app}/callback`,
+      );
+      expect(url.searchParams.get("scope")!.split(" ")).toEqual([
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/gmail.modify",
+        "https://www.googleapis.com/auth/calendar",
+        "https://www.googleapis.com/auth/drive",
+        "https://www.googleapis.com/auth/documents",
+        "https://www.googleapis.com/auth/spreadsheets",
+      ]);
+      expect(url.searchParams.get("include_granted_scopes")).toBe("false");
+    },
+  );
 });
 
 describe("app-bound OAuth state", () => {
