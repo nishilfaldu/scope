@@ -15,9 +15,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Scope Identity · Approve agent access to your accounts",
+  title: "Scope · Approve agent access to your accounts",
   description:
-    "Scope Identity lets you connect accounts and approve exactly which apps, accounts, and duration an AI agent may use.",
+    "Scope lets you connect accounts and approve exactly which apps, accounts, and duration an AI agent may use.",
 };
 
 const controls = [
@@ -49,21 +49,21 @@ export default function HomePage() {
               variant="outline"
               className="mb-6 border-[#cbd6c6] bg-white/70 text-[#415042] dark:bg-card"
             >
-              Scope Identity
+              Scope
             </Badge>
             <h1 className="max-w-[13ch] text-5xl font-semibold leading-[0.98] tracking-[-0.055em] sm:text-6xl lg:text-7xl">
               Let agents ask. You decide what they can reach.
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-[#526054] dark:text-muted-foreground">
-              Scope Identity is an access control service for AI agents. Connect
-              your accounts once, then review each agent request by app,
-              account, permissions, reason, and duration.
+              Scope is an access control service for AI agents. Connect your
+              accounts once, then review each agent request by app, account,
+              permissions, reason, and duration.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Button
                 size="lg"
                 nativeButton={false}
-                render={<Link href="/signin" />}
+                render={<Link href="/signin?redirectTo=/agents" />}
               >
                 Sign in to Scope
                 <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
@@ -155,52 +155,8 @@ export default function HomePage() {
             ))}
           </div>
         </section>
-
-        <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8 lg:grid lg:grid-cols-[0.7fr_1.3fr] lg:gap-24 lg:py-28">
-          <div>
-            <h2 className="text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
-              How Scope uses Google data
-            </h2>
-            <p className="mt-4 max-w-md text-base leading-7 text-[#5d695f] dark:text-muted-foreground">
-              Google OAuth connects Gmail, Calendar, Drive, Docs, and Sheets. It
-              is never used to sign in to Scope.
-            </p>
-          </div>
-          <div className="mt-10 divide-y divide-[#d8e1d4] border-y border-[#d8e1d4] lg:mt-0 dark:divide-border dark:border-border">
-            <DataUseRow title="Access">
-              You choose the Google account and app to connect. Scope asks only
-              for the permissions required by that app.
-            </DataUseRow>
-            <DataUseRow title="Use">
-              Scope uses the connection to issue access only for a slice you
-              approve. Possessing a request link does not grant access.
-            </DataUseRow>
-            <DataUseRow title="Control">
-              Disconnect an account or revoke an agent connection or slice from
-              your dashboard. Future credential requests stop when you revoke
-              access.
-            </DataUseRow>
-          </div>
-        </section>
       </main>
       <PublicFooter />
-    </div>
-  );
-}
-
-function DataUseRow({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="grid gap-2 py-6 sm:grid-cols-[9rem_1fr]">
-      <h3 className="font-medium">{title}</h3>
-      <p className="text-sm leading-6 text-[#5d695f] dark:text-muted-foreground">
-        {children}
-      </p>
     </div>
   );
 }

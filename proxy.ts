@@ -6,7 +6,7 @@ import {
 
 const isSignInPage = createRouteMatcher(["/signin"]);
 const isAuthApiRoute = createRouteMatcher(["/api/auth(.*)"]);
-const isPublicPage = createRouteMatcher(["/", "/privacy"]);
+const isPublicPage = createRouteMatcher(["/", "/privacy", "/terms"]);
 /** Request links show the email verification form at the request URL. */
 const isRequestLink = createRouteMatcher([
   "/connect/(.*)",

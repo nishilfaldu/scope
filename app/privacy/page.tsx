@@ -5,9 +5,9 @@ import { PublicFooter } from "@/components/public/public-footer";
 import { PublicHeader } from "@/components/public/public-header";
 
 export const metadata: Metadata = {
-  title: "Privacy policy · Scope Identity",
+  title: "Privacy policy · Scope",
   description:
-    "How Scope Identity accesses, uses, stores, shares, retains, and deletes account and Google user data.",
+    "How Scope accesses, uses, stores, shares, retains, and deletes account and connected-service data.",
 };
 
 type PolicySection = { id: string; title: string; content: ReactNode };
@@ -27,33 +27,36 @@ const sections: PolicySection[] = [
           credentials.
         </p>
         <p>
-          If you connect Google services, your authorization can allow access to
-          Gmail messages and metadata, calendars and events, Drive files, Google
-          Docs, and Google Sheets, according to the individual Google app and
-          permissions shown during consent. Scope does not use Google OAuth as a
-          sign-in method.
+          Scope supports connections to GitHub, Gmail, Google Calendar, Google
+          Drive, Google Docs, Google Sheets, Slack, Airtable, Notion, Linear,
+          Vercel, and Zoom. Depending on the service and permissions you choose,
+          a connection may permit access to repositories, messages, email,
+          calendars, files, documents, spreadsheets, databases, projects,
+          deployments, meetings, and related account metadata. The provider
+          shows the permissions before you connect. Provider OAuth is not used
+          to sign in to Scope.
         </p>
       </>
     ),
   },
   {
     id: "how-we-use-data",
-    title: "How we use Google user data",
+    title: "How we use connected-service data",
     content: (
       <>
         <p>
-          Scope uses Google authorization data to show you which Google accounts
-          are connected and to provide the access-control features you request.
-          When an agent requests access, Scope shows you the app, connected
-          account, requested permissions, reason, and duration. Scope issues
-          credentials for that request only after the required approval and
-          ownership checks succeed.
+          Scope uses provider authorization data to show you which accounts are
+          connected and to provide the access-control features you request. When
+          an agent requests access, Scope shows you the app, connected account,
+          requested permissions, reason, and duration. Scope issues credentials
+          for that request only after the required approval and ownership checks
+          succeed.
         </p>
         <p>
-          Scope does not use Google user data for advertising, credit decisions,
-          or sale to data brokers. Scope does not use Google Workspace API data
-          to develop, improve, or train generalized or non-personalized AI or
-          machine-learning models.
+          Scope does not use connected-service data for advertising, credit
+          decisions, or sale to data brokers. Scope does not use Google
+          Workspace API data to develop, improve, or train generalized or
+          non-personalized AI or machine-learning models.
         </p>
       </>
     ),
@@ -65,18 +68,18 @@ const sections: PolicySection[] = [
       <>
         <p>
           When you approve an access request, Scope provides a credential to the
-          agent identified in the request so it can access the specific Google
-          app and account you approved. The agent may then process Google user
-          data to perform the task described in that request. You should approve
-          only agents and requests you trust.
+          agent identified in the request so it can access the specific app and
+          account you approved. The agent may then process data from that
+          connected service to perform the task described in the request. You
+          should approve only agents and requests you trust.
         </p>
         <p>
           Scope uses infrastructure service providers to host the application,
           store encrypted credentials and application records, and deliver
           transactional sign-in email. They process data only to provide those
           services. Scope may also disclose information when required by law or
-          to protect the service and its users. Scope does not sell Google user
-          data or transfer it for advertising.
+          to protect the service and its users. Scope does not sell
+          connected-service data or transfer it for advertising.
         </p>
       </>
     ),
@@ -108,11 +111,11 @@ const sections: PolicySection[] = [
           protect users and investigate service abuse.
         </p>
         <p>
-          You can disconnect a Google account or revoke an agent connection or
+          You can disconnect a provider account or revoke an agent connection or
           slice in Scope. This stops future credentials from being issued
-          through that connection. You can also revoke Scope from your Google
-          Account permissions. To request deletion of your Scope account and
-          associated data, email{" "}
+          through that connection. You can also revoke Scope in the connected
+          provider&apos;s account settings. To request deletion of your Scope
+          account and associated data, email{" "}
           <a href="mailto:nishilfaldu@gmail.com">nishilfaldu@gmail.com</a>.
         </p>
       </>
@@ -141,7 +144,7 @@ const sections: PolicySection[] = [
         </p>
         <p>
           Questions, privacy requests, and deletion requests can be sent to the
-          developer responsible for Scope Identity at{" "}
+          developer responsible for Scope at{" "}
           <a href="mailto:nishilfaldu@gmail.com">nishilfaldu@gmail.com</a>.
         </p>
       </>
@@ -156,7 +159,7 @@ export default function PrivacyPage() {
       <main className="mx-auto max-w-6xl px-5 py-14 sm:px-8 sm:py-20">
         <div className="grid gap-12 lg:grid-cols-[14rem_minmax(0,44rem)] lg:gap-20">
           <aside className="lg:sticky lg:top-10 lg:self-start">
-            <p className="text-sm font-semibold">Scope Identity</p>
+            <p className="text-sm font-semibold">Scope</p>
             <p className="mt-1 text-sm text-[#68746a] dark:text-muted-foreground">
               Effective September 20, 2026
             </p>
@@ -184,9 +187,9 @@ export default function PrivacyPage() {
               Privacy policy
             </h1>
             <p className="mt-6 text-lg leading-8 text-[#526054] dark:text-muted-foreground">
-              This policy explains how Scope Identity accesses, uses, stores,
-              shares, retains, and deletes personal information and Google user
-              data when you use Scope.
+              This policy explains how Scope accesses, uses, stores, shares,
+              retains, and deletes personal information and data from services
+              you connect to Scope.
             </p>
             <div className="mt-12 divide-y divide-[#d8e1d4] border-y border-[#d8e1d4] dark:divide-border dark:border-border">
               {sections.map((section) => (

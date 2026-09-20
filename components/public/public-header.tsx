@@ -10,7 +10,7 @@ export function PublicHeader() {
         <Link
           href="/"
           className="flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
-          aria-label="Scope Identity home"
+          aria-label="Scope home"
         >
           <BrandMark priority className="size-8" />
           <span className="font-semibold tracking-[-0.02em]">Scope</span>
@@ -25,11 +25,17 @@ export function PublicHeader() {
           >
             Privacy
           </Link>
+          <Link
+            href="/terms"
+            className="hidden rounded-md px-3 py-2 text-sm text-[#526054] hover:text-[#172019] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30 sm:block dark:text-muted-foreground dark:hover:text-foreground"
+          >
+            Terms
+          </Link>
           <Button
             variant="outline"
             size="sm"
             nativeButton={false}
-            render={<Link href="/signin" />}
+            render={<Link href="/signin?redirectTo=/agents" />}
           >
             Sign in
           </Button>

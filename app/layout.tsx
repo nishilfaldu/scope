@@ -22,15 +22,15 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://scope.nishilfaldu.site"),
-  title: "Scope Identity",
+  title: "Scope",
   description:
     "Approve exactly which apps and connected accounts an AI agent may access.",
   openGraph: {
-    title: "Scope Identity",
+    title: "Scope",
     description:
       "Approve exactly which apps and connected accounts an AI agent may access.",
     url: "/",
-    siteName: "Scope Identity",
+    siteName: "Scope",
     type: "website",
   },
 };
