@@ -30,13 +30,11 @@ export function AccountBindings({
   apps,
   selected,
   onChange,
-  compact = false,
   allowConnect = true,
 }: {
   apps: readonly AppId[];
   selected: AccountSelection;
   onChange: (app: AppId, ids: Id<"connections">[]) => void;
-  compact?: boolean;
   allowConnect?: boolean;
 }) {
   const [page, setPage] = useState(0);
@@ -80,23 +78,21 @@ export function AccountBindings({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold">Choose accounts</h2>
+        <h2 className="text-sm text-muted-foreground">Accounts to authorize</h2>
         <span className="text-xs text-muted-foreground">{chosen} selected</span>
       </div>
-      <div className="divide-y rounded-xl border bg-background">
+      <div className="divide-y rounded-xl bg-muted/55">
         {visibleApps.map((app) => {
           const accounts =
             statuses?.find((entry) => entry.app === app)?.accounts ?? [];
           return (
             <div key={app} className="flex gap-3 px-3.5 py-3 text-sm">
-              <AppIcon app={app} />
+              <AppIcon app={app} className="bg-background" />
               <div className="min-w-0 flex-1">
                 <span className="font-medium">{APP_LABELS[app]}</span>
-                {!compact ? (
-                  <p className="text-muted-foreground">
-                    {APP_PERMISSIONS[app]}
-                  </p>
-                ) : null}
+                <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                  {APP_PERMISSIONS[app]}
+                </p>
                 <div className="mt-2 space-y-2">
                   {statuses === undefined ? (
                     <>
@@ -104,7 +100,7 @@ export function AccountBindings({
                       <Skeleton className="h-5 w-32" />
                     </>
                   ) : accounts.length === 0 ? (
-                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/70 px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background px-3 py-2">
                       <span className="text-xs text-muted-foreground">
                         No connected account
                       </span>
@@ -153,7 +149,6 @@ export function AccountBindings({
                   )}
                 </div>
                 {allowConnect &&
-                !compact &&
                 statuses !== undefined &&
                 accounts.length === 0 ? (
                   <Button
@@ -167,7 +162,6 @@ export function AccountBindings({
                   </Button>
                 ) : null}
                 {allowConnect &&
-                !compact &&
                 statuses !== undefined &&
                 accounts.length > 0 ? (
                   <Button

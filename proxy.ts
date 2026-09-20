@@ -6,6 +6,7 @@ import {
 
 const isSignInPage = createRouteMatcher(["/signin"]);
 const isAuthApiRoute = createRouteMatcher(["/api/auth(.*)"]);
+const isPublicPage = createRouteMatcher(["/", "/privacy", "/terms"]);
 /** Request links show the email verification form at the request URL. */
 const isRequestLink = createRouteMatcher([
   "/connect/(.*)",
@@ -23,6 +24,9 @@ function safeRedirectPath(value: string | null): string {
 export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
   // Let the auth endpoints through so sign-in and sign-out work.
   if (isAuthApiRoute(request)) {
+    return;
+  }
+  if (isPublicPage(request)) {
     return;
   }
   const isAuthenticated = await convexAuth.isAuthenticated();

@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AuthorizationShell } from "@/components/shared/authorization-shell";
-import { Mail01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { BrandMark } from "@/components/shared/brand-mark";
 
 export function SignIn({
   redirectTo = "/",
@@ -76,16 +75,10 @@ export function SignIn({
   }
 
   return (
-    <AuthorizationShell>
+    <AuthorizationShell showBrand={false}>
       <div className="px-6 py-7 sm:px-8 sm:py-8">
         <div className="mb-7 flex items-start gap-4">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-foreground">
-            <HugeiconsIcon
-              icon={Mail01Icon}
-              className="size-5"
-              strokeWidth={2}
-            />
-          </span>
+          <BrandMark priority className="size-11 shrink-0 rounded-xl" />
           <div>
             <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
             <p className="mt-1 text-sm leading-6 text-muted-foreground">

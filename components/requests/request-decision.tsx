@@ -10,16 +10,17 @@ import {
   bindingsFor,
 } from "@/components/connections/account-bindings";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { APP_LABELS, APP_PERMISSIONS, type AppId } from "@/lib/capabilities";
 import { useNow } from "@/hooks/use-now";
 import { AuthorizationShell } from "@/components/shared/authorization-shell";
 import { AppIcon } from "@/components/shared/app-icon";
-import { Clock01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import {
+  DecisionFact,
+  DecisionFacts,
+  DecisionHeader,
+} from "@/components/shared/decision-card";
 
 function duration(ms: number) {
   const hours = ms / 3_600_000;
@@ -126,98 +127,87 @@ export function RequestDecision({
 
   return (
     <AuthorizationShell>
-      <div className="px-6 pt-7 sm:px-8 sm:pt-8">
+      {kind === "new" && newRequest ? (
+        <DecisionHeader
+          title={newRequest.agentName}
+          subtitle={`requests access for ${duration(newRequest.ttlMs)}`}
+          leading={
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-xs font-semibold text-background">
+              {newRequest.agentName.slice(0, 2).toUpperCase()}
+            </span>
+          }
+        />
+      ) : null}
+      {kind === "token" && tokenRequest ? (
+        <DecisionHeader
+          title={tokenRequest.sliceName}
+          subtitle="requests one-time access"
+          leading={<AppIcon app={tokenRequest.app} />}
+        />
+      ) : null}
+      <div className="px-6 py-6 sm:px-8">
         {kind === "new" && newRequest ? (
-          <>
-            <Badge variant="secondary" className="mb-3">
-              Connected agent
-            </Badge>
-            <h1 className="text-balance text-2xl font-semibold tracking-tight">
-              {newRequest.agentName} requests access
-            </h1>
-            <div className="mt-6 rounded-xl bg-muted/70 px-4 py-3.5">
-              <p className="text-xs font-medium text-muted-foreground">
-                Purpose
-              </p>
-              <p className="mt-1 text-sm leading-6">{newRequest.reason}</p>
-            </div>
-            <div className="mt-6">
-              <h2 className="text-sm font-semibold">Requested access</h2>
-              <div className="mt-2 divide-y rounded-xl border bg-background">
-                {newRequest.apps.map((app) => (
-                  <div key={app} className="flex gap-3 px-3.5 py-3">
-                    <AppIcon app={app} />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{APP_LABELS[app]}</p>
-                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                        {APP_PERMISSIONS[app]}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="space-y-6">
+            <DecisionFacts>
+              <DecisionFact label="Reason">{newRequest.reason}</DecisionFact>
+              <DecisionFact label="Duration">
+                {duration(newRequest.ttlMs)} · expires automatically
+              </DecisionFact>
+            </DecisionFacts>
             {pending ? (
-              <div className="mt-6">
-                <AccountBindings
-                  apps={newRequest.apps}
-                  selected={selected}
-                  compact
-                  allowConnect={false}
-                  onChange={(app, ids) =>
-                    setSelected((current) => ({ ...current, [app]: ids }))
-                  }
-                />
-              </div>
-            ) : null}
-            <div className="mt-6 flex items-center gap-3 rounded-xl border px-3.5 py-3">
-              <span className="flex size-9 items-center justify-center rounded-lg bg-muted">
-                <HugeiconsIcon
-                  icon={Clock01Icon}
-                  className="size-4"
-                  strokeWidth={2}
-                />
-              </span>
+              <AccountBindings
+                apps={newRequest.apps}
+                selected={selected}
+                allowConnect={false}
+                onChange={(app, ids) =>
+                  setSelected((current) => ({ ...current, [app]: ids }))
+                }
+              />
+            ) : (
               <div>
-                <p className="text-sm font-medium">
-                  Valid for {duration(newRequest.ttlMs)}
+                <p className="text-sm text-muted-foreground">
+                  Requested access
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  Expires automatically
-                </p>
+                <div className="mt-3 divide-y rounded-xl bg-muted/55">
+                  {newRequest.apps.map((app) => (
+                    <div key={app} className="flex gap-3 px-4 py-3.5">
+                      <AppIcon app={app} className="bg-background" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium">{APP_LABELS[app]}</p>
+                        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                          {APP_PERMISSIONS[app]}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          </>
+            )}
+          </div>
         ) : null}
         {kind === "token" && tokenRequest ? (
-          <>
-            <Badge variant="secondary" className="mb-3">
-              One-time approval
-            </Badge>
-            <h1 className="text-balance text-2xl font-semibold tracking-tight">
-              Allow {APP_LABELS[tokenRequest.app]} access?
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Requested by {tokenRequest.sliceName}
-            </p>
-            <div className="mt-6 rounded-xl border bg-background">
-              <div className="flex gap-3 px-4 py-4">
-                <AppIcon app={tokenRequest.app} className="size-10" />
-                <div>
-                  <p className="font-medium">
+          <div className="space-y-6">
+            <div>
+              <p className="text-sm text-muted-foreground">Requested account</p>
+              <div className="mt-3 flex items-center gap-3 rounded-xl bg-muted/60 px-4 py-4">
+                <AppIcon app={tokenRequest.app} className="bg-background" />
+                <div className="min-w-0">
+                  <p className="font-medium">{APP_LABELS[tokenRequest.app]}</p>
+                  <p className="mt-0.5 break-all text-sm text-muted-foreground">
                     {tokenRequest.accountLogin ?? "Account disconnected"}
-                  </p>
-                  <p className="mt-1 text-sm leading-5 text-muted-foreground">
-                    {APP_PERMISSIONS[tokenRequest.app]}
                   </p>
                 </div>
               </div>
-              <Separator />
-              <p className="px-4 py-3 text-xs text-muted-foreground">
-                Approval applies to this token request only.
-              </p>
             </div>
-          </>
+            <DecisionFacts>
+              <DecisionFact label="Can do">
+                {APP_PERMISSIONS[tokenRequest.app]}
+              </DecisionFact>
+              <DecisionFact label="Effect">
+                Issues one credential for this request only
+              </DecisionFact>
+            </DecisionFacts>
+          </div>
         ) : null}
         {error ? (
           <Alert variant="destructive" className="mt-5">
@@ -225,11 +215,11 @@ export function RequestDecision({
           </Alert>
         ) : null}
       </div>
-      <div className="mt-7 border-t bg-muted/25 px-6 py-5 sm:px-8">
+      <div className="border-t px-6 py-5 sm:px-8">
         {pending ? (
-          <div className="flex flex-col gap-2 sm:flex-row-reverse">
+          <div className="flex gap-3">
             <Button
-              className="h-11 sm:min-w-40"
+              className="h-11 flex-1"
               disabled={
                 busy ||
                 (kind === "token" && !tokenRequest?.accountLogin) ||
@@ -242,16 +232,16 @@ export function RequestDecision({
               {busy
                 ? "Working…"
                 : kind === "new" && newRequest
-                  ? `Allow for ${duration(newRequest.ttlMs)}`
-                  : "Approve once"}
+                  ? `Approve for ${duration(newRequest.ttlMs)}`
+                  : "Approve"}
             </Button>
             <Button
-              variant="ghost"
-              className="h-11 sm:min-w-24"
+              variant="outline"
+              className="h-11 flex-1"
               disabled={busy}
               onClick={() => void submit("denied")}
             >
-              Decline
+              Deny
             </Button>
           </div>
         ) : (

@@ -21,8 +21,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://scope.nishilfaldu.site"),
   title: "Scope",
-  description: "Control agent access to your connected accounts",
+  description:
+    "Approve exactly which apps and connected accounts an AI agent may access.",
+  openGraph: {
+    title: "Scope",
+    description:
+      "Approve exactly which apps and connected accounts an AI agent may access.",
+    url: "/",
+    siteName: "Scope",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -41,7 +51,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <body className="flex min-h-full flex-col bg-background text-foreground">
           <ThemeProvider
             attribute="class"
-            defaultTheme="system"
+            defaultTheme="light"
+            forcedTheme="light"
             enableSystem
             disableTransitionOnChange
           >
