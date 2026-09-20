@@ -20,8 +20,8 @@ const app = defineApp({
     VERCEL_CLIENT_SECRET: v.string(),
     ZOOM_CLIENT_ID: v.string(),
     ZOOM_CLIENT_SECRET: v.string(),
-    BOARD_ORIGIN: v.string(),
-    RESEND_API_KEY: v.string(),
+    BOARD_ORIGIN: v.optional(v.string()),
+    RESEND_API_KEY: v.optional(v.string()),
     // Optional From header for OTP emails; falls back in auth.ts when unset.
     RESEND_FROM: v.optional(v.string()),
     // Base64-encoded 32-byte AES-256 key for connection token encryption at rest.
