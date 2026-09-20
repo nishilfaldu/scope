@@ -47,9 +47,25 @@ export function resolveReturnTo(
   }
 }
 
+export function resolveBoardOrigin(
+  configuredOrigin: unknown,
+  requestOrigin?: string | null,
+): string {
+  if (typeof configuredOrigin === "string" && configuredOrigin.trim()) {
+    return parseBoardOrigin(configuredOrigin);
+  }
+  return parseBoardOrigin(requestOrigin);
+}
+
 export function normalizeReturnTo(
   value: string | null,
   boardOrigin: unknown,
+  requestOrigin?: string | null,
 ): string {
-  return resolveReturnTo(value, parseBoardOrigin(boardOrigin));
+  const fallbackOrigin =
+    value === null ? requestOrigin : new URL(value).origin;
+  return resolveReturnTo(
+    value,
+    resolveBoardOrigin(boardOrigin, fallbackOrigin),
+  );
 }
