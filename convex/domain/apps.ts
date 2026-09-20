@@ -103,21 +103,18 @@ export function providerForApp(app: AppId): ProviderId {
   }
 }
 
-const GOOGLE_PROVIDER_SCOPES = [
-  "openid",
-  "email",
-  "profile",
-  "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/calendar",
-  "https://www.googleapis.com/auth/drive",
-  "https://www.googleapis.com/auth/documents",
-  "https://www.googleapis.com/auth/spreadsheets",
-] as const;
+const GOOGLE_APP_SCOPE: Record<GoogleAppId, string> = {
+  gmail: "https://www.googleapis.com/auth/gmail.modify",
+  calendar: "https://www.googleapis.com/auth/calendar",
+  drive: "https://www.googleapis.com/auth/drive",
+  docs: "https://www.googleapis.com/auth/documents",
+  sheets: "https://www.googleapis.com/auth/spreadsheets",
+};
 
-/** Request the provider-wide maximum for every Google connection. */
+/** Request identity plus only the resource scope represented by this app. */
 export function scopesForGoogleApp(app: AppId): string {
   if (!isGoogleApp(app)) {
     throw new Error(`scopesForGoogleApp requires a Google app, got ${app}`);
   }
-  return GOOGLE_PROVIDER_SCOPES.join(" ");
+  return ["openid", "email", "profile", GOOGLE_APP_SCOPE[app]].join(" ");
 }

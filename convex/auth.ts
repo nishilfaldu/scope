@@ -15,7 +15,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       generateVerificationToken: async () => {
         const bytes = new Uint32Array(1);
         crypto.getRandomValues(bytes);
-        return String(bytes[0] % 100_000_000).padStart(8, "0");
+        return String(bytes[0] % 1_000_000).padStart(6, "0");
       },
       normalizeIdentifier: (email) => email.trim().toLowerCase(),
       sendVerificationRequest: (async (

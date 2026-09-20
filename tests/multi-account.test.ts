@@ -12,10 +12,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("provider-wide Google consent", () => {
-  test.each(["gmail", "calendar", "drive", "docs", "sheets"] as const)(
-    "%s requests the full Google provider scope set",
-    (app) => {
+describe("per-app Google consent", () => {
+  test.each([
+    ["gmail", "https://www.googleapis.com/auth/gmail.modify"],
+    ["calendar", "https://www.googleapis.com/auth/calendar"],
+    ["drive", "https://www.googleapis.com/auth/drive"],
+    ["docs", "https://www.googleapis.com/auth/documents"],
+    ["sheets", "https://www.googleapis.com/auth/spreadsheets"],
+  ] as const)(
+    "%s requests only its own resource scope",
+    (app, resourceScope) => {
       vi.stubEnv("GOOGLE_CLIENT_ID", "shared-client");
       vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
       const started = google.authorize("state-1", app);
@@ -30,11 +36,7 @@ describe("provider-wide Google consent", () => {
         "openid",
         "email",
         "profile",
-        "https://www.googleapis.com/auth/gmail.modify",
-        "https://www.googleapis.com/auth/calendar",
-        "https://www.googleapis.com/auth/drive",
-        "https://www.googleapis.com/auth/documents",
-        "https://www.googleapis.com/auth/spreadsheets",
+        resourceScope,
       ]);
       expect(url.searchParams.get("include_granted_scopes")).toBe("false");
     },

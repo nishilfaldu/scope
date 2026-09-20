@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown01Icon, Alert02Icon } from "@hugeicons/core-free-icons";
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { toast } from "@/components/ui/toast";
 import { EmptyState } from "@/components/shared/empty-state";
 import { AppIcon } from "@/components/shared/app-icon";
 import { api } from "@/convex/_generated/api";
@@ -155,11 +155,9 @@ export function ConnectionsTable() {
   const disconnect = useAction(api.tables.connections.actions.disconnect);
   const startOAuth = useMutation(api.tables.oauthStates.mutations.start);
   const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState("");
 
   async function connect(app: AppId) {
     setBusy(app);
-    setError("");
     try {
       const { state } = await startOAuth({
         app,
@@ -169,11 +167,14 @@ export function ConnectionsTable() {
       url.searchParams.set("state", state);
       window.location.assign(url.toString());
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not start this connection.",
-      );
+      toast.add({
+        title: "Could not start connection",
+        description:
+          cause instanceof Error
+            ? cause.message
+            : "Please try again in a moment.",
+        type: "error",
+      });
     } finally {
       setBusy(null);
     }
@@ -181,15 +182,17 @@ export function ConnectionsTable() {
 
   async function remove(app: AppId, connectionId: Id<"connections">) {
     setBusy(connectionId);
-    setError("");
     try {
       await disconnect({ app, connectionId });
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Could not disconnect this account.",
-      );
+      toast.add({
+        title: "Could not disconnect account",
+        description:
+          cause instanceof Error
+            ? cause.message
+            : "Please try again in a moment.",
+        type: "error",
+      });
     } finally {
       setBusy(null);
     }
@@ -214,14 +217,6 @@ export function ConnectionsTable() {
           className="max-w-sm"
         />
       </div>
-      {error ? (
-        <div className="border-b p-4">
-          <Alert variant="destructive">
-            <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        </div>
-      ) : null}
       {statuses === undefined ? (
         <div className="divide-y">
           {[0, 1, 2, 3, 4].map((item) => (
