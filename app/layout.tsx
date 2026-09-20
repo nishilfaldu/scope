@@ -21,8 +21,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Scope",
-  description: "Control agent access to your connected accounts",
+  metadataBase: new URL("https://scope.nishilfaldu.site"),
+  title: "Scope Identity",
+  description:
+    "Approve exactly which apps and connected accounts an AI agent may access.",
+  openGraph: {
+    title: "Scope Identity",
+    description:
+      "Approve exactly which apps and connected accounts an AI agent may access.",
+    url: "/",
+    siteName: "Scope Identity",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
