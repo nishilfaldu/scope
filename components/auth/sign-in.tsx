@@ -75,7 +75,7 @@ export function SignIn({
   }
 
   return (
-    <AuthorizationShell>
+    <AuthorizationShell showBrand={false}>
       <div className="px-6 py-7 sm:px-8 sm:py-8">
         <div className="mb-7 flex items-start gap-4">
           <BrandMark priority className="size-11 shrink-0 rounded-xl" />
