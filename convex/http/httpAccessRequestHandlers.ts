@@ -11,8 +11,11 @@ import { errorResponse, jsonResponse } from "../lib/responses";
 import { AGENT_ERROR_GUIDANCE } from "../lib/errors";
 import { resolveBoardOrigin } from "../domain/returnPaths";
 
-function approvalUrlFor(publicToken: string): string {
-  const origin = resolveBoardOrigin(env.BOARD_ORIGIN, request.headers.get("origin"));
+function approvalUrlFor(
+  publicToken: string,
+  requestOrigin: string | null,
+): string {
+  const origin = resolveBoardOrigin(env.BOARD_ORIGIN, requestOrigin);
   return `${origin}/requests/new/${publicToken}`;
 }
 
@@ -97,7 +100,7 @@ export const httpCreateAccessRequestHandler = httpAction(
       return errorResponse(created.status, created.reason, created.code);
     }
 
-    const approvalUrl = approvalUrlFor(created.publicToken);
+    const approvalUrl = approvalUrlFor(created.publicToken, request.headers.get("origin"));
     return jsonResponse(created.reused ? 200 : 201, {
       requestId: created.requestId,
       status: created.status,
@@ -142,7 +145,7 @@ export const httpAccessRequestStatusHandler = httpAction(
       apps: status.apps,
       ttlMs: status.ttlMs,
       reason: status.reason,
-      approvalUrl: approvalUrlFor(status.publicToken),
+      approvalUrl: approvalUrlFor(status.publicToken, request.headers.get("origin")),
     });
   },
 );
