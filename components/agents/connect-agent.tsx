@@ -7,12 +7,15 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { SignIn } from "@/components/auth/sign-in";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuthorizationShell } from "@/components/shared/authorization-shell";
 import { useNow } from "@/hooks/use-now";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  DecisionFact,
+  DecisionFacts,
+  DecisionHeader,
+} from "@/components/shared/decision-card";
 
 export function ConnectAgent({ publicToken }: { publicToken: string }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -96,44 +99,43 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
 
   return (
     <AuthorizationShell>
-      <div className="px-6 pb-6 pt-7 sm:px-8 sm:pb-8">
-        <div className="flex items-start gap-4">
-          <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-foreground text-lg font-semibold text-background shadow-sm">
+      <DecisionHeader
+        title={invite.agentName}
+        subtitle={
+          invite.reconnecting
+            ? "requests replacement credentials"
+            : "wants to connect to Scope"
+        }
+        leading={
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-xs font-semibold text-background">
             {invite.agentName.slice(0, 2).toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <Badge variant="secondary" className="mb-2">
-              {invite.reconnecting ? "Rotate credentials" : "New connection"}
-            </Badge>
-            <h1 className="text-balance text-2xl font-semibold tracking-tight">
-              {invite.reconnecting ? "Rotate" : "Connect"} {invite.agentName}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Name provided by the requester
-            </p>
-          </div>
-        </div>
-        <Separator className="my-6" />
-        <div className="rounded-xl bg-muted/70 px-4 py-3.5 text-sm leading-6">
+          </span>
+        }
+      />
+      <div className="px-6 py-6 sm:px-8">
+        <DecisionFacts>
+          <DecisionFact label="Can do">
+            Send access requests to your Scope account
+          </DecisionFact>
+          <DecisionFact label="Access">
+            You still approve each app, account, and duration
+          </DecisionFact>
           {invite.reconnecting ? (
-            <p>
-              The current connection stays active until the agent claims and
-              activates its replacement credentials.
-            </p>
-          ) : (
-            <p>
-              This agent can send access requests to your Scope account. You
-              decide what to allow each time.
-            </p>
-          )}
-        </div>
+            <DecisionFact label="Effect">
+              The current credentials stay active until the replacement is
+              claimed and activated
+            </DecisionFact>
+          ) : null}
+        </DecisionFacts>
         {!invite.reconnecting && invite.replacementOptions.length > 0 ? (
-          <div className="mt-5">
-            <p className="text-sm font-medium">How should this connect?</p>
-            <div className="mt-2 grid gap-2">
+          <div className="mt-6">
+            <p className="text-sm text-muted-foreground">
+              Connection destination
+            </p>
+            <div className="mt-3 grid gap-2">
               <button
                 type="button"
-                className={`rounded-xl border px-4 py-3 text-left text-sm transition-colors ${replacementId === "new" ? "border-primary bg-primary/10" : "hover:bg-muted/60"}`}
+                className={`rounded-xl px-4 py-3 text-left text-sm transition-colors ${replacementId === "new" ? "bg-primary/15 ring-1 ring-primary/40" : "bg-muted/60 hover:bg-muted"}`}
                 onClick={() => setReplacementId("new")}
               >
                 <span className="font-medium">Connect as a new agent</span>
@@ -145,7 +147,7 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
                 <button
                   key={option.id}
                   type="button"
-                  className={`rounded-xl border px-4 py-3 text-left text-sm transition-colors ${replacementId === option.id ? "border-primary bg-primary/10" : "hover:bg-muted/60"}`}
+                  className={`rounded-xl px-4 py-3 text-left text-sm transition-colors ${replacementId === option.id ? "bg-primary/15 ring-1 ring-primary/40" : "bg-muted/60 hover:bg-muted"}`}
                   onClick={() => setReplacementId(option.id)}
                 >
                   <span className="font-medium">Replace {option.name}</span>
@@ -163,10 +165,12 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
+      </div>
+      <div className="border-t px-6 py-5 sm:px-8">
         {pending ? (
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row-reverse">
+          <div className="flex gap-3">
             <Button
-              className="h-11 sm:min-w-36"
+              className="h-11 flex-1"
               disabled={busy}
               onClick={() => void submit("approved")}
             >
@@ -179,20 +183,23 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
                     : "Connect agent"}
             </Button>
             <Button
-              variant="ghost"
-              className="h-11 sm:min-w-24"
+              variant="outline"
+              className="h-11 flex-1"
               disabled={busy}
               onClick={() => void submit("denied")}
             >
-              Decline
+              Deny
             </Button>
           </div>
         ) : (
-          <div className="mt-6 rounded-xl border px-4 py-3 text-sm">
+          <div className="text-sm">
             This connection is{" "}
             <span className="font-medium">{invite.status}</span>.
           </div>
         )}
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          Link expires {new Date(invite.expiresAt).toLocaleString()}.
+        </p>
       </div>
     </AuthorizationShell>
   );
