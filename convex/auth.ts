@@ -22,6 +22,10 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         { identifier, token }: { identifier: string; token: string },
         ctx: ActionCtx,
       ) => {
+        if (!env.RESEND_API_KEY) {
+          console.warn("RESEND_API_KEY is not set; skipping OTP email delivery");
+          return;
+        }
         await resend.sendEmail(ctx, {
           from: env.RESEND_FROM ?? "Scope <login@nishilfaldu.site>",
           to: identifier,
