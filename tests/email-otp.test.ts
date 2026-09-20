@@ -22,8 +22,8 @@ test("email OTP creates a session only on valid code and cannot be replayed", as
       provider: "email-otp",
       params: { email: "login@example.com" },
     });
-    const code = message.match(/\b\d{8}\b/)?.[0];
-    expect(code).toMatch(/^\d{8}$/);
+    const code = message.match(/\b\d{6}\b/)?.[0];
+    expect(code).toMatch(/^\d{6}$/);
     const before = await t.run(
       async (ctx) => (await ctx.db.query("authSessions").collect()).length,
     );
@@ -31,7 +31,10 @@ test("email OTP creates a session only on valid code and cannot be replayed", as
     await expect(
       t.action(api.auth.signIn, {
         provider: "email-otp",
-        params: { email: "login@example.com", code: "000000" },
+        params: {
+          email: "login@example.com",
+          code: code === "000000" ? "000001" : "000000",
+        },
       }),
     ).rejects.toThrow();
     expect(
@@ -81,7 +84,7 @@ test("email OTP creates a session only on valid code and cannot be replayed", as
       provider: "email-otp",
       params: { email: "late@example.com" },
     });
-    const lateCode = message.match(/\b\d{8}\b/)?.[0];
+    const lateCode = message.match(/\b\d{6}\b/)?.[0];
     await t.run(async (ctx) => {
       const codeRow = (
         await ctx.db.query("authVerificationCodes").collect()

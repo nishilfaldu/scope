@@ -1,39 +1,41 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import Link from "next/link";
-import { Alert02Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
 
 import { BoardShell } from "@/components/layout/board-shell";
 import { ConnectionsTable } from "@/components/connections/connections-table";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CONNECT_ERRORS, ALL_APPS, type AppId } from "@/lib/connections";
+import { toast } from "@/components/ui/toast";
+import { CONNECT_ERRORS, ALL_APPS } from "@/lib/connections";
 
-function readOauthReturn(): { provider: AppId; message: string } | null {
+function readOauthError(): string | null {
   if (typeof window === "undefined") return null;
   const url = new URL(window.location.href);
   for (const id of ALL_APPS) {
     const value = url.searchParams.get(id);
     if (!value || value === "connected") continue;
     if (value === "denied") {
-      return { provider: id, message: "Access was denied." };
+      return "Access was denied.";
     }
     const reason = url.searchParams.get("reason");
-    return {
-      provider: id,
-      message:
-        (reason && CONNECT_ERRORS[reason]) ||
-        "Connect failed. Flip the toggle again.",
-    };
+    return (
+      (reason && CONNECT_ERRORS[reason]) ||
+      "Connect failed. Try connecting again."
+    );
   }
   return null;
 }
 
 export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
-  const [connectBanner] = useState(readOauthReturn);
-
   useEffect(() => {
+    const connectError = readOauthError();
+    if (connectError) {
+      toast.add({
+        title: "Connect failed",
+        description: connectError,
+        type: "error",
+      });
+    }
     const url = new URL(window.location.href);
     let dirty = false;
     for (const id of ALL_APPS) {
@@ -78,16 +80,6 @@ export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
             </div>
           ) : null}
         </div>
-        {connectBanner ? (
-          <div className="mt-6">
-            <Alert variant="destructive">
-              <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
-              <AlertTitle>Connect failed</AlertTitle>
-              <AlertDescription>{connectBanner.message}</AlertDescription>
-            </Alert>
-          </div>
-        ) : null}
-
         <div className="mt-8 overflow-hidden rounded-xl border bg-card">
           <div className="border-b px-5 py-4">
             <h2 className="font-semibold">Apps and accounts</h2>

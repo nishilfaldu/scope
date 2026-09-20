@@ -119,13 +119,13 @@ export function SignIn({
                   id="code"
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  pattern="[0-9]{8}"
-                  maxLength={8}
+                  pattern="[0-9]{6}"
+                  maxLength={6}
                   required
                   autoFocus
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
-                  placeholder="00000000"
+                  placeholder="000000"
                   className="h-12 text-center font-mono text-lg tracking-[0.35em]"
                 />
                 <p className="text-xs text-muted-foreground">
