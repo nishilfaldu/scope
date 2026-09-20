@@ -34,7 +34,11 @@ export function httpOAuthCallback(app: AppId) {
   const provider = providerForApp(app);
   return httpAction(async (ctx, request) => {
     const requestUrl = new URL(request.url);
-    const returnFallback = normalizeReturnTo(null, env.BOARD_ORIGIN);
+    const returnFallback = normalizeReturnTo(
+      null,
+      env.BOARD_ORIGIN,
+      request.headers.get("origin"),
+    );
     const errorParam = requestUrl.searchParams.get("error");
     const code = requestUrl.searchParams.get("code");
     const state = requestUrl.searchParams.get("state");
