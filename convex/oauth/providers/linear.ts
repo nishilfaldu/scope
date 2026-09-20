@@ -69,7 +69,7 @@ export const linear: ProviderOAuth = {
     authorize.searchParams.set("client_id", client.clientId);
     authorize.searchParams.set("redirect_uri", oauthCallbackUrl("linear"));
     authorize.searchParams.set("response_type", "code");
-    authorize.searchParams.set("scope", "read,write");
+    authorize.searchParams.set("scope", "read,write,admin");
     authorize.searchParams.set("actor", "user");
     authorize.searchParams.set("state", state);
     return { url: authorize.toString() };
