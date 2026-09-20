@@ -3,7 +3,7 @@ import { internal } from "../_generated/api";
 import { readObjectBody, requiredString } from "../lib/requests";
 import { errorResponse, jsonResponse } from "../lib/responses";
 import { AGENT_ERROR_GUIDANCE } from "../lib/errors";
-import { parseBoardOrigin } from "../domain/returnPaths";
+import { resolveBoardOrigin } from "../domain/returnPaths";
 import { mintCredential } from "./mint";
 
 export const httpCredentialsHandler = httpAction(async (ctx, request) => {
@@ -42,7 +42,7 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
     );
     if (!pending.ok)
       return errorResponse(pending.status, pending.reason, pending.code);
-    const boardOrigin = parseBoardOrigin(env.BOARD_ORIGIN);
+    const boardOrigin = resolveBoardOrigin(env.BOARD_ORIGIN, request.headers.get("origin"));
     return jsonResponse(202, {
       error: pending.reason,
       code: pending.code,
