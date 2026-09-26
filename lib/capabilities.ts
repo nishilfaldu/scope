@@ -24,9 +24,9 @@ export const APP_PERMISSIONS: Record<AppId, string> = {
   calendar:
     "Read and manage calendars and events in the selected Google account.",
   drive:
-    "Read and manage Drive files, including Google Docs and Sheets files, in the selected Google account.",
-  docs: "Read and edit documents in the selected Google account.",
-  sheets: "Read and edit spreadsheets in the selected Google account.",
+    "List, inspect, and download non-Docs and non-Sheets Drive files through Scope's broker. Google Docs and Sheets files are excluded.",
+  docs: "Read, create, and edit Google Docs through Scope's broker.",
+  sheets: "Read, create, and edit Google Sheets through Scope's broker.",
   slack:
     "Read conversations and files, send messages, and manage bookmarks, pins, and reactions with the connected Slack user.",
   airtable:

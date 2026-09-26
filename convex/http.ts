@@ -4,6 +4,7 @@ import { httpAppsHandler } from "./http/httpAppsHandler";
 import { httpAccountsHandler } from "./http/httpAccountsHandler";
 import { httpClaimHandler } from "./http/httpClaimHandler";
 import { httpCredentialsHandler } from "./http/httpCredentialsHandler";
+import { httpGoogleBrokerHandler } from "./http/googleBroker";
 import {
   httpAccessRequestClaimHandler,
   httpAccessRequestAckHandler,
@@ -126,6 +127,16 @@ http.route({
   path: "/api/credentials",
   method: "POST",
   handler: httpCredentialsHandler,
+});
+http.route({
+  path: "/api/google/operations",
+  method: "OPTIONS",
+  handler: optionsOk,
+});
+http.route({
+  path: "/api/google/operations",
+  method: "POST",
+  handler: httpGoogleBrokerHandler,
 });
 
 // Poll / claim after operator approval (mint path)

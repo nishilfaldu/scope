@@ -160,8 +160,10 @@ test("Notion workspace authorization is distinct while reconnecting the same aut
   ).toContain("workspace-B");
 });
 
-test("Drive explicitly covers Docs and Sheets; Google grants require bounded resource scopes", () => {
-  expect(effectiveGoogleApps("drive")).toEqual(["drive", "docs", "sheets"]);
+test("Google apps have independent effective access; grants require bounded resource scopes", () => {
+  expect(effectiveGoogleApps("drive")).toEqual(["drive"]);
+  expect(effectiveGoogleApps("docs")).toEqual(["docs"]);
+  expect(effectiveGoogleApps("sheets")).toEqual(["sheets"]);
   expect(
     googleScopesAreBounded("drive", [
       "openid",

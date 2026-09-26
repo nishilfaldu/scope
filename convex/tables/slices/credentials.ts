@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "../../_generated/server";
+import { internal } from "../../_generated/api";
 import {
   isAppId,
   appValidator,
@@ -113,8 +114,12 @@ export const finalize = internalMutation({
     bindingId: v.id("sliceBindings"),
     connectionId: v.id("connections"),
     requestId: v.optional(v.id("tokenRequests")),
+    brokerSecretHash: v.optional(v.string()),
   },
-  returns: v.union(v.object({ ok: v.literal(true) }), denyResultValidator),
+  returns: v.union(
+    v.object({ ok: v.literal(true), expiresAt: v.number() }),
+    denyResultValidator,
+  ),
   handler: async (ctx, args) => {
     const slice = await ctx.db.get("slices", args.sliceId);
     if (!slice) return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
@@ -125,16 +130,17 @@ export const finalize = internalMutation({
     if (status === "revoked") return denyCreate(403, REVOKED_ERROR, "REVOKED");
     if (status === "expired") return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
     const binding = await ctx.db.get("sliceBindings", args.bindingId);
+    const selected = await selectedConnection(
+      ctx,
+      slice.userId,
+      args.app,
+      args.connectionId,
+    );
     if (
       binding?.sliceId !== slice._id ||
       binding.app !== args.app ||
       binding.connectionId !== args.connectionId ||
-      !(await selectedConnection(
-        ctx,
-        slice.userId,
-        args.app,
-        args.connectionId,
-      ))
+      !selected
     ) {
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
     }
@@ -170,6 +176,26 @@ export const finalize = internalMutation({
     } else if (slice.mintPolicy !== "auto") {
       return denyCreate(403, "Operator approval required", "APPROVAL_REQUIRED");
     }
-    return { ok: true as const };
+    const expiresAt = Math.min(slice.expiresAt, Date.now() + 15 * 60_000);
+    if (args.brokerSecretHash) {
+      if (!["drive", "docs", "sheets"].includes(args.app)) {
+        return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
+      }
+      const brokerId = await ctx.db.insert("googleBrokerCredentials", {
+        secretHash: args.brokerSecretHash,
+        sliceId: args.sliceId,
+        bindingId: args.bindingId,
+        connectionId: args.connectionId,
+        app: args.app as "drive" | "docs" | "sheets",
+        connectionGeneration: selected.connectionGeneration ?? 0,
+        expiresAt,
+      });
+      await ctx.scheduler.runAfter(
+        15 * 60_000 + 1000,
+        internal.tables.slices.googleBroker.expire,
+        { brokerId },
+      );
+    }
+    return { ok: true as const, expiresAt };
   },
 });

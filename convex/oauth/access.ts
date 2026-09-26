@@ -43,7 +43,7 @@ async function persistRefresh(
 }
 
 export type IssueShortLivedAccessResult =
-  | { accessToken: string; expiresAt: number | null }
+  | { accessToken: string; expiresAt: number | null; grantedScopes?: string[] }
   | { error: string; code: AgentErrorCode };
 
 const SHORT_LIVED_UNAVAILABLE_RESULT = {
@@ -175,5 +175,13 @@ export async function issueShortLivedAccess(
   // reporting an earlier expiry to the agent.
   const expiresAt = minted.tokenExpiresAt ?? null;
   // Intentionally omit refreshToken — agents never receive vault refresh secrets.
-  return { accessToken: minted.accessToken, expiresAt };
+  return {
+    accessToken: minted.accessToken,
+    expiresAt,
+    // Google can omit scope on refresh. The connection's verified grant is the
+    // effective scope only when the refresh response did not report one.
+    grantedScopes:
+      minted.grantedScopes ??
+      (isGoogleApp(app) ? connection.grantedScopes : undefined),
+  };
 }

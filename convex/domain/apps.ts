@@ -134,5 +134,5 @@ export function googleScopesAreBounded(
 }
 
 export function effectiveGoogleApps(app: AppId): AppId[] {
-  return app === "drive" ? ["drive", "docs", "sheets"] : [app];
+  return [app];
 }

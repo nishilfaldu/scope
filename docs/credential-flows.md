@@ -15,7 +15,7 @@ flowchart LR
   HTTP -->|server-side token exchange| Provider
 ```
 
-The browser never receives an agent connection secret, an OAuth access token, or an OAuth refresh token. The agent receives an agent connection secret through the private claim flow. Provider tokens stay in Convex except for freshly minted provider access tokens issued through the separate slice credential API.
+The browser never receives an agent connection secret, an OAuth access token, or an OAuth refresh token. The agent receives an agent connection secret through the private claim flow. Drive, Docs, and Sheets bearer tokens stay in Convex: their slice credential API returns an opaque, agent-bound broker token for vetted operations. Other apps may issue freshly minted provider access tokens through the slice credential API.
 
 ## Source map
 

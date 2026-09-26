@@ -207,7 +207,7 @@ describe("credential authorization", () => {
         connectionId: allowed.connectionId,
       },
     );
-    expect(finalized).toEqual({ ok: true });
+    expect(finalized).toMatchObject({ ok: true });
     expect(JSON.stringify(allowed)).not.toMatch(/ghs_/);
     expect(JSON.stringify(finalized)).not.toMatch(/ghs_/);
   });

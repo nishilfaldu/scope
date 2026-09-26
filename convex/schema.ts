@@ -76,6 +76,8 @@ export default defineSchema({
     status: sliceStatusValidator,
     expiresAt: v.number(),
     mintPolicy: mintPolicyValidator,
+    brokerWindowStart: v.optional(v.number()),
+    brokerWindowCount: v.optional(v.number()),
   })
     .index("by_token", ["token"])
     .index("by_agentId", ["agentId"]),
@@ -118,6 +120,16 @@ export default defineSchema({
     .index("by_public_token", ["publicToken"])
     .index("by_slice_status_expiresAt", ["sliceId", "status", "expiresAt"]),
 
+  googleBrokerCredentials: defineTable({
+    secretHash: v.string(),
+    sliceId: v.id("slices"),
+    bindingId: v.id("sliceBindings"),
+    connectionId: v.id("connections"),
+    app: v.union(v.literal("drive"), v.literal("docs"), v.literal("sheets")),
+    connectionGeneration: v.number(),
+    expiresAt: v.number(),
+  }).index("by_secretHash", ["secretHash"]),
+
   // One row per (user, provider, app, provider account). Google apps each have
   // their own connection rows (and may bind different Google accounts).
   connections: defineTable({
@@ -129,6 +141,7 @@ export default defineSchema({
     refreshToken: v.optional(v.string()),
     tokenExpiresAt: v.optional(v.number()),
     grantVersion: v.number(),
+    connectionGeneration: v.optional(v.number()),
     refreshLease: v.optional(v.string()),
     refreshLeaseExpiresAt: v.optional(v.number()),
     grantedScopes: v.optional(v.array(v.string())),

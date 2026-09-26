@@ -17,6 +17,7 @@ import type * as domain_slices from "../domain/slices.js";
 import type * as functions from "../functions.js";
 import type * as http from "../http.js";
 import type * as http_contracts from "../http/contracts.js";
+import type * as http_googleBroker from "../http/googleBroker.js";
 import type * as http_helpers from "../http/helpers.js";
 import type * as http_httpAccessRequestHandlers from "../http/httpAccessRequestHandlers.js";
 import type * as http_httpAccountsHandler from "../http/httpAccountsHandler.js";
@@ -57,6 +58,7 @@ import type * as tables_oauthStates_finish from "../tables/oauthStates/finish.js
 import type * as tables_oauthStates_mutations from "../tables/oauthStates/mutations.js";
 import type * as tables_oauthStates_queries from "../tables/oauthStates/queries.js";
 import type * as tables_slices_credentials from "../tables/slices/credentials.js";
+import type * as tables_slices_googleBroker from "../tables/slices/googleBroker.js";
 import type * as tables_slices_helpers from "../tables/slices/helpers.js";
 import type * as tables_slices_mutations from "../tables/slices/mutations.js";
 import type * as tables_slices_queries from "../tables/slices/queries.js";
@@ -83,6 +85,7 @@ declare const fullApi: ApiFromModules<{
   functions: typeof functions;
   http: typeof http;
   "http/contracts": typeof http_contracts;
+  "http/googleBroker": typeof http_googleBroker;
   "http/helpers": typeof http_helpers;
   "http/httpAccessRequestHandlers": typeof http_httpAccessRequestHandlers;
   "http/httpAccountsHandler": typeof http_httpAccountsHandler;
@@ -123,6 +126,7 @@ declare const fullApi: ApiFromModules<{
   "tables/oauthStates/mutations": typeof tables_oauthStates_mutations;
   "tables/oauthStates/queries": typeof tables_oauthStates_queries;
   "tables/slices/credentials": typeof tables_slices_credentials;
+  "tables/slices/googleBroker": typeof tables_slices_googleBroker;
   "tables/slices/helpers": typeof tables_slices_helpers;
   "tables/slices/mutations": typeof tables_slices_mutations;
   "tables/slices/queries": typeof tables_slices_queries;

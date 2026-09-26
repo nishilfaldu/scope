@@ -91,6 +91,7 @@ export const saveConnection = internalMutation({
       tokenExpiresAt: args.tokenExpiresAt,
       grantedScopes: args.grantedScopes,
       grantVersion: (existing?.grantVersion ?? 0) + 1,
+      connectionGeneration: (existing?.connectionGeneration ?? 0) + 1,
     };
     if (existing) await ctx.db.replace("connections", existing._id, doc);
     else await ctx.db.insert("connections", doc);
