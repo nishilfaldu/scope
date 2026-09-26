@@ -6,17 +6,21 @@ export type ConnectionSecrets = {
   tokenExpiresAt: number | null;
   login: string;
   providerUserId: string;
+  grantVersion: number;
+  grantedScopes?: string[];
 };
 
 export type RefreshedTokens = {
   accessToken: string;
   refreshToken?: string;
   tokenExpiresAt?: number;
+  grantedScopes?: string[];
 };
 
 export type OAuthGrant = RefreshedTokens & {
   login: string;
   providerUserId: string;
+  grantedScopes?: string[];
 };
 
 export type AuthorizeStart = { url: string } | { error: string };
@@ -26,11 +30,13 @@ export type ProviderOAuth = {
   authorize: (
     state: string,
     app?: AppId,
+    pkceChallenge?: string,
   ) => AuthorizeStart | Promise<AuthorizeStart>;
   exchange: (
     code: string,
     state?: string,
     app?: AppId,
+    pkceVerifier?: string,
   ) => Promise<OAuthGrant | { error: string }>;
   refresh: (connection: ConnectionSecrets) => Promise<RefreshedTokens | null>;
   revoke: (accessToken: string) => Promise<void>;

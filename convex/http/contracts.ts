@@ -40,7 +40,13 @@ const routes = [
     method: "POST",
     path: "/api/agent-connections/claim",
     summary:
-      "Claim approved credentials; replacement claims retry until activation.",
+      "Claim credentials; new claims retry until acknowledged or expired, replacements until activation.",
+  },
+  {
+    method: "POST",
+    path: "/api/agent-connections/ack",
+    summary:
+      "Acknowledge storage of a new connection secret using its claim handle and secret.",
   },
   {
     method: "POST",
@@ -56,7 +62,13 @@ const routes = [
   {
     method: "POST",
     path: "/api/access-requests/claim",
-    summary: "Claim approved slice credentials once.",
+    summary: "Claim approved slice credentials until acknowledged or expired.",
+  },
+  {
+    method: "POST",
+    path: "/api/access-requests/ack",
+    summary:
+      "Acknowledge storage of slice credentials using the claim handle and slice secret.",
   },
   {
     method: "POST",

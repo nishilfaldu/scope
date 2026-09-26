@@ -8,6 +8,7 @@ import {
 } from "../../domain/requests";
 import { encryptToken } from "../../lib/tokenEncryption";
 import { createSlice, validatedBindings } from "./helpers";
+import { internal } from "../../_generated/api";
 import { activeConnectionForAgent } from "../agentConnections";
 
 const sliceRequest = v.object({
@@ -49,6 +50,7 @@ export const decide = authenticatedMutation({
   args: {
     publicToken: v.string(),
     decision: v.union(v.literal("approved"), v.literal("denied")),
+    mintPolicy: v.optional(v.union(v.literal("auto"), v.literal("approve"))),
     bindings: v.optional(
       v.array(
         v.object({ app: appValidator, connectionId: v.id("connections") }),
@@ -91,16 +93,22 @@ export const decide = authenticatedMutation({
       userId: ctx.userId,
       name: agentConnection.name,
       ttlMs: request.ttlMs,
-      mintPolicy: "auto",
+      mintPolicy: args.mintPolicy ?? "auto",
       bindings,
       agentId: request.agentId,
     });
+    const claimExpiresAt = Date.now() + CLAIM_WINDOW_MS;
     await ctx.db.patch("sliceRequests", request._id, {
       status: "approved",
       createdSliceId: created.id,
       issuedSliceSecretCipher: await encryptToken(created.sliceSecret),
-      expiresAt: Date.now() + CLAIM_WINDOW_MS,
+      expiresAt: claimExpiresAt,
     });
+    await ctx.scheduler.runAt(
+      claimExpiresAt,
+      internal.tables.slices.sliceRequestExpiry.clearClaimSecret,
+      { requestId: request._id },
+    );
     return null;
   },
 });

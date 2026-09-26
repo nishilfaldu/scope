@@ -53,6 +53,7 @@ export function RequestDecision({
     Partial<Record<AppId, Id<"connections">[]>>
   >({});
   const [busy, setBusy] = useState(false);
+  const [mintPolicy, setMintPolicy] = useState<"auto" | "approve">("auto");
   const [error, setError] = useState("");
   const now = useNow();
   const request = kind === "new" ? newRequest : tokenRequest;
@@ -106,6 +107,7 @@ export function RequestDecision({
         await decideSlice({
           publicToken,
           decision,
+          mintPolicy: decision === "approved" ? mintPolicy : undefined,
           bindings:
             decision === "approved"
               ? bindingsFor(newRequest.apps, selected)
@@ -155,14 +157,36 @@ export function RequestDecision({
               </DecisionFact>
             </DecisionFacts>
             {pending ? (
-              <AccountBindings
-                apps={newRequest.apps}
-                selected={selected}
-                allowConnect={false}
-                onChange={(app, ids) =>
-                  setSelected((current) => ({ ...current, [app]: ids }))
-                }
-              />
+              <>
+                <div className="rounded-xl border p-4 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="mintPolicy"
+                      checked={mintPolicy === "auto"}
+                      onChange={() => setMintPolicy("auto")}
+                    />{" "}
+                    Allow automatic credential minting
+                  </label>
+                  <label className="mt-2 flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="mintPolicy"
+                      checked={mintPolicy === "approve"}
+                      onChange={() => setMintPolicy("approve")}
+                    />{" "}
+                    Approve each credential request
+                  </label>
+                </div>
+                <AccountBindings
+                  apps={newRequest.apps}
+                  selected={selected}
+                  allowConnect={false}
+                  onChange={(app, ids) =>
+                    setSelected((current) => ({ ...current, [app]: ids }))
+                  }
+                />
+              </>
             ) : (
               <div>
                 <p className="text-sm text-muted-foreground">

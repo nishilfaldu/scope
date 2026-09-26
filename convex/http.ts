@@ -6,6 +6,7 @@ import { httpClaimHandler } from "./http/httpClaimHandler";
 import { httpCredentialsHandler } from "./http/httpCredentialsHandler";
 import {
   httpAccessRequestClaimHandler,
+  httpAccessRequestAckHandler,
   httpCancelAccessRequestHandler,
   httpAccessRequestStatusHandler,
   httpCreateAccessRequestHandler,
@@ -18,6 +19,7 @@ import { oauthConfigured } from "./oauth";
 import { auth } from "./auth";
 import {
   httpAgentConnectionClaimHandler,
+  httpAgentConnectionAckHandler,
   httpActivateAgentConnectionHandler,
   httpCancelAgentConnectionInviteHandler,
   httpRevokeAgentConnectionHandler,
@@ -46,6 +48,7 @@ for (const [path, handler] of [
   ["/api/agent-connections", httpCreateAgentConnectionHandler],
   ["/api/agent-connections/status", httpAgentConnectionStatusHandler],
   ["/api/agent-connections/claim", httpAgentConnectionClaimHandler],
+  ["/api/agent-connections/ack", httpAgentConnectionAckHandler],
   ["/api/agent-connections/activate", httpActivateAgentConnectionHandler],
   ["/api/agent-connections/cancel", httpCancelAgentConnectionInviteHandler],
   ["/api/agent-connections/revoke", httpRevokeAgentConnectionHandler],
@@ -96,6 +99,16 @@ http.route({
   path: "/api/access-requests/claim",
   method: "OPTIONS",
   handler: optionsOk,
+});
+http.route({
+  path: "/api/access-requests/ack",
+  method: "OPTIONS",
+  handler: optionsOk,
+});
+http.route({
+  path: "/api/access-requests/ack",
+  method: "POST",
+  handler: httpAccessRequestAckHandler,
 });
 http.route({
   path: "/api/access-requests/claim",

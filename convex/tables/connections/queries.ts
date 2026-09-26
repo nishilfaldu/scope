@@ -15,6 +15,8 @@ const connectionValidator = v.object({
   providerUserId: v.string(),
   refreshToken: v.union(v.string(), v.null()),
   tokenExpiresAt: v.union(v.number(), v.null()),
+  grantVersion: v.number(),
+  grantedScopes: v.optional(v.array(v.string())),
 });
 
 export const statusesForApps = authenticatedQuery({
@@ -78,6 +80,8 @@ export const getConnection = internalQuery({
           ? null
           : await decryptToken(row.refreshToken),
       tokenExpiresAt: row.tokenExpiresAt ?? null,
+      grantVersion: row.grantVersion,
+      grantedScopes: row.grantedScopes,
     };
   },
 });

@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import {
+  useConvexAuth,
+  useMutation,
+  useQuery,
+  usePaginatedQuery,
+} from "convex/react";
 
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -22,6 +27,15 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
   const invite = useQuery(
     api.tables.agentConnections.getInvite,
     isAuthenticated ? { publicToken } : "skip",
+  );
+  const {
+    results: replacementOptions,
+    status: optionsStatus,
+    loadMore: loadMoreOptions,
+  } = usePaginatedQuery(
+    api.tables.agentConnections.replacementOptionsPage,
+    isAuthenticated ? {} : "skip",
+    { initialNumItems: 50 },
   );
   const decide = useMutation(api.tables.agentConnections.decideInvite);
   const [busy, setBusy] = useState(false);
@@ -127,7 +141,7 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
             </DecisionFact>
           ) : null}
         </DecisionFacts>
-        {!invite.reconnecting && invite.replacementOptions.length > 0 ? (
+        {!invite.reconnecting && replacementOptions.length > 0 ? (
           <div className="mt-6">
             <p className="text-sm text-muted-foreground">
               Connection destination
@@ -143,7 +157,7 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
                   Starts without existing grants.
                 </span>
               </button>
-              {invite.replacementOptions.map((option) => (
+              {replacementOptions.map((option) => (
                 <button
                   key={option.id}
                   type="button"
@@ -157,6 +171,11 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
                   </span>
                 </button>
               ))}
+              {optionsStatus === "CanLoadMore" ? (
+                <Button variant="outline" onClick={() => loadMoreOptions(50)}>
+                  Load more connections
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : null}

@@ -495,6 +495,8 @@ describe("multi-account bindings", () => {
           providerUserId: "sub-y",
           accessToken: "late-token",
           refreshToken: "late-refresh",
+          grantVersion: 0,
+          lease: "stale-lease",
         },
       ),
     ).toBe(false);

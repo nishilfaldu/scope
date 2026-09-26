@@ -17,7 +17,7 @@ import {
   denyResultValidator,
 } from "../../lib/errors";
 import { decryptToken, encryptToken } from "../../lib/tokenEncryption";
-import { randomSecret, sha256Hex } from "../../lib/secrets";
+import { hashesEqual, randomSecret, sha256Hex } from "../../lib/secrets";
 import { denyCreate, MAX_TTL_MS } from "./helpers";
 import {
   activeAgentConnection,
@@ -162,8 +162,11 @@ export const createSliceRequest = internalMutation({
     const now = Date.now();
     const open = await ctx.db
       .query("sliceRequests")
-      .withIndex("by_status_expiresAt", (q) =>
-        q.eq("status", "pending").gt("expiresAt", now),
+      .withIndex("by_userId_status_expiresAt", (q) =>
+        q
+          .eq("userId", agentConnection.userId)
+          .eq("status", "pending")
+          .gt("expiresAt", now),
       )
       .take(MAX_PENDING_SLICE_REQUESTS);
     if (open.length >= MAX_PENDING_SLICE_REQUESTS) {
@@ -178,6 +181,7 @@ export const createSliceRequest = internalMutation({
       await issuePublicPair();
     const requestId = await ctx.db.insert("sliceRequests", {
       agentId: agentConnection.agentId,
+      userId: agentConnection.userId,
       apps: uniqueApps,
       ttlMs: args.ttlMs,
       reason,
@@ -236,7 +240,7 @@ function claimDenial(
   const status = effectiveRequestStatus(request, Date.now());
   if (status === "denied")
     return denyCreate(403, APPROVAL_DENIED_ERROR, "APPROVAL_DENIED");
-  if (status === "expired" || status === "claimed") {
+  if (status === "expired") {
     return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
   }
   return null;
@@ -308,7 +312,7 @@ export const resolveSliceRequestClaim = internalMutation({
       expiresAt: v.number(),
       name: v.string(),
       apps: v.array(appValidator),
-      mintPolicy: v.literal("auto"),
+      mintPolicy: v.union(v.literal("auto"), v.literal("approve")),
     }),
     denyResultValidator,
   ),
@@ -338,7 +342,7 @@ export const resolveSliceRequestClaim = internalMutation({
       };
     }
 
-    // approved → return slice creds once
+    // Approved claims remain retryable until the bounded claim window expires.
     if (!request.issuedSliceSecretCipher || !request.createdSliceId) {
       return denyCreate(
         500,
@@ -366,8 +370,6 @@ export const resolveSliceRequestClaim = internalMutation({
     }
     await ctx.db.patch("sliceRequests", request._id, {
       status: "claimed",
-      issuedSliceSecretCipher: "",
-      claimHandleCipher: "",
     });
     return {
       ok: true as const,
@@ -379,7 +381,7 @@ export const resolveSliceRequestClaim = internalMutation({
       expiresAt: slice.expiresAt,
       name: slice.name,
       apps: request.apps,
-      mintPolicy: "auto" as const,
+      mintPolicy: slice.mintPolicy,
     };
   },
 });
@@ -410,6 +412,36 @@ export const cancelSliceRequest = internalMutation({
       expiresAt: Date.now(),
       claimHandleCipher: "",
     });
+    return true;
+  },
+});
+
+export const acknowledgeSliceClaim = internalMutation({
+  args: { claimHandle: v.string(), sliceSecret: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const request = await sliceRequestByClaim(ctx, args.claimHandle);
+    if (
+      !request ||
+      request.status !== "claimed" ||
+      request.expiresAt <= Date.now() ||
+      !request.createdSliceId
+    )
+      return false;
+    const slice = await ctx.db.get("slices", request.createdSliceId);
+    if (
+      !slice ||
+      slice.status !== "active" ||
+      !hashesEqual(slice.secretHash, await sha256Hex(args.sliceSecret))
+    )
+      return false;
+    if (!request.claimAcknowledgedAt) {
+      await ctx.db.patch("sliceRequests", request._id, {
+        claimAcknowledgedAt: Date.now(),
+        issuedSliceSecretCipher: "",
+        claimHandleCipher: "",
+      });
+    }
     return true;
   },
 });

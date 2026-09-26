@@ -21,8 +21,5 @@ export function effectiveRequestStatus<
     expiresAt: number;
   },
 >(request: T, now: number): T["status"] | "expired" {
-  return (request.status === "pending" || request.status === "approved") &&
-    request.expiresAt <= now
-    ? "expired"
-    : request.status;
+  return request.expiresAt <= now ? "expired" : request.status;
 }

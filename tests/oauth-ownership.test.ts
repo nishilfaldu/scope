@@ -32,16 +32,15 @@ describe("OAuth ownership", () => {
     await expect(
       test.mutation(internal.tables.oauthStates.mutations.consume, {
         state: "state-1",
+        userId,
+        browserProof: "missing",
       }),
-    ).resolves.toEqual({
-      userId,
-      provider: "github",
-      app: "github",
-      returnTo: "https://board.example/connections",
-    });
+    ).resolves.toBeNull();
     await expect(
       test.mutation(internal.tables.oauthStates.mutations.consume, {
         state: "state-1",
+        userId,
+        browserProof: "missing",
       }),
     ).resolves.toBeNull();
   });
@@ -59,9 +58,13 @@ describe("OAuth ownership", () => {
     });
 
     await expect(
-      test.mutation(internal.tables.oauthStates.mutations.consume, {
-        state: "state-policy",
-      }),
+      test.run(
+        async (ctx) =>
+          (await ctx.db
+            .query("oauthStates")
+            .withIndex("by_state", (q) => q.eq("state", "state-policy"))
+            .unique())!,
+      ),
     ).resolves.toMatchObject({
       returnTo: "https://board.example/connections",
     });
@@ -82,8 +85,10 @@ describe("OAuth ownership", () => {
     await expect(
       test.mutation(internal.tables.oauthStates.mutations.consume, {
         state: result.state,
+        userId,
+        browserProof: result.browserProof,
       }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       userId,
       provider: "github",
       app: "github",

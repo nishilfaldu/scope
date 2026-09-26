@@ -23,6 +23,7 @@ test("email OTP creates a session only on valid code and cannot be replayed", as
       params: { email: "login@example.com" },
     });
     const code = message.match(/\b\d{6}\b/)?.[0];
+    expect(message).toContain(`\n\n${code}\n\n`);
     expect(code).toMatch(/^\d{6}$/);
     const before = await t.run(
       async (ctx) => (await ctx.db.query("authSessions").collect()).length,
@@ -33,7 +34,7 @@ test("email OTP creates a session only on valid code and cannot be replayed", as
         provider: "email-otp",
         params: {
           email: "login@example.com",
-          code: code === "000000" ? "000001" : "000000",
+          code: "0".repeat(6) === code ? "1".repeat(6) : "0".repeat(6),
         },
       }),
     ).rejects.toThrow();
@@ -154,6 +155,93 @@ test("an email identifier links only to a user who previously verified it", asyn
         (account) => account.providerAccountId === "unverified@example.com",
       )?.userId,
     ).not.toBe(unverified);
+  } finally {
+    send.mockRestore();
+    vi.unstubAllEnvs();
+  }
+});
+
+test("identical live and expired codes verify for the intended account", async () => {
+  vi.stubEnv("SITE_URL", "http://localhost:3000");
+  const sent = new Map<string, string>();
+  const send = vi
+    .spyOn(Resend.prototype, "sendEmail")
+    .mockImplementation(async (_ctx, options) => {
+      if (typeof options !== "string")
+        sent.set(options.to as string, options.text ?? "");
+      return "test-email-id" as never;
+    });
+  try {
+    const t = convexTest(schema, modules);
+    for (const email of [
+      "live-a@example.com",
+      "live-b@example.com",
+      "expired@example.com",
+    ]) {
+      await t.action(api.auth.signIn, {
+        provider: "email-otp",
+        params: { email },
+      });
+    }
+    const codeFor = (email: string) => sent.get(email)?.match(/\b\d{6}\b/)?.[0];
+    const a = codeFor("live-a@example.com");
+    const b = codeFor("live-b@example.com");
+    const expired = codeFor("expired@example.com");
+    expect(a).toMatch(/^\d{6}$/);
+    expect(b).toMatch(/^\d{6}$/);
+    expect(expired).toMatch(/^\d{6}$/);
+    await t.run(async (ctx) => {
+      const rows = await ctx.db.query("authVerificationCodes").collect();
+      await ctx.db.patch("authVerificationCodes", rows[1]._id, {
+        code: rows[0].code,
+      });
+      await ctx.db.patch("authVerificationCodes", rows[2]._id, {
+        code: rows[0].code,
+        expirationTime: Date.now() - 1,
+      });
+    });
+    expect(
+      await t.mutation(internal.auth.store, {
+        args: {
+          type: "verifyCodeAndSignIn",
+          provider: "email-otp",
+          params: { email: "missing@example.com", code: a },
+          generateTokens: false,
+          allowExtraProviders: false,
+        },
+      }),
+    ).toBeNull();
+    for (const [email, code] of [
+      ["live-a@example.com", a],
+      ["live-b@example.com", a],
+    ] as const) {
+      const result = await t.mutation(internal.auth.store, {
+        args: {
+          type: "verifyCodeAndSignIn",
+          provider: "email-otp",
+          params: { email, code },
+          generateTokens: false,
+          allowExtraProviders: false,
+        },
+      });
+      expect(result).toMatchObject({ tokens: null });
+    }
+    expect(
+      await t.mutation(internal.auth.store, {
+        args: {
+          type: "verifyCodeAndSignIn",
+          provider: "email-otp",
+          params: { email: "expired@example.com", code: a },
+          generateTokens: false,
+          allowExtraProviders: false,
+        },
+      }),
+    ).toBeNull();
+    expect(
+      await t.run(
+        async (ctx) => (await ctx.db.query("authSessions").collect()).length,
+      ),
+    ).toBe(2);
   } finally {
     send.mockRestore();
     vi.unstubAllEnvs();

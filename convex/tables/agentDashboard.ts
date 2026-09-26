@@ -1,4 +1,8 @@
 import { v } from "convex/values";
+import {
+  paginationOptsValidator,
+  paginationResultValidator,
+} from "convex/server";
 import { authenticatedQuery } from "../functions";
 import { effectiveSliceStatus } from "../domain/slices";
 
@@ -28,11 +32,22 @@ export const list = authenticatedQuery({
   args: {},
   returns: v.array(boardConnection),
   handler: async (ctx) => {
-    const rows = await ctx.db
-      .query("agentConnections")
-      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-      .order("desc")
-      .take(100);
+    const rows = [
+      ...(await ctx.db
+        .query("agentConnections")
+        .withIndex("by_user_status", (q) =>
+          q.eq("userId", ctx.userId).eq("status", "active"),
+        )
+        .order("desc")
+        .take(200)),
+      ...(await ctx.db
+        .query("agentConnections")
+        .withIndex("by_user_status", (q) =>
+          q.eq("userId", ctx.userId).eq("status", "revoked"),
+        )
+        .order("desc")
+        .take(100)),
+    ];
     type VisibleConnection = (typeof rows)[number] & {
       status: "active" | "revoked";
     };
@@ -73,5 +88,46 @@ export const list = authenticatedQuery({
         };
       }),
     );
+  },
+});
+
+// The owner UI pages active identities directly from an indexed status range.
+export const activePage = authenticatedQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(boardConnection),
+  handler: async (ctx, args) => {
+    const page = await ctx.db
+      .query("agentConnections")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", ctx.userId).eq("status", "active"),
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
+    return {
+      ...page,
+      page: await Promise.all(
+        page.page.map(async (row) => {
+          const slices = await ctx.db
+            .query("slices")
+            .withIndex("by_agentId", (q) => q.eq("agentId", row.agentId))
+            .take(100);
+          return {
+            _id: row._id,
+            _creationTime: row._creationTime,
+            name: row.name,
+            agentId: row.agentId,
+            status: "active" as const,
+            lastUsedAt: row.lastUsedAt,
+            revokedAt: row.revokedAt,
+            slices: slices.map((slice) => ({
+              _id: slice._id,
+              name: slice.name,
+              status: effectiveSliceStatus(slice),
+              expiresAt: slice.expiresAt,
+            })),
+          };
+        }),
+      ),
+    };
   },
 });

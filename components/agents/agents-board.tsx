@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { AiChat02Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -34,7 +34,20 @@ function statusVariant(status: "active" | "revoked" | "expired") {
 }
 
 export function AgentsBoard() {
-  const agents = useQuery(api.tables.agentDashboard.list);
+  const {
+    results: activeResults,
+    status: pageStatus,
+    loadMore,
+  } = usePaginatedQuery(
+    api.tables.agentDashboard.activePage,
+    {},
+    { initialNumItems: 50 },
+  );
+  const historical = useQuery(api.tables.agentDashboard.list);
+  const agents = [
+    ...activeResults,
+    ...(historical ?? []).filter((row) => row.status === "revoked"),
+  ];
   const revoke = useMutation(api.tables.agentConnections.revoke);
   const [busy, setBusy] = useState<Id<"agentConnections"> | null>(null);
 
@@ -64,7 +77,7 @@ export function AgentsBoard() {
               Connected agents and the access you granted to each one.
             </p>
           </div>
-          {agents !== undefined ? (
+          {pageStatus !== "LoadingFirstPage" ? (
             <div className="flex gap-6 text-sm">
               <div>
                 <span className="block text-2xl font-semibold tabular-nums">
@@ -83,7 +96,7 @@ export function AgentsBoard() {
         </div>
 
         <div className="mt-8 overflow-hidden rounded-xl border bg-card">
-          {agents === undefined ? (
+          {pageStatus === "LoadingFirstPage" ? (
             <div className="divide-y">
               {[0, 1, 2].map((item) => (
                 <div key={item} className="flex items-center gap-4 p-5">
@@ -211,6 +224,15 @@ export function AgentsBoard() {
             </div>
           )}
         </div>
+        {pageStatus === "CanLoadMore" ? (
+          <Button
+            className="mt-4"
+            variant="outline"
+            onClick={() => loadMore(50)}
+          >
+            Load more agents
+          </Button>
+        ) : null}
       </div>
     </BoardShell>
   );

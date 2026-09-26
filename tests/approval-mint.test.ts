@@ -148,8 +148,12 @@ describe("auto mint policy", () => {
         }),
       });
 
-      expect(response.status).toBe(503);
+      expect(response.status).toBe(provider === "google" ? 403 : 503);
       const body = await response.json();
+      if (provider === "google") {
+        expect(body).toMatchObject({ code: "APP_UNAVAILABLE" });
+        return;
+      }
       expect(body).toEqual({
         error:
           "Provider cannot mint a short-lived access token for agents. Reconnect with a refresh-capable OAuth grant, or this provider hard-fails standing-token handoff.",

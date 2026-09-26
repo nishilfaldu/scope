@@ -14,8 +14,26 @@ export const expireInvite = internalMutation({
     if (
       !invite ||
       invite.expiresAt > Date.now() ||
-      (invite.status !== "pending" && invite.status !== "approved")
+      (invite.status !== "pending" &&
+        invite.status !== "approved" &&
+        invite.status !== "claimed")
     ) {
+      return null;
+    }
+    if (invite.status === "claimed") {
+      if (
+        !invite.replacesAgentConnectionId &&
+        !invite.claimAcknowledgedAt &&
+        invite.agentConnectionId
+      ) {
+        await ctx.db.patch("agentConnections", invite.agentConnectionId, {
+          status: "revoked",
+          revokedAt: Date.now(),
+        });
+      }
+      await ctx.db.patch("agentConnectionInvites", invite._id, {
+        issuedSecretCipher: "",
+      });
       return null;
     }
     if (invite.agentConnectionId) {

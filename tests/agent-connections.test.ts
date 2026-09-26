@@ -10,6 +10,129 @@ const modules = import.meta.glob("../convex/**/*.ts");
 afterEach(() => vi.useRealTimers());
 
 describe("agent connections", () => {
+  test.each(["activate first", "revoke first"])(
+    "owner revocation wins when rotation and revocation commit in either order: %s",
+    async (order) => {
+      const t = convexTest(schema, modules);
+      const owner = await t.run((ctx) =>
+        ctx.db.insert("users", {
+          email: "owner@example.com",
+          emailVerificationTime: Date.now(),
+        }),
+      );
+      const other = await t.run((ctx) =>
+        ctx.db.insert("users", {
+          email: "other@example.com",
+          emailVerificationTime: Date.now(),
+        }),
+      );
+      const ownerSession = t.withIdentity({ subject: `${owner}|session` });
+      const otherSession = t.withIdentity({ subject: `${other}|session` });
+      const firstInvite = await t.mutation(
+        internal.tables.agentConnections.createInvite,
+        {
+          agentName: "Codex",
+        },
+      );
+      await ownerSession.mutation(api.tables.agentConnections.decideInvite, {
+        publicToken: firstInvite.publicToken,
+        decision: "approved",
+      });
+      const first = await t.mutation(internal.tables.agentConnections.claim, {
+        claimHandle: firstInvite.claimHandle,
+      });
+      if (first.kind !== "connected") throw new Error("Expected connection");
+      const sliceId = await t.run((ctx) =>
+        ctx.db.insert("slices", {
+          userId: owner,
+          agentId: first.agentId,
+          name: "Existing grant",
+          token: "st_existing",
+          secretHash: "unused",
+          status: "active",
+          expiresAt: Date.now() + 60_000,
+          mintPolicy: "auto",
+        }),
+      );
+      const replacementInvite = await t.mutation(
+        internal.tables.agentConnections.createInvite,
+        {
+          agentName: "Codex",
+          previousConnectionId: first.agentConnectionId,
+          previousConnectionSecret: first.agentConnectionSecret,
+        },
+      );
+      await ownerSession.mutation(api.tables.agentConnections.decideInvite, {
+        publicToken: replacementInvite.publicToken,
+        decision: "approved",
+      });
+      const replacement = await t.mutation(
+        internal.tables.agentConnections.claim,
+        {
+          claimHandle: replacementInvite.claimHandle,
+        },
+      );
+      if (replacement.kind !== "connected")
+        throw new Error("Expected replacement");
+      const activate = () =>
+        t.mutation(internal.tables.agentConnections.activateReplacement, {
+          agentConnectionId: replacement.agentConnectionId,
+          agentConnectionSecret: replacement.agentConnectionSecret,
+        });
+      const revoke = () =>
+        ownerSession.mutation(api.tables.agentConnections.revoke, {
+          agentConnectionId: first.agentConnectionId,
+        });
+      if (order === "activate first") {
+        expect((await activate()).ok).toBe(true);
+        await revoke();
+      } else {
+        await revoke();
+        expect((await activate()).ok).toBe(false);
+      }
+      await revoke();
+      await expect(
+        otherSession.mutation(api.tables.agentConnections.revoke, {
+          agentConnectionId: first.agentConnectionId,
+        }),
+      ).rejects.toThrow("not found");
+      const active = await t.run((ctx) =>
+        ctx.db
+          .query("agentConnections")
+          .withIndex("by_agentId_status", (q) =>
+            q.eq("agentId", first.agentId).eq("status", "active"),
+          )
+          .take(2),
+      );
+      expect(active).toHaveLength(0);
+      expect(
+        await ownerSession.query(api.tables.slices.queries.get, {
+          sliceId,
+        }),
+      ).toMatchObject({ status: "revoked" });
+      await expect(
+        t.mutation(internal.tables.agentConnections.createInvite, {
+          agentName: "Codex",
+          previousConnectionId: replacement.agentConnectionId,
+          previousConnectionSecret: replacement.agentConnectionSecret,
+        }),
+      ).rejects.toThrow("Invalid previous agent connection");
+      const request = await t.fetch("/api/access-requests", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-agent-connection-id": replacement.agentConnectionId,
+          "x-agent-connection-secret": replacement.agentConnectionSecret,
+        },
+        body: JSON.stringify({
+          apps: ["github"],
+          ttlMs: 60_000,
+          reason: "Denied",
+        }),
+      });
+      expect(request.status).toBe(401);
+    },
+  );
   test("rotation keeps the old connection live until idempotent activation", async () => {
     const t = convexTest(schema, modules);
     const owner = await t.run((ctx) =>
@@ -224,6 +347,15 @@ describe("agent connections", () => {
       body: JSON.stringify({ claimHandle: invite.claimHandle }),
     });
     const current = await firstClaim.json();
+    const acknowledged = await t.fetch("/api/agent-connections/ack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claimHandle: invite.claimHandle,
+        agentConnectionSecret: current.agentConnectionSecret,
+      }),
+    });
+    expect(acknowledged.status).toBe(200);
 
     const reconnectResponse = await t.fetch("/api/agent-connections", {
       method: "POST",
@@ -402,7 +534,10 @@ describe("agent connections", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ claimHandle: invite.claimHandle }),
     });
-    expect(replay.status).toBe(403);
+    expect(replay.status).toBe(200);
+    expect((await replay.json()).agentConnectionSecret).toBe(
+      claimed.agentConnectionSecret,
+    );
 
     await t.mutation(internal.tables.connections.mutations.saveConnection, {
       userId: owner,

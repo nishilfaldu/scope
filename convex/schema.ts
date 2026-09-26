@@ -31,8 +31,17 @@ export default defineSchema({
     lastUsedAt: v.optional(v.number()),
     revokedAt: v.optional(v.number()),
   })
+    // Keep creation-time ordering for owner history queries.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user", ["userId"])
+    .index("by_user_status", ["userId", "status"])
     .index("by_agentId_status", ["agentId", "status"]),
+
+  agentLineages: defineTable({
+    agentId: v.string(),
+    userId: v.id("users"),
+    revokedAt: v.optional(v.number()),
+  }).index("by_agentId", ["agentId"]),
 
   agentConnectionInvites: defineTable({
     publicToken: v.string(),
@@ -51,6 +60,7 @@ export default defineSchema({
     replacesAgentConnectionId: v.optional(v.id("agentConnections")),
     agentConnectionId: v.optional(v.id("agentConnections")),
     issuedSecretCipher: v.optional(v.string()),
+    claimAcknowledgedAt: v.optional(v.number()),
   })
     .index("by_public_token", ["publicToken"])
     .index("by_claim_secret_hash", ["claimSecretHash"])
@@ -74,17 +84,21 @@ export default defineSchema({
     sliceId: v.id("slices"),
     app: appValidator,
     connectionId: v.id("connections"),
-  }).index("by_slice_app_connectionId", ["sliceId", "app", "connectionId"]),
+  })
+    .index("by_slice_app_connectionId", ["sliceId", "app", "connectionId"])
+    .index("by_connectionId", ["connectionId"]),
 
   sliceRequests: defineTable({
     ...requestLifecycle,
     claimSecretHash: v.string(),
     agentId: v.string(),
+    userId: v.optional(v.id("users")),
     createdSliceId: v.optional(v.id("slices")),
     apps: v.array(appValidator),
     ttlMs: v.number(),
     reason: v.string(),
     issuedSliceSecretCipher: v.optional(v.string()),
+    claimAcknowledgedAt: v.optional(v.number()),
     idempotencyKeyHash: v.optional(v.string()),
     claimHandleCipher: v.optional(v.string()),
   })
@@ -92,6 +106,7 @@ export default defineSchema({
     .index("by_claim_secret_hash", ["claimSecretHash"])
     .index("by_idempotency_key_hash", ["idempotencyKeyHash"])
     .index("by_agentId", ["agentId"])
+    .index("by_userId_status_expiresAt", ["userId", "status", "expiresAt"])
     .index("by_status_expiresAt", ["status", "expiresAt"]),
 
   tokenRequests: defineTable({
@@ -113,12 +128,19 @@ export default defineSchema({
     providerUserId: v.string(),
     refreshToken: v.optional(v.string()),
     tokenExpiresAt: v.optional(v.number()),
+    grantVersion: v.number(),
+    refreshLease: v.optional(v.string()),
+    refreshLeaseExpiresAt: v.optional(v.number()),
+    grantedScopes: v.optional(v.array(v.string())),
   }).index("by_user_app_providerUserId", ["userId", "app", "providerUserId"]),
 
   oauthStates: defineTable({
     userId: v.id("users"),
     app: appValidator,
     state: v.string(),
+    browserProofHash: v.optional(v.string()),
+    pkceVerifier: v.optional(v.string()),
+    pkceChallenge: v.optional(v.string()),
     returnTo: v.string(),
     expiresAt: v.number(),
   }).index("by_state", ["state"]),

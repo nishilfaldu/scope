@@ -174,3 +174,21 @@ export const httpAgentConnectionClaimHandler = httpAction(
     }
   },
 );
+
+export const httpAgentConnectionAckHandler = httpAction(
+  async (ctx, request) => {
+    const body = await readObjectBody(request);
+    if (body instanceof Response) return body;
+    const claimHandle = requiredString(body, "claimHandle");
+    if (claimHandle instanceof Response) return claimHandle;
+    const agentConnectionSecret = requiredString(body, "agentConnectionSecret");
+    if (agentConnectionSecret instanceof Response) return agentConnectionSecret;
+    const ok = await ctx.runMutation(
+      internal.tables.agentConnections.acknowledgeClaim,
+      { claimHandle, agentConnectionSecret },
+    );
+    return ok
+      ? jsonResponse(200, { ok: true })
+      : errorResponse(403, "Claim unavailable", "UNAUTHORIZED");
+  },
+);

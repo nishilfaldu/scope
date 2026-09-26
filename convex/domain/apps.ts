@@ -118,3 +118,21 @@ export function scopesForGoogleApp(app: AppId): string {
   }
   return ["openid", "email", "profile", GOOGLE_APP_SCOPE[app]].join(" ");
 }
+
+/** Effective Google bearer-token authority for the requested app. */
+export function googleScopesAreBounded(
+  app: AppId,
+  scopes: readonly string[] | undefined,
+): boolean {
+  if (!isGoogleApp(app) || !scopes) return false;
+  const requested = new Set(scopesForGoogleApp(app).split(" "));
+  const actual = new Set(scopes);
+  return (
+    actual.has(GOOGLE_APP_SCOPE[app]) &&
+    [...actual].every((scope) => requested.has(scope))
+  );
+}
+
+export function effectiveGoogleApps(app: AppId): AppId[] {
+  return app === "drive" ? ["drive", "docs", "sheets"] : [app];
+}

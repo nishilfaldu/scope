@@ -137,6 +137,7 @@ export const seedUiDemo = internalMutation({
         accessToken: "demo-token-not-valid",
         refreshToken: "demo-refresh-not-valid",
         tokenExpiresAt: Date.now() + 60 * 60 * 1000,
+        grantVersion: 1,
       });
       accounts.set(account.app, id);
     }

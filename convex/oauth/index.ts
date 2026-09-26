@@ -44,8 +44,9 @@ export async function startAuthorize(
   provider: ProviderId,
   state: string,
   app: AppId,
+  pkceChallenge?: string,
 ): Promise<AuthorizeStart> {
-  return await PROVIDER_OAUTH[provider].authorize(state, app);
+  return await PROVIDER_OAUTH[provider].authorize(state, app, pkceChallenge);
 }
 
 export async function exchangeAuthorizationCode(
@@ -53,8 +54,14 @@ export async function exchangeAuthorizationCode(
   code: string,
   state: string,
   app: AppId,
+  pkceVerifier?: string,
 ): Promise<OAuthGrant | { error: string }> {
-  return await PROVIDER_OAUTH[provider].exchange(code, state, app);
+  return await PROVIDER_OAUTH[provider].exchange(
+    code,
+    state,
+    app,
+    pkceVerifier,
+  );
 }
 
 export async function refreshProviderTokens(

@@ -68,51 +68,28 @@ export const github: ProviderOAuth = {
       return { error: "config" };
     }
     const redirectUri = oauthCallbackUrl("github");
-    const attempts: Array<{
-      params: Record<string, string>;
-      mode: "body" | "query";
-    }> = [
+    const attempts: Array<Record<string, string>> = [
       {
-        mode: "body",
-        params: {
-          client_id: client.clientId,
-          client_secret: client.clientSecret,
-          code,
-          redirect_uri: redirectUri,
-        },
-      },
-      {
-        mode: "query",
-        params: {
-          client_id: client.clientId,
-          client_secret: client.clientSecret,
-          code,
-        },
+        client_id: client.clientId,
+        client_secret: client.clientSecret,
+        code,
+        redirect_uri: redirectUri,
       },
     ];
     let lastError = "token";
     for (const attempt of attempts) {
-      const tokenResponse =
-        attempt.mode === "query"
-          ? await fetch(
-              `https://github.com/login/oauth/access_token?${new URLSearchParams(attempt.params).toString()}`,
-              {
-                method: "POST",
-                headers: {
-                  Accept: "application/json",
-                  "User-Agent": "scope-app",
-                },
-              },
-            )
-          : await fetch("https://github.com/login/oauth/access_token", {
-              method: "POST",
-              headers: {
-                Accept: "application/json",
-                "User-Agent": "scope-app",
-                "Content-Type": "application/x-www-form-urlencoded",
-              },
-              body: new URLSearchParams(attempt.params).toString(),
-            });
+      const tokenResponse = await fetch(
+        "https://github.com/login/oauth/access_token",
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "scope-app",
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams(attempt).toString(),
+        },
+      );
       const tokenRaw: unknown = await tokenResponse.json();
       if (
         isPlainObject(tokenRaw) &&

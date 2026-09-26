@@ -29,11 +29,7 @@ function credentials() {
   return clientId && clientSecret ? { clientId, clientSecret } : null;
 }
 
-function codeVerifier(state: string) {
-  return `${state.replaceAll("-", "")}.${state.replaceAll("-", "")}`;
-}
-
-async function codeChallenge(verifier: string) {
+export async function codeChallenge(verifier: string) {
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(verifier),
@@ -76,27 +72,27 @@ async function identity(accessToken: string) {
 }
 
 export const airtable: ProviderOAuth = {
-  async authorize(state) {
+  async authorize(state, _app, pkceChallenge) {
     const client = credentials();
     if (!client) return { error: "Airtable OAuth is not configured." };
-    const verifier = codeVerifier(state);
+    if (!pkceChallenge) return { error: "Airtable PKCE challenge missing." };
     const authorize = new URL("https://airtable.com/oauth2/v1/authorize");
     authorize.searchParams.set("client_id", client.clientId);
     authorize.searchParams.set("redirect_uri", oauthCallbackUrl("airtable"));
     authorize.searchParams.set("response_type", "code");
     authorize.searchParams.set("scope", SCOPES);
     authorize.searchParams.set("state", state);
-    authorize.searchParams.set("code_challenge", await codeChallenge(verifier));
+    authorize.searchParams.set("code_challenge", pkceChallenge);
     authorize.searchParams.set("code_challenge_method", "S256");
     return { url: authorize.toString() };
   },
-  async exchange(code, state) {
-    if (!state) return { error: "state" };
+  async exchange(code, _state, _app, pkceVerifier) {
+    if (!pkceVerifier) return { error: "pkce" };
     const raw = await tokenRequest({
       code,
       redirect_uri: oauthCallbackUrl("airtable"),
       grant_type: "authorization_code",
-      code_verifier: codeVerifier(state),
+      code_verifier: pkceVerifier,
     });
     if ("error" in raw) return { error: String(raw.error) };
     return grantFromTokenPayload(raw, await identity(String(raw.access_token)));

@@ -1,9 +1,7 @@
 import { env, httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { exchangeAuthorizationCode, startAuthorize } from "../oauth";
+import { startAuthorize } from "../oauth";
 import { providerForApp, type AppId } from "../domain/apps";
-import { normalizeReturnTo } from "../domain/returnPaths";
-import { redirectTo } from "./helpers";
 
 export function httpOAuthConnect(app: AppId) {
   const provider = providerForApp(app);
@@ -19,7 +17,12 @@ export function httpOAuthConnect(app: AppId) {
     if (!pending || pending.app !== app) {
       return new Response("Invalid or expired OAuth state", { status: 400 });
     }
-    const started = await startAuthorize(provider, state, app);
+    const started = await startAuthorize(
+      provider,
+      state,
+      app,
+      pending.pkceChallenge,
+    );
     if ("error" in started) {
       return new Response(started.error, {
         status: 503,
@@ -31,56 +34,14 @@ export function httpOAuthConnect(app: AppId) {
 }
 
 export function httpOAuthCallback(app: AppId) {
-  const provider = providerForApp(app);
-  return httpAction(async (ctx, request) => {
-    const requestUrl = new URL(request.url);
-    const returnFallback = normalizeReturnTo(null, env.BOARD_ORIGIN);
-    const errorParam = requestUrl.searchParams.get("error");
-    const code = requestUrl.searchParams.get("code");
-    const state = requestUrl.searchParams.get("state");
-
-    if (typeof state !== "string") {
-      return redirectTo(returnFallback, app, "error", "state");
+  return httpAction(async (_ctx, request) => {
+    const incoming = new URL(request.url);
+    const target = new URL("/oauth/complete", env.BOARD_ORIGIN);
+    target.searchParams.set("app", app);
+    for (const key of ["state", "code", "error"]) {
+      const value = incoming.searchParams.get(key);
+      if (value) target.searchParams.set(key, value);
     }
-    const origin = await ctx.runMutation(
-      internal.tables.oauthStates.mutations.consume,
-      { state },
-    );
-    if (!origin || origin.app !== app) {
-      return redirectTo(returnFallback, app, "error", "state");
-    }
-    if (errorParam) {
-      return redirectTo(origin.returnTo, app, "denied");
-    }
-    if (typeof code !== "string") {
-      return redirectTo(origin.returnTo, app, "error", "code");
-    }
-
-    let grant;
-    try {
-      grant = await exchangeAuthorizationCode(provider, code, state, app);
-    } catch {
-      return redirectTo(origin.returnTo, app, "error", "identity");
-    }
-    if ("error" in grant) {
-      return redirectTo(origin.returnTo, app, "error", grant.error);
-    }
-    if (!grant.providerUserId.trim()) {
-      return redirectTo(origin.returnTo, app, "error", "identity");
-    }
-    await ctx.runMutation(
-      internal.tables.connections.mutations.saveConnection,
-      {
-        userId: origin.userId,
-        provider,
-        app,
-        accessToken: grant.accessToken,
-        login: grant.login,
-        providerUserId: grant.providerUserId,
-        refreshToken: grant.refreshToken,
-        tokenExpiresAt: grant.tokenExpiresAt,
-      },
-    );
-    return redirectTo(origin.returnTo, app, "connected");
+    return Response.redirect(target.toString(), 302);
   });
 }

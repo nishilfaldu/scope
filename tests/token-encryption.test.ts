@@ -78,6 +78,7 @@ describe("connection secrets at rest", () => {
         login: "octocat",
         providerUserId: "1",
         refreshToken: "ghr_plaintext_stored",
+        grantVersion: 1,
       });
     });
 

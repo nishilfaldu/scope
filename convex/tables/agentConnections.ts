@@ -1,4 +1,8 @@
 import { v } from "convex/values";
+import {
+  paginationOptsValidator,
+  paginationResultValidator,
+} from "convex/server";
 import { internal } from "../_generated/api";
 import {
   internalMutation,
@@ -12,6 +16,16 @@ import { hashesEqual, randomSecret, sha256Hex } from "../lib/secrets";
 
 const INVITE_TTL_MS = 15 * 60 * 1000;
 
+async function lineage(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  agentId: string,
+) {
+  return await ctx.db
+    .query("agentLineages")
+    .withIndex("by_agentId", (q) => q.eq("agentId", agentId))
+    .unique();
+}
+
 export async function activeAgentConnection(
   ctx: QueryCtx | MutationCtx,
   connectionId: string,
@@ -19,7 +33,12 @@ export async function activeAgentConnection(
 ) {
   const id = ctx.db.normalizeId("agentConnections", connectionId);
   const connection = id ? await ctx.db.get("agentConnections", id) : null;
-  if (!connection || connection.status !== "active") return null;
+  if (
+    !connection ||
+    connection.status !== "active" ||
+    (await lineage(ctx, connection.agentId))?.revokedAt !== undefined
+  )
+    return null;
   return hashesEqual(connection.secretHash, await sha256Hex(secret))
     ? connection
     : null;
@@ -29,6 +48,7 @@ export async function activeConnectionForAgent(
   ctx: Pick<QueryCtx | MutationCtx, "db">,
   agentId: string,
 ) {
+  if ((await lineage(ctx, agentId))?.revokedAt !== undefined) return null;
   return await ctx.db
     .query("agentConnections")
     .withIndex("by_agentId_status", (q) =>
@@ -150,7 +170,9 @@ export const getInvite = authenticatedQuery({
       : (
           await ctx.db
             .query("agentConnections")
-            .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
+            .withIndex("by_user_status", (q) =>
+              q.eq("userId", ctx.userId).eq("status", "active"),
+            )
             .order("desc")
             .take(100)
         )
@@ -223,6 +245,16 @@ export const decideInvite = authenticatedMutation({
     }
     const agentId = replacement?.agentId ?? invite.agentId;
     const agentName = replacement?.name ?? invite.agentName;
+    const existingLineage = await lineage(ctx, agentId);
+    if (
+      existingLineage?.revokedAt !== undefined ||
+      (existingLineage && existingLineage.userId !== ctx.userId)
+    ) {
+      throw new Error("Agent lineage is revoked or belongs to another account");
+    }
+    if (!existingLineage) {
+      await ctx.db.insert("agentLineages", { agentId, userId: ctx.userId });
+    }
     const activeConnections = await ctx.db
       .query("agentConnections")
       .withIndex("by_agentId_status", (q) =>
@@ -316,7 +348,7 @@ export const claim = internalMutation({
       return { kind: "pending" as const, expiresAt: invite.expiresAt };
     }
     if (
-      invite.status !== "approved" ||
+      (invite.status !== "approved" && invite.status !== "claimed") ||
       !invite.agentConnectionId ||
       !invite.issuedSecretCipher
     ) {
@@ -327,7 +359,6 @@ export const claim = internalMutation({
     if (!activationRequired) {
       await ctx.db.patch("agentConnectionInvites", invite._id, {
         status: "claimed",
-        issuedSecretCipher: "",
       });
     }
     return {
@@ -354,6 +385,9 @@ export const activateReplacement = internalMutation({
       args.agentConnectionSecret,
     );
     if (!replacement) return { ok: false as const };
+    if ((await lineage(ctx, replacement.agentId))?.revokedAt !== undefined) {
+      return { ok: false as const };
+    }
     if (replacement.status === "active") {
       return { ok: true as const, status: "active" as const };
     }
@@ -405,12 +439,36 @@ export const revoke = authenticatedMutation({
     );
     if (!connection || connection.userId !== ctx.userId)
       throw new Error("Agent connection not found");
-    if (connection.status === "revoked") return null;
     const now = Date.now();
-    await ctx.db.patch("agentConnections", connection._id, {
-      status: "revoked",
-      revokedAt: now,
-    });
+    const existingLineage = await lineage(ctx, connection.agentId);
+    if (existingLineage && existingLineage.userId !== ctx.userId) {
+      throw new Error("Agent connection not found");
+    }
+    if (existingLineage) {
+      if (existingLineage.revokedAt === undefined) {
+        await ctx.db.patch("agentLineages", existingLineage._id, {
+          revokedAt: now,
+        });
+      }
+    } else {
+      await ctx.db.insert("agentLineages", {
+        agentId: connection.agentId,
+        userId: ctx.userId,
+        revokedAt: now,
+      });
+    }
+    const active = await ctx.db
+      .query("agentConnections")
+      .withIndex("by_agentId_status", (q) =>
+        q.eq("agentId", connection.agentId).eq("status", "active"),
+      )
+      .unique();
+    if (active) {
+      await ctx.db.patch("agentConnections", active._id, {
+        status: "revoked",
+        revokedAt: now,
+      });
+    }
     return null;
   },
 });
@@ -449,6 +507,61 @@ export const cancelInvite = internalMutation({
       expiresAt: Date.now(),
       issuedSecretCipher: "",
     });
+    return true;
+  },
+});
+
+export const replacementOptionsPage = authenticatedQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(
+    v.object({ id: v.id("agentConnections"), name: v.string() }),
+  ),
+  handler: async (ctx, args) => {
+    const page = await ctx.db
+      .query("agentConnections")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", ctx.userId).eq("status", "active"),
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
+    return {
+      ...page,
+      page: page.page.map((row) => ({ id: row._id, name: row.name })),
+    };
+  },
+});
+
+export const acknowledgeClaim = internalMutation({
+  args: { claimHandle: v.string(), agentConnectionSecret: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const invite = await inviteByClaim(ctx, args.claimHandle);
+    if (
+      !invite ||
+      invite.status !== "claimed" ||
+      invite.expiresAt <= Date.now() ||
+      !invite.agentConnectionId
+    )
+      return false;
+    const connection = await ctx.db.get(
+      "agentConnections",
+      invite.agentConnectionId,
+    );
+    if (
+      !connection ||
+      connection.status !== "active" ||
+      !hashesEqual(
+        connection.secretHash,
+        await sha256Hex(args.agentConnectionSecret),
+      )
+    )
+      return false;
+    if (!invite.claimAcknowledgedAt) {
+      await ctx.db.patch("agentConnectionInvites", invite._id, {
+        claimAcknowledgedAt: Date.now(),
+        issuedSecretCipher: "",
+      });
+    }
     return true;
   },
 });

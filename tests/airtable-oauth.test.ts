@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { airtable } from "../convex/oauth/providers/airtable";
+import { airtable, codeChallenge } from "../convex/oauth/providers/airtable";
 
 const json = (body: unknown) => new Response(JSON.stringify(body));
 
@@ -9,7 +9,11 @@ describe("Airtable OAuth", () => {
     vi.stubEnv("AIRTABLE_CLIENT_ID", "airtable-client");
     vi.stubEnv("AIRTABLE_CLIENT_SECRET", "airtable-secret");
     vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
-    const started = await airtable.authorize("state-1");
+    const started = await airtable.authorize(
+      "state-1",
+      "airtable",
+      await codeChallenge("independent-secret"),
+    );
     if (!("url" in started)) throw new Error("expected URL");
     const url = new URL(started.url);
     expect(url.origin + url.pathname).toBe(
@@ -40,16 +44,16 @@ describe("Airtable OAuth", () => {
           expires_in: 3600,
         }),
       );
-    await expect(airtable.exchange("code-1", "state-1")).resolves.toMatchObject(
-      {
-        accessToken: "access-1",
-        refreshToken: "refresh-1",
-        login: "nishil@example.com",
-        providerUserId: "usr1",
-      },
-    );
+    await expect(
+      airtable.exchange("code-1", "state-1", "airtable", "independent-secret"),
+    ).resolves.toMatchObject({
+      accessToken: "access-1",
+      refreshToken: "refresh-1",
+      login: "nishil@example.com",
+      providerUserId: "usr1",
+    });
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
-      body: expect.stringContaining("code_verifier=state1.state1"),
+      body: expect.stringContaining("code_verifier=independent-secret"),
     });
     await expect(
       airtable.refresh({

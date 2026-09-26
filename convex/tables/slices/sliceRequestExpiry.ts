@@ -7,6 +7,15 @@ export const clearClaimSecret = internalMutation({
   handler: async (ctx, args) => {
     const request = await ctx.db.get("sliceRequests", args.requestId);
     if (request && request.expiresAt <= Date.now()) {
+      if (
+        request.status === "claimed" &&
+        !request.claimAcknowledgedAt &&
+        request.createdSliceId
+      ) {
+        await ctx.db.patch("slices", request.createdSliceId, {
+          status: "revoked",
+        });
+      }
       await ctx.db.patch("sliceRequests", request._id, {
         issuedSliceSecretCipher: "",
         claimHandleCipher: "",

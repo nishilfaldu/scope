@@ -138,6 +138,16 @@ export async function createSlice(
     agentId: string;
   },
 ) {
+  for (const binding of args.bindings) {
+    if (
+      binding.app === "github" &&
+      !(await githubGrantIsExclusive(ctx, binding.connectionId, args.agentId))
+    ) {
+      throw new Error(
+        "GitHub App user tokens cannot be shared by multiple active agents",
+      );
+    }
+  }
   const token = randomSecret("st_");
   const sliceSecret = randomSecret("ss_");
   const expiresAt = Date.now() + args.ttlMs;
@@ -173,4 +183,27 @@ export function denyCreate(
   code: AgentErrorCode,
 ) {
   return { ok: false as const, status, reason, code };
+}
+
+export async function githubGrantIsExclusive(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  connectionId: Id<"connections">,
+  agentId: string,
+): Promise<boolean> {
+  const existing = await ctx.db
+    .query("sliceBindings")
+    .withIndex("by_connectionId", (q) => q.eq("connectionId", connectionId))
+    .take(100);
+  if (existing.length === 100) return false;
+  for (const row of existing) {
+    const slice = await ctx.db.get("slices", row.sliceId);
+    if (
+      slice &&
+      slice.agentId !== agentId &&
+      effectiveSliceStatus(slice) === "active" &&
+      (await hasActiveAgentConnection(ctx, slice))
+    )
+      return false;
+  }
+  return true;
 }

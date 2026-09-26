@@ -53,6 +53,7 @@ import type * as tables_connections_actions from "../tables/connections/actions.
 import type * as tables_connections_helpers from "../tables/connections/helpers.js";
 import type * as tables_connections_mutations from "../tables/connections/mutations.js";
 import type * as tables_connections_queries from "../tables/connections/queries.js";
+import type * as tables_oauthStates_finish from "../tables/oauthStates/finish.js";
 import type * as tables_oauthStates_mutations from "../tables/oauthStates/mutations.js";
 import type * as tables_oauthStates_queries from "../tables/oauthStates/queries.js";
 import type * as tables_slices_credentials from "../tables/slices/credentials.js";
@@ -118,6 +119,7 @@ declare const fullApi: ApiFromModules<{
   "tables/connections/helpers": typeof tables_connections_helpers;
   "tables/connections/mutations": typeof tables_connections_mutations;
   "tables/connections/queries": typeof tables_connections_queries;
+  "tables/oauthStates/finish": typeof tables_oauthStates_finish;
   "tables/oauthStates/mutations": typeof tables_oauthStates_mutations;
   "tables/oauthStates/queries": typeof tables_oauthStates_queries;
   "tables/slices/credentials": typeof tables_slices_credentials;

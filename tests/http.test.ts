@@ -54,6 +54,7 @@ async function createSlice(
         accessToken: `${app}-token`,
         login: "nishil",
         providerUserId: `${provider}-1`,
+        grantVersion: 1,
       });
     }
   });

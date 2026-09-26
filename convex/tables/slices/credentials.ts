@@ -19,6 +19,7 @@ import {
   bindingsForApp,
   denyCreate,
   hasActiveAgentConnection,
+  githubGrantIsExclusive,
   sliceBySecret,
 } from "./helpers";
 
@@ -80,6 +81,16 @@ export const authorizeCreate = internalMutation({
         : null;
     if (!connection)
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
+    if (
+      args.app === "github" &&
+      !(await githubGrantIsExclusive(ctx, connection._id, slice.agentId))
+    ) {
+      return denyCreate(
+        403,
+        "GitHub grant is shared by multiple agents",
+        "APP_UNAVAILABLE",
+      );
+    }
     return {
       ok: true as const,
       sliceId: slice._id,
@@ -126,6 +137,16 @@ export const finalize = internalMutation({
       ))
     ) {
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
+    }
+    if (
+      args.app === "github" &&
+      !(await githubGrantIsExclusive(ctx, args.connectionId, slice.agentId))
+    ) {
+      return denyCreate(
+        403,
+        "GitHub grant is shared by multiple agents",
+        "APP_UNAVAILABLE",
+      );
     }
     if (args.requestId) {
       const request = await ctx.db.get("tokenRequests", args.requestId);

@@ -221,3 +221,19 @@ export const httpCancelAccessRequestHandler = httpAction(
     return jsonResponse(200, { status: "cancelled" });
   },
 );
+
+export const httpAccessRequestAckHandler = httpAction(async (ctx, request) => {
+  const body = await readObjectBody(request);
+  if (body instanceof Response) return body;
+  const claimHandle = requiredString(body, "claimHandle");
+  if (claimHandle instanceof Response) return claimHandle;
+  const sliceSecret = requiredString(body, "sliceSecret");
+  if (sliceSecret instanceof Response) return sliceSecret;
+  const ok = await ctx.runMutation(
+    internal.tables.slices.sliceRequestClaims.acknowledgeSliceClaim,
+    { claimHandle, sliceSecret },
+  );
+  return ok
+    ? jsonResponse(200, { ok: true })
+    : errorResponse(403, "Claim unavailable", "UNAUTHORIZED");
+});

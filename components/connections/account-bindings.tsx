@@ -64,10 +64,11 @@ export function AccountBindings({
   async function connect(app: AppId) {
     setConnecting(app);
     try {
-      const { state } = await startOAuth({
+      const { state, browserProof } = await startOAuth({
         app,
         returnTo: window.location.href,
       });
+      sessionStorage.setItem(`scope-oauth:${state}`, browserProof);
       const url = new URL(APP_CONNECT_URL[app]);
       url.searchParams.set("state", state);
       window.location.assign(url.toString());
