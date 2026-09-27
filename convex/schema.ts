@@ -154,7 +154,8 @@ export default defineSchema({
     expiresAt: v.number(),
   }).index("by_secretHash", ["secretHash"]),
 
-  // One row per (user, provider, app, provider account).
+  // One row per (Scope user, app, service account). Google keys are service-local:
+  // Gmail mailbox email, primary Calendar ID, or Drive permission ID, not OIDC sub.
   connections: defineTable({
     userId: v.id("users"),
     app: appValidator,

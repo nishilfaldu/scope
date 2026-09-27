@@ -56,9 +56,10 @@ export const APP_CONNECT_URL = Object.fromEntries(
 ) as Record<AppId, string>;
 export const CONNECT_ERRORS: Record<string, string> = {
   token: "The provider did not issue a token. Check the OAuth callback URL.",
-  identity: "The provider did not return a stable account identity.",
+  identity:
+    "The provider could not identify the connected account. Try connecting again.",
   scope:
-    "Google did not grant all requested permissions. Reconnect and approve every permission shown.",
+    "Google returned missing or unrelated service permissions. Reconnect this app; if it persists, remove Scope in Google Account and reconnect your Google apps.",
   redirect_uri_mismatch:
     "The provider rejected the callback URL. Register this app's /api/<app>/callback URL.",
   state: "Connect session expired. Try connecting again.",

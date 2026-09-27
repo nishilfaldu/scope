@@ -26,15 +26,15 @@ Every later `POST /api/access-requests` includes that connection ID and secret i
 
 For an existing slice with approval policy, `POST /api/credentials` returns a `/requests/token/[token]` link. The decision screen shows the slice, app, and specific connected account. Only the slice owner's Scope user ID can read or decide it. A connected provider login is never used to establish ownership. Approval permits one short-lived credential claim through the existing private agent claim path; the browser never receives provider tokens or slice secrets.
 
-Google OAuth remains available for connecting Gmail, Calendar, and Google files. Google files requests Drive, Docs, and Sheets scopes together. Each app also requests permission to read the Google account's primary email address for account identification; it does not request personal profile or OpenID access. Existing separate Drive, Docs, and Sheets connections must be replaced with a Google files connection. Google OAuth is not a Scope sign-in method. Email codes are 128-bit random values, expire in 10 minutes, and are single use. The longer code prevents practical collisions in the auth library's global code lookup.
+Google OAuth remains available for connecting Gmail, Calendar, and Google files. Gmail requests `gmail.modify`, Calendar requests `calendar`, and combined Google files requests `drive` (which also authorizes its Docs and Sheets operations). No app requests email, profile, or OpenID scopes. Identity comes from the authorized service API; see [Google consent design](docs/google-consent.md). Google OAuth is not a Scope sign-in method. Email codes are 128-bit random values, expire in 10 minutes, and are single use. The longer code prevents practical collisions in the auth library's global code lookup.
 
 Use a random, task-stable `Idempotency-Key` header (32–128 characters) when creating an access request. The same key and payload return the same pending or approved request and private handle before it is claimed. A different payload with that key returns `IDEMPOTENCY_CONFLICT`. Treat this key as a secret because a caller holding it can recover the claim handle while the request is live. Agent errors include stable `code`, `retryable`, and `nextAction` fields. A denied or expired request needs a fresh task and key. An approved slice can first be claimed for five minutes after approval. The first claim starts a fixed two-minute acknowledgment window; retries do not extend it. A completed acknowledgment can be confirmed later through the ack endpoint or status.
 
 ## Connect and account selection
 
-The signed-in operator connects apps from `/connections`. Each connection is keyed by user, provider, app, and the provider's stable account ID. The display login is never used as an account key. Slice creation and onboarding approval page through apps and account choices, retaining selections across pages. At least one account must be chosen for every selected app; several may be chosen.
+The signed-in operator connects apps from `/connections`. Each connection is keyed by Scope user, app, and the provider service account ID. Google uses mailbox email for Gmail, primary calendar ID for Calendar, and permission ID for Files; these are not cross-app Google IDs. Gmail email changes create a new connection on reconnect. The display login alone never authorizes access. Slice creation and onboarding approval page through apps and account choices, retaining selections across pages. At least one account must be chosen for every selected app; several may be chosen.
 
-Scope keeps the Google files bearer server-side and restricts agents to vetted Drive file listing, metadata, and non-Docs/Sheets download operations, plus Docs and Sheets content operations. One connection, slice binding, and broker credential covers all three. Google grants with missing or broader scope metadata must be reconnected. A GitHub App user grant can be bound to one active agent lineage because refreshing its user token invalidates the prior access token.
+Scope keeps the Google files bearer server-side and restricts agents to vetted Drive file listing, metadata, and non-Docs/Sheets download operations, plus Docs and Sheets content operations. One connection, slice binding, and broker credential covers all three. Google grants must contain exactly the requested service scope; missing scopes or any extras are rejected, including old identity and redundant Files scopes. A GitHub App user grant can be bound to one active agent lineage because refreshing its user token invalidates the prior access token.
 
 For Google, register three redirects on the same OAuth client:
 
@@ -42,7 +42,7 @@ For Google, register three redirects on the same OAuth client:
 - `https://<deployment>.convex.site/api/calendar/callback`
 - `https://<deployment>.convex.site/api/files/callback`
 
-Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` once. Disconnect removes local access first. Provider revocation is attempted afterward; for Google it is attempted when the last app connection for that Google account is removed.
+Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` once. Disconnect removes local access first. Provider revocation is attempted afterward for non-Google providers. Google disconnect is local only: Google revocation invalidates the entire project grant, so revoke Scope in Google Account settings when you want to remove all Google access. Already issued Gmail and Calendar tokens can remain usable until expiry.
 
 ## Agent pairing, onboarding, and minting
 

@@ -3,10 +3,6 @@ import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import {
-  effectiveGoogleApps,
-  googleScopesAreBounded,
-} from "../convex/domain/apps";
 import { github } from "../convex/oauth/providers/github";
 import { slack } from "../convex/oauth/providers/slack";
 import { linear } from "../convex/oauth/providers/linear";
@@ -159,51 +155,6 @@ test("Notion workspace authorization is distinct while reconnecting the same aut
     rows.find((row) => row.providerUserId === "workspace-B:bot-workspace-B")
       ?.login,
   ).toContain("workspace-B");
-});
-
-test("Google files requires the combined bounded resource scopes", () => {
-  expect(effectiveGoogleApps("files")).toEqual(["files"]);
-  expect(
-    googleScopesAreBounded("files", [
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/drive",
-      "https://www.googleapis.com/auth/documents",
-      "https://www.googleapis.com/auth/spreadsheets",
-    ]),
-  ).toBe(true);
-  expect(
-    googleScopesAreBounded("files", [
-      "email",
-      "https://www.googleapis.com/auth/drive",
-      "https://www.googleapis.com/auth/documents",
-      "https://www.googleapis.com/auth/spreadsheets",
-    ]),
-  ).toBe(true);
-  expect(
-    googleScopesAreBounded("files", [
-      "openid",
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/drive",
-      "https://www.googleapis.com/auth/documents",
-      "https://www.googleapis.com/auth/spreadsheets",
-    ]),
-  ).toBe(false);
-  expect(
-    googleScopesAreBounded("files", [
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile",
-      "https://www.googleapis.com/auth/drive",
-      "https://www.googleapis.com/auth/documents",
-      "https://www.googleapis.com/auth/spreadsheets",
-    ]),
-  ).toBe(false);
-  expect(
-    googleScopesAreBounded("files", [
-      "email",
-      "https://www.googleapis.com/auth/drive",
-    ]),
-  ).toBe(false);
-  expect(googleScopesAreBounded("files", undefined)).toBe(false);
 });
 
 test("refresh lease fences reconnection and serializes concurrent refreshes with expiry recovery", async () => {
@@ -708,6 +659,11 @@ test("an interrupted refresh lease can be recovered after its deadline", async (
 
 test.each([
   [undefined, 200],
+  ["https://www.googleapis.com/auth/gmail.modify", 200],
+  ["https://www.googleapis.com/auth/gmail.modify openid email profile", 403],
+  ["", 403],
+  [null, 503],
+  [42, 503],
   [
     "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/drive",
     403,
@@ -728,10 +684,7 @@ test.each([
       refreshToken: "refresh",
       login: "gmail",
       providerUserId: "sub",
-      grantedScopes: [
-        "https://www.googleapis.com/auth/userinfo.email",
-        "https://www.googleapis.com/auth/gmail.modify",
-      ],
+      grantedScopes: ["https://www.googleapis.com/auth/gmail.modify"],
     });
     const created = await session.mutation(
       internal.tables.slices.mutations.createFixture,
@@ -747,7 +700,7 @@ test.each([
         access_token: "fresh-token",
         refresh_token: "rotated-refresh",
         expires_in: 3600,
-        ...(scope ? { scope } : {}),
+        ...(scope !== undefined ? { scope } : {}),
       }),
     );
     const response = await t.fetch("/api/credentials", {

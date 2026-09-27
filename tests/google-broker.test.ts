@@ -5,12 +5,7 @@ import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
-const scopes = [
-  "https://www.googleapis.com/auth/userinfo.email",
-  "https://www.googleapis.com/auth/drive",
-  "https://www.googleapis.com/auth/documents",
-  "https://www.googleapis.com/auth/spreadsheets",
-];
+const scopes = ["https://www.googleapis.com/auth/drive"];
 const json = (body: unknown) =>
   new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json" },
@@ -356,10 +351,7 @@ test("a refreshed Google token with broader scopes cannot be used by the broker"
     json({
       access_token: "fresh-broad",
       expires_in: 3600,
-      scope: [
-        ...scopes,
-        "https://www.googleapis.com/auth/userinfo.profile",
-      ].join(" "),
+      scope: [...scopes, "https://www.googleapis.com/auth/calendar"].join(" "),
     }),
   );
   const response = await operate(credential.brokerToken, "drive.list");
