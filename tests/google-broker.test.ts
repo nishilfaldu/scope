@@ -5,23 +5,26 @@ import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
-const scopes = (app: "drive" | "docs" | "sheets") => [
+const scopes = [
   "https://www.googleapis.com/auth/userinfo.email",
-  `https://www.googleapis.com/auth/${app === "docs" ? "documents" : app === "sheets" ? "spreadsheets" : "drive"}`,
+  "https://www.googleapis.com/auth/drive",
+  "https://www.googleapis.com/auth/documents",
+  "https://www.googleapis.com/auth/spreadsheets",
 ];
 const json = (body: unknown) =>
   new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json" },
   });
 
-async function setup(apps: ("drive" | "docs" | "sheets")[]) {
+async function setup() {
   vi.stubEnv("GOOGLE_CLIENT_ID", "client");
   vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
   const t = convexTest(schema, modules);
   const userId = await t.run((ctx) =>
     ctx.db.insert("users", { name: "Owner", email: "owner@example.com" }),
   );
-  for (const app of apps) {
+  {
+    const app = "files";
     await t.mutation(internal.tables.connections.mutations.saveConnection, {
       userId,
       provider: "google",
@@ -30,7 +33,7 @@ async function setup(apps: ("drive" | "docs" | "sheets")[]) {
       refreshToken: `refresh-${app}`,
       login: "owner@example.com",
       providerUserId: "google-user",
-      grantedScopes: scopes(app),
+      grantedScopes: scopes,
     });
   }
   const fixture = await t
@@ -38,18 +41,16 @@ async function setup(apps: ("drive" | "docs" | "sheets")[]) {
     .mutation(internal.tables.slices.mutations.createFixture, {
       name: "Google",
       ttlMs: 60_000,
-      apps,
+      apps: ["files"],
       mintPolicy: "auto",
     });
-  const mint = async (
-    app: "drive" | "docs" | "sheets",
-    options: { omitRefreshScope?: boolean } = {},
-  ) => {
+  const mint = async (options: { omitRefreshScope?: boolean } = {}) => {
+    const app = "files";
     const refresh = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       json({
         access_token: `minted-${app}-${crypto.randomUUID()}`,
         expires_in: 3600,
-        ...(options.omitRefreshScope ? {} : { scope: scopes(app).join(" ") }),
+        ...(options.omitRefreshScope ? {} : { scope: scopes.join(" ") }),
       }),
     );
     let response: Response;
@@ -88,34 +89,46 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-test("Drive mint returns only an opaque credential and refuses Docs and Sheets operations", async () => {
-  const { mint, operate } = await setup(["drive"]);
-  const credential = await mint("drive");
+test("one files credential can call Drive, Docs, and Sheets operations", async () => {
+  const { mint, operate } = await setup();
+  const credential = await mint();
   expect(credential).toMatchObject({
-    app: "drive",
+    app: "files",
     brokerToken: expect.stringMatching(/^gc_/),
   });
   expect(credential).not.toHaveProperty("accessToken");
-  const upstream = vi.spyOn(globalThis, "fetch");
-  expect(
-    (await operate(credential.brokerToken, "docs.get", { id: "document123" }))
-      .status,
-  ).toBe(400);
-  expect(
-    (
-      await operate(credential.brokerToken, "sheets.get", {
-        id: "spreadsheet123",
-      })
-    ).status,
-  ).toBe(400);
-  expect(upstream).not.toHaveBeenCalled();
+  const upstream = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (url) => {
+      if (String(url) === "https://oauth2.googleapis.com/token")
+        return json({
+          access_token: "fresh-files",
+          expires_in: 3600,
+          scope: scopes.join(" "),
+        });
+      return json(
+        String(url).includes("drive/v3/files")
+          ? { files: [] }
+          : { id: "resource123" },
+      );
+    });
+  for (const [operation, extra] of [
+    ["drive.list", {}],
+    ["docs.get", { id: "document123" }],
+    ["sheets.get", { id: "sheet12345" }],
+  ] as const) {
+    expect(
+      (await operate(credential.brokerToken, operation, extra)).status,
+    ).toBe(200);
+  }
+  expect(upstream).toHaveBeenCalledTimes(6);
 });
 
 test("expired broker credentials remain distinguishable from unknown credentials", async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
-  const { t, mint } = await setup(["drive"]);
-  const credential = await mint("drive");
+  const { t, mint } = await setup();
+  const credential = await mint();
   await t.finishAllScheduledFunctions(() =>
     vi.advanceTimersByTime(16 * 60_000),
   );
@@ -145,8 +158,8 @@ test("expired broker credentials remain distinguishable from unknown credentials
 });
 
 test("broker can use a valid access token repeated by Google's refresh endpoint", async () => {
-  const { t, userId, mint, operate } = await setup(["docs"]);
-  const credential = await mint("docs");
+  const { t, userId, mint, operate } = await setup();
+  const credential = await mint();
   const connection = (await t.run((ctx) =>
     ctx.db.query("connections").unique(),
   ))!;
@@ -154,7 +167,7 @@ test("broker can use a valid access token repeated by Google's refresh endpoint"
     internal.tables.connections.queries.getConnection,
     {
       userId,
-      app: "docs",
+      app: "files",
       connectionId: connection._id,
     },
   ))!;
@@ -165,7 +178,7 @@ test("broker can use a valid access token repeated by Google's refresh endpoint"
         return json({
           access_token: stored.accessToken,
           expires_in: 3600,
-          scope: scopes("docs").join(" "),
+          scope: scopes.join(" "),
         });
       }
       expect(JSON.stringify(options?.headers)).toContain(stored.accessToken);
@@ -180,15 +193,15 @@ test("broker can use a valid access token repeated by Google's refresh endpoint"
 });
 
 test("broker reports refresh-lease contention as retryable", async () => {
-  const { t, userId, mint, operate } = await setup(["docs"]);
-  const credential = await mint("docs");
+  const { t, userId, mint, operate } = await setup();
+  const credential = await mint();
   const connection = (await t.run((ctx) =>
     ctx.db.query("connections").unique(),
   ))!;
   expect(
     await t.mutation(internal.tables.connections.mutations.beginRefresh, {
       userId,
-      app: "docs",
+      app: "files",
       connectionId: connection._id,
       grantVersion: connection.grantVersion,
       lease: "held-by-another-request",
@@ -207,8 +220,8 @@ test("broker reports refresh-lease contention as retryable", async () => {
 test("Drive rejects Docs and Sheets content and permits a binary file", async () => {
   vi.stubEnv("GOOGLE_CLIENT_ID", "client");
   vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
-  const { mint, operate } = await setup(["drive"]);
-  const credential = await mint("drive");
+  const { mint, operate } = await setup();
+  const credential = await mint();
   let mimeType = "application/vnd.google-apps.document";
   let issued = 0;
   const upstream = vi
@@ -219,7 +232,7 @@ test("Drive rejects Docs and Sheets content and permits a binary file", async ()
         return json({
           access_token: `fresh-drive-${++issued}`,
           expires_in: 3600,
-          scope: scopes("drive").join(" "),
+          scope: scopes.join(" "),
         });
       expect(JSON.stringify(options?.headers)).toContain("fresh-drive-");
       if (target.includes("alt=media")) return new Response("PDF data");
@@ -254,14 +267,14 @@ test("Drive rejects Docs and Sheets content and permits a binary file", async ()
 test("Drive lists Docs and Sheets metadata but excludes shortcuts", async () => {
   vi.stubEnv("GOOGLE_CLIENT_ID", "client");
   vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
-  const { mint, operate } = await setup(["drive"]);
-  const credential = await mint("drive");
+  const { mint, operate } = await setup();
+  const credential = await mint();
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
     if (String(url) === "https://oauth2.googleapis.com/token")
       return json({
         access_token: "fresh-drive",
         expires_in: 3600,
-        scope: scopes("drive").join(" "),
+        scope: scopes.join(" "),
       });
     const query = new URL(String(url)).searchParams.get("q");
     expect(query).not.toContain("application/vnd.google-apps.document");
@@ -304,8 +317,8 @@ test("Drive lists Docs and Sheets metadata but excludes shortcuts", async () => 
 });
 
 test("Drive can inspect Docs and Sheets metadata without downloading their content", async () => {
-  const { mint, operate } = await setup(["drive"]);
-  const credential = await mint("drive");
+  const { mint, operate } = await setup();
+  const credential = await mint();
   let mimeType = "application/vnd.google-apps.document";
   const upstream = vi
     .spyOn(globalThis, "fetch")
@@ -314,7 +327,7 @@ test("Drive can inspect Docs and Sheets metadata without downloading their conte
         return json({
           access_token: "fresh-drive",
           expires_in: 3600,
-          scope: scopes("drive").join(" "),
+          scope: scopes.join(" "),
         });
       return json({ id: "file12345", name: "file", mimeType });
     });
@@ -337,15 +350,15 @@ test("Drive can inspect Docs and Sheets metadata without downloading their conte
 test("a refreshed Google token with broader scopes cannot be used by the broker", async () => {
   vi.stubEnv("GOOGLE_CLIENT_ID", "client");
   vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
-  const { mint, operate } = await setup(["drive"]);
-  const credential = await mint("drive");
+  const { mint, operate } = await setup();
+  const credential = await mint();
   const upstream = vi.spyOn(globalThis, "fetch").mockResolvedValue(
     json({
       access_token: "fresh-broad",
       expires_in: 3600,
       scope: [
-        ...scopes("drive"),
-        "https://www.googleapis.com/auth/spreadsheets",
+        ...scopes,
+        "https://www.googleapis.com/auth/userinfo.profile",
       ].join(" "),
     }),
   );
@@ -356,134 +369,71 @@ test("a refreshed Google token with broader scopes cannot be used by the broker"
 });
 
 test.each([
-  ["drive", "drive.list", {}],
-  ["docs", "docs.get", { id: "document123" }],
-  ["sheets", "sheets.get", { id: "sheet12345" }],
+  ["drive.list", {}],
+  ["docs.get", { id: "document123" }],
+  ["sheets.get", { id: "sheet12345" }],
 ] as const)(
-  "%s broker mint and operation accept omitted refresh scope from a bounded connection",
-  async (app, operation, args) => {
-    const { mint, operate } = await setup([app]);
-    const credential = await mint(app, { omitRefreshScope: true });
-    expect(credential.brokerToken).toMatch(/^gc_/);
-    expect(credential).not.toHaveProperty("accessToken");
+  "%s accepts omitted refresh scope from the combined connection",
+  async (operation, args) => {
+    const { mint, operate } = await setup();
+    const credential = await mint({ omitRefreshScope: true });
     const upstream = vi
       .spyOn(globalThis, "fetch")
-      .mockImplementation(async (url, options) => {
-        if (String(url) === "https://oauth2.googleapis.com/token") {
-          return json({
-            access_token: `fresh-${app}-without-scope`,
-            expires_in: 3600,
-          });
-        }
-        expect(JSON.stringify(options?.headers)).toContain(
-          `fresh-${app}-without-scope`,
-        );
+      .mockImplementation(async (url) => {
+        if (String(url) === "https://oauth2.googleapis.com/token")
+          return json({ access_token: "fresh-files", expires_in: 3600 });
         return json(
-          app === "drive"
-            ? { files: [{ id: "pdf12345", mimeType: "application/pdf" }] }
-            : { id: "resource123" },
+          operation === "drive.list" ? { files: [] } : { id: "resource123" },
         );
       });
-    const response = await operate(credential.brokerToken, operation, args);
-    expect(response.status).toBe(200);
-    expect(JSON.stringify(await response.json())).not.toContain(
-      `fresh-${app}-without-scope`,
-    );
+    expect(
+      (await operate(credential.brokerToken, operation, args)).status,
+    ).toBe(200);
     expect(upstream).toHaveBeenCalledTimes(2);
   },
 );
 
-test("Docs, Sheets, and Drive use separate accounts; disconnect and revocation stop only their capabilities", async () => {
-  vi.stubEnv("GOOGLE_CLIENT_ID", "client");
-  vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
-  const { t, fixture, mint, operate } = await setup([
-    "drive",
-    "docs",
-    "sheets",
-  ]);
-  const drive = await mint("drive"),
-    docs = await mint("docs"),
-    sheets = await mint("sheets");
-  let issued = 0;
-  const upstream = vi
-    .spyOn(globalThis, "fetch")
-    .mockImplementation(async (url, options) => {
-      if (String(url) === "https://oauth2.googleapis.com/token") {
-        const refresh = new URLSearchParams(String(options?.body)).get(
-          "refresh_token",
-        )!;
-        const app = refresh.split("-")[1] as "drive" | "docs" | "sheets";
-        return json({
-          access_token: `fresh-${app}-${++issued}`,
-          expires_in: 3600,
-          scope: scopes(app).join(" "),
-        });
-      }
-      return json({ id: "document123", title: "hello" });
-    });
-  expect(
-    (await operate(docs.brokerToken, "docs.get", { id: "document123" })).status,
-  ).toBe(200);
-  expect(
-    (await operate(sheets.brokerToken, "sheets.get", { id: "spreadsheet123" }))
-      .status,
-  ).toBe(200);
-  expect(
-    (await operate(drive.brokerToken, "docs.get", { id: "document123" }))
-      .status,
-  ).toBe(400);
-  expect(
-    upstream.mock.calls.some(
-      ([url, options]) =>
-        String(url).includes("docs.googleapis.com") &&
-        JSON.stringify(options).includes("fresh-drive"),
-    ),
-  ).toBe(false);
+test("disconnecting the files account stops all three operation families", async () => {
+  const { t, mint, operate } = await setup();
+  const credential = await mint();
   await t.run(async (ctx) => {
-    const row = (await ctx.db.query("connections").take(10)).find(
-      (connection) => connection.app === "docs",
-    );
+    const row = await ctx.db.query("connections").unique();
     if (row) await ctx.db.delete("connections", row._id);
   });
-  expect(
-    (await operate(docs.brokerToken, "docs.get", { id: "document123" })).status,
-  ).toBe(403);
-  expect(
-    (await operate(sheets.brokerToken, "sheets.get", { id: "spreadsheet123" }))
-      .status,
-  ).toBe(200);
-  await t.run(async (ctx) => {
-    await ctx.db.patch("slices", fixture.id, { status: "revoked" });
-  });
-  expect(
-    (await operate(sheets.brokerToken, "sheets.get", { id: "spreadsheet123" }))
-      .status,
-  ).toBe(403);
+  for (const [operation, extra] of [
+    ["drive.list", {}],
+    ["docs.get", { id: "document123" }],
+    ["sheets.get", { id: "sheet12345" }],
+  ] as const) {
+    expect(
+      (await operate(credential.brokerToken, operation, extra)).status,
+    ).toBe(403);
+  }
 });
 
 test("reconnecting the same Google account invalidates its older broker credential", async () => {
-  const { t, userId, mint, operate } = await setup(["docs"]);
-  const old = await mint("docs");
+  const { t, userId, mint, operate } = await setup();
+  const old = await mint();
   await t.mutation(internal.tables.connections.mutations.saveConnection, {
     userId,
     provider: "google",
-    app: "docs",
+    app: "files",
     accessToken: "new-standing",
     refreshToken: "new-refresh",
     login: "owner@example.com",
     providerUserId: "google-user",
-    grantedScopes: scopes("docs"),
+    grantedScopes: scopes,
   });
   expect(
     (await operate(old.brokerToken, "docs.get", { id: "document123" })).status,
   ).toBe(403);
-  const fresh = await mint("docs");
+  const fresh = await mint();
   expect(fresh.brokerToken).not.toBe(old.brokerToken);
 });
 
 test("broker enforces expiry, request size, and fixed operation URLs", async () => {
-  const { t, mint, operate } = await setup(["docs"]);
-  const credential = await mint("docs");
+  const { t, mint, operate } = await setup();
+  const credential = await mint();
   const upstream = vi.spyOn(globalThis, "fetch");
   expect(
     (
@@ -518,8 +468,8 @@ test("broker enforces expiry, request size, and fixed operation URLs", async () 
 });
 
 test("revoking the agent lineage stops an existing broker credential", async () => {
-  const { t, fixture, mint, operate } = await setup(["sheets"]);
-  const credential = await mint("sheets");
+  const { t, fixture, mint, operate } = await setup();
+  const credential = await mint();
   await t.run(async (ctx) => {
     const slice = await ctx.db.get("slices", fixture.id);
     const agent = await ctx.db
@@ -538,9 +488,9 @@ test("revoking the agent lineage stops an existing broker credential", async () 
 });
 
 test("broker rate limit is shared across credentials on the same slice", async () => {
-  const { t, mint } = await setup(["docs"]);
-  const first = await mint("docs");
-  const second = await mint("docs");
+  const { t, mint } = await setup();
+  const first = await mint();
+  const second = await mint();
   for (let i = 0; i < 30; i++) {
     const result = await t.mutation(
       internal.tables.slices.googleBroker.authorizeOperation,

@@ -6,9 +6,7 @@ export const APP_LABELS: Record<AppId, string> = {
   github: "GitHub",
   gmail: "Gmail",
   calendar: "Calendar",
-  drive: "Drive",
-  docs: "Docs",
-  sheets: "Sheets",
+  files: "Google files",
   slack: "Slack",
   airtable: "Airtable",
   notion: "Notion",
@@ -23,10 +21,8 @@ export const APP_PERMISSIONS: Record<AppId, string> = {
   gmail: "Read, send, and manage mail in the selected Gmail account.",
   calendar:
     "Read and manage calendars and events in the selected Google account.",
-  drive:
-    "List Drive files, including Google Docs and Sheets, and inspect their metadata. Download other files through Scope's broker; reading Docs and Sheets content requires separate access.",
-  docs: "Read, create, and edit Google Docs through Scope's broker.",
-  sheets: "Read, create, and edit Google Sheets through Scope's broker.",
+  files:
+    "List and inspect Drive files, download non-Google files, and read, create, or edit Google Docs and Sheets through Scope's broker.",
   slack:
     "Read conversations and files, send messages, and manage bookmarks, pins, and reactions with the connected Slack user.",
   airtable:

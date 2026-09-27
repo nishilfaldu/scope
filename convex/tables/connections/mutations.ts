@@ -22,13 +22,7 @@ export const clearConnection = internalMutation({
     if (!row || row.userId !== args.userId || row.app !== args.app) return null;
     let revokeUpstream = true;
     if (providerForApp(row.app) === "google") {
-      for (const app of [
-        "gmail",
-        "calendar",
-        "drive",
-        "docs",
-        "sheets",
-      ] as const) {
+      for (const app of ["gmail", "calendar", "files"] as const) {
         const others = await ctx.db
           .query("connections")
           .withIndex("by_user_app_providerUserId", (q) =>

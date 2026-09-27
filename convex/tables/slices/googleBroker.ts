@@ -12,7 +12,7 @@ export const authorizeOperation = internalMutation({
     v.object({
       ok: v.literal(true),
       userId: v.id("users"),
-      app: v.union(v.literal("drive"), v.literal("docs"), v.literal("sheets")),
+      app: v.literal("files"),
       connectionId: v.id("connections"),
     }),
     denyResultValidator,

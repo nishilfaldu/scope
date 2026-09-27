@@ -7,7 +7,11 @@ import {
   oauthErrorReason,
   refreshedFromPayload,
 } from "../shared";
-import { isGoogleApp, scopesForGoogleApp } from "../../domain/apps";
+import {
+  googleScopesAreBounded,
+  isGoogleApp,
+  scopesForGoogleApp,
+} from "../../domain/apps";
 import type { ProviderOAuth } from "../types";
 
 export const google: ProviderOAuth = {
@@ -50,6 +54,16 @@ export const google: ProviderOAuth = {
     const tokenRaw: unknown = await tokenResponse.json();
     if (!isPlainObject(tokenRaw) || typeof tokenRaw.access_token !== "string") {
       return { error: oauthErrorReason(tokenRaw) };
+    }
+    if (
+      !googleScopesAreBounded(
+        app,
+        typeof tokenRaw.scope === "string"
+          ? tokenRaw.scope.split(/[\s,]+/).filter(Boolean)
+          : undefined,
+      )
+    ) {
+      return { error: "scope" };
     }
     const userResponse = await fetch(
       "https://www.googleapis.com/oauth2/v2/userinfo",

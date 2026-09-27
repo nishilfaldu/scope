@@ -161,38 +161,49 @@ test("Notion workspace authorization is distinct while reconnecting the same aut
   ).toContain("workspace-B");
 });
 
-test("Google apps have independent effective access; grants require bounded resource scopes", () => {
-  expect(effectiveGoogleApps("drive")).toEqual(["drive"]);
-  expect(effectiveGoogleApps("docs")).toEqual(["docs"]);
-  expect(effectiveGoogleApps("sheets")).toEqual(["sheets"]);
+test("Google files requires the combined bounded resource scopes", () => {
+  expect(effectiveGoogleApps("files")).toEqual(["files"]);
   expect(
-    googleScopesAreBounded("drive", [
+    googleScopesAreBounded("files", [
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/drive",
+      "https://www.googleapis.com/auth/documents",
+      "https://www.googleapis.com/auth/spreadsheets",
     ]),
   ).toBe(true);
   expect(
-    googleScopesAreBounded("drive", [
+    googleScopesAreBounded("files", [
       "email",
       "https://www.googleapis.com/auth/drive",
+      "https://www.googleapis.com/auth/documents",
+      "https://www.googleapis.com/auth/spreadsheets",
     ]),
   ).toBe(true);
   expect(
-    googleScopesAreBounded("drive", [
+    googleScopesAreBounded("files", [
       "openid",
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/drive",
+      "https://www.googleapis.com/auth/documents",
+      "https://www.googleapis.com/auth/spreadsheets",
     ]),
   ).toBe(false);
   expect(
-    googleScopesAreBounded("drive", [
+    googleScopesAreBounded("files", [
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
       "https://www.googleapis.com/auth/drive",
+      "https://www.googleapis.com/auth/documents",
+      "https://www.googleapis.com/auth/spreadsheets",
     ]),
   ).toBe(false);
-  expect(googleScopesAreBounded("drive", ["email"])).toBe(false);
-  expect(googleScopesAreBounded("drive", undefined)).toBe(false);
+  expect(
+    googleScopesAreBounded("files", [
+      "email",
+      "https://www.googleapis.com/auth/drive",
+    ]),
+  ).toBe(false);
+  expect(googleScopesAreBounded("files", undefined)).toBe(false);
 });
 
 test("refresh lease fences reconnection and serializes concurrent refreshes with expiry recovery", async () => {

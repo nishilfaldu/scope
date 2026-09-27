@@ -19,7 +19,7 @@ export async function mintCredential(
     requestId?: Id<"tokenRequests">;
   },
 ): Promise<Response> {
-  if (args.app === "drive" || args.app === "docs" || args.app === "sheets") {
+  if (args.app === "files") {
     const verified = await issueShortLivedAccess(
       ctx,
       args.userId,

@@ -4,9 +4,7 @@ export const ALL_APPS = [
   "github",
   "gmail",
   "calendar",
-  "drive",
-  "docs",
-  "sheets",
+  "files",
   "slack",
   "airtable",
   "notion",
@@ -20,9 +18,7 @@ export type AppId = (typeof ALL_APPS)[number];
 export const GOOGLE_APPS = [
   "gmail",
   "calendar",
-  "drive",
-  "docs",
-  "sheets",
+  "files",
 ] as const satisfies readonly AppId[];
 
 export type GoogleAppId = (typeof GOOGLE_APPS)[number];
@@ -44,9 +40,7 @@ export const appValidator = v.union(
   v.literal("github"),
   v.literal("gmail"),
   v.literal("calendar"),
-  v.literal("drive"),
-  v.literal("docs"),
-  v.literal("sheets"),
+  v.literal("files"),
   v.literal("slack"),
   v.literal("airtable"),
   v.literal("notion"),
@@ -80,9 +74,7 @@ export function providerForApp(app: AppId): ProviderId {
       return "github";
     case "gmail":
     case "calendar":
-    case "drive":
-    case "docs":
-    case "sheets":
+    case "files":
       return "google";
     case "slack":
       return "slack";
@@ -106,12 +98,11 @@ export function providerForApp(app: AppId): ProviderId {
 const GOOGLE_APP_SCOPE: Record<GoogleAppId, string> = {
   gmail: "https://www.googleapis.com/auth/gmail.modify",
   calendar: "https://www.googleapis.com/auth/calendar",
-  drive: "https://www.googleapis.com/auth/drive",
-  docs: "https://www.googleapis.com/auth/documents",
-  sheets: "https://www.googleapis.com/auth/spreadsheets",
+  files:
+    "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/spreadsheets",
 };
 
-/** Request account email plus only the resource scope represented by this app. */
+/** Request account email plus the scopes represented by this app. */
 export function scopesForGoogleApp(app: AppId): string {
   if (!isGoogleApp(app)) {
     throw new Error(`scopesForGoogleApp requires a Google app, got ${app}`);
@@ -137,7 +128,7 @@ export function googleScopesAreBounded(
     }),
   );
   return (
-    actual.has(GOOGLE_APP_SCOPE[app]) &&
+    [...requested].every((scope) => actual.has(scope)) &&
     [...actual].every((scope) => requested.has(scope))
   );
 }

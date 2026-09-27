@@ -18,7 +18,7 @@ export function AppIcon({
   app: AppId;
   className?: string;
 }) {
-  const icon = ["gmail", "calendar", "drive", "docs", "sheets"].includes(app)
+  const icon = ["gmail", "calendar", "files"].includes(app)
     ? GoogleIcon
     : app === "github"
       ? GithubIcon

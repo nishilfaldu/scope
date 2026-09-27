@@ -19,9 +19,7 @@ async function createSlice(
       | "github"
       | "gmail"
       | "calendar"
-      | "drive"
-      | "docs"
-      | "sheets"
+      | "files"
       | "slack"
       | "airtable"
       | "notion"
@@ -39,13 +37,7 @@ async function createSlice(
   });
   await test.run(async (ctx) => {
     for (const app of args.apps) {
-      const provider = [
-        "gmail",
-        "calendar",
-        "drive",
-        "docs",
-        "sheets",
-      ].includes(app)
+      const provider = ["gmail", "calendar", "files"].includes(app)
         ? "google"
         : app;
       await ctx.db.insert("connections", {
@@ -269,9 +261,7 @@ describe("GET /api/apps", () => {
         { app: "github", allowed: true, connected: true },
         { app: "gmail", allowed: false, connected: false },
         { app: "calendar", allowed: false, connected: false },
-        { app: "drive", allowed: false, connected: false },
-        { app: "docs", allowed: false, connected: false },
-        { app: "sheets", allowed: false, connected: false },
+        { app: "files", allowed: false, connected: false },
         { app: "slack", allowed: false, connected: false },
         { app: "airtable", allowed: false, connected: false },
         { app: "notion", allowed: false, connected: false },

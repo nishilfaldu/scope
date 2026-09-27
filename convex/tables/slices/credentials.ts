@@ -169,7 +169,7 @@ export const finalize = internalMutation({
     }
     const expiresAt = Math.min(slice.expiresAt, Date.now() + 15 * 60_000);
     if (args.brokerSecretHash) {
-      if (!["drive", "docs", "sheets"].includes(args.app)) {
+      if (args.app !== "files") {
         return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
       }
       await ctx.db.insert("googleBrokerCredentials", {
@@ -177,7 +177,7 @@ export const finalize = internalMutation({
         sliceId: args.sliceId,
         bindingId: args.bindingId,
         connectionId: args.connectionId,
-        app: args.app as "drive" | "docs" | "sheets",
+        app: args.app,
         connectionGeneration: selected.connectionGeneration ?? 0,
         expiresAt,
       });

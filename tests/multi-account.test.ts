@@ -12,13 +12,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("per-app Google consent", () => {
+describe("Google consent", () => {
   test.each([
     ["gmail", "https://www.googleapis.com/auth/gmail.modify"],
     ["calendar", "https://www.googleapis.com/auth/calendar"],
-    ["drive", "https://www.googleapis.com/auth/drive"],
-    ["docs", "https://www.googleapis.com/auth/documents"],
-    ["sheets", "https://www.googleapis.com/auth/spreadsheets"],
+    [
+      "files",
+      "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/spreadsheets",
+    ],
   ] as const)(
     "%s requests only its own resource scope",
     (app, resourceScope) => {
@@ -34,7 +35,7 @@ describe("per-app Google consent", () => {
       );
       expect(url.searchParams.get("scope")!.split(" ")).toEqual([
         "https://www.googleapis.com/auth/userinfo.email",
-        resourceScope,
+        ...resourceScope.split(" "),
       ]);
       expect(url.searchParams.get("include_granted_scopes")).toBe("false");
     },
@@ -53,7 +54,7 @@ describe("per-app Google consent", () => {
               access_token: "google-access",
               refresh_token: "google-refresh",
               scope:
-                "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/documents",
+                "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/spreadsheets",
             }),
           );
         }
@@ -70,7 +71,7 @@ describe("per-app Google consent", () => {
           }),
         );
       });
-    const grant = await google.exchange("auth-code", "state-1", "docs");
+    const grant = await google.exchange("auth-code", "state-1", "files");
     expect(grant).toMatchObject({
       providerUserId: "stable-google-id",
       login: "owner@example.com",
@@ -84,14 +85,39 @@ describe("per-app Google consent", () => {
     vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ access_token: "google-access" })),
+        new Response(
+          JSON.stringify({
+            access_token: "google-access",
+            scope:
+              "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/spreadsheets",
+          }),
+        ),
       )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ email: "owner@example.com" })),
       );
-    expect(await google.exchange("auth-code", "state-1", "docs")).toEqual({
+    expect(await google.exchange("auth-code", "state-1", "files")).toEqual({
       error: "identity",
     });
+  });
+
+  test("a partial files grant is rejected during connection", async () => {
+    vi.stubEnv("GOOGLE_CLIENT_ID", "shared-client");
+    vi.stubEnv("GOOGLE_CLIENT_SECRET", "shared-secret");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
+    const upstream = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          access_token: "google-access",
+          scope:
+            "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive",
+        }),
+      ),
+    );
+    expect(await google.exchange("auth-code", "state-1", "files")).toEqual({
+      error: "scope",
+    });
+    expect(upstream).toHaveBeenCalledTimes(1);
   });
 });
 

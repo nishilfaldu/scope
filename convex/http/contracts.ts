@@ -79,7 +79,7 @@ const routes = [
     method: "POST",
     path: "/api/credentials",
     summary:
-      "Mint an allowed app credential. Drive, Docs, and Sheets return an opaque Scope broker credential; other apps return provider-native tokens.",
+      "Mint an allowed app credential. The files app covers Drive, Docs, and Sheets through one opaque Scope broker credential; other apps return provider-native tokens.",
   },
   {
     method: "POST",

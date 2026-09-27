@@ -32,15 +32,11 @@ function jsonBody(value: unknown): string | null {
   return serialized.length <= MAX_REQUEST_BYTES ? serialized : null;
 }
 
-export function operationFor(
-  app: "drive" | "docs" | "sheets",
-  input: Record<string, unknown>,
-): Operation | null {
+export function operationFor(input: Record<string, unknown>): Operation | null {
   const id = input.id;
   const payload = input.payload;
   switch (input.operation) {
     case "drive.list": {
-      if (app !== "drive") return null;
       const pageSize = input.pageSize === undefined ? 50 : input.pageSize;
       if (
         !Number.isInteger(pageSize) ||
@@ -66,7 +62,7 @@ export function operationFor(
     }
     case "drive.metadata":
     case "drive.download": {
-      if (app !== "drive" || !nonempty(id) || !FILE_ID.test(id)) return null;
+      if (!nonempty(id) || !FILE_ID.test(id)) return null;
       return {
         method: "GET",
         url: `https://www.googleapis.com/drive/v3/files/${id}?fields=id,name,mimeType,size,modifiedTime`,
@@ -74,25 +70,23 @@ export function operationFor(
       };
     }
     case "docs.get":
-      if (app !== "docs" || !nonempty(id) || !FILE_ID.test(id)) return null;
+      if (!nonempty(id) || !FILE_ID.test(id)) return null;
       return {
         method: "GET",
         url: `https://docs.googleapis.com/v1/documents/${id}`,
       };
-    case "docs.create":
-      if (app !== "docs") return null;
-      {
-        const body = jsonBody(payload);
-        return body === null
-          ? null
-          : {
-              method: "POST",
-              url: "https://docs.googleapis.com/v1/documents",
-              body,
-            };
-      }
+    case "docs.create": {
+      const body = jsonBody(payload);
+      return body === null
+        ? null
+        : {
+            method: "POST",
+            url: "https://docs.googleapis.com/v1/documents",
+            body,
+          };
+    }
     case "docs.batchUpdate":
-      if (app !== "docs" || !nonempty(id) || !FILE_ID.test(id)) return null;
+      if (!nonempty(id) || !FILE_ID.test(id)) return null;
       {
         const body = jsonBody(payload);
         return body === null
@@ -104,42 +98,30 @@ export function operationFor(
             };
       }
     case "sheets.get":
-      if (app !== "sheets" || !nonempty(id) || !FILE_ID.test(id)) return null;
+      if (!nonempty(id) || !FILE_ID.test(id)) return null;
       return {
         method: "GET",
         url: `https://sheets.googleapis.com/v4/spreadsheets/${id}`,
       };
-    case "sheets.create":
-      if (app !== "sheets") return null;
-      {
-        const body = jsonBody(payload);
-        return body === null
-          ? null
-          : {
-              method: "POST",
-              url: "https://sheets.googleapis.com/v4/spreadsheets",
-              body,
-            };
-      }
+    case "sheets.create": {
+      const body = jsonBody(payload);
+      return body === null
+        ? null
+        : {
+            method: "POST",
+            url: "https://sheets.googleapis.com/v4/spreadsheets",
+            body,
+          };
+    }
     case "sheets.values.get":
-      if (
-        app !== "sheets" ||
-        !nonempty(id) ||
-        !FILE_ID.test(id) ||
-        !nonempty(input.range, 500)
-      )
+      if (!nonempty(id) || !FILE_ID.test(id) || !nonempty(input.range, 500))
         return null;
       return {
         method: "GET",
         url: `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(input.range)}`,
       };
     case "sheets.values.update":
-      if (
-        app !== "sheets" ||
-        !nonempty(id) ||
-        !FILE_ID.test(id) ||
-        !nonempty(input.range, 500)
-      )
+      if (!nonempty(id) || !FILE_ID.test(id) || !nonempty(input.range, 500))
         return null;
       {
         const body = jsonBody(payload);
@@ -236,7 +218,7 @@ export const httpGoogleBrokerHandler = httpAction(async (ctx, request) => {
   );
   if (!authorized.ok)
     return errorResponse(authorized.status, authorized.reason, authorized.code);
-  const operation = operationFor(authorized.app, input);
+  const operation = operationFor(input);
   if (!operation)
     return errorResponse(
       400,
@@ -285,7 +267,11 @@ export const httpGoogleBrokerHandler = httpAction(async (ctx, request) => {
         "Google response exceeds broker limit",
         "INVALID_REQUEST",
       );
-    if (authorized.app === "drive") {
+    if (
+      input.operation === "drive.list" ||
+      input.operation === "drive.metadata" ||
+      input.operation === "drive.download"
+    ) {
       const metadata = JSON.parse(new TextDecoder().decode(bytes));
       if (!isPlainObject(metadata) && operation.download)
         return errorResponse(502, "Invalid Drive metadata", "APP_UNAVAILABLE");
@@ -322,7 +308,7 @@ export const httpGoogleBrokerHandler = httpAction(async (ctx, request) => {
         let binary = "";
         for (const byte of file) binary += String.fromCharCode(byte);
         return jsonResponse(200, {
-          app: "drive",
+          app: "files",
           operation: "drive.download",
           mimeType: metadata.mimeType,
           contentBase64: btoa(binary),
@@ -338,7 +324,7 @@ export const httpGoogleBrokerHandler = httpAction(async (ctx, request) => {
             file.mimeType !== SHORTCUT_MIME,
         );
         return jsonResponse(200, {
-          app: "drive",
+          app: "files",
           operation: input.operation,
           data: metadata,
         });

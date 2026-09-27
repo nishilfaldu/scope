@@ -149,13 +149,12 @@ export default defineSchema({
     sliceId: v.id("slices"),
     bindingId: v.id("sliceBindings"),
     connectionId: v.id("connections"),
-    app: v.union(v.literal("drive"), v.literal("docs"), v.literal("sheets")),
+    app: v.literal("files"),
     connectionGeneration: v.number(),
     expiresAt: v.number(),
   }).index("by_secretHash", ["secretHash"]),
 
-  // One row per (user, provider, app, provider account). Google apps each have
-  // their own connection rows (and may bind different Google accounts).
+  // One row per (user, provider, app, provider account).
   connections: defineTable({
     userId: v.id("users"),
     app: appValidator,
