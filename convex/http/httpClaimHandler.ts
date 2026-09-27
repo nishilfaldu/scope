@@ -25,7 +25,12 @@ export const httpClaimHandler = httpAction(async (ctx, request) => {
     },
   );
   if (!decision.ok)
-    return errorResponse(decision.status, decision.reason, decision.code);
+    return errorResponse(
+      decision.status,
+      decision.reason,
+      decision.code,
+      decision,
+    );
   if (decision.kind === "pending") {
     return jsonResponse(202, {
       error: "Operator approval required before this credential can be minted",

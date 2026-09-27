@@ -42,6 +42,12 @@ describe("agent connections", () => {
         claimHandle: firstInvite.claimHandle,
       });
       if (first.kind !== "connected") throw new Error("Expected connection");
+      expect(
+        await t.mutation(internal.tables.agentConnections.acknowledgeClaim, {
+          claimHandle: firstInvite.claimHandle,
+          agentConnectionSecret: first.agentConnectionSecret,
+        }),
+      ).toMatchObject({ ok: true, resourceStatus: "active" });
       const sliceId = await t.run((ctx) =>
         ctx.db.insert("slices", {
           userId: owner,
@@ -116,7 +122,7 @@ describe("agent connections", () => {
           previousConnectionId: replacement.agentConnectionId,
           previousConnectionSecret: replacement.agentConnectionSecret,
         }),
-      ).rejects.toThrow("Invalid previous agent connection");
+      ).rejects.toThrow("Agent connection revoked");
       const request = await t.fetch("/api/access-requests", {
         method: "POST",
         headers: {
@@ -130,7 +136,7 @@ describe("agent connections", () => {
           reason: "Denied",
         }),
       });
-      expect(request.status).toBe(401);
+      expect(request.status).toBe(403);
     },
   );
   test("rotation keeps the old connection live until idempotent activation", async () => {
@@ -167,6 +173,15 @@ describe("agent connections", () => {
       body: JSON.stringify({ claimHandle: firstInvite.claimHandle }),
     });
     const first = await firstClaimResponse.json();
+    const firstAck = await t.fetch("/api/agent-connections/ack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claimHandle: firstInvite.claimHandle,
+        agentConnectionSecret: first.agentConnectionSecret,
+      }),
+    });
+    expect(firstAck.status).toBe(200);
     const lineageRecords = await t.run(async (ctx) => {
       const sliceId = await ctx.db.insert("slices", {
         userId: owner,
@@ -186,7 +201,7 @@ describe("agent connections", () => {
         ttlMs: 60_000,
         reason: "Existing request",
         status: "pending",
-        expiresAt: Date.now() + 60_000,
+        approvalDeadlineAt: Date.now() + 60_000,
       });
       return { sliceId, requestId };
     });
@@ -261,8 +276,20 @@ describe("agent connections", () => {
         },
       });
       expect(activation.status).toBe(200);
-      expect(await activation.json()).toEqual({ ok: true, status: "active" });
+      expect(await activation.json()).toMatchObject({
+        ok: true,
+        status: "active",
+      });
     }
+    const activatedStatus = await t.fetch("/api/agent-connections/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ claimHandle: reconnect.claimHandle }),
+    });
+    expect(await activatedStatus.json()).toMatchObject({
+      handoffStatus: "ready",
+      resourceStatus: "active",
+    });
 
     const connections = await t.run((ctx) =>
       ctx.db
@@ -307,7 +334,7 @@ describe("agent connections", () => {
       },
       body: "{}",
     });
-    expect(staleReconnect.status).toBe(400);
+    expect(staleReconnect.status).toBe(403);
 
     const revoke = await t.fetch("/api/agent-connections/revoke", {
       method: "POST",
@@ -399,7 +426,7 @@ describe("agent connections", () => {
         "x-agent-connection-secret": replacement.agentConnectionSecret,
       },
     });
-    expect(activation.status).toBe(401);
+    expect(activation.status).toBe(403);
   });
 
   test("the owner can reconnect a credential-less agent to an active lineage", async () => {
@@ -538,6 +565,15 @@ describe("agent connections", () => {
     expect((await replay.json()).agentConnectionSecret).toBe(
       claimed.agentConnectionSecret,
     );
+    const ack = await t.fetch("/api/agent-connections/ack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claimHandle: invite.claimHandle,
+        agentConnectionSecret: claimed.agentConnectionSecret,
+      }),
+    });
+    expect(ack.status).toBe(200);
 
     await t.mutation(internal.tables.connections.mutations.saveConnection, {
       userId: owner,
@@ -585,6 +621,15 @@ describe("agent connections", () => {
       body: JSON.stringify({ claimHandle: created.claimHandle }),
     });
     const slice = await sliceResponse.json();
+    const sliceAck = await t.fetch("/api/access-requests/ack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claimHandle: created.claimHandle,
+        sliceSecret: slice.sliceSecret,
+      }),
+    });
+    expect(sliceAck.status).toBe(200);
     expect(
       await ownerSession.query(api.tables.agentDashboard.list, {}),
     ).toEqual(
@@ -623,7 +668,7 @@ describe("agent connections", () => {
         reason: "Test revocation",
       }),
     });
-    expect(afterRevoke.status).toBe(401);
+    expect(afterRevoke.status).toBe(403);
 
     const useRevokedSlice = await t.fetch("/api/accounts?app=github", {
       method: "GET",
@@ -632,6 +677,6 @@ describe("agent connections", () => {
         "x-slice-secret": slice.sliceSecret,
       },
     });
-    expect(useRevokedSlice.status).toBe(401);
+    expect(useRevokedSlice.status).toBe(403);
   });
 });

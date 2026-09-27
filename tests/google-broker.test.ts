@@ -85,6 +85,7 @@ async function setup(apps: ("drive" | "docs" | "sheets")[]) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
@@ -110,6 +111,39 @@ test("Drive mint returns only an opaque credential and refuses Docs and Sheets o
     ).status,
   ).toBe(400);
   expect(upstream).not.toHaveBeenCalled();
+});
+
+test("expired broker credentials remain distinguishable from unknown credentials", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+  const { t, mint } = await setup(["drive"]);
+  const credential = await mint("drive");
+  await t.finishAllScheduledFunctions(() =>
+    vi.advanceTimersByTime(16 * 60_000),
+  );
+  expect(
+    await t.run((ctx) => ctx.db.query("googleBrokerCredentials").collect()),
+  ).toHaveLength(1);
+  const expired = await t.mutation(
+    internal.tables.slices.googleBroker.authorizeOperation,
+    {
+      brokerToken: credential.brokerToken,
+      charge: false,
+    },
+  );
+  expect(expired).toMatchObject({ ok: false, status: 403, code: "EXPIRED" });
+  const unknown = await t.mutation(
+    internal.tables.slices.googleBroker.authorizeOperation,
+    {
+      brokerToken: `gc_${"a".repeat(64)}`,
+      charge: false,
+    },
+  );
+  expect(unknown).toMatchObject({
+    ok: false,
+    status: 401,
+    code: "UNAUTHORIZED",
+  });
 });
 
 test("broker can use a valid access token repeated by Google's refresh endpoint", async () => {
@@ -475,5 +509,5 @@ test("broker rate limit is shared across credentials on the same slice", async (
       brokerToken: first.brokerToken,
       charge: true,
     }),
-  ).toEqual({ ok: false, rateLimited: true });
+  ).toMatchObject({ ok: false, status: 429, code: "PROVIDER_ERROR" });
 });

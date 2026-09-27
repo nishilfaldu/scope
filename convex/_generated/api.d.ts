@@ -11,6 +11,7 @@
 import type * as auth from "../auth.js";
 import type * as devSeed from "../devSeed.js";
 import type * as domain_apps from "../domain/apps.js";
+import type * as domain_handoff from "../domain/handoff.js";
 import type * as domain_requests from "../domain/requests.js";
 import type * as domain_returnPaths from "../domain/returnPaths.js";
 import type * as domain_slices from "../domain/slices.js";
@@ -79,6 +80,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   devSeed: typeof devSeed;
   "domain/apps": typeof domain_apps;
+  "domain/handoff": typeof domain_handoff;
   "domain/requests": typeof domain_requests;
   "domain/returnPaths": typeof domain_returnPaths;
   "domain/slices": typeof domain_slices;

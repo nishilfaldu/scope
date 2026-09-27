@@ -29,7 +29,12 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
     },
   );
   if (!decision.ok)
-    return errorResponse(decision.status, decision.reason, decision.code);
+    return errorResponse(
+      decision.status,
+      decision.reason,
+      decision.code,
+      decision,
+    );
 
   if (decision.mintPolicy === "approve") {
     const pending = await ctx.runMutation(
@@ -41,7 +46,12 @@ export const httpCredentialsHandler = httpAction(async (ctx, request) => {
       },
     );
     if (!pending.ok)
-      return errorResponse(pending.status, pending.reason, pending.code);
+      return errorResponse(
+        pending.status,
+        pending.reason,
+        pending.code,
+        pending,
+      );
     const boardOrigin = parseBoardOrigin(env.BOARD_ORIGIN);
     return jsonResponse(202, {
       error: pending.reason,

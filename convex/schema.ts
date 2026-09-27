@@ -4,7 +4,11 @@ import { v } from "convex/values";
 import { appValidator } from "./domain/apps";
 import { storedRequestStatusValidator } from "./domain/requests";
 
-const sliceStatusValidator = v.union(v.literal("active"), v.literal("revoked"));
+const sliceStatusValidator = v.union(
+  v.literal("staged"),
+  v.literal("active"),
+  v.literal("revoked"),
+);
 
 const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
 const agentConnectionStatusValidator = v.union(
@@ -30,6 +34,7 @@ export default defineSchema({
     status: agentConnectionStatusValidator,
     lastUsedAt: v.optional(v.number()),
     revokedAt: v.optional(v.number()),
+    revocationReason: v.optional(v.string()),
   })
     // Keep creation-time ordering for owner history queries.
     // eslint-disable-next-line @convex-dev/no-duplicate-indexes
@@ -55,7 +60,13 @@ export default defineSchema({
       v.literal("claimed"),
       v.literal("expired"),
     ),
-    expiresAt: v.number(),
+    approvalDeadlineAt: v.number(),
+    pickupDeadlineAt: v.optional(v.number()),
+    ackDeadlineAt: v.optional(v.number()),
+    activationDeadlineAt: v.optional(v.number()),
+    firstClaimedAt: v.optional(v.number()),
+    activatedAt: v.optional(v.number()),
+    terminalReason: v.optional(v.string()),
     userId: v.optional(v.id("users")),
     replacesAgentConnectionId: v.optional(v.id("agentConnections")),
     agentConnectionId: v.optional(v.id("agentConnections")),
@@ -74,6 +85,8 @@ export default defineSchema({
     token: v.string(),
     secretHash: v.string(),
     status: sliceStatusValidator,
+    revocationReason: v.optional(v.string()),
+    revokedAt: v.optional(v.number()),
     expiresAt: v.number(),
     mintPolicy: mintPolicyValidator,
     brokerWindowStart: v.optional(v.number()),
@@ -91,7 +104,13 @@ export default defineSchema({
     .index("by_connectionId", ["connectionId"]),
 
   sliceRequests: defineTable({
-    ...requestLifecycle,
+    publicToken: v.string(),
+    status: storedRequestStatusValidator,
+    approvalDeadlineAt: v.number(),
+    pickupDeadlineAt: v.optional(v.number()),
+    ackDeadlineAt: v.optional(v.number()),
+    firstClaimedAt: v.optional(v.number()),
+    terminalReason: v.optional(v.string()),
     claimSecretHash: v.string(),
     agentId: v.string(),
     userId: v.optional(v.id("users")),
@@ -108,8 +127,13 @@ export default defineSchema({
     .index("by_claim_secret_hash", ["claimSecretHash"])
     .index("by_idempotency_key_hash", ["idempotencyKeyHash"])
     .index("by_agentId", ["agentId"])
-    .index("by_userId_status_expiresAt", ["userId", "status", "expiresAt"])
-    .index("by_status_expiresAt", ["status", "expiresAt"]),
+    .index("by_createdSliceId", ["createdSliceId"])
+    .index("by_userId_status_approvalDeadlineAt", [
+      "userId",
+      "status",
+      "approvalDeadlineAt",
+    ])
+    .index("by_status_approvalDeadlineAt", ["status", "approvalDeadlineAt"]),
 
   tokenRequests: defineTable({
     ...requestLifecycle,

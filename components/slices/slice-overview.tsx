@@ -10,17 +10,21 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
-import { effectiveSliceStatus, STATUS_LABELS } from "@/lib/capabilities";
+import {
+  effectiveSliceStatus,
+  handoffLabel,
+  STATUS_LABELS,
+} from "@/lib/capabilities";
 import { useErrorCatchingMutation } from "@/lib/errors";
 import { useNow } from "@/hooks/use-now";
 
 export function SliceOverview({ sliceId }: { sliceId: string }) {
-  const slice = useQuery(api.tables.slices.queries.get, { sliceId });
+  const now = useNow();
+  const slice = useQuery(api.tables.slices.queries.get, { sliceId, now });
   const [setMintPolicy, isSettingPolicy] = useErrorCatchingMutation(
     api.tables.slices.mutations.setMintPolicy,
     { successMessage: "Approval policy updated" },
   );
-  const now = useNow();
 
   if (slice === undefined)
     return <Skeleton className="h-48 w-full rounded-xl" />;
@@ -47,14 +51,35 @@ export function SliceOverview({ sliceId }: { sliceId: string }) {
                       : "outline"
                 }
               >
-                {STATUS_LABELS[status]}
+                {status === "staged"
+                  ? handoffLabel(slice.handoffStatus ?? "waiting_for_pickup")
+                  : STATUS_LABELS[status]}
               </Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Access granted to a connected agent
+              {isActive
+                ? "Access granted to a connected agent"
+                : status === "staged"
+                  ? handoffLabel(slice.handoffStatus ?? "waiting_for_pickup")
+                  : status === "revoked"
+                    ? "Access was revoked"
+                    : "This grant has expired"}
             </p>
+            {status === "staged" && slice.handoffDeadlineAt ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {slice.handoffStatus === "waiting_for_pickup"
+                  ? "Pickup deadline"
+                  : "Acknowledgment deadline"}
+                : {new Date(slice.handoffDeadlineAt).toLocaleString()}
+              </p>
+            ) : null}
+            {status === "revoked" && slice.revocationReason ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Cause: {handoffLabel(slice.revocationReason)}
+              </p>
+            ) : null}
           </div>
-          {isActive ? (
+          {isActive || status === "staged" ? (
             <SliceRevokeButton
               sliceToken={slice.token}
               sliceName={slice.name}

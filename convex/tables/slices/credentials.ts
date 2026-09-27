@@ -1,26 +1,22 @@
 import { v } from "convex/values";
 import { internalMutation } from "../../_generated/server";
-import { internal } from "../../_generated/api";
 import {
   isAppId,
   appValidator,
   providerForApp,
   providerValidator,
 } from "../../domain/apps";
-import { effectiveSliceStatus } from "../../domain/slices";
 import {
   denyResultValidator,
   APP_UNAVAILABLE_ERROR,
-  EXPIRED_ERROR,
-  REVOKED_ERROR,
   UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
 import { selectedConnection } from "../connections/helpers";
 import {
   bindingsForApp,
   denyCreate,
-  hasActiveAgentConnection,
   githubGrantIsExclusive,
+  sliceAccessDenial,
   sliceBySecret,
 } from "./helpers";
 
@@ -49,11 +45,10 @@ export const authorizeCreate = internalMutation({
   handler: async (ctx, args) => {
     const slice = await sliceBySecret(ctx, args);
     if (!slice) return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
+    const accessDenial = await sliceAccessDenial(ctx, slice);
+    if (accessDenial) return accessDenial;
     if (!isAppId(args.app))
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
-    const status = effectiveSliceStatus(slice);
-    if (status === "revoked") return denyCreate(403, REVOKED_ERROR, "REVOKED");
-    if (status === "expired") return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
     const bindingId =
       args.bindingId === undefined
         ? null
@@ -123,12 +118,8 @@ export const finalize = internalMutation({
   handler: async (ctx, args) => {
     const slice = await ctx.db.get("slices", args.sliceId);
     if (!slice) return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
-    if (!(await hasActiveAgentConnection(ctx, slice))) {
-      return denyCreate(403, REVOKED_ERROR, "REVOKED");
-    }
-    const status = effectiveSliceStatus(slice);
-    if (status === "revoked") return denyCreate(403, REVOKED_ERROR, "REVOKED");
-    if (status === "expired") return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
+    const accessDenial = await sliceAccessDenial(ctx, slice);
+    if (accessDenial) return accessDenial;
     const binding = await ctx.db.get("sliceBindings", args.bindingId);
     const selected = await selectedConnection(
       ctx,
@@ -181,7 +172,7 @@ export const finalize = internalMutation({
       if (!["drive", "docs", "sheets"].includes(args.app)) {
         return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
       }
-      const brokerId = await ctx.db.insert("googleBrokerCredentials", {
+      await ctx.db.insert("googleBrokerCredentials", {
         secretHash: args.brokerSecretHash,
         sliceId: args.sliceId,
         bindingId: args.bindingId,
@@ -190,11 +181,6 @@ export const finalize = internalMutation({
         connectionGeneration: selected.connectionGeneration ?? 0,
         expiresAt,
       });
-      await ctx.scheduler.runAfter(
-        15 * 60_000 + 1000,
-        internal.tables.slices.googleBroker.expire,
-        { brokerId },
-      );
     }
     return { ok: true as const, expiresAt };
   },

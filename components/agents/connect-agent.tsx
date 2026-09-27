@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuthorizationShell } from "@/components/shared/authorization-shell";
 import { useNow } from "@/hooks/use-now";
+import { handoffLabel } from "@/lib/capabilities";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   DecisionFact,
@@ -24,9 +25,10 @@ import {
 
 export function ConnectAgent({ publicToken }: { publicToken: string }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const now = useNow();
   const invite = useQuery(
     api.tables.agentConnections.getInvite,
-    isAuthenticated ? { publicToken } : "skip",
+    isAuthenticated ? { publicToken, now } : "skip",
   );
   const {
     results: replacementOptions,
@@ -41,7 +43,6 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [replacementId, setReplacementId] = useState<string>("new");
-  const now = useNow();
   const currentPath = `/connect/${publicToken}`;
 
   if (isLoading)
@@ -83,7 +84,7 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
     );
   }
 
-  const pending = invite.status === "pending" && invite.expiresAt > now;
+  const pending = invite.handoffStatus === "waiting_for_approval";
   const resolvedInvite = invite;
 
   async function submit(decision: "approved" | "denied") {
@@ -141,7 +142,7 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
             </DecisionFact>
           ) : null}
         </DecisionFacts>
-        {!invite.reconnecting && replacementOptions.length > 0 ? (
+        {pending && !invite.reconnecting && replacementOptions.length > 0 ? (
           <div className="mt-6">
             <p className="text-sm text-muted-foreground">
               Connection destination
@@ -211,14 +212,37 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
             </Button>
           </div>
         ) : (
-          <div className="text-sm">
-            This connection is{" "}
-            <span className="font-medium">{invite.status}</span>.
+          <div className="text-sm font-medium">
+            {handoffLabel(invite.handoffStatus)}
           </div>
         )}
-        <p className="mt-3 text-center text-xs text-muted-foreground">
-          Link expires {new Date(invite.expiresAt).toLocaleString()}.
-        </p>
+        {invite.status === "pending" ||
+        invite.handoffStatus.startsWith("waiting_for_") ? (
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            {invite.status === "pending"
+              ? "Approval deadline"
+              : invite.status === "approved"
+                ? "Pickup deadline"
+                : invite.reconnecting
+                  ? "Activation deadline"
+                  : "Acknowledgment deadline"}
+            :{" "}
+            {new Date(
+              invite.status === "pending"
+                ? invite.approvalDeadlineAt
+                : invite.status === "approved"
+                  ? (invite.pickupDeadlineAt ?? invite.approvalDeadlineAt)
+                  : (invite.activationDeadlineAt ??
+                    invite.ackDeadlineAt ??
+                    invite.approvalDeadlineAt),
+            ).toLocaleString()}
+          </p>
+        ) : null}
+        {invite.reason ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Cause: {handoffLabel(invite.reason)}
+          </p>
+        ) : null}
       </div>
     </AuthorizationShell>
   );

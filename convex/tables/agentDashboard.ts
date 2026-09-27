@@ -5,21 +5,35 @@ import {
 } from "convex/server";
 import { authenticatedQuery } from "../functions";
 import { effectiveSliceStatus } from "../domain/slices";
+import { connectionDeadline, sliceHandoff } from "../domain/handoff";
+import {
+  projectConnectionHandoff,
+  activeConnectionForAgent,
+  agentAccessRevokedAt,
+} from "./agentConnections";
 
 const boardConnection = v.object({
   _id: v.id("agentConnections"),
   _creationTime: v.number(),
   name: v.string(),
   agentId: v.string(),
-  status: v.union(v.literal("active"), v.literal("revoked")),
+  status: v.union(
+    v.literal("staged"),
+    v.literal("active"),
+    v.literal("revoked"),
+  ),
   lastUsedAt: v.optional(v.number()),
   revokedAt: v.optional(v.number()),
+  revocationReason: v.optional(v.string()),
+  handoffStatus: v.optional(v.string()),
+  handoffDeadlineAt: v.optional(v.number()),
 });
 
 const boardGrant = v.object({
   _id: v.id("slices"),
   name: v.string(),
   status: v.union(
+    v.literal("staged"),
     v.literal("active"),
     v.literal("revoked"),
     v.literal("expired"),
@@ -28,10 +42,17 @@ const boardGrant = v.object({
 });
 
 export const list = authenticatedQuery({
-  args: {},
+  args: { now: v.optional(v.number()) },
   returns: v.array(boardConnection),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     const rows = [
+      ...(await ctx.db
+        .query("agentConnections")
+        .withIndex("by_user_status", (q) =>
+          q.eq("userId", ctx.userId).eq("status", "staged"),
+        )
+        .order("desc")
+        .take(100)),
       ...(await ctx.db
         .query("agentConnections")
         .withIndex("by_user_status", (q) =>
@@ -47,29 +68,56 @@ export const list = authenticatedQuery({
         .order("desc")
         .take(100)),
     ];
-    type VisibleConnection = (typeof rows)[number] & {
-      status: "active" | "revoked";
-    };
-    const byAgent = new Map<string, VisibleConnection>();
+    const byAgent = new Map<string, (typeof rows)[number]>();
     for (const row of rows) {
-      if (row.status === "staged") continue;
       const current = byAgent.get(row.agentId);
       if (
         !current ||
-        (row.status === "active" && current.status !== "active")
+        (row.status === "active" && current.status !== "active") ||
+        (row.status === "staged" && current.status === "revoked")
       ) {
-        byAgent.set(row.agentId, row as VisibleConnection);
+        byAgent.set(row.agentId, row);
       }
     }
-    return [...byAgent.values()].map((row) => ({
-      _id: row._id,
-      _creationTime: row._creationTime,
-      name: row.name,
-      agentId: row.agentId,
-      status: row.status,
-      lastUsedAt: row.lastUsedAt,
-      revokedAt: row.revokedAt,
-    }));
+    const visible = [
+      ...rows.filter((row) => row.status === "staged"),
+      ...[...byAgent.values()].filter((row) => row.status !== "staged"),
+    ];
+    return await Promise.all(
+      visible.map(async (row) => {
+        const invite =
+          row.status === "staged"
+            ? await ctx.db
+                .query("agentConnectionInvites")
+                .withIndex("by_agent_connection_id", (q) =>
+                  q.eq("agentConnectionId", row._id),
+                )
+                .unique()
+            : null;
+        const handoff = invite
+          ? await projectConnectionHandoff(
+              ctx,
+              invite,
+              row,
+              args.now ?? Date.now(),
+            )
+          : null;
+        return {
+          _id: row._id,
+          _creationTime: row._creationTime,
+          name: row.name,
+          agentId: row.agentId,
+          status: row.status,
+          lastUsedAt: row.lastUsedAt,
+          revokedAt: row.revokedAt,
+          revocationReason: handoff?.reason ?? row.revocationReason,
+          handoffStatus: handoff?.handoffStatus,
+          handoffDeadlineAt: invite
+            ? connectionDeadline(invite)?.at
+            : undefined,
+        };
+      }),
+    );
   },
 });
 
@@ -95,6 +143,7 @@ export const activePage = authenticatedQuery({
         status: "active" as const,
         lastUsedAt: row.lastUsedAt,
         revokedAt: row.revokedAt,
+        revocationReason: row.revocationReason,
       })),
     };
   },
@@ -103,6 +152,7 @@ export const activePage = authenticatedQuery({
 export const grantsPage = authenticatedQuery({
   args: {
     agentConnectionId: v.id("agentConnections"),
+    now: v.optional(v.number()),
     paginationOpts: paginationOptsValidator,
   },
   returns: paginationResultValidator(boardGrant),
@@ -116,17 +166,34 @@ export const grantsPage = authenticatedQuery({
       .withIndex("by_agentId", (q) => q.eq("agentId", agent.agentId))
       .order("desc")
       .paginate(args.paginationOpts);
+    const parent = await activeConnectionForAgent(ctx, agent.agentId);
+    const parentRevokedAt = parent
+      ? undefined
+      : await agentAccessRevokedAt(ctx, agent.agentId);
+    const now = args.now ?? Date.now();
     return {
       ...page,
-      page: page.page.map((slice) => ({
-        _id: slice._id,
-        name: slice.name,
-        status:
-          agent.status === "revoked"
-            ? ("revoked" as const)
-            : effectiveSliceStatus(slice),
-        expiresAt: slice.expiresAt,
-      })),
+      page: await Promise.all(
+        page.page.map(async (slice) => {
+          const request = await ctx.db
+            .query("sliceRequests")
+            .withIndex("by_createdSliceId", (q) =>
+              q.eq("createdSliceId", slice._id),
+            )
+            .unique();
+          return {
+            _id: slice._id,
+            name: slice.name,
+            expiresAt: slice.expiresAt,
+            status: request
+              ? sliceHandoff(request, slice, !!parent, now, parentRevokedAt)
+                  .resourceStatus!
+              : parent
+                ? effectiveSliceStatus(slice, now)
+                : ("revoked" as const),
+          };
+        }),
+      ),
     };
   },
 });

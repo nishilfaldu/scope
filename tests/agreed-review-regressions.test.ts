@@ -389,7 +389,7 @@ test("revoking a GitHub holder releases its grant for pending approval", async (
       publicToken: "pending-B",
       claimSecretHash: "unused",
       status: "pending",
-      expiresAt: Date.now() + 60_000,
+      approvalDeadlineAt: Date.now() + 60_000,
       apps: ["github"],
       ttlMs: 60_000,
       reason: "GitHub access",
@@ -435,7 +435,7 @@ test("pending request quota is indexed by owner and expired requests do not cons
         publicToken: `first-${i}`,
         claimSecretHash: `hash-${i}`,
         status: "pending",
-        expiresAt: Date.now() + 60_000,
+        approvalDeadlineAt: Date.now() + 60_000,
         apps: ["github"],
         ttlMs: 60_000,
         reason: "first",
@@ -447,7 +447,7 @@ test("pending request quota is indexed by owner and expired requests do not cons
       publicToken: "expired",
       claimSecretHash: "expired-hash",
       status: "pending",
-      expiresAt: Date.now() - 1,
+      approvalDeadlineAt: Date.now() - 1,
       apps: ["github"],
       ttlMs: 60_000,
       reason: "expired",
@@ -525,6 +525,12 @@ test("initial approve mint policy and changed pre-claim policy are both reported
     mintPolicy: "approve",
   });
   if (!claim.ok || claim.kind !== "slice") throw new Error("claim failed");
+  expect(
+    await t.mutation(
+      internal.tables.slices.sliceRequestClaims.acknowledgeSliceClaim,
+      { claimHandle: request.claimHandle, sliceSecret: claim.sliceSecret },
+    ),
+  ).toMatchObject({ ok: true, resourceStatus: "active" });
   const mint = await t.fetch("/api/credentials", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -539,11 +545,10 @@ test("initial approve mint policy and changed pre-claim policy are both reported
     sliceToken: claim.sliceToken,
     mintPolicy: "auto",
   });
-  const retry = await t.mutation(
-    internal.tables.slices.sliceRequestClaims.resolveSliceRequestClaim,
-    { claimHandle: request.claimHandle },
+  const currentSlice = await t.run((ctx) =>
+    ctx.db.get("slices", claim.sliceId),
   );
-  expect(retry).toMatchObject({ ok: true, kind: "slice", mintPolicy: "auto" });
+  expect(currentSlice?.mintPolicy).toBe("auto");
   expect(
     await t.mutation(
       internal.tables.slices.sliceRequestClaims.acknowledgeSliceClaim,
@@ -552,7 +557,7 @@ test("initial approve mint policy and changed pre-claim policy are both reported
         sliceSecret: "wrong",
       },
     ),
-  ).toBe(false);
+  ).toMatchObject({ ok: false, status: 401, code: "UNAUTHORIZED" });
   expect(
     await t.mutation(
       internal.tables.slices.sliceRequestClaims.acknowledgeSliceClaim,
@@ -561,7 +566,7 @@ test("initial approve mint policy and changed pre-claim policy are both reported
         sliceSecret: claim.sliceSecret,
       },
     ),
-  ).toBe(true);
+  ).toMatchObject({ ok: true, resourceStatus: "active" });
   expect(
     await t.mutation(
       internal.tables.slices.sliceRequestClaims.resolveSliceRequestClaim,
@@ -569,7 +574,11 @@ test("initial approve mint policy and changed pre-claim policy are both reported
         claimHandle: request.claimHandle,
       },
     ),
-  ).toMatchObject({ ok: false });
+  ).toMatchObject({
+    ok: false,
+    status: 409,
+    code: "CLAIM_ALREADY_ACKNOWLEDGED",
+  });
 });
 
 test("a held provider refresh cannot deliver stale authority after OAuth reconnection", async () => {
@@ -870,6 +879,75 @@ test("GitHub exclusivity checks live owners beyond 100 historical bindings", asy
   ).toBe(false);
 });
 
+test("a staged GitHub grant reserves the account until its handoff ends", async () => {
+  const t = convexTest(schema, modules);
+  const { id } = await owner(t, "owner@example.com");
+  await t.mutation(internal.tables.connections.mutations.saveConnection, {
+    userId: id,
+    app: "github",
+    provider: "github",
+    accessToken: "standing",
+    login: "owner",
+    providerUserId: "github-owner",
+  });
+  const connectionId = await t.run(async (ctx) => {
+    const connectionId = (await ctx.db.query("connections").unique())!._id;
+    await ctx.db.insert("agentConnections", {
+      userId: id,
+      agentId: "first",
+      name: "First",
+      secretHash: "hash",
+      status: "active",
+    });
+    const sliceId = await ctx.db.insert("slices", {
+      userId: id,
+      agentId: "first",
+      name: "Reserved",
+      token: "staged-token",
+      secretHash: "hash",
+      status: "staged",
+      expiresAt: Date.now() + 600_000,
+      mintPolicy: "auto",
+    });
+    await ctx.db.insert("sliceBindings", {
+      sliceId,
+      app: "github",
+      connectionId,
+    });
+    await ctx.db.insert("sliceRequests", {
+      agentId: "first",
+      userId: id,
+      apps: ["github"],
+      ttlMs: 600_000,
+      reason: "Read issues",
+      publicToken: "ar_reservation",
+      claimSecretHash: "claim-hash",
+      status: "approved",
+      approvalDeadlineAt: Date.now() + 600_000,
+      pickupDeadlineAt: Date.now() + 300_000,
+      createdSliceId: sliceId,
+    });
+    return connectionId;
+  });
+  expect(
+    await t.run((ctx) => githubGrantIsExclusive(ctx, connectionId, "second")),
+  ).toBe(false);
+  await t.run(async (ctx) => {
+    const request = await ctx.db
+      .query("sliceRequests")
+      .withIndex("by_public_token", (q) =>
+        q.eq("publicToken", "ar_reservation"),
+      )
+      .unique();
+    await ctx.db.patch("sliceRequests", request!._id, {
+      terminalReason: "pickup_timeout",
+    });
+  });
+  expect(
+    await t.run((ctx) => githubGrantIsExclusive(ctx, connectionId, "second")),
+  ).toBe(true);
+});
+
 test("editing a slice cannot add a GitHub connection held by another live agent", async () => {
   const t = convexTest(schema, modules);
   const { id, session } = await owner(t, "owner@example.com");
@@ -995,18 +1073,22 @@ test("new-agent claim recovers a lost response, then acknowledgment closes recov
       claimHandle: invite.claimHandle,
       agentConnectionSecret: "wrong",
     }),
-  ).toBe(false);
+  ).toMatchObject({ ok: false, status: 401, code: "UNAUTHORIZED" });
   expect(
     await t.mutation(internal.tables.agentConnections.acknowledgeClaim, {
       claimHandle: invite.claimHandle,
       agentConnectionSecret: first.agentConnectionSecret,
     }),
-  ).toBe(true);
-  await expect(
-    t.mutation(internal.tables.agentConnections.claim, {
+  ).toMatchObject({ ok: true, resourceStatus: "active" });
+  expect(
+    await t.mutation(internal.tables.agentConnections.claim, {
       claimHandle: invite.claimHandle,
     }),
-  ).rejects.toThrow("unavailable");
+  ).toMatchObject({
+    kind: "error",
+    status: 409,
+    code: "CLAIM_ALREADY_ACKNOWLEDGED",
+  });
   const row = await t.run((ctx) =>
     ctx.db.get("agentConnections", first.agentConnectionId),
   );
@@ -1068,7 +1150,7 @@ test("activated replacement remains authorized after its invite expires", async 
         claimHandle: firstInvite.claimHandle,
         agentConnectionSecret: first.agentConnectionSecret,
       }),
-    ).toBe(true);
+    ).toMatchObject({ ok: true, resourceStatus: "active" });
     const rotation = await t.mutation(
       internal.tables.agentConnections.createInvite,
       {
@@ -1092,7 +1174,7 @@ test("activated replacement remains authorized after its invite expires", async 
         agentConnectionId: replacement.agentConnectionId,
         agentConnectionSecret: replacement.agentConnectionSecret,
       }),
-    ).toEqual({ ok: true, status: "active" });
+    ).toMatchObject({ ok: true, status: "active" });
     vi.advanceTimersByTime(15 * 60 * 1000 + 1);
     await t.mutation(internal.tables.agentConnectionExpiry.expireInvite, {
       publicToken: rotation.publicToken,
@@ -1109,7 +1191,7 @@ test("activated replacement remains authorized after its invite expires", async 
         agentConnectionId: replacement.agentConnectionId,
         agentConnectionSecret: replacement.agentConnectionSecret,
       }),
-    ).toEqual({ ok: true, status: "active" });
+    ).toMatchObject({ ok: true, status: "active" });
     await expect(
       t.mutation(internal.tables.agentConnections.createInvite, {
         agentName: "Agent",
@@ -1217,44 +1299,49 @@ test("Airtable PKCE verifier is independent of public state and wrong verifier i
 test.each(["approved", "claimed"] as const)(
   "an unacknowledged %s slice is retired when its claim window expires",
   async (status) => {
-  const t = convexTest(schema, modules);
-  const { id } = await owner(t, "owner@example.com");
-  const ids = await t.run(async (ctx) => {
-    const sliceId = await ctx.db.insert("slices", {
-      userId: id,
-      agentId: "agent",
-      name: "Slice",
-      token: "token",
-      secretHash: await sha256Hex("secret"),
-      status: "active",
-      expiresAt: Date.now() + 60_000,
-      mintPolicy: "auto",
+    const t = convexTest(schema, modules);
+    const { id } = await owner(t, "owner@example.com");
+    const ids = await t.run(async (ctx) => {
+      const sliceId = await ctx.db.insert("slices", {
+        userId: id,
+        agentId: "agent",
+        name: "Slice",
+        token: "token",
+        secretHash: await sha256Hex("secret"),
+        status: "staged",
+        expiresAt: Date.now() + 60_000,
+        mintPolicy: "auto",
+      });
+      const requestId = await ctx.db.insert("sliceRequests", {
+        userId: id,
+        agentId: "agent",
+        publicToken: "public",
+        claimSecretHash: "hash",
+        status,
+        approvalDeadlineAt: Date.now() - 1,
+        pickupDeadlineAt: status === "approved" ? Date.now() - 1 : undefined,
+        ackDeadlineAt: status === "claimed" ? Date.now() - 1 : undefined,
+        apps: ["linear"],
+        ttlMs: 60_000,
+        reason: "test",
+        createdSliceId: sliceId,
+        issuedSliceSecretCipher: "cipher",
+      });
+      return { sliceId, requestId };
     });
-    const requestId = await ctx.db.insert("sliceRequests", {
-      userId: id,
-      agentId: "agent",
-      publicToken: "public",
-      claimSecretHash: "hash",
-      status,
-      expiresAt: Date.now() - 1,
-      apps: ["linear"],
-      ttlMs: 60_000,
-      reason: "test",
-      createdSliceId: sliceId,
-      issuedSliceSecretCipher: "cipher",
-    });
-    return { sliceId, requestId };
-  });
-  await t.mutation(internal.tables.slices.sliceRequestExpiry.clearClaimSecret, {
-    requestId: ids.requestId,
-  });
-  expect(
-    (await t.run((ctx) => ctx.db.get("slices", ids.sliceId)))?.status,
-  ).toBe("revoked");
-  expect(
-    (await t.run((ctx) => ctx.db.get("sliceRequests", ids.requestId)))
-      ?.issuedSliceSecretCipher,
-  ).toBe("");
+    await t.mutation(
+      internal.tables.slices.sliceRequestExpiry.clearClaimSecret,
+      {
+        requestId: ids.requestId,
+      },
+    );
+    expect(
+      (await t.run((ctx) => ctx.db.get("slices", ids.sliceId)))?.status,
+    ).toBe("revoked");
+    expect(
+      (await t.run((ctx) => ctx.db.get("sliceRequests", ids.requestId)))
+        ?.issuedSliceSecretCipher,
+    ).toBe("");
   },
 );
 
@@ -1370,7 +1457,7 @@ test("concurrent requests for one owner cannot exceed the pending allowance", as
         publicToken: `pending-${i}`,
         claimSecretHash: `hash-${i}`,
         status: "pending",
-        expiresAt: Date.now() + 60_000,
+        approvalDeadlineAt: Date.now() + 60_000,
         apps: ["linear"],
         ttlMs: 60_000,
         reason: "existing",

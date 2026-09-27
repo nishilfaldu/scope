@@ -234,13 +234,7 @@ export const httpGoogleBrokerHandler = httpAction(async (ctx, request) => {
     { brokerToken: input.brokerToken, charge: true },
   );
   if (!authorized.ok)
-    return errorResponse(
-      authorized.rateLimited ? 429 : 403,
-      authorized.rateLimited
-        ? "Broker rate limit exceeded"
-        : "Broker credential unavailable",
-      authorized.rateLimited ? "PROVIDER_ERROR" : "APP_UNAVAILABLE",
-    );
+    return errorResponse(authorized.status, authorized.reason, authorized.code);
   const operation = operationFor(authorized.app, input);
   if (!operation)
     return errorResponse(
@@ -279,11 +273,7 @@ export const httpGoogleBrokerHandler = httpAction(async (ctx, request) => {
     { brokerToken: input.brokerToken, charge: false },
   );
   if (!current.ok)
-    return errorResponse(
-      403,
-      "Broker credential unavailable",
-      "APP_UNAVAILABLE",
-    );
+    return errorResponse(current.status, current.reason, current.code);
   try {
     const upstream = await googleFetch(operation, minted.accessToken);
     if (!upstream.ok) return googleError(upstream.status);

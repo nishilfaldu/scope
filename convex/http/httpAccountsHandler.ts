@@ -26,6 +26,6 @@ export const httpAccountsHandler = httpAction(async (ctx, request) => {
     },
   );
   if (!result.ok)
-    return errorResponse(result.status, result.reason, result.code);
+    return errorResponse(result.status, result.reason, result.code, result);
   return jsonResponse(200, { app: result.app, accounts: result.accounts });
 });

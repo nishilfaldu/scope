@@ -42,7 +42,12 @@ auth.addHttpRoutes(http);
 http.route({
   path: "/",
   method: "GET",
-  handler: httpAction(async () => jsonResponse(200, discoverySpec)),
+  handler: httpAction(async (_ctx, request) =>
+    jsonResponse(200, {
+      ...discoverySpec,
+      rediscoveryUrl: new URL("/", request.url).toString(),
+    }),
+  ),
 });
 // Agent-initiated onboarding (approval link)
 for (const [path, handler] of [

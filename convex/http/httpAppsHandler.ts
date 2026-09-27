@@ -18,7 +18,12 @@ export const httpAppsHandler = httpAction(async (ctx, request) => {
     { sliceToken, sliceSecret, now: Date.now() },
   );
   if (!decision.ok) {
-    return errorResponse(decision.status, decision.reason, decision.code);
+    return errorResponse(
+      decision.status,
+      decision.reason,
+      decision.code,
+      decision,
+    );
   }
   return jsonResponse(200, {
     expiresAt: decision.expiresAt,

@@ -13,6 +13,9 @@ export const AGENT_ERROR_CODES = [
   "APPROVAL_DENIED",
   "APPROVAL_EXPIRED",
   "IDEMPOTENCY_CONFLICT",
+  "CLAIM_ACK_REQUIRED",
+  "ACTIVATION_REQUIRED",
+  "CLAIM_ALREADY_ACKNOWLEDGED",
 ] as const;
 
 export type AgentErrorCode = (typeof AGENT_ERROR_CODES)[number];
@@ -69,6 +72,20 @@ export const AGENT_ERROR_GUIDANCE: Record<
     retryable: false,
     nextAction: "Use the original payload or a new idempotency key.",
   },
+  CLAIM_ACK_REQUIRED: {
+    retryable: false,
+    nextAction:
+      "Persist the claimed secret, then acknowledge the claim before retrying.",
+  },
+  ACTIVATION_REQUIRED: {
+    retryable: false,
+    nextAction: "Activate the claimed replacement connection before retrying.",
+  },
+  CLAIM_ALREADY_ACKNOWLEDGED: {
+    retryable: false,
+    nextAction:
+      "Use the stored credential; check claim status to confirm its current state.",
+  },
 };
 
 export const agentErrorCodeValidator = v.union(
@@ -84,6 +101,9 @@ export const agentErrorCodeValidator = v.union(
   v.literal("APPROVAL_DENIED"),
   v.literal("APPROVAL_EXPIRED"),
   v.literal("IDEMPOTENCY_CONFLICT"),
+  v.literal("CLAIM_ACK_REQUIRED"),
+  v.literal("ACTIVATION_REQUIRED"),
+  v.literal("CLAIM_ALREADY_ACKNOWLEDGED"),
 );
 
 export const APP_UNAVAILABLE_ERROR = "This app is not available to this slice";
@@ -106,4 +126,6 @@ export const denyResultValidator = v.object({
   status: v.number(),
   reason: v.string(),
   code: agentErrorCodeValidator,
+  completionPath: v.optional(v.string()),
+  completionDeadlineAt: v.optional(v.number()),
 });

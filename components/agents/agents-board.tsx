@@ -24,8 +24,10 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BrandMark } from "@/components/shared/brand-mark";
+import { useNow } from "@/hooks/use-now";
+import { handoffLabel } from "@/lib/capabilities";
 
-function statusVariant(status: "active" | "revoked" | "expired") {
+function statusVariant(status: "staged" | "active" | "revoked" | "expired") {
   return status === "active"
     ? "default"
     : status === "revoked"
@@ -38,9 +40,10 @@ function AgentGrants({
 }: {
   agentConnectionId: Id<"agentConnections">;
 }) {
+  const now = useNow();
   const { results, status, loadMore } = usePaginatedQuery(
     api.tables.agentDashboard.grantsPage,
-    { agentConnectionId },
+    { agentConnectionId, now },
     { initialNumItems: 20 },
   );
 
@@ -96,6 +99,7 @@ function AgentGrants({
 }
 
 export function AgentsBoard() {
+  const now = useNow();
   const {
     results: activeResults,
     status: pageStatus,
@@ -105,10 +109,10 @@ export function AgentsBoard() {
     {},
     { initialNumItems: 50 },
   );
-  const historical = useQuery(api.tables.agentDashboard.list);
+  const historical = useQuery(api.tables.agentDashboard.list, { now });
   const agents = [
     ...activeResults,
-    ...(historical ?? []).filter((row) => row.status === "revoked"),
+    ...(historical ?? []).filter((row) => row.status !== "active"),
   ];
   const revoke = useMutation(api.tables.agentConnections.revoke);
   const [busy, setBusy] = useState<Id<"agentConnections"> | null>(null);
@@ -184,16 +188,24 @@ export function AgentsBoard() {
                             agent.status === "active" ? "secondary" : "outline"
                           }
                         >
-                          {agent.status}
+                          {agent.status === "staged"
+                            ? handoffLabel(
+                                agent.handoffStatus ?? "waiting_for_pickup",
+                              )
+                            : agent.status}
                         </Badge>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {agent.lastUsedAt
-                          ? `Last used ${new Date(agent.lastUsedAt).toLocaleString()}`
-                          : "Not used yet"}
+                        {agent.status === "staged" && agent.handoffDeadlineAt
+                          ? `Completion deadline ${new Date(agent.handoffDeadlineAt).toLocaleString()}`
+                          : agent.revocationReason
+                            ? `Cause: ${agent.revocationReason.replaceAll("_", " ")}`
+                            : agent.lastUsedAt
+                              ? `Last used ${new Date(agent.lastUsedAt).toLocaleString()}`
+                              : "Not used yet"}
                       </p>
                     </div>
-                    {agent.status === "active" ? (
+                    {agent.status === "active" || agent.status === "staged" ? (
                       <Dialog>
                         <DialogTrigger
                           render={<Button size="sm" variant="outline" />}
@@ -233,7 +245,9 @@ export function AgentsBoard() {
                       </Dialog>
                     ) : null}
                   </div>
-                  <AgentGrants agentConnectionId={agent._id} />
+                  {agent.status !== "staged" ? (
+                    <AgentGrants agentConnectionId={agent._id} />
+                  ) : null}
                 </section>
               ))}
             </div>

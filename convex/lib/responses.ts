@@ -23,6 +23,33 @@ export function errorResponse(
   status: number,
   error: string,
   code: AgentErrorCode,
+  details?: { completionPath?: string; completionDeadlineAt?: number },
 ): Response {
-  return jsonResponse(status, { error, code, ...AGENT_ERROR_GUIDANCE[code] });
+  const completionPath = details?.completionPath;
+  const requiredBodyFields =
+    completionPath === "/api/access-requests/ack"
+      ? ["claimHandle", "sliceSecret"]
+      : completionPath === "/api/agent-connections/ack"
+        ? ["claimHandle", "agentConnectionSecret"]
+        : undefined;
+  return jsonResponse(status, {
+    error,
+    code,
+    ...AGENT_ERROR_GUIDANCE[code],
+    ...(completionPath
+      ? {
+          serverTime: Date.now(),
+          completionPath,
+          completionDeadlineAt: details?.completionDeadlineAt,
+          ...(requiredBodyFields
+            ? { requiredBodyFields }
+            : {
+                requiredHeaders: [
+                  "x-agent-connection-id",
+                  "x-agent-connection-secret",
+                ],
+              }),
+        }
+      : {}),
+  });
 }

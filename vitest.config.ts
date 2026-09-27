@@ -1,6 +1,8 @@
 import { defineConfig } from "vitest/config";
+import { resolve } from "node:path";
 
 export default defineConfig({
+  resolve: { alias: { "@": resolve(__dirname, ".") } },
   test: {
     environment: "edge-runtime",
     // Required for connection save/read paths (AES-GCM). 32-byte key, base64.

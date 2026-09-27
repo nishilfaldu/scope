@@ -54,7 +54,12 @@ export async function mintCredential(
       },
     );
     if (!finalized.ok) {
-      return errorResponse(finalized.status, finalized.reason, finalized.code);
+      return errorResponse(
+        finalized.status,
+        finalized.reason,
+        finalized.code,
+        finalized,
+      );
     }
     return jsonResponse(200, {
       brokerToken,
@@ -62,7 +67,8 @@ export async function mintCredential(
       endpoint: "/api/google/operations",
       app: args.app,
       bindingId: args.bindingId,
-      expiresAt: finalized.expiresAt,
+      credentialExpiresAt: finalized.expiresAt,
+      ackRequired: false,
       expiresIn: Math.max(
         0,
         Math.floor((finalized.expiresAt - Date.now()) / 1000),
@@ -94,14 +100,20 @@ export async function mintCredential(
     },
   );
   if (!finalized.ok) {
-    return errorResponse(finalized.status, finalized.reason, finalized.code);
+    return errorResponse(
+      finalized.status,
+      finalized.reason,
+      finalized.code,
+      finalized,
+    );
   }
   return jsonResponse(200, {
     accessToken: issued.accessToken,
     tokenType: "Bearer",
     app: args.app,
     bindingId: args.bindingId,
-    expiresAt: issued.expiresAt,
+    credentialExpiresAt: issued.expiresAt,
+    ackRequired: false,
     expiresIn:
       issued.expiresAt === null
         ? null

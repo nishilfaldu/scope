@@ -94,14 +94,20 @@ export const httpCreateAccessRequestHandler = httpAction(
       },
     );
     if (!created.ok) {
-      return errorResponse(created.status, created.reason, created.code);
+      return errorResponse(
+        created.status,
+        created.reason,
+        created.code,
+        created,
+      );
     }
 
     const approvalUrl = approvalUrlFor(created.publicToken);
     return jsonResponse(created.reused ? 200 : 201, {
       requestId: created.requestId,
       status: created.status,
-      expiresAt: created.expiresAt,
+      approvalDeadlineAt: created.approvalDeadlineAt,
+      serverTime: Date.now(),
       agentName: created.agentName,
       apps: created.apps,
       ttlMs: created.ttlMs,
@@ -111,6 +117,12 @@ export const httpCreateAccessRequestHandler = httpAction(
       // Runtime-only: never paste claimHandle into chat.
       claimHandle: created.claimHandle,
       reused: created.reused,
+      nextAction: {
+        type: "share_approval_url_then_poll",
+        method: "POST",
+        path: "/api/access-requests/status",
+        requiredBodyFields: ["claimHandle"],
+      },
     });
   },
 );
@@ -126,18 +138,52 @@ export const httpAccessRequestStatusHandler = httpAction(
       return claimHandle;
     }
 
+    const now = Date.now();
     const status = await ctx.runQuery(
       internal.tables.slices.sliceRequestClaims.resolveSliceRequestStatus,
-      { claimHandle },
+      { claimHandle, now },
     );
     if (!status.ok) {
-      return errorResponse(status.status, status.reason, status.code);
+      return errorResponse(status.status, status.reason, status.code, status);
     }
 
     return jsonResponse(200, {
       requestId: status.requestId,
       status: status.status,
-      expiresAt: status.expiresAt,
+      approvalDeadlineAt: status.approvalDeadlineAt,
+      pickupDeadlineAt: status.pickupDeadlineAt,
+      ackDeadlineAt: status.ackDeadlineAt,
+      sliceExpiresAt: status.sliceExpiresAt,
+      handoffStatus: status.handoffStatus,
+      resourceStatus: status.resourceStatus,
+      acknowledgedAt: status.acknowledgedAt,
+      reasonCode: status.reasonCode,
+      serverTime: now,
+      nextAction:
+        status.handoffStatus === "waiting_for_approval"
+          ? {
+              type: "poll_status",
+              method: "POST",
+              path: "/api/access-requests/status",
+              requiredBodyFields: ["claimHandle"],
+            }
+          : status.handoffStatus === "waiting_for_pickup"
+            ? {
+                type: "claim",
+                method: "POST",
+                path: "/api/access-requests/claim",
+                requiredBodyFields: ["claimHandle"],
+              }
+            : status.handoffStatus === "waiting_for_ack"
+              ? {
+                  type: "persist_then_ack",
+                  method: "POST",
+                  path: "/api/access-requests/ack",
+                  requiredBodyFields: ["claimHandle", "sliceSecret"],
+                }
+              : status.handoffStatus === "ready"
+                ? { type: "use_slice" }
+                : { type: "stop_and_request_new_grant" },
       agentName: status.agentName,
       apps: status.apps,
       ttlMs: status.ttlMs,
@@ -163,7 +209,12 @@ export const httpAccessRequestClaimHandler = httpAction(
       { claimHandle },
     );
     if (!decision.ok) {
-      return errorResponse(decision.status, decision.reason, decision.code);
+      return errorResponse(
+        decision.status,
+        decision.reason,
+        decision.code,
+        decision,
+      );
     }
 
     if (decision.kind === "pending") {
@@ -174,7 +225,14 @@ export const httpAccessRequestClaimHandler = httpAction(
         ...AGENT_ERROR_GUIDANCE.APPROVAL_REQUIRED,
         requestId: decision.requestId,
         status: decision.status,
-        expiresAt: decision.expiresAt,
+        approvalDeadlineAt: decision.approvalDeadlineAt,
+        serverTime: Date.now(),
+        nextAction: {
+          type: "poll_status",
+          method: "POST",
+          path: "/api/access-requests/status",
+          requiredBodyFields: ["claimHandle"],
+        },
         agentName: decision.agentName,
         apps: decision.apps,
         approvalUrl: approvalUrlFor(decision.publicToken),
@@ -186,7 +244,17 @@ export const httpAccessRequestClaimHandler = httpAction(
       sliceId: decision.sliceId,
       sliceToken: decision.sliceToken,
       sliceSecret: decision.sliceSecret,
-      expiresAt: decision.expiresAt,
+      sliceExpiresAt: decision.sliceExpiresAt,
+      ackDeadlineAt: decision.ackDeadlineAt,
+      ackRequired: decision.ackRequired,
+      handoffStatus: "awaiting_ack",
+      serverTime: Date.now(),
+      nextAction: {
+        type: "persist_then_ack",
+        method: "POST",
+        path: "/api/access-requests/ack",
+        requiredBodyFields: ["claimHandle", "sliceSecret"],
+      },
       name: decision.name,
       apps: decision.apps,
       mintPolicy: decision.mintPolicy,
@@ -233,7 +301,12 @@ export const httpAccessRequestAckHandler = httpAction(async (ctx, request) => {
     internal.tables.slices.sliceRequestClaims.acknowledgeSliceClaim,
     { claimHandle, sliceSecret },
   );
-  return ok
-    ? jsonResponse(200, { ok: true })
-    : errorResponse(403, "Claim unavailable", "UNAUTHORIZED");
+  return ok.ok
+    ? jsonResponse(200, {
+        ...ok,
+        handoffStatus:
+          ok.resourceStatus === "active" ? "ready" : ok.resourceStatus,
+        serverTime: Date.now(),
+      })
+    : errorResponse(ok.status, ok.reason, ok.code, ok);
 });
