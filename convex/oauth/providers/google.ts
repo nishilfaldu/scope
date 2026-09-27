@@ -52,25 +52,22 @@ export const google: ProviderOAuth = {
       return { error: oauthErrorReason(tokenRaw) };
     }
     const userResponse = await fetch(
-      "https://openidconnect.googleapis.com/v1/userinfo",
+      "https://www.googleapis.com/oauth2/v2/userinfo",
       { headers: { Authorization: `Bearer ${tokenRaw.access_token}` } },
     );
     const userRaw: unknown = await userResponse.json();
     if (
       !userResponse.ok ||
       !isPlainObject(userRaw) ||
-      typeof userRaw.sub !== "string" ||
-      !userRaw.sub
+      typeof userRaw.id !== "string" ||
+      !userRaw.id ||
+      typeof userRaw.email !== "string" ||
+      !userRaw.email
     )
       return { error: "identity" };
-    const email =
-      isPlainObject(userRaw) && typeof userRaw.email === "string"
-        ? userRaw.email
-        : "google";
-    const sub = userRaw.sub;
     return grantFromTokenPayload(tokenRaw, {
-      login: email,
-      providerUserId: sub,
+      login: userRaw.email,
+      providerUserId: userRaw.id,
     });
   },
 

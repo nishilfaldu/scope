@@ -6,9 +6,7 @@ import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const scopes = (app: "drive" | "docs" | "sheets") => [
-  "openid",
-  "email",
-  "profile",
+  "https://www.googleapis.com/auth/userinfo.email",
   `https://www.googleapis.com/auth/${app === "docs" ? "documents" : app === "sheets" ? "spreadsheets" : "drive"}`,
 ];
 const json = (body: unknown) =>

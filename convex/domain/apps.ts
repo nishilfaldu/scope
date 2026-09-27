@@ -111,12 +111,15 @@ const GOOGLE_APP_SCOPE: Record<GoogleAppId, string> = {
   sheets: "https://www.googleapis.com/auth/spreadsheets",
 };
 
-/** Request identity plus only the resource scope represented by this app. */
+/** Request account email plus only the resource scope represented by this app. */
 export function scopesForGoogleApp(app: AppId): string {
   if (!isGoogleApp(app)) {
     throw new Error(`scopesForGoogleApp requires a Google app, got ${app}`);
   }
-  return ["openid", "email", "profile", GOOGLE_APP_SCOPE[app]].join(" ");
+  return [
+    "https://www.googleapis.com/auth/userinfo.email",
+    GOOGLE_APP_SCOPE[app],
+  ].join(" ");
 }
 
 /** Effective Google bearer-token authority for the requested app. */
@@ -128,10 +131,8 @@ export function googleScopesAreBounded(
   const requested = new Set(scopesForGoogleApp(app).split(" "));
   const actual = new Set(
     scopes.map((scope) => {
-      if (scope === "https://www.googleapis.com/auth/userinfo.email")
-        return "email";
-      if (scope === "https://www.googleapis.com/auth/userinfo.profile")
-        return "profile";
+      if (scope === "email")
+        return "https://www.googleapis.com/auth/userinfo.email";
       return scope;
     }),
   );

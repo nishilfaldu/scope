@@ -33,14 +33,66 @@ describe("per-app Google consent", () => {
         `https://scope.convex.site/api/${app}/callback`,
       );
       expect(url.searchParams.get("scope")!.split(" ")).toEqual([
-        "openid",
-        "email",
-        "profile",
+        "https://www.googleapis.com/auth/userinfo.email",
         resourceScope,
       ]);
       expect(url.searchParams.get("include_granted_scopes")).toBe("false");
     },
   );
+
+  test("email-only consent identifies the Google account without profile access", async () => {
+    vi.stubEnv("GOOGLE_CLIENT_ID", "shared-client");
+    vi.stubEnv("GOOGLE_CLIENT_SECRET", "shared-secret");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
+    const upstream = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (url, options) => {
+        if (String(url) === "https://oauth2.googleapis.com/token") {
+          return new Response(
+            JSON.stringify({
+              access_token: "google-access",
+              refresh_token: "google-refresh",
+              scope:
+                "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/documents",
+            }),
+          );
+        }
+        expect(String(url)).toBe(
+          "https://www.googleapis.com/oauth2/v2/userinfo",
+        );
+        expect(new Headers(options?.headers).get("Authorization")).toBe(
+          "Bearer google-access",
+        );
+        return new Response(
+          JSON.stringify({
+            id: "stable-google-id",
+            email: "owner@example.com",
+          }),
+        );
+      });
+    const grant = await google.exchange("auth-code", "state-1", "docs");
+    expect(grant).toMatchObject({
+      providerUserId: "stable-google-id",
+      login: "owner@example.com",
+    });
+    expect(upstream).toHaveBeenCalledTimes(2);
+  });
+
+  test("email-only consent refuses an unidentifiable account", async () => {
+    vi.stubEnv("GOOGLE_CLIENT_ID", "shared-client");
+    vi.stubEnv("GOOGLE_CLIENT_SECRET", "shared-secret");
+    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "google-access" })),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ email: "owner@example.com" })),
+      );
+    expect(await google.exchange("auth-code", "state-1", "docs")).toEqual({
+      error: "identity",
+    });
+  });
 });
 
 describe("app-bound OAuth state", () => {

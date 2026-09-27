@@ -167,9 +167,13 @@ test("Google apps have independent effective access; grants require bounded reso
   expect(effectiveGoogleApps("sheets")).toEqual(["sheets"]);
   expect(
     googleScopesAreBounded("drive", [
-      "openid",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/drive",
+    ]),
+  ).toBe(true);
+  expect(
+    googleScopesAreBounded("drive", [
       "email",
-      "profile",
       "https://www.googleapis.com/auth/drive",
     ]),
   ).toBe(true);
@@ -177,18 +181,17 @@ test("Google apps have independent effective access; grants require bounded reso
     googleScopesAreBounded("drive", [
       "openid",
       "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile",
-      "https://www.googleapis.com/auth/drive",
-    ]),
-  ).toBe(true);
-  expect(
-    googleScopesAreBounded("drive", [
-      "openid",
-      "https://www.googleapis.com/auth/gmail.modify",
       "https://www.googleapis.com/auth/drive",
     ]),
   ).toBe(false);
-  expect(googleScopesAreBounded("drive", ["openid", "email"])).toBe(false);
+  expect(
+    googleScopesAreBounded("drive", [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile",
+      "https://www.googleapis.com/auth/drive",
+    ]),
+  ).toBe(false);
+  expect(googleScopesAreBounded("drive", ["email"])).toBe(false);
   expect(googleScopesAreBounded("drive", undefined)).toBe(false);
 });
 
@@ -695,10 +698,10 @@ test("an interrupted refresh lease can be recovered after its deadline", async (
 test.each([
   [undefined, 200],
   [
-    "openid email profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/drive",
     403,
   ],
-  ["openid email profile", 403],
+  ["https://www.googleapis.com/auth/userinfo.email", 403],
 ] as const)(
   "Google refresh scope %s yields status %s",
   async (scope, expectedStatus) => {
@@ -715,9 +718,7 @@ test.each([
       login: "gmail",
       providerUserId: "sub",
       grantedScopes: [
-        "openid",
-        "email",
-        "profile",
+        "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/gmail.modify",
       ],
     });
