@@ -253,12 +253,15 @@ export const httpGoogleBrokerHandler = httpAction(async (ctx, request) => {
     authorized.userId,
     authorized.app,
     authorized.connectionId,
+    "server",
   );
   if ("error" in minted)
     return errorResponse(
-      403,
-      "Google connection unavailable",
-      "APP_UNAVAILABLE",
+      minted.code === "APP_UNAVAILABLE" ? 403 : 503,
+      minted.code === "PROVIDER_ERROR"
+        ? "Google connection is busy; retry shortly"
+        : "Google connection unavailable",
+      minted.code,
     );
   if (!googleScopesAreBounded(authorized.app, minted.grantedScopes)) {
     return errorResponse(

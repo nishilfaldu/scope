@@ -60,6 +60,48 @@ afterEach(() => {
 });
 
 describe("auto mint policy", () => {
+  test("a concurrent refresh asks the agent to retry", async () => {
+    const test = t();
+    const { backend, userId } = await signedIn(test, {
+      refreshToken: "ghr_refresh_token",
+    });
+    const created = await backend.mutation(
+      internal.tables.slices.mutations.createFixture,
+      {
+        name: "Concurrent refresh",
+        ttlMs: 60_000,
+        apps: ["github"],
+        mintPolicy: "auto",
+      },
+    );
+    const connection = (await test.run((ctx) =>
+      ctx.db.query("connections").unique(),
+    ))!;
+    expect(
+      await test.mutation(internal.tables.connections.mutations.beginRefresh, {
+        userId,
+        app: "github",
+        connectionId: connection._id,
+        grantVersion: connection.grantVersion,
+        lease: "held-by-other-request",
+      }),
+    ).toBe(true);
+    const response = await test.fetch("/api/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sliceToken: created.sliceToken,
+        sliceSecret: created.sliceSecret,
+        app: "github",
+      }),
+    });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      code: "PROVIDER_ERROR",
+      retryable: true,
+    });
+  });
+
   test("POST /api/credentials mints a short-lived token distinct from standing", async () => {
     const test = t();
     const { backend } = await signedIn(test, {

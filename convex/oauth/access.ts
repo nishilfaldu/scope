@@ -66,6 +66,7 @@ export async function issueShortLivedAccess(
   userId: Id<"users">,
   app: AppId,
   connectionId: Id<"connections">,
+  delivery: "agent" | "server" = "agent",
 ): Promise<IssueShortLivedAccessResult> {
   const connection = await ctx.runQuery(
     internal.tables.connections.queries.getConnection,
@@ -108,7 +109,7 @@ export async function issueShortLivedAccess(
   if (!acquired)
     return {
       error: "Connection refresh is in progress; retry shortly",
-      code: "SHORT_LIVED_UNAVAILABLE",
+      code: "PROVIDER_ERROR",
     };
   let minted: RefreshedTokens | null;
   try {
@@ -128,9 +129,10 @@ export async function issueShortLivedAccess(
     return SHORT_LIVED_UNAVAILABLE_RESULT;
   }
 
-  // Refuse vault standing-token handoff even if a provider regresses.
+  // A broker may reuse a provider token because it never gives that token to
+  // the agent. Direct handoff must still refuse the stored access token.
   if (
-    minted.accessToken === connection.accessToken ||
+    (delivery === "agent" && minted.accessToken === connection.accessToken) ||
     (connection.refreshToken !== null &&
       minted.accessToken === connection.refreshToken)
   ) {

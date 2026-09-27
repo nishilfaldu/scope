@@ -112,6 +112,66 @@ test("Drive mint returns only an opaque credential and refuses Docs and Sheets o
   expect(upstream).not.toHaveBeenCalled();
 });
 
+test("broker can use a valid access token repeated by Google's refresh endpoint", async () => {
+  const { t, userId, mint, operate } = await setup(["docs"]);
+  const credential = await mint("docs");
+  const connection = (await t.run((ctx) =>
+    ctx.db.query("connections").unique(),
+  ))!;
+  const stored = (await t.query(
+    internal.tables.connections.queries.getConnection,
+    {
+      userId,
+      app: "docs",
+      connectionId: connection._id,
+    },
+  ))!;
+  const upstream = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (url, options) => {
+      if (String(url) === "https://oauth2.googleapis.com/token") {
+        return json({
+          access_token: stored.accessToken,
+          expires_in: 3600,
+          scope: scopes("docs").join(" "),
+        });
+      }
+      expect(JSON.stringify(options?.headers)).toContain(stored.accessToken);
+      return json({ documentId: "document123" });
+    });
+  const result = await operate(credential.brokerToken, "docs.get", {
+    id: "document123",
+  });
+  expect(result.status).toBe(200);
+  expect(JSON.stringify(await result.json())).not.toContain(stored.accessToken);
+  expect(upstream).toHaveBeenCalledTimes(2);
+});
+
+test("broker reports refresh-lease contention as retryable", async () => {
+  const { t, userId, mint, operate } = await setup(["docs"]);
+  const credential = await mint("docs");
+  const connection = (await t.run((ctx) =>
+    ctx.db.query("connections").unique(),
+  ))!;
+  expect(
+    await t.mutation(internal.tables.connections.mutations.beginRefresh, {
+      userId,
+      app: "docs",
+      connectionId: connection._id,
+      grantVersion: connection.grantVersion,
+      lease: "held-by-another-request",
+    }),
+  ).toBe(true);
+  const response = await operate(credential.brokerToken, "docs.get", {
+    id: "document123",
+  });
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({
+    code: "PROVIDER_ERROR",
+    retryable: true,
+  });
+});
+
 test("Drive rejects Docs and Sheets content and permits a binary file", async () => {
   vi.stubEnv("GOOGLE_CLIENT_ID", "client");
   vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");

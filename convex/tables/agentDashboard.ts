@@ -14,18 +14,17 @@ const boardConnection = v.object({
   status: v.union(v.literal("active"), v.literal("revoked")),
   lastUsedAt: v.optional(v.number()),
   revokedAt: v.optional(v.number()),
-  slices: v.array(
-    v.object({
-      _id: v.id("slices"),
-      name: v.string(),
-      status: v.union(
-        v.literal("active"),
-        v.literal("revoked"),
-        v.literal("expired"),
-      ),
-      expiresAt: v.number(),
-    }),
+});
+
+const boardGrant = v.object({
+  _id: v.id("slices"),
+  name: v.string(),
+  status: v.union(
+    v.literal("active"),
+    v.literal("revoked"),
+    v.literal("expired"),
   ),
+  expiresAt: v.number(),
 });
 
 export const list = authenticatedQuery({
@@ -62,32 +61,15 @@ export const list = authenticatedQuery({
         byAgent.set(row.agentId, row as VisibleConnection);
       }
     }
-    return await Promise.all(
-      [...byAgent.values()].map(async (row) => {
-        const slices = await ctx.db
-          .query("slices")
-          .withIndex("by_agentId", (q) => q.eq("agentId", row.agentId))
-          .collect();
-        return {
-          _id: row._id,
-          _creationTime: row._creationTime,
-          name: row.name,
-          agentId: row.agentId,
-          status: row.status,
-          lastUsedAt: row.lastUsedAt,
-          revokedAt: row.revokedAt,
-          slices: slices.map((slice) => ({
-            _id: slice._id,
-            name: slice.name,
-            status:
-              row.status === "revoked"
-                ? ("revoked" as const)
-                : effectiveSliceStatus(slice),
-            expiresAt: slice.expiresAt,
-          })),
-        };
-      }),
-    );
+    return [...byAgent.values()].map((row) => ({
+      _id: row._id,
+      _creationTime: row._creationTime,
+      name: row.name,
+      agentId: row.agentId,
+      status: row.status,
+      lastUsedAt: row.lastUsedAt,
+      revokedAt: row.revokedAt,
+    }));
   },
 });
 
@@ -105,29 +87,46 @@ export const activePage = authenticatedQuery({
       .paginate(args.paginationOpts);
     return {
       ...page,
-      page: await Promise.all(
-        page.page.map(async (row) => {
-          const slices = await ctx.db
-            .query("slices")
-            .withIndex("by_agentId", (q) => q.eq("agentId", row.agentId))
-            .take(100);
-          return {
-            _id: row._id,
-            _creationTime: row._creationTime,
-            name: row.name,
-            agentId: row.agentId,
-            status: "active" as const,
-            lastUsedAt: row.lastUsedAt,
-            revokedAt: row.revokedAt,
-            slices: slices.map((slice) => ({
-              _id: slice._id,
-              name: slice.name,
-              status: effectiveSliceStatus(slice),
-              expiresAt: slice.expiresAt,
-            })),
-          };
-        }),
-      ),
+      page: page.page.map((row) => ({
+        _id: row._id,
+        _creationTime: row._creationTime,
+        name: row.name,
+        agentId: row.agentId,
+        status: "active" as const,
+        lastUsedAt: row.lastUsedAt,
+        revokedAt: row.revokedAt,
+      })),
+    };
+  },
+});
+
+export const grantsPage = authenticatedQuery({
+  args: {
+    agentConnectionId: v.id("agentConnections"),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(boardGrant),
+  handler: async (ctx, args) => {
+    const agent = await ctx.db.get("agentConnections", args.agentConnectionId);
+    if (!agent || agent.userId !== ctx.userId || agent.status === "staged") {
+      throw new Error("Agent connection not found");
+    }
+    const page = await ctx.db
+      .query("slices")
+      .withIndex("by_agentId", (q) => q.eq("agentId", agent.agentId))
+      .order("desc")
+      .paginate(args.paginationOpts);
+    return {
+      ...page,
+      page: page.page.map((slice) => ({
+        _id: slice._id,
+        name: slice.name,
+        status:
+          agent.status === "revoked"
+            ? ("revoked" as const)
+            : effectiveSliceStatus(slice),
+        expiresAt: slice.expiresAt,
+      })),
     };
   },
 });

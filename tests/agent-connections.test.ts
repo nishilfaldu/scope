@@ -591,10 +591,19 @@ describe("agent connections", () => {
       expect.arrayContaining([
         expect.objectContaining({
           _id: claimed.agentConnectionId,
-          slices: expect.arrayContaining([
-            expect.objectContaining({ _id: slice.sliceId, status: "active" }),
-          ]),
         }),
+      ]),
+    );
+    const grants = await ownerSession.query(
+      api.tables.agentDashboard.grantsPage,
+      {
+        agentConnectionId: claimed.agentConnectionId,
+        paginationOpts: { numItems: 20, cursor: null },
+      },
+    );
+    expect(grants.page).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ _id: slice.sliceId, status: "active" }),
       ]),
     );
 

@@ -190,12 +190,9 @@ export async function githubGrantIsExclusive(
   connectionId: Id<"connections">,
   agentId: string,
 ): Promise<boolean> {
-  const existing = await ctx.db
+  for await (const row of ctx.db
     .query("sliceBindings")
-    .withIndex("by_connectionId", (q) => q.eq("connectionId", connectionId))
-    .take(100);
-  if (existing.length === 100) return false;
-  for (const row of existing) {
+    .withIndex("by_connectionId", (q) => q.eq("connectionId", connectionId))) {
     const slice = await ctx.db.get("slices", row.sliceId);
     if (
       slice &&

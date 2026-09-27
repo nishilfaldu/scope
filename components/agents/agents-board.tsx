@@ -33,6 +33,68 @@ function statusVariant(status: "active" | "revoked" | "expired") {
       : "outline";
 }
 
+function AgentGrants({
+  agentConnectionId,
+}: {
+  agentConnectionId: Id<"agentConnections">;
+}) {
+  const { results, status, loadMore } = usePaginatedQuery(
+    api.tables.agentDashboard.grantsPage,
+    { agentConnectionId },
+    { initialNumItems: 20 },
+  );
+
+  return (
+    <div className="border-t bg-muted/25 px-4 py-2 sm:px-5">
+      {status === "LoadingFirstPage" ? (
+        <Skeleton className="my-3 h-8 w-full" />
+      ) : results.length ? (
+        results.map((slice) => (
+          <Link
+            key={slice._id}
+            href={`/slices/${slice._id}`}
+            className="group flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="flex size-8 items-center justify-center rounded-lg border bg-background">
+              <HugeiconsIcon
+                icon={AiChat02Icon}
+                className="size-4"
+                strokeWidth={2}
+              />
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {slice.name}
+            </span>
+            <Badge variant={statusVariant(slice.status)}>{slice.status}</Badge>
+            <span className="hidden text-xs text-muted-foreground sm:block">
+              {new Date(slice.expiresAt).toLocaleDateString()}
+            </span>
+            <HugeiconsIcon
+              icon={ArrowRight01Icon}
+              className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+              strokeWidth={2}
+            />
+          </Link>
+        ))
+      ) : (
+        <p className="px-2 py-3 text-sm text-muted-foreground">
+          No access granted yet.
+        </p>
+      )}
+      {status === "CanLoadMore" ? (
+        <Button
+          className="mt-2"
+          size="sm"
+          variant="outline"
+          onClick={() => loadMore(20)}
+        >
+          Load more grants
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function AgentsBoard() {
   const {
     results: activeResults,
@@ -60,12 +122,7 @@ export function AgentsBoard() {
     }
   }
 
-  const activeAgents =
-    agents?.filter((agent) => agent.status === "active").length ?? 0;
-  const activeSlices =
-    agents
-      ?.flatMap((agent) => agent.slices)
-      .filter((slice) => slice.status === "active").length ?? 0;
+  const activeAgents = activeResults.length;
 
   return (
     <BoardShell title="Agents">
@@ -83,13 +140,9 @@ export function AgentsBoard() {
                 <span className="block text-2xl font-semibold tabular-nums">
                   {activeAgents}
                 </span>
-                <span className="text-muted-foreground">Active agents</span>
-              </div>
-              <div>
-                <span className="block text-2xl font-semibold tabular-nums">
-                  {activeSlices}
+                <span className="text-muted-foreground">
+                  Active agents shown
                 </span>
-                <span className="text-muted-foreground">Active grants</span>
               </div>
             </div>
           ) : null}
@@ -137,9 +190,7 @@ export function AgentsBoard() {
                       <p className="mt-1 text-xs text-muted-foreground">
                         {agent.lastUsedAt
                           ? `Last used ${new Date(agent.lastUsedAt).toLocaleString()}`
-                          : "Not used yet"}{" "}
-                        · {agent.slices.length}{" "}
-                        {agent.slices.length === 1 ? "grant" : "grants"}
+                          : "Not used yet"}
                       </p>
                     </div>
                     {agent.status === "active" ? (
@@ -182,43 +233,7 @@ export function AgentsBoard() {
                       </Dialog>
                     ) : null}
                   </div>
-                  <div className="border-t bg-muted/25 px-4 py-2 sm:px-5">
-                    {agent.slices.length ? (
-                      agent.slices.map((slice) => (
-                        <Link
-                          key={slice._id}
-                          href={`/slices/${slice._id}`}
-                          className="group flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <span className="flex size-8 items-center justify-center rounded-lg border bg-background">
-                            <HugeiconsIcon
-                              icon={AiChat02Icon}
-                              className="size-4"
-                              strokeWidth={2}
-                            />
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                            {slice.name}
-                          </span>
-                          <Badge variant={statusVariant(slice.status)}>
-                            {slice.status}
-                          </Badge>
-                          <span className="hidden text-xs text-muted-foreground sm:block">
-                            {new Date(slice.expiresAt).toLocaleDateString()}
-                          </span>
-                          <HugeiconsIcon
-                            icon={ArrowRight01Icon}
-                            className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                            strokeWidth={2}
-                          />
-                        </Link>
-                      ))
-                    ) : (
-                      <p className="px-2 py-3 text-sm text-muted-foreground">
-                        No access granted yet.
-                      </p>
-                    )}
-                  </div>
+                  <AgentGrants agentConnectionId={agent._id} />
                 </section>
               ))}
             </div>

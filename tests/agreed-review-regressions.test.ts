@@ -12,6 +12,7 @@ import { slack } from "../convex/oauth/providers/slack";
 import { linear } from "../convex/oauth/providers/linear";
 import { notion } from "../convex/oauth/providers/notion";
 import { sha256Hex } from "../convex/lib/secrets";
+import { githubGrantIsExclusive } from "../convex/tables/slices/helpers";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const json = (body: unknown) =>
@@ -169,6 +170,14 @@ test("Google apps have independent effective access; grants require bounded reso
       "openid",
       "email",
       "profile",
+      "https://www.googleapis.com/auth/drive",
+    ]),
+  ).toBe(true);
+  expect(
+    googleScopesAreBounded("drive", [
+      "openid",
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile",
       "https://www.googleapis.com/auth/drive",
     ]),
   ).toBe(true);
@@ -791,6 +800,177 @@ test("active lineages remain paginated and selectable past 100 historical and 10
   expect(options.page.some((row) => row.id === oldestId)).toBe(true);
 });
 
+test("GitHub exclusivity checks live owners beyond 100 historical bindings", async () => {
+  const t = convexTest(schema, modules);
+  const { id } = await owner(t, "owner@example.com");
+  await t.mutation(internal.tables.connections.mutations.saveConnection, {
+    userId: id,
+    app: "github",
+    provider: "github",
+    accessToken: "standing",
+    login: "owner",
+    providerUserId: "github-owner",
+  });
+  const connection = (await t.run((ctx) =>
+    ctx.db.query("connections").unique(),
+  ))!;
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 120; i++) {
+      const sliceId = await ctx.db.insert("slices", {
+        userId: id,
+        agentId: `retired-${i}`,
+        name: `Retired ${i}`,
+        token: `token-${i}`,
+        secretHash: "hash",
+        status: "revoked",
+        expiresAt: Date.now() + 60_000,
+        mintPolicy: "auto",
+      });
+      await ctx.db.insert("sliceBindings", {
+        sliceId,
+        app: "github",
+        connectionId: connection._id,
+      });
+    }
+  });
+  expect(
+    await t.run((ctx) =>
+      githubGrantIsExclusive(ctx, connection._id, "new-agent"),
+    ),
+  ).toBe(true);
+  await t.run(async (ctx) => {
+    const agentId = "other-live-agent";
+    await ctx.db.insert("agentConnections", {
+      userId: id,
+      agentId,
+      name: "Other",
+      secretHash: "hash",
+      status: "active",
+    });
+    const sliceId = await ctx.db.insert("slices", {
+      userId: id,
+      agentId,
+      name: "Other's grant",
+      token: "other-token",
+      secretHash: "hash",
+      status: "active",
+      expiresAt: Date.now() + 60_000,
+      mintPolicy: "auto",
+    });
+    await ctx.db.insert("sliceBindings", {
+      sliceId,
+      app: "github",
+      connectionId: connection._id,
+    });
+  });
+  expect(
+    await t.run((ctx) =>
+      githubGrantIsExclusive(ctx, connection._id, "new-agent"),
+    ),
+  ).toBe(false);
+});
+
+test("editing a slice cannot add a GitHub connection held by another live agent", async () => {
+  const t = convexTest(schema, modules);
+  const { id, session } = await owner(t, "owner@example.com");
+  await t.mutation(internal.tables.connections.mutations.saveConnection, {
+    userId: id,
+    app: "github",
+    provider: "github",
+    accessToken: "standing",
+    login: "owner",
+    providerUserId: "github-owner",
+  });
+  const connection = (await t.run((ctx) =>
+    ctx.db.query("connections").unique(),
+  ))!;
+  await t.run(async (ctx) => {
+    for (const agentId of ["agent-A", "agent-B"]) {
+      await ctx.db.insert("agentConnections", {
+        userId: id,
+        agentId,
+        name: agentId,
+        secretHash: "hash",
+        status: "active",
+      });
+      const sliceId = await ctx.db.insert("slices", {
+        userId: id,
+        agentId,
+        name: agentId,
+        token: agentId,
+        secretHash: "hash",
+        status: "active",
+        expiresAt: Date.now() + 60_000,
+        mintPolicy: "auto",
+      });
+      if (agentId === "agent-A") {
+        await ctx.db.insert("sliceBindings", {
+          sliceId,
+          app: "github",
+          connectionId: connection._id,
+        });
+      }
+    }
+  });
+  await expect(
+    session.mutation(api.tables.slices.mutations.setBinding, {
+      sliceToken: "agent-B",
+      app: "github",
+      enabled: true,
+      connectionId: connection._id,
+    }),
+  ).rejects.toThrow("cannot be shared");
+  expect(
+    await t.run((ctx) =>
+      ctx.db
+        .query("sliceBindings")
+        .withIndex("by_connectionId", (q) =>
+          q.eq("connectionId", connection._id),
+        )
+        .collect(),
+    ),
+  ).toHaveLength(1);
+});
+
+test("agent grants page reaches recent and older grants beyond 100", async () => {
+  const t = convexTest(schema, modules);
+  const { id, session } = await owner(t, "owner@example.com");
+  const agentConnectionId = await t.run((ctx) =>
+    ctx.db.insert("agentConnections", {
+      userId: id,
+      agentId: "paged-agent",
+      name: "Paged agent",
+      secretHash: "hash",
+      status: "active",
+    }),
+  );
+  await t.run(async (ctx) => {
+    for (let i = 0; i < 120; i++) {
+      await ctx.db.insert("slices", {
+        userId: id,
+        agentId: "paged-agent",
+        name: `Grant ${i}`,
+        token: `page-token-${i}`,
+        secretHash: "hash",
+        status: "active",
+        expiresAt: Date.now() + 60_000,
+        mintPolicy: "auto",
+      });
+    }
+  });
+  const first = await session.query(api.tables.agentDashboard.grantsPage, {
+    agentConnectionId,
+    paginationOpts: { numItems: 20, cursor: null },
+  });
+  expect(first.page[0]?.name).toBe("Grant 119");
+  const second = await session.query(api.tables.agentDashboard.grantsPage, {
+    agentConnectionId,
+    paginationOpts: { numItems: 110, cursor: first.continueCursor },
+  });
+  expect([...first.page, ...second.page]).toHaveLength(120);
+  expect(second.page.at(-1)?.name).toBe("Grant 0");
+});
+
 test("new-agent claim recovers a lost response, then acknowledgment closes recovery", async () => {
   const t = convexTest(schema, modules);
   const { session } = await owner(t, "owner@example.com");
@@ -1034,7 +1214,9 @@ test("Airtable PKCE verifier is independent of public state and wrong verifier i
   provider.mockRestore();
 });
 
-test("an unacknowledged slice claim is retired when its claim window expires", async () => {
+test.each(["approved", "claimed"] as const)(
+  "an unacknowledged %s slice is retired when its claim window expires",
+  async (status) => {
   const t = convexTest(schema, modules);
   const { id } = await owner(t, "owner@example.com");
   const ids = await t.run(async (ctx) => {
@@ -1053,7 +1235,7 @@ test("an unacknowledged slice claim is retired when its claim window expires", a
       agentId: "agent",
       publicToken: "public",
       claimSecretHash: "hash",
-      status: "claimed",
+      status,
       expiresAt: Date.now() - 1,
       apps: ["linear"],
       ttlMs: 60_000,
@@ -1073,7 +1255,8 @@ test("an unacknowledged slice claim is retired when its claim window expires", a
     (await t.run((ctx) => ctx.db.get("sliceRequests", ids.requestId)))
       ?.issuedSliceSecretCipher,
   ).toBe("");
-});
+  },
+);
 
 test("GitHub user-token refresh invalidates the prior access token, so a second agent is refused", async () => {
   vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");

@@ -7,6 +7,7 @@ import { effectiveSliceStatus } from "../../domain/slices";
 import {
   bindingForConnection,
   createSlice,
+  githubGrantIsExclusive,
   MAX_SLICE_NAME,
   MAX_TTL_MS,
   validatedBindings,
@@ -141,6 +142,14 @@ export const setBinding = authenticatedMutation({
       throw new Error(`Select a connected account for ${args.app}`);
     }
     if (!binding) {
+      if (
+        args.app === "github" &&
+        !(await githubGrantIsExclusive(ctx, args.connectionId, slice.agentId))
+      ) {
+        throw new Error(
+          "GitHub App user tokens cannot be shared by multiple active agents",
+        );
+      }
       await ctx.db.insert("sliceBindings", {
         sliceId: slice._id,
         app: args.app,

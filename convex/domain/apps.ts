@@ -126,7 +126,15 @@ export function googleScopesAreBounded(
 ): boolean {
   if (!isGoogleApp(app) || !scopes) return false;
   const requested = new Set(scopesForGoogleApp(app).split(" "));
-  const actual = new Set(scopes);
+  const actual = new Set(
+    scopes.map((scope) => {
+      if (scope === "https://www.googleapis.com/auth/userinfo.email")
+        return "email";
+      if (scope === "https://www.googleapis.com/auth/userinfo.profile")
+        return "profile";
+      return scope;
+    }),
+  );
   return (
     actual.has(GOOGLE_APP_SCOPE[app]) &&
     [...actual].every((scope) => requested.has(scope))

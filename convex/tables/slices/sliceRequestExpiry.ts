@@ -8,7 +8,7 @@ export const clearClaimSecret = internalMutation({
     const request = await ctx.db.get("sliceRequests", args.requestId);
     if (request && request.expiresAt <= Date.now()) {
       if (
-        request.status === "claimed" &&
+        (request.status === "approved" || request.status === "claimed") &&
         !request.claimAcknowledgedAt &&
         request.createdSliceId
       ) {

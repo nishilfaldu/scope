@@ -25,11 +25,16 @@ export async function mintCredential(
       args.userId,
       args.app,
       args.connectionId,
+      "server",
     );
-    if (
-      "error" in verified ||
-      !googleScopesAreBounded(args.app, verified.grantedScopes)
-    ) {
+    if ("error" in verified) {
+      return errorResponse(
+        verified.code === "APP_UNAVAILABLE" ? 403 : 503,
+        verified.error,
+        verified.code,
+      );
+    }
+    if (!googleScopesAreBounded(args.app, verified.grantedScopes)) {
       return errorResponse(
         503,
         "Google connection cannot mint a bounded token",
