@@ -64,18 +64,19 @@ export const notion: ProviderOAuth = {
       isPlainObject(raw.owner) && isPlainObject(raw.owner.user)
         ? raw.owner.user
         : null;
+    const workspaceName =
+      typeof raw.workspace_name === "string"
+        ? raw.workspace_name
+        : "Notion workspace";
+    const workspaceId =
+      typeof raw.workspace_id === "string" ? raw.workspace_id : "";
+    const botId = typeof raw.bot_id === "string" ? raw.bot_id : "";
     const login =
       owner && typeof owner.name === "string"
-        ? owner.name
-        : typeof raw.workspace_name === "string"
-          ? raw.workspace_name
-          : "notion";
+        ? `${workspaceName} · ${owner.name}`
+        : workspaceName;
     const providerUserId =
-      owner && typeof owner.id === "string"
-        ? owner.id
-        : typeof raw.bot_id === "string"
-          ? raw.bot_id
-          : "";
+      workspaceId && botId ? `${workspaceId}:${botId}` : "";
     return grantFromTokenPayload(raw, { login, providerUserId });
   },
 

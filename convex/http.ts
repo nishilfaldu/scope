@@ -4,8 +4,10 @@ import { httpAppsHandler } from "./http/httpAppsHandler";
 import { httpAccountsHandler } from "./http/httpAccountsHandler";
 import { httpClaimHandler } from "./http/httpClaimHandler";
 import { httpCredentialsHandler } from "./http/httpCredentialsHandler";
+import { httpGoogleBrokerHandler } from "./http/googleBroker";
 import {
   httpAccessRequestClaimHandler,
+  httpAccessRequestAckHandler,
   httpCancelAccessRequestHandler,
   httpAccessRequestStatusHandler,
   httpCreateAccessRequestHandler,
@@ -18,6 +20,7 @@ import { oauthConfigured } from "./oauth";
 import { auth } from "./auth";
 import {
   httpAgentConnectionClaimHandler,
+  httpAgentConnectionAckHandler,
   httpActivateAgentConnectionHandler,
   httpCancelAgentConnectionInviteHandler,
   httpRevokeAgentConnectionHandler,
@@ -39,13 +42,19 @@ auth.addHttpRoutes(http);
 http.route({
   path: "/",
   method: "GET",
-  handler: httpAction(async () => jsonResponse(200, discoverySpec)),
+  handler: httpAction(async (_ctx, request) =>
+    jsonResponse(200, {
+      ...discoverySpec,
+      rediscoveryUrl: new URL("/", request.url).toString(),
+    }),
+  ),
 });
 // Agent-initiated onboarding (approval link)
 for (const [path, handler] of [
   ["/api/agent-connections", httpCreateAgentConnectionHandler],
   ["/api/agent-connections/status", httpAgentConnectionStatusHandler],
   ["/api/agent-connections/claim", httpAgentConnectionClaimHandler],
+  ["/api/agent-connections/ack", httpAgentConnectionAckHandler],
   ["/api/agent-connections/activate", httpActivateAgentConnectionHandler],
   ["/api/agent-connections/cancel", httpCancelAgentConnectionInviteHandler],
   ["/api/agent-connections/revoke", httpRevokeAgentConnectionHandler],
@@ -98,6 +107,16 @@ http.route({
   handler: optionsOk,
 });
 http.route({
+  path: "/api/access-requests/ack",
+  method: "OPTIONS",
+  handler: optionsOk,
+});
+http.route({
+  path: "/api/access-requests/ack",
+  method: "POST",
+  handler: httpAccessRequestAckHandler,
+});
+http.route({
   path: "/api/access-requests/claim",
   method: "POST",
   handler: httpAccessRequestClaimHandler,
@@ -113,6 +132,16 @@ http.route({
   path: "/api/credentials",
   method: "POST",
   handler: httpCredentialsHandler,
+});
+http.route({
+  path: "/api/google/operations",
+  method: "OPTIONS",
+  handler: optionsOk,
+});
+http.route({
+  path: "/api/google/operations",
+  method: "POST",
+  handler: httpGoogleBrokerHandler,
 });
 
 // Poll / claim after operator approval (mint path)

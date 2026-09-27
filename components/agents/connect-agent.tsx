@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import {
+  useConvexAuth,
+  useMutation,
+  useQuery,
+  usePaginatedQuery,
+} from "convex/react";
 
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -10,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuthorizationShell } from "@/components/shared/authorization-shell";
 import { useNow } from "@/hooks/use-now";
+import { handoffLabel } from "@/lib/capabilities";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   DecisionFact,
@@ -19,15 +25,24 @@ import {
 
 export function ConnectAgent({ publicToken }: { publicToken: string }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const now = useNow();
   const invite = useQuery(
     api.tables.agentConnections.getInvite,
-    isAuthenticated ? { publicToken } : "skip",
+    isAuthenticated ? { publicToken, now } : "skip",
+  );
+  const {
+    results: replacementOptions,
+    status: optionsStatus,
+    loadMore: loadMoreOptions,
+  } = usePaginatedQuery(
+    api.tables.agentConnections.replacementOptionsPage,
+    isAuthenticated ? {} : "skip",
+    { initialNumItems: 50 },
   );
   const decide = useMutation(api.tables.agentConnections.decideInvite);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [replacementId, setReplacementId] = useState<string>("new");
-  const now = useNow();
   const currentPath = `/connect/${publicToken}`;
 
   if (isLoading)
@@ -69,7 +84,7 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
     );
   }
 
-  const pending = invite.status === "pending" && invite.expiresAt > now;
+  const pending = invite.handoffStatus === "waiting_for_approval";
   const resolvedInvite = invite;
 
   async function submit(decision: "approved" | "denied") {
@@ -127,7 +142,13 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
             </DecisionFact>
           ) : null}
         </DecisionFacts>
-        {!invite.reconnecting && invite.replacementOptions.length > 0 ? (
+        {pending ? (
+          <p className="mt-4 text-xs leading-5 text-muted-foreground">
+            Agent names are provided by the requester. Approve only the agent
+            you asked to connect.
+          </p>
+        ) : null}
+        {pending && !invite.reconnecting && replacementOptions.length > 0 ? (
           <div className="mt-6">
             <p className="text-sm text-muted-foreground">
               Connection destination
@@ -143,7 +164,7 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
                   Starts without existing grants.
                 </span>
               </button>
-              {invite.replacementOptions.map((option) => (
+              {replacementOptions.map((option) => (
                 <button
                   key={option.id}
                   type="button"
@@ -157,6 +178,11 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
                   </span>
                 </button>
               ))}
+              {optionsStatus === "CanLoadMore" ? (
+                <Button variant="outline" onClick={() => loadMoreOptions(50)}>
+                  Load more connections
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -192,14 +218,43 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
             </Button>
           </div>
         ) : (
-          <div className="text-sm">
-            This connection is{" "}
-            <span className="font-medium">{invite.status}</span>.
+          <div className="text-sm font-medium">
+            {handoffLabel(invite.handoffStatus)}
           </div>
         )}
-        <p className="mt-3 text-center text-xs text-muted-foreground">
-          Link expires {new Date(invite.expiresAt).toLocaleString()}.
-        </p>
+        {!pending && invite.status === "approved" ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Return to your agent chat. If the agent paused, reply
+            &ldquo;Continue&rdquo; so it can finish connecting.
+          </p>
+        ) : null}
+        {invite.status === "pending" ||
+        invite.handoffStatus.startsWith("waiting_for_") ? (
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            {invite.status === "pending"
+              ? "Approval deadline"
+              : invite.status === "approved"
+                ? "Pickup deadline"
+                : invite.reconnecting
+                  ? "Activation deadline"
+                  : "Acknowledgment deadline"}
+            :{" "}
+            {new Date(
+              invite.status === "pending"
+                ? invite.approvalDeadlineAt
+                : invite.status === "approved"
+                  ? (invite.pickupDeadlineAt ?? invite.approvalDeadlineAt)
+                  : (invite.activationDeadlineAt ??
+                    invite.ackDeadlineAt ??
+                    invite.approvalDeadlineAt),
+            ).toLocaleString()}
+          </p>
+        ) : null}
+        {invite.reason ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Cause: {handoffLabel(invite.reason)}
+          </p>
+        ) : null}
       </div>
     </AuthorizationShell>
   );

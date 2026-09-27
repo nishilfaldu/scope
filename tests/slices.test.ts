@@ -24,6 +24,7 @@ async function signedIn(test: ReturnType<typeof t>) {
       accessToken: "github-token",
       login: "nishil",
       providerUserId: "github-1",
+      grantVersion: 1,
     });
   });
   await test.run(async (ctx) => {
@@ -33,6 +34,7 @@ async function signedIn(test: ReturnType<typeof t>) {
       accessToken: "google-token",
       login: "nishil@example.com",
       providerUserId: "google-1",
+      grantVersion: 1,
     });
   });
   return {

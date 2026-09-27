@@ -4,19 +4,19 @@ Scope lets a user connect OAuth accounts and give an agent a slice that can requ
 
 ## How it works
 
-- A **connection** stores one provider account's encrypted OAuth tokens. Google has separate Gmail, Calendar, Drive, Docs, and Sheets connections, each with its own consent scopes and callback. One user can connect multiple accounts to the same app.
+- A **connection** stores one provider account's encrypted OAuth tokens. Google has separate Gmail, Calendar, and Google files connections; Google files combines Drive, Docs, and Sheets in one consent flow and agent grant. One user can connect multiple accounts to the same app.
 - A **slice** belongs to a user and stable agent lineage, has a token and secret, an expiry, a revocation state, and an `auto` or `approve` mint policy.
 - An **agent connection** is an operator-approved relationship with an opaque ID and secret. It identifies the Scope account that later slice requests must address. Revoking it blocks new requests and every slice created through it.
 - Each allowed account has one indexed **slice binding** that selects a connection. A slice can allow several accounts for the same app. Bindings are separate rows; the slice does not store an array of apps or accounts.
-- An agent presents its slice token and secret to `POST /api/credentials`. When several accounts are allowed for an app, it chooses a `bindingId` from `GET /api/accounts?app=<app>`. The backend checks that exact binding, refreshes its provider connection, checks permissions again, then returns the newly issued provider access token. Under `approve`, the operator first approves a one-time mint request for that account.
+- An agent presents its slice token and secret to `POST /api/credentials`. When several accounts are allowed for an app, it chooses a `bindingId` from `GET /api/accounts?app=<app>`. Google files returns an opaque `brokerToken` for `/api/google/operations`; its Google bearer token never leaves Scope. Other apps return provider access tokens. Under `approve`, the operator first approves a one-time mint request for that account.
 
-**Revocation boundary:** Revoking an agent connection, revoking a slice, or disconnecting an account immediately blocks _future_ credential mints. An already issued provider-native access token remains usable until that provider expires or revokes it. Scope does not proxy provider requests and cannot shorten an upstream token's lifetime. The credential response reports the provider's expiry, or `null` if the provider did not give one.
+**Revocation boundary:** Revoking an agent connection, revoking a slice, or disconnecting an account blocks future mints and future Drive, Docs, and Sheets broker operations. Other apps still return provider-native access tokens, which remain usable until their provider expires or revokes them. Their credential response reports the provider's expiry, or `null` if the provider did not give one.
 
 The vault never hands out its stored access token or refresh token. Providers without a refresh-capable grant cannot mint agent credentials and return `SHORT_LIVED_UNAVAILABLE`.
 
 ## Agent approval
 
-An agent first calls `POST /api/agent-connections`, sends only the returned `connectUrl` to the operator, and keeps the private claim handle. The operator verifies their email in Scope and explicitly connects the agent. The agent claims a stable agent ID plus an opaque connection ID and secret once. The pairing name is requester supplied and is not a verified identity.
+An agent first calls `POST /api/agent-connections`, sends only the returned `connectUrl` to the operator, and keeps the private claim handle. The operator verifies their email in Scope and explicitly connects the agent. The agent claims a stable agent ID plus an opaque connection ID and secret, stores them, and acknowledges delivery with `POST /api/agent-connections/ack` using `claimHandle` and `agentConnectionSecret`. A lost claim response can be retried until two minutes after the first claim. New connections cannot request access before acknowledgment; unacknowledged connections are retired at that fixed deadline. The pairing name is requester supplied and is not a verified identity.
 
 For planned rotation, the agent calls the same endpoint with its active connection ID and secret in the connection headers. The link is bound to the original Scope account. Approval stages replacement credentials while the current connection remains active. The agent may retry the claim until it receives those credentials, then proves possession through `POST /api/agent-connections/activate`. Activation atomically swaps the active credential generation and revokes the previous one; slices and slice requests remain attached to the stable agent lineage. Retrying activation is safe.
 
@@ -26,37 +26,49 @@ Every later `POST /api/access-requests` includes that connection ID and secret i
 
 For an existing slice with approval policy, `POST /api/credentials` returns a `/requests/token/[token]` link. The decision screen shows the slice, app, and specific connected account. Only the slice owner's Scope user ID can read or decide it. A connected provider login is never used to establish ownership. Approval permits one short-lived credential claim through the existing private agent claim path; the browser never receives provider tokens or slice secrets.
 
-Google OAuth remains available for connecting Gmail, Calendar, Drive, Docs, and Sheets. It is not a Scope sign-in method. Email codes expire in 10 minutes and are single use.
+Google OAuth remains available for connecting Gmail, Calendar, and Google files. Google files requests Drive, Docs, and Sheets scopes together. Each app also requests permission to read the Google account's primary email address for account identification; it does not request personal profile or OpenID access. Existing separate Drive, Docs, and Sheets connections must be replaced with a Google files connection. Google OAuth is not a Scope sign-in method. Email codes are 128-bit random values, expire in 10 minutes, and are single use. The longer code prevents practical collisions in the auth library's global code lookup.
 
-Use a random, task-stable `Idempotency-Key` header (32–128 characters) when creating an access request. The same key and payload return the same pending or approved request and private handle before it is claimed. A different payload with that key returns `IDEMPOTENCY_CONFLICT`. Treat this key as a secret because a caller holding it can recover the claim handle while the request is live. Agent errors include stable `code`, `retryable`, and `nextAction` fields. A denied, expired, or claimed request needs a fresh task and key.
+Use a random, task-stable `Idempotency-Key` header (32–128 characters) when creating an access request. The same key and payload return the same pending or approved request and private handle before it is claimed. A different payload with that key returns `IDEMPOTENCY_CONFLICT`. Treat this key as a secret because a caller holding it can recover the claim handle while the request is live. Agent errors include stable `code`, `retryable`, and `nextAction` fields. A denied or expired request needs a fresh task and key. An approved slice can first be claimed for five minutes after approval. The first claim starts a fixed two-minute acknowledgment window; retries do not extend it. A completed acknowledgment can be confirmed later through the ack endpoint or status.
 
 ## Connect and account selection
 
 The signed-in operator connects apps from `/connections`. Each connection is keyed by user, provider, app, and the provider's stable account ID. The display login is never used as an account key. Slice creation and onboarding approval page through apps and account choices, retaining selections across pages. At least one account must be chosen for every selected app; several may be chosen.
 
-For Google, register five redirects on the same OAuth client:
+Scope keeps the Google files bearer server-side and restricts agents to vetted Drive file listing, metadata, and non-Docs/Sheets download operations, plus Docs and Sheets content operations. One connection, slice binding, and broker credential covers all three. Google grants with missing or broader scope metadata must be reconnected. A GitHub App user grant can be bound to one active agent lineage because refreshing its user token invalidates the prior access token.
+
+For Google, register three redirects on the same OAuth client:
 
 - `https://<deployment>.convex.site/api/gmail/callback`
 - `https://<deployment>.convex.site/api/calendar/callback`
-- `https://<deployment>.convex.site/api/drive/callback`
-- `https://<deployment>.convex.site/api/docs/callback`
-- `https://<deployment>.convex.site/api/sheets/callback`
+- `https://<deployment>.convex.site/api/files/callback`
 
 Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` once. Disconnect removes local access first. Provider revocation is attempted afterward; for Google it is attempted when the last app connection for that Google account is removed.
 
 ## Agent pairing, onboarding, and minting
 
 1. The agent calls `POST /api/agent-connections` with `agentName`, gives the operator the `connectUrl`, and privately retains the `claimHandle`.
-2. After the operator approves, the agent calls `POST /api/agent-connections/claim` and securely stores the returned connection ID and secret. Replacement claims are retryable until activation. When `activationRequired` is true, the agent calls `POST /api/agent-connections/activate` with the replacement credentials; this endpoint is idempotent.
+2. The agent polls `POST /api/agent-connections/status` with private JSON `{ "claimHandle": "ach_..." }`. After approval, it calls `/api/agent-connections/claim` with that body, stores the returned connection ID and secret, and follows the returned `nextAction`. For a new connection, `POST /api/agent-connections/ack` with JSON `{ "claimHandle": "ach_...", "agentConnectionSecret": "acs_..." }` completes setup. For a replacement, `POST /api/agent-connections/activate` with headers `x-agent-connection-id` and `x-agent-connection-secret` atomically swaps credentials. Both completion requests are idempotent; claim retries remain possible only until completion or its deadline.
 3. The agent calls `POST /api/access-requests` with `apps`, `ttlMs`, a requester-supplied `reason`, and the connection credentials in headers. The response contains a chat-safe owner-bound `approvalUrl` and private `claimHandle`.
-4. The operator opens the URL, selects one or more accounts for each app, and approves or denies. The agent polls `POST /api/access-requests/status` and claims slice credentials once with `POST /api/access-requests/claim`.
+4. The operator opens the URL, selects one or more accounts for each app, and approves or denies. The agent polls `POST /api/access-requests/status`, claims slice credentials with `POST /api/access-requests/claim`, stores them, then acknowledges with `POST /api/access-requests/ack` using `claimHandle` and `sliceSecret`. The agent can first claim for five minutes after approval. The first claim starts a fixed two-minute acknowledgment window; it retries a lost claim response before that deadline. It retries a lost ack response with the same handle and secret, even after the deadline, to confirm recorded completion. An unacknowledged slice is retired. Its approved lifetime still begins at approval.
 5. The agent calls `GET /api/accounts?app=<app>` with `x-slice-token` and `x-slice-secret` to see the accounts allowed for that app. It sends `sliceToken`, `sliceSecret`, `app`, and the chosen `bindingId` to `POST /api/credentials`. With a single allowed account, `bindingId` may be omitted. With several, omitting it returns `ACCOUNT_SELECTION_REQUIRED`. An auto slice mints immediately. An approve slice returns a request ID and approval URL for the exact account; after approval the agent calls `POST /api/credentials/claim`.
+
+### Google files broker
+
+For the `files` app, a successful credential response contains `brokerToken`, `tokenType: "ScopeBroker"`, `endpoint: "/api/google/operations"`, `app`, `bindingId`, and an expiry (at most 15 minutes). It has no `accessToken`. The agent sends JSON `{ "brokerToken": "gc_...", "operation": "..." }` to `POST /api/google/operations` on the same Convex HTTP origin. The broker verifies the current slice, agent, binding, connection, and OAuth grant on every call, refreshes a Google token server-side, and checks bounded scopes before calling a fixed Google endpoint. When Google omits `scope` from a refresh response, Scope uses the bounded scopes verified and stored at connection time; an explicit mismatched or broader refresh scope is rejected. The broker rejects redirects, limits requests to 64 KiB and upstream responses to 512 KiB (384 KiB for downloaded file bytes before base64 encoding), and allows 30 operations per slice per minute. Reconnect or disconnect invalidates previously issued broker credentials for that connection.
+
+| Area   | Operations                                                                 | Arguments                                                               |
+| ------ | -------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Drive  | `drive.list`, `drive.metadata`, `drive.download`                           | `pageSize` (1–100) and `pageToken` for list; `id` for metadata/download |
+| Docs   | `docs.get`, `docs.create`, `docs.batchUpdate`                              | `id` for get/update; `payload` for create/update                        |
+| Sheets | `sheets.get`, `sheets.create`, `sheets.values.get`, `sheets.values.update` | `id` for get; `range` for values; `payload` for create/update           |
+
+Drive list includes Google Docs and Sheets names, IDs, and MIME types, but excludes shortcuts. Drive metadata can inspect Docs and Sheets, while Drive download rejects Docs, Sheets, and shortcuts even when the agent knows an ID; allowed downloads return `contentBase64` and `mimeType`. Docs and Sheets content uses their respective APIs through the same Google files broker credential. The broker does not support arbitrary Google URLs, Drive upload, delete, copy, export, or permissions. The broker does not claim parity with Google's APIs.
 
 An agent may reduce its own authority without operator approval. Connection credentials authorize `POST /api/agent-connections/revoke`; slice credentials authorize `POST /api/slices/revoke`. Private request credentials authorize cancellation through `/api/agent-connections/cancel`, `/api/access-requests/cancel`, and `/api/credentials/cancel`. Revocation and cancellation never expand access. Request fields are immutable after a link is created.
 
-A failed provider refresh leaves an approved mint request available to retry until its claim window expires. The backend consumes the request only after refresh and the final slice, account, and binding check succeed.
+A failed provider refresh leaves an approved mint request available to retry until its claim window expires. Google files verifies a bounded fresh Google grant before issuing an opaque broker credential. A later broker operation can still fail if the grant expires or is revoked.
 
-`GET /` on the Convex HTTP origin lists routes. `GET /api/apps` reports app availability for a slice. Its `connected` flag means at least one account allowed by the slice is still connected; unbound apps report `false`. `GET /api/accounts?app=<app>` returns each available account's display login and opaque `bindingId`. If an account is removed from the slice while a mint is pending, that mint can no longer be claimed.
+`GET /` on the Convex HTTP origin provides route discovery and a complete polling, claim, and acknowledgment guide. A running or resumable agent must do the polling; Scope does not wake it. All deadline fields and `serverTime` are Unix milliseconds. `status` remains inspectable after denial or timeout, while a wrong private handle returns 401. `GET /` also lists routes. `GET /api/apps` reports app availability for a slice. Its `connected` flag means at least one account allowed by the slice is still connected; unbound apps report `false`. `GET /api/accounts?app=<app>` returns each available account's display login and opaque `bindingId`. If an account is removed from the slice while a mint is pending, that mint can no longer be claimed.
 
 ## Run it
 

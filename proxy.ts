@@ -50,6 +50,8 @@ export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
       `/signin?redirectTo=${redirectTo}`,
     );
   }
+}, {
+  shouldHandleCode: (request) => request.nextUrl.pathname !== "/oauth/complete",
 });
 
 export const config = {

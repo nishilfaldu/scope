@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
+import { projectConnectionHandoff } from "./agentConnections";
 
 export const expireInvite = internalMutation({
   args: { publicToken: v.string() },
@@ -13,19 +14,31 @@ export const expireInvite = internalMutation({
       .unique();
     if (
       !invite ||
-      invite.expiresAt > Date.now() ||
-      (invite.status !== "pending" && invite.status !== "approved")
-    ) {
+      invite.status === "denied" ||
+      invite.status === "expired" ||
+      invite.claimAcknowledgedAt !== undefined ||
+      invite.activatedAt !== undefined
+    )
       return null;
-    }
-    if (invite.agentConnectionId) {
-      await ctx.db.patch("agentConnections", invite.agentConnectionId, {
+    const connection = invite.agentConnectionId
+      ? await ctx.db.get("agentConnections", invite.agentConnectionId)
+      : null;
+    const handoff = await projectConnectionHandoff(
+      ctx,
+      invite,
+      connection,
+      Date.now(),
+    );
+    if (!handoff.reason) return null;
+    if (connection?.status === "staged")
+      await ctx.db.patch("agentConnections", connection._id, {
         status: "revoked",
-        revokedAt: Date.now(),
+        revokedAt: handoff.terminalAt,
+        revocationReason: handoff.reason,
       });
-    }
     await ctx.db.patch("agentConnectionInvites", invite._id, {
       status: "expired",
+      terminalReason: handoff.reason,
       issuedSecretCipher: "",
     });
     return null;

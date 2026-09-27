@@ -1,8 +1,5 @@
 import { v } from "convex/values";
-import {
-  requestStatusValidator,
-  effectiveRequestStatus,
-} from "../../domain/requests";
+import { requestStatusValidator } from "../../domain/requests";
 import {
   internalMutation,
   internalQuery,
@@ -11,20 +8,21 @@ import {
 } from "../../_generated/server";
 import { internal } from "../../_generated/api";
 import { appValidator } from "../../domain/apps";
-import {
-  APPROVAL_DENIED_ERROR,
-  APPROVAL_EXPIRED_ERROR,
-  denyResultValidator,
-} from "../../lib/errors";
+import { APPROVAL_DENIED_ERROR, denyResultValidator } from "../../lib/errors";
 import { decryptToken, encryptToken } from "../../lib/tokenEncryption";
-import { randomSecret, sha256Hex } from "../../lib/secrets";
+import { hashesEqual, randomSecret, sha256Hex } from "../../lib/secrets";
 import { denyCreate, MAX_TTL_MS } from "./helpers";
+import { sliceHandoff, isRevocation } from "../../domain/handoff";
 import {
   activeAgentConnection,
   activeConnectionForAgent,
+  agentAccessRevokedAt,
+  connectionBySecret,
+  connectionAccessDenial,
 } from "../agentConnections";
 
 export const SLICE_REQUEST_TTL_MS = 24 * 60 * 60 * 1000;
+export const SLICE_ACK_WINDOW_MS = 2 * 60 * 1000;
 export const MAX_PENDING_SLICE_REQUESTS = 100;
 export const MAX_REASON_LENGTH = 280;
 
@@ -50,7 +48,7 @@ export const createSliceRequest = internalMutation({
       requestId: v.id("sliceRequests"),
       publicToken: v.string(),
       claimHandle: v.string(),
-      expiresAt: v.number(),
+      approvalDeadlineAt: v.number(),
       status: v.union(v.literal("pending"), v.literal("approved")),
       agentName: v.string(),
       apps: v.array(appValidator),
@@ -61,18 +59,17 @@ export const createSliceRequest = internalMutation({
     denyResultValidator,
   ),
   handler: async (ctx, args) => {
-    const agentConnection = await activeAgentConnection(
+    const identified = await connectionBySecret(
       ctx,
       args.agentConnectionId,
       args.agentConnectionSecret,
     );
-    if (!agentConnection) {
-      return denyCreate(
-        401,
-        "Invalid or revoked agent connection",
-        "UNAUTHORIZED",
-      );
+    if (!identified) {
+      return denyCreate(401, "Invalid agent connection", "UNAUTHORIZED");
     }
+    const accessDenial = await connectionAccessDenial(ctx, identified);
+    if (accessDenial) return accessDenial;
+    const agentConnection = identified;
     const agentName = agentConnection.name;
     if (!Number.isFinite(args.ttlMs) || args.ttlMs <= 0) {
       return denyCreate(
@@ -131,11 +128,14 @@ export const createSliceRequest = internalMutation({
             "IDEMPOTENCY_CONFLICT",
           );
         }
+        const slice = existing.createdSliceId
+          ? await ctx.db.get("slices", existing.createdSliceId)
+          : null;
         if (
           !existing.claimHandleCipher ||
-          existing.expiresAt <= Date.now() ||
           existing.status === "denied" ||
-          existing.status === "claimed"
+          existing.status === "claimed" ||
+          sliceHandoff(existing, slice, true, Date.now()).reasonCode
         ) {
           return denyCreate(
             409,
@@ -148,7 +148,7 @@ export const createSliceRequest = internalMutation({
           requestId: existing._id,
           publicToken: existing.publicToken,
           claimHandle: await decryptToken(existing.claimHandleCipher),
-          expiresAt: existing.expiresAt,
+          approvalDeadlineAt: existing.approvalDeadlineAt,
           status: existing.status,
           agentName,
           apps: uniqueApps,
@@ -162,8 +162,11 @@ export const createSliceRequest = internalMutation({
     const now = Date.now();
     const open = await ctx.db
       .query("sliceRequests")
-      .withIndex("by_status_expiresAt", (q) =>
-        q.eq("status", "pending").gt("expiresAt", now),
+      .withIndex("by_userId_status_approvalDeadlineAt", (q) =>
+        q
+          .eq("userId", agentConnection.userId)
+          .eq("status", "pending")
+          .gt("approvalDeadlineAt", now),
       )
       .take(MAX_PENDING_SLICE_REQUESTS);
     if (open.length >= MAX_PENDING_SLICE_REQUESTS) {
@@ -173,18 +176,19 @@ export const createSliceRequest = internalMutation({
         "INVALID_REQUEST",
       );
     }
-    const expiresAt = now + SLICE_REQUEST_TTL_MS;
+    const approvalDeadlineAt = now + SLICE_REQUEST_TTL_MS;
     const { publicToken, claimHandle, claimSecretHash } =
       await issuePublicPair();
     const requestId = await ctx.db.insert("sliceRequests", {
       agentId: agentConnection.agentId,
+      userId: agentConnection.userId,
       apps: uniqueApps,
       ttlMs: args.ttlMs,
       reason,
       publicToken,
       claimSecretHash,
       status: "pending",
-      expiresAt,
+      approvalDeadlineAt,
       idempotencyKeyHash,
       claimHandleCipher: idempotencyKeyHash
         ? await encryptToken(claimHandle)
@@ -205,7 +209,7 @@ export const createSliceRequest = internalMutation({
       requestId,
       publicToken,
       claimHandle,
-      expiresAt,
+      approvalDeadlineAt,
       status: "pending" as const,
       agentName,
       apps: uniqueApps,
@@ -230,27 +234,29 @@ async function sliceRequestByClaim(
   return request;
 }
 
-function claimDenial(
-  request: NonNullable<Awaited<ReturnType<typeof sliceRequestByClaim>>>,
-) {
-  const status = effectiveRequestStatus(request, Date.now());
-  if (status === "denied")
-    return denyCreate(403, APPROVAL_DENIED_ERROR, "APPROVAL_DENIED");
-  if (status === "expired" || status === "claimed") {
-    return denyCreate(403, APPROVAL_EXPIRED_ERROR, "APPROVAL_EXPIRED");
-  }
-  return null;
-}
-
 export const resolveSliceRequestStatus = internalQuery({
-  args: { claimHandle: v.string() },
+  args: { claimHandle: v.string(), now: v.optional(v.number()) },
   returns: v.union(
     v.object({
       ok: v.literal(true),
       requestId: v.id("sliceRequests"),
       publicToken: v.string(),
       status: requestStatusValidator,
-      expiresAt: v.number(),
+      approvalDeadlineAt: v.number(),
+      pickupDeadlineAt: v.optional(v.number()),
+      ackDeadlineAt: v.optional(v.number()),
+      sliceExpiresAt: v.optional(v.number()),
+      handoffStatus: v.string(),
+      resourceStatus: v.optional(
+        v.union(
+          v.literal("staged"),
+          v.literal("active"),
+          v.literal("revoked"),
+          v.literal("expired"),
+        ),
+      ),
+      acknowledgedAt: v.optional(v.number()),
+      reasonCode: v.optional(v.string()),
       agentName: v.string(),
       apps: v.array(appValidator),
       ttlMs: v.number(),
@@ -266,18 +272,32 @@ export const resolveSliceRequestStatus = internalQuery({
       ctx,
       request.agentId,
     );
-    if (!agentConnection) {
-      return denyCreate(403, "Agent connection has been revoked", "REVOKED");
-    }
-    const denied = claimDenial(request);
-    if (denied) return denied;
+    const slice = request.createdSliceId
+      ? await ctx.db.get("slices", request.createdSliceId)
+      : null;
+    const { resourceStatus, reasonCode, handoffStatus } = sliceHandoff(
+      request,
+      slice,
+      !!agentConnection,
+      args.now ?? Date.now(),
+      agentConnection
+        ? undefined
+        : await agentAccessRevokedAt(ctx, request.agentId),
+    );
     return {
       ok: true as const,
       requestId: request._id,
       publicToken: request.publicToken,
       status: request.status,
-      expiresAt: request.expiresAt,
-      agentName: agentConnection.name,
+      approvalDeadlineAt: request.approvalDeadlineAt,
+      pickupDeadlineAt: request.pickupDeadlineAt,
+      ackDeadlineAt: request.ackDeadlineAt,
+      sliceExpiresAt: slice?.expiresAt,
+      handoffStatus,
+      resourceStatus,
+      acknowledgedAt: request.claimAcknowledgedAt,
+      reasonCode,
+      agentName: agentConnection?.name ?? "Agent",
       apps: request.apps,
       ttlMs: request.ttlMs,
       reason: request.reason,
@@ -294,7 +314,7 @@ export const resolveSliceRequestClaim = internalMutation({
       requestId: v.id("sliceRequests"),
       publicToken: v.string(),
       status: v.literal("pending"),
-      expiresAt: v.number(),
+      approvalDeadlineAt: v.number(),
       agentName: v.string(),
       apps: v.array(appValidator),
     }),
@@ -305,10 +325,12 @@ export const resolveSliceRequestClaim = internalMutation({
       sliceId: v.id("slices"),
       sliceToken: v.string(),
       sliceSecret: v.string(),
-      expiresAt: v.number(),
+      sliceExpiresAt: v.number(),
+      ackDeadlineAt: v.number(),
+      ackRequired: v.literal(true),
       name: v.string(),
       apps: v.array(appValidator),
-      mintPolicy: v.literal("auto"),
+      mintPolicy: v.union(v.literal("auto"), v.literal("approve")),
     }),
     denyResultValidator,
   ),
@@ -320,11 +342,28 @@ export const resolveSliceRequestClaim = internalMutation({
       ctx,
       request.agentId,
     );
-    if (!agentConnection) {
-      return denyCreate(403, "Agent connection has been revoked", "REVOKED");
-    }
-    const denied = claimDenial(request);
-    if (denied) return denied;
+    const slice = request.createdSliceId
+      ? await ctx.db.get("slices", request.createdSliceId)
+      : null;
+    const handoff = sliceHandoff(
+      request,
+      slice,
+      !!agentConnection,
+      Date.now(),
+      agentConnection
+        ? undefined
+        : await agentAccessRevokedAt(ctx, request.agentId),
+    );
+    if (request.status === "denied" && !request.terminalReason)
+      return denyCreate(403, APPROVAL_DENIED_ERROR, "APPROVAL_DENIED");
+    if (handoff.reasonCode)
+      return denyCreate(
+        403,
+        handoff.reasonCode,
+        isRevocation(handoff.reasonCode) ? "REVOKED" : "APPROVAL_EXPIRED",
+      );
+    if (!agentConnection)
+      return denyCreate(403, "Agent connection revoked", "REVOKED");
     if (request.status === "pending") {
       return {
         ok: true as const,
@@ -332,18 +371,25 @@ export const resolveSliceRequestClaim = internalMutation({
         requestId: request._id,
         publicToken: request.publicToken,
         status: "pending" as const,
-        expiresAt: request.expiresAt,
+        approvalDeadlineAt: request.approvalDeadlineAt,
         agentName: agentConnection.name,
         apps: request.apps,
       };
     }
 
-    // approved → return slice creds once
+    if (request.claimAcknowledgedAt) {
+      return denyCreate(
+        409,
+        "Slice claim was already acknowledged",
+        "CLAIM_ALREADY_ACKNOWLEDGED",
+      );
+    }
+    // Approved claims remain retryable until the fixed acknowledgment deadline.
     if (!request.issuedSliceSecretCipher || !request.createdSliceId) {
       return denyCreate(
-        500,
-        "Approved request is missing issued slice credentials",
-        "INVALID_REQUEST",
+        403,
+        "Slice claim is no longer available",
+        "APPROVAL_EXPIRED",
       );
     }
     let sliceSecret: string;
@@ -356,19 +402,23 @@ export const resolveSliceRequestClaim = internalMutation({
         "PROVIDER_ERROR",
       );
     }
-    const slice = await ctx.db.get("slices", request.createdSliceId);
-    if (!slice) {
-      return denyCreate(
-        404,
-        "Slice missing for approved request",
-        "INVALID_REQUEST",
+    if (!slice || slice.status !== "staged") {
+      return denyCreate(403, "Slice is no longer available", "EXPIRED");
+    }
+    const now = Date.now();
+    const ackDeadlineAt = request.ackDeadlineAt ?? now + SLICE_ACK_WINDOW_MS;
+    if (!request.firstClaimedAt) {
+      await ctx.db.patch("sliceRequests", request._id, {
+        status: "claimed",
+        firstClaimedAt: now,
+        ackDeadlineAt,
+      });
+      await ctx.scheduler.runAt(
+        ackDeadlineAt,
+        internal.tables.slices.sliceRequestExpiry.clearClaimSecret,
+        { requestId: request._id },
       );
     }
-    await ctx.db.patch("sliceRequests", request._id, {
-      status: "claimed",
-      issuedSliceSecretCipher: "",
-      claimHandleCipher: "",
-    });
     return {
       ok: true as const,
       kind: "slice" as const,
@@ -376,10 +426,12 @@ export const resolveSliceRequestClaim = internalMutation({
       sliceId: slice._id,
       sliceToken: slice.token,
       sliceSecret,
-      expiresAt: slice.expiresAt,
+      sliceExpiresAt: slice.expiresAt,
+      ackDeadlineAt,
+      ackRequired: true as const,
       name: slice.name,
       apps: request.apps,
-      mintPolicy: "auto" as const,
+      mintPolicy: slice.mintPolicy,
     };
   },
 });
@@ -402,14 +454,89 @@ export const cancelSliceRequest = internalMutation({
     if (
       !request ||
       request.agentId !== agentConnection.agentId ||
-      request.status !== "pending"
+      request.status !== "pending" ||
+      request.terminalReason ||
+      request.approvalDeadlineAt <= Date.now()
     ) {
       return false;
     }
     await ctx.db.patch("sliceRequests", request._id, {
-      expiresAt: Date.now(),
+      status: "denied",
+      terminalReason: "agent_cancelled",
       claimHandleCipher: "",
     });
     return true;
+  },
+});
+
+export const acknowledgeSliceClaim = internalMutation({
+  args: { claimHandle: v.string(), sliceSecret: v.string() },
+  returns: v.union(
+    v.object({
+      ok: v.literal(true),
+      acknowledgedAt: v.number(),
+      resourceStatus: v.union(
+        v.literal("active"),
+        v.literal("revoked"),
+        v.literal("expired"),
+      ),
+    }),
+    denyResultValidator,
+  ),
+  handler: async (ctx, args) => {
+    const request = await sliceRequestByClaim(ctx, args.claimHandle);
+    if (!request)
+      return denyCreate(401, "Unknown claim handle", "UNAUTHORIZED");
+    if (!request.createdSliceId)
+      return denyCreate(403, "Slice claim unavailable", "EXPIRED");
+    const slice = await ctx.db.get("slices", request.createdSliceId);
+    if (
+      !slice ||
+      !hashesEqual(slice.secretHash, await sha256Hex(args.sliceSecret))
+    )
+      return denyCreate(401, "Invalid slice credentials", "UNAUTHORIZED");
+    const parent = await activeConnectionForAgent(ctx, slice.agentId);
+    const handoff = sliceHandoff(
+      request,
+      slice,
+      !!parent,
+      Date.now(),
+      parent ? undefined : await agentAccessRevokedAt(ctx, request.agentId),
+    );
+    const resourceStatus = handoff.resourceStatus;
+    if (request.claimAcknowledgedAt)
+      return {
+        ok: true as const,
+        acknowledgedAt: request.claimAcknowledgedAt,
+        resourceStatus:
+          resourceStatus === "active"
+            ? ("active" as const)
+            : resourceStatus === "expired"
+              ? ("expired" as const)
+              : ("revoked" as const),
+      };
+    if (handoff.reasonCode)
+      return denyCreate(
+        403,
+        handoff.reasonCode,
+        isRevocation(handoff.reasonCode) ? "REVOKED" : "EXPIRED",
+      );
+    if (
+      handoff.handoffStatus !== "waiting_for_ack" ||
+      slice.status !== "staged"
+    )
+      return denyCreate(403, "Slice claim unavailable", "EXPIRED");
+    const now = Date.now();
+    await ctx.db.patch("slices", slice._id, { status: "active" });
+    await ctx.db.patch("sliceRequests", request._id, {
+      claimAcknowledgedAt: now,
+      issuedSliceSecretCipher: "",
+      claimHandleCipher: "",
+    });
+    return {
+      ok: true as const,
+      acknowledgedAt: now,
+      resourceStatus: "active" as const,
+    };
   },
 });

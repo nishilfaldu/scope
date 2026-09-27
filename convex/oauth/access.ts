@@ -6,7 +6,12 @@ import {
   type ConnectionSecrets,
   type RefreshedTokens,
 } from "./index";
-import { providerForApp, type AppId } from "../domain/apps";
+import {
+  providerForApp,
+  isGoogleApp,
+  googleScopesAreBounded,
+  type AppId,
+} from "../domain/apps";
 import type { AgentErrorCode } from "../lib/errors";
 
 async function persistRefresh(
@@ -16,6 +21,7 @@ async function persistRefresh(
   connectionId: Id<"connections">,
   connection: ConnectionSecrets,
   refreshed: RefreshedTokens,
+  lease: string,
 ): Promise<boolean> {
   return await ctx.runMutation(
     internal.tables.connections.mutations.refreshConnection,
@@ -29,12 +35,15 @@ async function persistRefresh(
         refreshed.refreshToken ?? connection.refreshToken ?? undefined,
       tokenExpiresAt:
         refreshed.tokenExpiresAt ?? connection.tokenExpiresAt ?? undefined,
+      grantedScopes: refreshed.grantedScopes,
+      grantVersion: connection.grantVersion,
+      lease: lease,
     },
   );
 }
 
 export type IssueShortLivedAccessResult =
-  | { accessToken: string; expiresAt: number | null }
+  | { accessToken: string; expiresAt: number | null; grantedScopes?: string[] }
   | { error: string; code: AgentErrorCode };
 
 const SHORT_LIVED_UNAVAILABLE_RESULT = {
@@ -57,6 +66,7 @@ export async function issueShortLivedAccess(
   userId: Id<"users">,
   app: AppId,
   connectionId: Id<"connections">,
+  delivery: "agent" | "server" = "agent",
 ): Promise<IssueShortLivedAccessResult> {
   const connection = await ctx.runQuery(
     internal.tables.connections.queries.getConnection,
@@ -73,23 +83,63 @@ export async function issueShortLivedAccess(
     };
   }
 
+  if (
+    isGoogleApp(app) &&
+    !googleScopesAreBounded(app, connection.grantedScopes)
+  ) {
+    return {
+      error:
+        "Google grant scopes are unknown or mismatched; reconnect the account",
+      code: "APP_UNAVAILABLE",
+    };
+  }
+
+  // A durable lease serializes rotating refresh tokens across Convex actions.
+  const lease = crypto.randomUUID();
+  const acquired = await ctx.runMutation(
+    internal.tables.connections.mutations.beginRefresh,
+    {
+      userId,
+      app,
+      connectionId,
+      grantVersion: connection.grantVersion,
+      lease,
+    },
+  );
+  if (!acquired)
+    return {
+      error: "Connection refresh is in progress; retry shortly",
+      code: "PROVIDER_ERROR",
+    };
   let minted: RefreshedTokens | null;
   try {
     minted = await refreshProviderTokens(providerForApp(app), connection);
   } catch {
-    // Network / malformed / unexpected refresh failures must not become 500s.
+    await ctx.runMutation(
+      internal.tables.connections.mutations.releaseRefresh,
+      { connectionId, lease },
+    );
     return SHORT_LIVED_UNAVAILABLE_RESULT;
   }
   if (!minted) {
+    await ctx.runMutation(
+      internal.tables.connections.mutations.releaseRefresh,
+      { connectionId, lease },
+    );
     return SHORT_LIVED_UNAVAILABLE_RESULT;
   }
 
-  // Refuse vault standing-token handoff even if a provider regresses.
+  // A broker may reuse a provider token because it never gives that token to
+  // the agent. Direct handoff must still refuse the stored access token.
   if (
-    minted.accessToken === connection.accessToken ||
+    (delivery === "agent" && minted.accessToken === connection.accessToken) ||
     (connection.refreshToken !== null &&
       minted.accessToken === connection.refreshToken)
   ) {
+    await ctx.runMutation(
+      internal.tables.connections.mutations.releaseRefresh,
+      { connectionId, lease },
+    );
     return {
       error: "Refusing to hand off the vault standing upstream token to agents",
       code: "SHORT_LIVED_UNAVAILABLE",
@@ -97,14 +147,43 @@ export async function issueShortLivedAccess(
   }
 
   if (
-    !(await persistRefresh(ctx, userId, app, connectionId, connection, minted))
+    !(await persistRefresh(
+      ctx,
+      userId,
+      app,
+      connectionId,
+      connection,
+      minted,
+      lease,
+    ))
   ) {
     return { error: `${app} is not connected`, code: "APP_UNAVAILABLE" };
+  }
+
+  if (
+    isGoogleApp(app) &&
+    !googleScopesAreBounded(
+      app,
+      minted.grantedScopes ?? connection.grantedScopes,
+    )
+  ) {
+    return {
+      error: "Google grant scopes do not match this app; reconnect the account",
+      code: "APP_UNAVAILABLE",
+    };
   }
 
   // The provider controls this token's lifetime. We cannot shorten it by
   // reporting an earlier expiry to the agent.
   const expiresAt = minted.tokenExpiresAt ?? null;
   // Intentionally omit refreshToken — agents never receive vault refresh secrets.
-  return { accessToken: minted.accessToken, expiresAt };
+  return {
+    accessToken: minted.accessToken,
+    expiresAt,
+    // Google can omit scope on refresh. The connection's verified grant is the
+    // effective scope only when the refresh response did not report one.
+    grantedScopes:
+      minted.grantedScopes ??
+      (isGoogleApp(app) ? connection.grantedScopes : undefined),
+  };
 }

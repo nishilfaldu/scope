@@ -1,19 +1,16 @@
 import { v } from "convex/values";
 import { internalMutation } from "../../_generated/server";
 import { appValidator } from "../../domain/apps";
-import { effectiveSliceStatus } from "../../domain/slices";
 import {
   APPROVAL_DENIED_ERROR,
   APPROVAL_EXPIRED_ERROR,
   APPROVAL_REQUIRED_ERROR,
   denyResultValidator,
-  EXPIRED_ERROR,
-  REVOKED_ERROR,
   UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
 import { selectedConnection } from "../connections/helpers";
 import { randomSecret } from "../../lib/secrets";
-import { denyCreate, sliceBySecret } from "./helpers";
+import { denyCreate, sliceAccessDenial, sliceBySecret } from "./helpers";
 
 export const PENDING_TTL_MS = 5 * 60 * 1000;
 export const MAX_PENDING_PER_SLICE = 5;
@@ -38,9 +35,9 @@ export const createPending = internalMutation({
   ),
   handler: async (ctx, args) => {
     const slice = await ctx.db.get("slices", args.sliceId);
-    if (!slice || effectiveSliceStatus(slice) !== "active") {
-      return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
-    }
+    if (!slice) return denyCreate(403, "Slice unavailable", "EXPIRED");
+    const accessDenial = await sliceAccessDenial(ctx, slice);
+    if (accessDenial) return accessDenial;
     const binding = await ctx.db.get("sliceBindings", args.bindingId);
     if (
       !binding ||
@@ -127,6 +124,8 @@ export const resolveClaim = internalMutation({
   handler: async (ctx, args) => {
     const slice = await sliceBySecret(ctx, args);
     if (!slice) return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
+    const accessDenial = await sliceAccessDenial(ctx, slice);
+    if (accessDenial) return accessDenial;
     const request = await ctx.db.get("tokenRequests", args.requestId);
     if (!request || request.sliceId !== slice._id) {
       return denyCreate(404, "Unknown credential request", "INVALID_REQUEST");
@@ -146,9 +145,6 @@ export const resolveClaim = internalMutation({
         app: request.app,
       };
     }
-    const status = effectiveSliceStatus(slice);
-    if (status === "revoked") return denyCreate(403, REVOKED_ERROR, "REVOKED");
-    if (status === "expired") return denyCreate(403, EXPIRED_ERROR, "EXPIRED");
     const binding = request.bindingId
       ? await ctx.db.get("sliceBindings", request.bindingId)
       : null;
@@ -190,6 +186,7 @@ export const cancelTokenRequest = internalMutation({
   handler: async (ctx, args) => {
     const slice = await sliceBySecret(ctx, args);
     if (!slice) return false;
+    if (await sliceAccessDenial(ctx, slice)) return false;
     const request = await ctx.db.get("tokenRequests", args.requestId);
     if (
       !request ||

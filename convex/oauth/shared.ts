@@ -48,6 +48,10 @@ export function grantFromTokenPayload(
       expiresIn === null ? undefined : Date.now() + expiresIn * 1000,
     login: identity.login,
     providerUserId: identity.providerUserId,
+    grantedScopes:
+      typeof tokenRaw.scope === "string"
+        ? tokenRaw.scope.split(/[\s,]+/).filter(Boolean)
+        : undefined,
   };
 }
 
@@ -64,5 +68,9 @@ export function refreshedFromPayload(
         : (fallbackRefresh ?? undefined),
     tokenExpiresAt:
       expiresIn === null ? undefined : Date.now() + expiresIn * 1000,
+    grantedScopes:
+      typeof tokenRaw.scope === "string"
+        ? tokenRaw.scope.split(/[\s,]+/).filter(Boolean)
+        : undefined,
   };
 }

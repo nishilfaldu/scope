@@ -4,7 +4,11 @@ import { v } from "convex/values";
 import { appValidator } from "./domain/apps";
 import { storedRequestStatusValidator } from "./domain/requests";
 
-const sliceStatusValidator = v.union(v.literal("active"), v.literal("revoked"));
+const sliceStatusValidator = v.union(
+  v.literal("staged"),
+  v.literal("active"),
+  v.literal("revoked"),
+);
 
 const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
 const agentConnectionStatusValidator = v.union(
@@ -30,9 +34,19 @@ export default defineSchema({
     status: agentConnectionStatusValidator,
     lastUsedAt: v.optional(v.number()),
     revokedAt: v.optional(v.number()),
+    revocationReason: v.optional(v.string()),
   })
+    // Keep creation-time ordering for owner history queries.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user", ["userId"])
+    .index("by_user_status", ["userId", "status"])
     .index("by_agentId_status", ["agentId", "status"]),
+
+  agentLineages: defineTable({
+    agentId: v.string(),
+    userId: v.id("users"),
+    revokedAt: v.optional(v.number()),
+  }).index("by_agentId", ["agentId"]),
 
   agentConnectionInvites: defineTable({
     publicToken: v.string(),
@@ -46,11 +60,18 @@ export default defineSchema({
       v.literal("claimed"),
       v.literal("expired"),
     ),
-    expiresAt: v.number(),
+    approvalDeadlineAt: v.number(),
+    pickupDeadlineAt: v.optional(v.number()),
+    ackDeadlineAt: v.optional(v.number()),
+    activationDeadlineAt: v.optional(v.number()),
+    firstClaimedAt: v.optional(v.number()),
+    activatedAt: v.optional(v.number()),
+    terminalReason: v.optional(v.string()),
     userId: v.optional(v.id("users")),
     replacesAgentConnectionId: v.optional(v.id("agentConnections")),
     agentConnectionId: v.optional(v.id("agentConnections")),
     issuedSecretCipher: v.optional(v.string()),
+    claimAcknowledgedAt: v.optional(v.number()),
   })
     .index("by_public_token", ["publicToken"])
     .index("by_claim_secret_hash", ["claimSecretHash"])
@@ -64,8 +85,12 @@ export default defineSchema({
     token: v.string(),
     secretHash: v.string(),
     status: sliceStatusValidator,
+    revocationReason: v.optional(v.string()),
+    revokedAt: v.optional(v.number()),
     expiresAt: v.number(),
     mintPolicy: mintPolicyValidator,
+    brokerWindowStart: v.optional(v.number()),
+    brokerWindowCount: v.optional(v.number()),
   })
     .index("by_token", ["token"])
     .index("by_agentId", ["agentId"]),
@@ -74,17 +99,27 @@ export default defineSchema({
     sliceId: v.id("slices"),
     app: appValidator,
     connectionId: v.id("connections"),
-  }).index("by_slice_app_connectionId", ["sliceId", "app", "connectionId"]),
+  })
+    .index("by_slice_app_connectionId", ["sliceId", "app", "connectionId"])
+    .index("by_connectionId", ["connectionId"]),
 
   sliceRequests: defineTable({
-    ...requestLifecycle,
+    publicToken: v.string(),
+    status: storedRequestStatusValidator,
+    approvalDeadlineAt: v.number(),
+    pickupDeadlineAt: v.optional(v.number()),
+    ackDeadlineAt: v.optional(v.number()),
+    firstClaimedAt: v.optional(v.number()),
+    terminalReason: v.optional(v.string()),
     claimSecretHash: v.string(),
     agentId: v.string(),
+    userId: v.optional(v.id("users")),
     createdSliceId: v.optional(v.id("slices")),
     apps: v.array(appValidator),
     ttlMs: v.number(),
     reason: v.string(),
     issuedSliceSecretCipher: v.optional(v.string()),
+    claimAcknowledgedAt: v.optional(v.number()),
     idempotencyKeyHash: v.optional(v.string()),
     claimHandleCipher: v.optional(v.string()),
   })
@@ -92,7 +127,13 @@ export default defineSchema({
     .index("by_claim_secret_hash", ["claimSecretHash"])
     .index("by_idempotency_key_hash", ["idempotencyKeyHash"])
     .index("by_agentId", ["agentId"])
-    .index("by_status_expiresAt", ["status", "expiresAt"]),
+    .index("by_createdSliceId", ["createdSliceId"])
+    .index("by_userId_status_approvalDeadlineAt", [
+      "userId",
+      "status",
+      "approvalDeadlineAt",
+    ])
+    .index("by_status_approvalDeadlineAt", ["status", "approvalDeadlineAt"]),
 
   tokenRequests: defineTable({
     ...requestLifecycle,
@@ -103,8 +144,17 @@ export default defineSchema({
     .index("by_public_token", ["publicToken"])
     .index("by_slice_status_expiresAt", ["sliceId", "status", "expiresAt"]),
 
-  // One row per (user, provider, app, provider account). Google apps each have
-  // their own connection rows (and may bind different Google accounts).
+  googleBrokerCredentials: defineTable({
+    secretHash: v.string(),
+    sliceId: v.id("slices"),
+    bindingId: v.id("sliceBindings"),
+    connectionId: v.id("connections"),
+    app: v.literal("files"),
+    connectionGeneration: v.number(),
+    expiresAt: v.number(),
+  }).index("by_secretHash", ["secretHash"]),
+
+  // One row per (user, provider, app, provider account).
   connections: defineTable({
     userId: v.id("users"),
     app: appValidator,
@@ -113,12 +163,20 @@ export default defineSchema({
     providerUserId: v.string(),
     refreshToken: v.optional(v.string()),
     tokenExpiresAt: v.optional(v.number()),
+    grantVersion: v.number(),
+    connectionGeneration: v.optional(v.number()),
+    refreshLease: v.optional(v.string()),
+    refreshLeaseExpiresAt: v.optional(v.number()),
+    grantedScopes: v.optional(v.array(v.string())),
   }).index("by_user_app_providerUserId", ["userId", "app", "providerUserId"]),
 
   oauthStates: defineTable({
     userId: v.id("users"),
     app: appValidator,
     state: v.string(),
+    browserProofHash: v.optional(v.string()),
+    pkceVerifier: v.optional(v.string()),
+    pkceChallenge: v.optional(v.string()),
     returnTo: v.string(),
     expiresAt: v.number(),
   }).index("by_state", ["state"]),

@@ -6,9 +6,7 @@ export const APP_LABELS: Record<AppId, string> = {
   github: "GitHub",
   gmail: "Gmail",
   calendar: "Calendar",
-  drive: "Drive",
-  docs: "Docs",
-  sheets: "Sheets",
+  files: "Google files",
   slack: "Slack",
   airtable: "Airtable",
   notion: "Notion",
@@ -23,11 +21,10 @@ export const APP_PERMISSIONS: Record<AppId, string> = {
   gmail: "Read, send, and manage mail in the selected Gmail account.",
   calendar:
     "Read and manage calendars and events in the selected Google account.",
-  drive: "Read and manage Drive files in the selected Google account.",
-  docs: "Read and edit documents in the selected Google account.",
-  sheets: "Read and edit spreadsheets in the selected Google account.",
+  files:
+    "List and inspect Drive files, download non-Google files, and read, create, or edit Google Docs and Sheets through Scope's broker.",
   slack:
-    "Read conversations and files and send messages with the connected Slack user.",
+    "Read conversations and files, send messages, and manage bookmarks, pins, and reactions with the connected Slack user.",
   airtable:
     "Read and write records and schemas in bases approved during Airtable consent.",
   notion: "Read and edit pages shared with the Notion integration.",
@@ -37,20 +34,59 @@ export const APP_PERMISSIONS: Record<AppId, string> = {
 };
 
 export const STATUS_LABELS = {
+  staged: "Setup incomplete",
   active: "Active",
   revoked: "Revoked",
   expired: "Expired",
 } as const;
 
+export function handoffLabel(status: string): string {
+  switch (status) {
+    case "waiting_for_approval":
+      return "Waiting for your approval";
+    case "waiting_for_pickup":
+      return "Approved—waiting for agent pickup";
+    case "waiting_for_ack":
+      return "Waiting for agent acknowledgment";
+    case "waiting_for_activation":
+      return "Waiting for replacement activation";
+    case "ready":
+      return "Ready";
+    case "approval_timeout":
+      return "Approval timed out";
+    case "pickup_timeout":
+      return "Agent did not pick up credentials in time";
+    case "claim_ack_timeout":
+      return "Agent did not acknowledge credentials in time";
+    case "activation_timeout":
+      return "Replacement was not activated in time";
+    case "denied":
+      return "Denied";
+    case "revoked":
+    case "operator_revoked":
+      return "Revoked";
+    case "expired":
+    case "slice_expired":
+      return "Grant expired";
+    case "agent_cancelled":
+      return "Cancelled by agent";
+    default:
+      return status.replaceAll("_", " ");
+  }
+}
+
 export function effectiveSliceStatus(
-  slice: { status: "active" | "revoked" | "expired"; expiresAt: number },
+  slice: {
+    status: "staged" | "active" | "revoked" | "expired";
+    expiresAt: number;
+  },
   now: number,
 ) {
   return slice.status === "revoked"
     ? ("revoked" as const)
     : slice.expiresAt <= now
       ? ("expired" as const)
-      : ("active" as const);
+      : slice.status;
 }
 
 export function formatRemaining(expiresAt: number, now: number): string {

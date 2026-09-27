@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useMutation, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { AiChat02Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
@@ -24,8 +24,11 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BrandMark } from "@/components/shared/brand-mark";
+import { AgentOnboarding } from "@/components/agents/agent-onboarding";
+import { useNow } from "@/hooks/use-now";
+import { handoffLabel } from "@/lib/capabilities";
 
-function statusVariant(status: "active" | "revoked" | "expired") {
+function statusVariant(status: "staged" | "active" | "revoked" | "expired") {
   return status === "active"
     ? "default"
     : status === "revoked"
@@ -33,8 +36,85 @@ function statusVariant(status: "active" | "revoked" | "expired") {
       : "outline";
 }
 
+function AgentGrants({
+  agentConnectionId,
+}: {
+  agentConnectionId: Id<"agentConnections">;
+}) {
+  const now = useNow();
+  const { results, status, loadMore } = usePaginatedQuery(
+    api.tables.agentDashboard.grantsPage,
+    { agentConnectionId, now },
+    { initialNumItems: 20 },
+  );
+
+  return (
+    <div className="border-t bg-muted/25 px-4 py-2 sm:px-5">
+      {status === "LoadingFirstPage" ? (
+        <Skeleton className="my-3 h-8 w-full" />
+      ) : results.length ? (
+        results.map((slice) => (
+          <Link
+            key={slice._id}
+            href={`/slices/${slice._id}`}
+            className="group flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="flex size-8 items-center justify-center rounded-lg border bg-background">
+              <HugeiconsIcon
+                icon={AiChat02Icon}
+                className="size-4"
+                strokeWidth={2}
+              />
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {slice.name}
+            </span>
+            <Badge variant={statusVariant(slice.status)}>{slice.status}</Badge>
+            <span className="hidden text-xs text-muted-foreground sm:block">
+              {new Date(slice.expiresAt).toLocaleDateString()}
+            </span>
+            <HugeiconsIcon
+              icon={ArrowRight01Icon}
+              className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+              strokeWidth={2}
+            />
+          </Link>
+        ))
+      ) : (
+        <p className="px-2 py-3 text-sm text-muted-foreground">
+          No access granted yet.
+        </p>
+      )}
+      {status === "CanLoadMore" ? (
+        <Button
+          className="mt-2"
+          size="sm"
+          variant="outline"
+          onClick={() => loadMore(20)}
+        >
+          Load more grants
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function AgentsBoard() {
-  const agents = useQuery(api.tables.agentDashboard.list);
+  const now = useNow();
+  const {
+    results: activeResults,
+    status: pageStatus,
+    loadMore,
+  } = usePaginatedQuery(
+    api.tables.agentDashboard.activePage,
+    {},
+    { initialNumItems: 50 },
+  );
+  const historical = useQuery(api.tables.agentDashboard.list, { now });
+  const agents = [
+    ...activeResults,
+    ...(historical ?? []).filter((row) => row.status !== "active"),
+  ];
   const revoke = useMutation(api.tables.agentConnections.revoke);
   const [busy, setBusy] = useState<Id<"agentConnections"> | null>(null);
 
@@ -47,12 +127,7 @@ export function AgentsBoard() {
     }
   }
 
-  const activeAgents =
-    agents?.filter((agent) => agent.status === "active").length ?? 0;
-  const activeSlices =
-    agents
-      ?.flatMap((agent) => agent.slices)
-      .filter((slice) => slice.status === "active").length ?? 0;
+  const activeAgents = activeResults.length;
 
   return (
     <BoardShell title="Agents">
@@ -64,26 +139,39 @@ export function AgentsBoard() {
               Connected agents and the access you granted to each one.
             </p>
           </div>
-          {agents !== undefined ? (
+          {pageStatus !== "LoadingFirstPage" ? (
             <div className="flex gap-6 text-sm">
               <div>
                 <span className="block text-2xl font-semibold tabular-nums">
                   {activeAgents}
                 </span>
-                <span className="text-muted-foreground">Active agents</span>
-              </div>
-              <div>
-                <span className="block text-2xl font-semibold tabular-nums">
-                  {activeSlices}
+                <span className="text-muted-foreground">
+                  Active agents shown
                 </span>
-                <span className="text-muted-foreground">Active grants</span>
               </div>
             </div>
           ) : null}
         </div>
 
+        {pageStatus !== "LoadingFirstPage" ? (
+          <div className="mt-8">
+            {agents.length === 0 ? (
+              <AgentOnboarding />
+            ) : (
+              <details className="rounded-xl border bg-card">
+                <summary className="cursor-pointer px-5 py-4 text-sm font-medium sm:px-6">
+                  Connect another agent
+                </summary>
+                <div className="border-t p-3">
+                  <AgentOnboarding />
+                </div>
+              </details>
+            )}
+          </div>
+        ) : null}
+
         <div className="mt-8 overflow-hidden rounded-xl border bg-card">
-          {agents === undefined ? (
+          {pageStatus === "LoadingFirstPage" ? (
             <div className="divide-y">
               {[0, 1, 2].map((item) => (
                 <div key={item} className="flex items-center gap-4 p-5">
@@ -99,7 +187,7 @@ export function AgentsBoard() {
           ) : agents.length === 0 ? (
             <EmptyState
               title="No connected agents"
-              description="Open a connection link from an agent to connect it to Scope."
+              description="Send the instructions above to your agent to get a connection link."
               icon={<BrandMark className="size-6" />}
             />
           ) : (
@@ -118,18 +206,24 @@ export function AgentsBoard() {
                             agent.status === "active" ? "secondary" : "outline"
                           }
                         >
-                          {agent.status}
+                          {agent.status === "staged"
+                            ? handoffLabel(
+                                agent.handoffStatus ?? "waiting_for_pickup",
+                              )
+                            : agent.status}
                         </Badge>
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {agent.lastUsedAt
-                          ? `Last used ${new Date(agent.lastUsedAt).toLocaleString()}`
-                          : "Not used yet"}{" "}
-                        · {agent.slices.length}{" "}
-                        {agent.slices.length === 1 ? "grant" : "grants"}
+                        {agent.status === "staged" && agent.handoffDeadlineAt
+                          ? `Completion deadline ${new Date(agent.handoffDeadlineAt).toLocaleString()}`
+                          : agent.revocationReason
+                            ? `Cause: ${agent.revocationReason.replaceAll("_", " ")}`
+                            : agent.lastUsedAt
+                              ? `Last used ${new Date(agent.lastUsedAt).toLocaleString()}`
+                              : "Not used yet"}
                       </p>
                     </div>
-                    {agent.status === "active" ? (
+                    {agent.status === "active" || agent.status === "staged" ? (
                       <Dialog>
                         <DialogTrigger
                           render={<Button size="sm" variant="outline" />}
@@ -169,48 +263,23 @@ export function AgentsBoard() {
                       </Dialog>
                     ) : null}
                   </div>
-                  <div className="border-t bg-muted/25 px-4 py-2 sm:px-5">
-                    {agent.slices.length ? (
-                      agent.slices.map((slice) => (
-                        <Link
-                          key={slice._id}
-                          href={`/slices/${slice._id}`}
-                          className="group flex items-center gap-3 rounded-lg px-2 py-2.5 hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <span className="flex size-8 items-center justify-center rounded-lg border bg-background">
-                            <HugeiconsIcon
-                              icon={AiChat02Icon}
-                              className="size-4"
-                              strokeWidth={2}
-                            />
-                          </span>
-                          <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                            {slice.name}
-                          </span>
-                          <Badge variant={statusVariant(slice.status)}>
-                            {slice.status}
-                          </Badge>
-                          <span className="hidden text-xs text-muted-foreground sm:block">
-                            {new Date(slice.expiresAt).toLocaleDateString()}
-                          </span>
-                          <HugeiconsIcon
-                            icon={ArrowRight01Icon}
-                            className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5"
-                            strokeWidth={2}
-                          />
-                        </Link>
-                      ))
-                    ) : (
-                      <p className="px-2 py-3 text-sm text-muted-foreground">
-                        No access granted yet.
-                      </p>
-                    )}
-                  </div>
+                  {agent.status !== "staged" ? (
+                    <AgentGrants agentConnectionId={agent._id} />
+                  ) : null}
                 </section>
               ))}
             </div>
           )}
         </div>
+        {pageStatus === "CanLoadMore" ? (
+          <Button
+            className="mt-4"
+            variant="outline"
+            onClick={() => loadMore(50)}
+          >
+            Load more agents
+          </Button>
+        ) : null}
       </div>
     </BoardShell>
   );

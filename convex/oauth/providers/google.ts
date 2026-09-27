@@ -7,7 +7,11 @@ import {
   oauthErrorReason,
   refreshedFromPayload,
 } from "../shared";
-import { isGoogleApp, scopesForGoogleApp } from "../../domain/apps";
+import {
+  googleScopesAreBounded,
+  isGoogleApp,
+  scopesForGoogleApp,
+} from "../../domain/apps";
 import type { ProviderOAuth } from "../types";
 
 export const google: ProviderOAuth = {
@@ -51,26 +55,33 @@ export const google: ProviderOAuth = {
     if (!isPlainObject(tokenRaw) || typeof tokenRaw.access_token !== "string") {
       return { error: oauthErrorReason(tokenRaw) };
     }
+    if (
+      !googleScopesAreBounded(
+        app,
+        typeof tokenRaw.scope === "string"
+          ? tokenRaw.scope.split(/[\s,]+/).filter(Boolean)
+          : undefined,
+      )
+    ) {
+      return { error: "scope" };
+    }
     const userResponse = await fetch(
-      "https://openidconnect.googleapis.com/v1/userinfo",
+      "https://www.googleapis.com/oauth2/v2/userinfo",
       { headers: { Authorization: `Bearer ${tokenRaw.access_token}` } },
     );
     const userRaw: unknown = await userResponse.json();
     if (
       !userResponse.ok ||
       !isPlainObject(userRaw) ||
-      typeof userRaw.sub !== "string" ||
-      !userRaw.sub
+      typeof userRaw.id !== "string" ||
+      !userRaw.id ||
+      typeof userRaw.email !== "string" ||
+      !userRaw.email
     )
       return { error: "identity" };
-    const email =
-      isPlainObject(userRaw) && typeof userRaw.email === "string"
-        ? userRaw.email
-        : "google";
-    const sub = userRaw.sub;
     return grantFromTokenPayload(tokenRaw, {
-      login: email,
-      providerUserId: sub,
+      login: userRaw.email,
+      providerUserId: userRaw.id,
     });
   },
 

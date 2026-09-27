@@ -3,18 +3,19 @@ import { internalQuery } from "../../_generated/server";
 import { authenticatedQuery } from "../../functions";
 import { appValidator, ALL_APPS, isAppId } from "../../domain/apps";
 import { effectiveSliceStatus } from "../../domain/slices";
+import { sliceHandoff } from "../../domain/handoff";
+import { agentAccessRevokedAt } from "../agentConnections";
 import { selectedConnection } from "../connections/helpers";
 import {
   denyResultValidator,
   APP_UNAVAILABLE_ERROR,
-  EXPIRED_ERROR,
-  REVOKED_ERROR,
   UNAUTHORIZED_ERROR,
 } from "../../lib/errors";
 import {
   bindingsForApp,
   hasActiveAgentConnection,
   sliceBySecret,
+  sliceAccessDenial,
   withoutSecretHash,
 } from "./helpers";
 
@@ -25,26 +26,57 @@ const boardSlice = v.object({
   name: v.string(),
   token: v.string(),
   status: v.union(
+    v.literal("staged"),
     v.literal("active"),
     v.literal("revoked"),
     v.literal("expired"),
   ),
   expiresAt: v.number(),
   mintPolicy: v.union(v.literal("auto"), v.literal("approve")),
+  revocationReason: v.optional(v.string()),
+  ackDeadlineAt: v.optional(v.number()),
+  handoffStatus: v.optional(v.string()),
+  handoffDeadlineAt: v.optional(v.number()),
 });
 
 export const get = authenticatedQuery({
-  args: { sliceId: v.string() },
+  args: { sliceId: v.string(), now: v.optional(v.number()) },
   returns: v.union(boardSlice, v.null()),
   handler: async (ctx, args) => {
     const id = ctx.db.normalizeId("slices", args.sliceId);
     const slice = id ? await ctx.db.get("slices", id) : null;
     if (!slice || slice.userId !== ctx.userId) return null;
+    const request = await ctx.db
+      .query("sliceRequests")
+      .withIndex("by_createdSliceId", (q) => q.eq("createdSliceId", slice._id))
+      .unique();
+    const now = args.now ?? Date.now();
+    const parentActive = await hasActiveAgentConnection(ctx, slice);
+    const handoff = request
+      ? sliceHandoff(
+          request,
+          slice,
+          parentActive,
+          now,
+          parentActive
+            ? undefined
+            : await agentAccessRevokedAt(ctx, slice.agentId),
+        )
+      : null;
     return {
       ...withoutSecretHash(slice),
-      status: (await hasActiveAgentConnection(ctx, slice))
-        ? effectiveSliceStatus(slice)
-        : ("revoked" as const),
+      revocationReason: handoff?.reasonCode ?? slice.revocationReason,
+      ackDeadlineAt: request?.ackDeadlineAt,
+      handoffStatus: handoff?.handoffStatus,
+      handoffDeadlineAt:
+        request?.status === "approved"
+          ? request.pickupDeadlineAt
+          : request?.ackDeadlineAt,
+      status:
+        handoff?.resourceStatus ??
+        (parentActive
+          ? effectiveSliceStatus(slice, now)
+          : ("revoked" as const)),
     };
   },
 });
@@ -96,15 +128,9 @@ export const discoverApps = internalQuery({
         reason: UNAUTHORIZED_ERROR,
         code: "UNAUTHORIZED" as const,
       };
-    const status = effectiveSliceStatus(slice, args.now);
-    if (status !== "active")
-      return {
-        ok: false as const,
-        status: 403,
-        reason: status === "revoked" ? REVOKED_ERROR : EXPIRED_ERROR,
-        code:
-          status === "revoked" ? ("REVOKED" as const) : ("EXPIRED" as const),
-      };
+    const accessDenial = await sliceAccessDenial(ctx, slice, args.now);
+    if (accessDenial) return accessDenial;
+
     const bindings = await ctx.db
       .query("sliceBindings")
       .withIndex("by_slice_app_connectionId", (q) => q.eq("sliceId", slice._id))
@@ -162,15 +188,9 @@ export const discoverAccounts = internalQuery({
         reason: UNAUTHORIZED_ERROR,
         code: "UNAUTHORIZED" as const,
       };
-    const status = effectiveSliceStatus(slice, args.now);
-    if (status !== "active")
-      return {
-        ok: false as const,
-        status: 403,
-        reason: status === "revoked" ? REVOKED_ERROR : EXPIRED_ERROR,
-        code:
-          status === "revoked" ? ("REVOKED" as const) : ("EXPIRED" as const),
-      };
+    const accessDenial = await sliceAccessDenial(ctx, slice, args.now);
+    if (accessDenial) return accessDenial;
+
     const app = args.app;
     if (!isAppId(app))
       return {

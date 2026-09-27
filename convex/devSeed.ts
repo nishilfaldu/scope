@@ -2,12 +2,14 @@ import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { sha256Hex } from "./lib/secrets";
+import { encryptToken } from "./lib/tokenEncryption";
 
 const inviteTokens = [
   "ac_demo_new_pending",
   "ac_demo_reconnect_pending",
   "ac_demo_denied",
   "ac_demo_expired",
+  "ac_demo_staged_approved",
 ] as const;
 const sliceRequestTokens = [
   "ar_demo_slice_pending",
@@ -27,8 +29,13 @@ const sliceTokens = [
   "st_demo_revoked",
   "st_demo_expired",
   "st_demo_research",
+  "st_demo_staged",
 ] as const;
-const agentIds = ["ag_demo_codex", "ag_demo_research"] as const;
+const agentIds = [
+  "ag_demo_codex",
+  "ag_demo_research",
+  "ag_demo_stage",
+] as const;
 
 export const seedUiDemo = internalMutation({
   args: { userId: v.id("users") },
@@ -89,6 +96,12 @@ export const seedUiDemo = internalMutation({
     }
 
     for (const agentId of agentIds) {
+      const lineage = await ctx.db
+        .query("agentLineages")
+        .withIndex("by_agentId", (q) => q.eq("agentId", agentId))
+        .unique();
+      if (lineage?.userId === userId)
+        await ctx.db.delete("agentLineages", lineage._id);
       const rows = await ctx.db
         .query("agentConnections")
         .withIndex("by_agentId_status", (q) => q.eq("agentId", agentId))
@@ -137,6 +150,7 @@ export const seedUiDemo = internalMutation({
         accessToken: "demo-token-not-valid",
         refreshToken: "demo-refresh-not-valid",
         tokenExpiresAt: Date.now() + 60 * 60 * 1000,
+        grantVersion: 1,
       });
       accounts.set(account.app, id);
     }
@@ -167,12 +181,19 @@ export const seedUiDemo = internalMutation({
       status: "active",
       lastUsedAt: now - 2 * 60 * 60 * 1000,
     });
+    const stagedAgentId = await ctx.db.insert("agentConnections", {
+      userId,
+      agentId: "ag_demo_stage",
+      name: "Staged Agent Demo",
+      secretHash: await sha256Hex("acs_demo_stage"),
+      status: "staged",
+    });
 
     async function insertSlice(args: {
       token: (typeof sliceTokens)[number];
       name: string;
       agentId: string;
-      status: "active" | "revoked";
+      status: "staged" | "active" | "revoked";
       expiresAt: number;
       mintPolicy: "auto" | "approve";
       apps: ("github" | "gmail" | "slack")[];
@@ -244,7 +265,16 @@ export const seedUiDemo = internalMutation({
       status: "active",
       expiresAt: now + 5 * 24 * 60 * 60 * 1000,
       mintPolicy: "auto",
-      apps: ["github"],
+      apps: ["slack"],
+    });
+    const stagedSlice = await insertSlice({
+      token: "st_demo_staged",
+      name: "Awaiting agent pickup",
+      agentId: "ag_demo_codex",
+      status: "staged",
+      expiresAt: now + 3 * 24 * 60 * 60 * 1000,
+      mintPolicy: "auto",
+      apps: ["gmail"],
     });
 
     const invites = [
@@ -254,7 +284,7 @@ export const seedUiDemo = internalMutation({
         agentId: "ag_demo_new_agent",
         agentName: "Calendar Planning Agent",
         status: "pending" as const,
-        expiresAt: now + 24 * 60 * 60 * 1000,
+        approvalDeadlineAt: now + 15 * 60 * 1000,
       },
       {
         publicToken: "ac_demo_reconnect_pending",
@@ -262,7 +292,7 @@ export const seedUiDemo = internalMutation({
         agentId: "ag_demo_codex",
         agentName: "Codex Desktop Demo",
         status: "pending" as const,
-        expiresAt: now + 24 * 60 * 60 * 1000,
+        approvalDeadlineAt: now + 15 * 60 * 1000,
         userId,
         replacesAgentConnectionId: codexId,
       },
@@ -272,7 +302,7 @@ export const seedUiDemo = internalMutation({
         agentId: "ag_demo_denied",
         agentName: "Denied Agent",
         status: "denied" as const,
-        expiresAt: now + 24 * 60 * 60 * 1000,
+        approvalDeadlineAt: now + 15 * 60 * 1000,
         userId,
       },
       {
@@ -281,8 +311,20 @@ export const seedUiDemo = internalMutation({
         agentId: "ag_demo_expired",
         agentName: "Expired Agent",
         status: "expired" as const,
-        expiresAt: now - 60 * 60 * 1000,
+        approvalDeadlineAt: now - 60 * 60 * 1000,
         userId,
+      },
+      {
+        publicToken: "ac_demo_staged_approved",
+        claimHandle: "ach_demo_staged_approved",
+        agentId: "ag_demo_stage",
+        agentName: "Staged Agent Demo",
+        status: "approved" as const,
+        approvalDeadlineAt: now + 15 * 60 * 1000,
+        pickupDeadlineAt: now + 5 * 60 * 1000,
+        userId,
+        agentConnectionId: stagedAgentId,
+        issuedSecretCipher: await encryptToken("acs_demo_stage"),
       },
     ];
     for (const invite of invites) {
@@ -297,25 +339,25 @@ export const seedUiDemo = internalMutation({
       {
         token: "ar_demo_slice_pending",
         status: "pending" as const,
-        expiresAt: now + 24 * 60 * 60 * 1000,
+        approvalDeadlineAt: now + 15 * 60 * 1000,
         reason: "Summarize new issues and important email before standup.",
       },
       {
         token: "ar_demo_slice_approved",
         status: "approved" as const,
-        expiresAt: now + 24 * 60 * 60 * 1000,
+        approvalDeadlineAt: now + 15 * 60 * 1000,
         reason: "Prepare an approved release summary.",
       },
       {
         token: "ar_demo_slice_denied",
         status: "denied" as const,
-        expiresAt: now + 24 * 60 * 60 * 1000,
+        approvalDeadlineAt: now + 15 * 60 * 1000,
         reason: "Access was declined by the operator.",
       },
       {
         token: "ar_demo_slice_expired",
         status: "pending" as const,
-        expiresAt: now - 60 * 60 * 1000,
+        approvalDeadlineAt: now - 60 * 60 * 1000,
         reason: "This request was not reviewed in time.",
       },
     ];
@@ -324,13 +366,20 @@ export const seedUiDemo = internalMutation({
         publicToken: request.token,
         claimSecretHash: await sha256Hex(`ch_${request.token}`),
         agentId: "ag_demo_codex",
-        apps: ["github", "gmail"],
+        apps: request.status === "approved" ? ["gmail"] : ["github", "gmail"],
         ttlMs: 3 * 24 * 60 * 60 * 1000,
         reason: request.reason,
         status: request.status,
-        expiresAt: request.expiresAt,
+        approvalDeadlineAt: request.approvalDeadlineAt,
         createdSliceId:
-          request.status === "approved" ? activeAuto.id : undefined,
+          request.status === "approved" ? stagedSlice.id : undefined,
+        userId,
+        pickupDeadlineAt:
+          request.status === "approved" ? now + 5 * 60 * 1000 : undefined,
+        issuedSliceSecretCipher:
+          request.status === "approved"
+            ? await encryptToken("ss_st_demo_staged")
+            : undefined,
       });
     }
 
@@ -378,7 +427,7 @@ export const seedUiDemo = internalMutation({
         path: `/connect/${invite.publicToken}`,
       })),
       sliceRequestLinks: sliceRequests.map((request) => ({
-        label: `New slice · ${request.status}${request.expiresAt <= now ? " (expired)" : ""}`,
+        label: `New slice · ${request.status}${request.approvalDeadlineAt <= now ? " (expired)" : ""}`,
         path: `/requests/new/${request.token}`,
       })),
       tokenRequestLinks: tokenRequests.map((request) => ({
@@ -391,6 +440,7 @@ export const seedUiDemo = internalMutation({
         { label: "Revoked slice", path: `/slices/${revoked.id}` },
         { label: "Expired slice", path: `/slices/${expired.id}` },
         { label: "Second agent slice", path: `/slices/${research.id}` },
+        { label: "Staged slice", path: `/slices/${stagedSlice.id}` },
       ],
     };
   },

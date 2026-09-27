@@ -3,14 +3,15 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { internalMutation } from "../../_generated/server";
 import { authenticatedMutation } from "../../functions";
 import { appValidator } from "../../domain/apps";
-import { effectiveSliceStatus } from "../../domain/slices";
 import {
   bindingForConnection,
   createSlice,
+  githubGrantIsExclusive,
   MAX_SLICE_NAME,
   MAX_TTL_MS,
   validatedBindings,
   sliceBySecret,
+  sliceAccessDenial,
 } from "./helpers";
 import { selectedConnection } from "../connections/helpers";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
@@ -101,7 +102,7 @@ export const setMintPolicy = authenticatedMutation({
       .unique();
     if (!slice || slice.userId !== ctx.userId)
       throw new Error("Slice not found");
-    if (effectiveSliceStatus(slice) !== "active")
+    if (await sliceAccessDenial(ctx, slice))
       throw new Error("Slice is not live");
     await ctx.db.patch("slices", slice._id, { mintPolicy: args.mintPolicy });
     return null;
@@ -123,7 +124,7 @@ export const setBinding = authenticatedMutation({
       .unique();
     if (!slice || slice.userId !== ctx.userId)
       throw new Error("Slice not found");
-    if (effectiveSliceStatus(slice) !== "active")
+    if (await sliceAccessDenial(ctx, slice))
       throw new Error("Slice is not live");
     const binding = await bindingForConnection(
       ctx,
@@ -141,6 +142,14 @@ export const setBinding = authenticatedMutation({
       throw new Error(`Select a connected account for ${args.app}`);
     }
     if (!binding) {
+      if (
+        args.app === "github" &&
+        !(await githubGrantIsExclusive(ctx, args.connectionId, slice.agentId))
+      ) {
+        throw new Error(
+          "GitHub App user tokens cannot be shared by multiple active agents",
+        );
+      }
       await ctx.db.insert("sliceBindings", {
         sliceId: slice._id,
         app: args.app,
@@ -162,7 +171,11 @@ export const revoke = authenticatedMutation({
     if (!slice || slice.userId !== ctx.userId)
       throw new Error("Slice not found");
     if (slice.status !== "revoked") {
-      await ctx.db.patch("slices", slice._id, { status: "revoked" });
+      await ctx.db.patch("slices", slice._id, {
+        status: "revoked",
+        revocationReason: "operator_revoked",
+        revokedAt: Date.now(),
+      });
     }
     return null;
   },
@@ -175,7 +188,11 @@ export const revokeBySecret = internalMutation({
     const slice = await sliceBySecret(ctx, args);
     if (!slice) return false;
     if (slice.status !== "revoked") {
-      await ctx.db.patch("slices", slice._id, { status: "revoked" });
+      await ctx.db.patch("slices", slice._id, {
+        status: "revoked",
+        revocationReason: "agent_revoked",
+        revokedAt: Date.now(),
+      });
     }
     return true;
   },

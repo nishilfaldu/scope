@@ -22,13 +22,7 @@ export const clearConnection = internalMutation({
     if (!row || row.userId !== args.userId || row.app !== args.app) return null;
     let revokeUpstream = true;
     if (providerForApp(row.app) === "google") {
-      for (const app of [
-        "gmail",
-        "calendar",
-        "drive",
-        "docs",
-        "sheets",
-      ] as const) {
+      for (const app of ["gmail", "calendar", "files"] as const) {
         const others = await ctx.db
           .query("connections")
           .withIndex("by_user_app_providerUserId", (q) =>
@@ -59,6 +53,7 @@ export const saveConnection = internalMutation({
     providerUserId: v.string(),
     refreshToken: v.optional(v.string()),
     tokenExpiresAt: v.optional(v.number()),
+    grantedScopes: v.optional(v.array(v.string())),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -88,9 +83,54 @@ export const saveConnection = internalMutation({
       providerUserId: args.providerUserId,
       refreshToken: refreshToken ?? existing?.refreshToken,
       tokenExpiresAt: args.tokenExpiresAt,
+      grantedScopes: args.grantedScopes,
+      grantVersion: (existing?.grantVersion ?? 0) + 1,
+      connectionGeneration: (existing?.connectionGeneration ?? 0) + 1,
     };
     if (existing) await ctx.db.replace("connections", existing._id, doc);
     else await ctx.db.insert("connections", doc);
+    return null;
+  },
+});
+
+export const beginRefresh = internalMutation({
+  args: {
+    userId: v.id("users"),
+    app: appValidator,
+    connectionId: v.id("connections"),
+    grantVersion: v.number(),
+    lease: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get("connections", args.connectionId);
+    if (
+      !row ||
+      row.userId !== args.userId ||
+      row.app !== args.app ||
+      row.grantVersion !== args.grantVersion ||
+      (row.refreshLease && (row.refreshLeaseExpiresAt ?? 0) > Date.now())
+    )
+      return false;
+    await ctx.db.patch("connections", row._id, {
+      refreshLease: args.lease,
+      refreshLeaseExpiresAt: Date.now() + 120_000,
+    });
+    return true;
+  },
+});
+
+export const releaseRefresh = internalMutation({
+  args: { connectionId: v.id("connections"), lease: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const row = await ctx.db.get("connections", args.connectionId);
+    if (row?.refreshLease === args.lease) {
+      await ctx.db.patch("connections", row._id, {
+        refreshLease: undefined,
+        refreshLeaseExpiresAt: undefined,
+      });
+    }
     return null;
   },
 });
@@ -104,6 +144,9 @@ export const refreshConnection = internalMutation({
     accessToken: v.string(),
     refreshToken: v.optional(v.string()),
     tokenExpiresAt: v.optional(v.number()),
+    grantedScopes: v.optional(v.array(v.string())),
+    grantVersion: v.number(),
+    lease: v.string(),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
@@ -112,7 +155,10 @@ export const refreshConnection = internalMutation({
       !row ||
       row.userId !== args.userId ||
       row.app !== args.app ||
-      row.providerUserId !== args.providerUserId
+      row.providerUserId !== args.providerUserId ||
+      row.grantVersion !== args.grantVersion ||
+      row.refreshLease !== args.lease ||
+      (row.refreshLeaseExpiresAt ?? 0) <= Date.now()
     )
       return false;
     await ctx.db.patch("connections", row._id, {
@@ -122,6 +168,10 @@ export const refreshConnection = internalMutation({
           ? row.refreshToken
           : await encryptToken(args.refreshToken),
       tokenExpiresAt: args.tokenExpiresAt ?? row.tokenExpiresAt,
+      grantedScopes: args.grantedScopes ?? row.grantedScopes,
+      grantVersion: row.grantVersion + 1,
+      refreshLease: undefined,
+      refreshLeaseExpiresAt: undefined,
     });
     return true;
   },

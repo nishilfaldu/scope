@@ -159,10 +159,11 @@ export function ConnectionsTable() {
   async function connect(app: AppId) {
     setBusy(app);
     try {
-      const { state } = await startOAuth({
+      const { state, browserProof } = await startOAuth({
         app,
         returnTo: `${window.location.origin}/connections`,
       });
+      sessionStorage.setItem(`scope-oauth:${state}`, browserProof);
       const url = new URL(APP_CONNECT_URL[app]);
       url.searchParams.set("state", state);
       window.location.assign(url.toString());

@@ -108,7 +108,7 @@ describe("request link decisions", () => {
       userId: owner,
       agentId: "ag_Agent",
       name: "Agent",
-      status: "active",
+      status: "staged",
     });
     await expect(
       ownerSession.mutation(api.tables.slices.sliceRequests.decide, {
@@ -259,7 +259,7 @@ describe("request link decisions", () => {
     if (!expired.ok) throw new Error("request creation failed");
     await t.run((ctx) =>
       ctx.db.patch("sliceRequests", expired.requestId, {
-        expiresAt: Date.now() - 1,
+        approvalDeadlineAt: Date.now() - 1,
       }),
     );
     await expect(

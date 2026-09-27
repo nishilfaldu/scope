@@ -5,7 +5,11 @@ import { effectiveSliceStatus } from "../../domain/slices";
 import type { AgentErrorCode } from "../../lib/errors";
 import { hashesEqual, randomSecret, sha256Hex } from "../../lib/secrets";
 import { connectionsForApp, selectedConnection } from "../connections/helpers";
-import { activeConnectionForAgent } from "../agentConnections";
+import { sliceHandoff, isRevocation } from "../../domain/handoff";
+import {
+  activeConnectionForAgent,
+  agentAccessRevokedAt,
+} from "../agentConnections";
 
 export const MAX_SLICE_NAME = 80;
 export const MAX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -38,7 +42,6 @@ export async function sliceBySecret(
     !hashesEqual(await sha256Hex(args.sliceSecret), slice.secretHash)
   )
     return null;
-  if (!(await hasActiveAgentConnection(ctx, slice))) return null;
   return slice;
 }
 
@@ -48,6 +51,51 @@ export async function hasActiveAgentConnection(
 ) {
   const connection = await activeConnectionForAgent(ctx, slice.agentId);
   return connection?.status === "active" && connection.userId === slice.userId;
+}
+
+export async function sliceAccessDenial(
+  ctx: QueryCtx | MutationCtx,
+  slice: Doc<"slices">,
+  now = Date.now(),
+) {
+  const parentActive = await hasActiveAgentConnection(ctx, slice);
+  const request = await ctx.db
+    .query("sliceRequests")
+    .withIndex("by_createdSliceId", (q) => q.eq("createdSliceId", slice._id))
+    .unique();
+  if (request) {
+    const handoff = sliceHandoff(
+      request,
+      slice,
+      parentActive,
+      now,
+      parentActive ? undefined : await agentAccessRevokedAt(ctx, slice.agentId),
+    );
+    if (handoff.reasonCode)
+      return denyCreate(
+        403,
+        handoff.reasonCode,
+        isRevocation(handoff.reasonCode) ? "REVOKED" : "EXPIRED",
+      );
+    if (
+      handoff.handoffStatus === "waiting_for_ack" &&
+      request.ackDeadlineAt !== undefined
+    )
+      return denyCreate(
+        409,
+        "Acknowledge the slice claim before using it",
+        "CLAIM_ACK_REQUIRED",
+        {
+          completionPath: "/api/access-requests/ack",
+          completionDeadlineAt: request.ackDeadlineAt,
+        },
+      );
+  }
+  if (!parentActive || slice.status === "revoked")
+    return denyCreate(403, "Slice or agent connection revoked", "REVOKED");
+  if (slice.expiresAt <= now || slice.status !== "active")
+    return denyCreate(403, "Slice expired or claim unavailable", "EXPIRED");
+  return null;
 }
 
 export async function bindingsForApp(
@@ -136,8 +184,19 @@ export async function createSlice(
     mintPolicy: MintPolicy;
     bindings: Binding[];
     agentId: string;
+    initialStatus?: "staged" | "active";
   },
 ) {
+  for (const binding of args.bindings) {
+    if (
+      binding.app === "github" &&
+      !(await githubGrantIsExclusive(ctx, binding.connectionId, args.agentId))
+    ) {
+      throw new Error(
+        "GitHub App user tokens cannot be shared by multiple active agents",
+      );
+    }
+  }
   const token = randomSecret("st_");
   const sliceSecret = randomSecret("ss_");
   const expiresAt = Date.now() + args.ttlMs;
@@ -147,7 +206,7 @@ export async function createSlice(
     name: args.name,
     token,
     secretHash: await sha256Hex(sliceSecret),
-    status: "active",
+    status: args.initialStatus ?? "active",
     expiresAt,
     mintPolicy: args.mintPolicy,
   });
@@ -171,6 +230,38 @@ export function denyCreate(
   status: number,
   reason: string,
   code: AgentErrorCode,
+  completion?: { completionPath: string; completionDeadlineAt: number },
 ) {
-  return { ok: false as const, status, reason, code };
+  return { ok: false as const, status, reason, code, ...completion };
+}
+
+export async function githubGrantIsExclusive(
+  ctx: Pick<QueryCtx | MutationCtx, "db">,
+  connectionId: Id<"connections">,
+  agentId: string,
+): Promise<boolean> {
+  for await (const row of ctx.db
+    .query("sliceBindings")
+    .withIndex("by_connectionId", (q) => q.eq("connectionId", connectionId))) {
+    const slice = await ctx.db.get("slices", row.sliceId);
+    if (
+      !slice ||
+      slice.agentId === agentId ||
+      !(await hasActiveAgentConnection(ctx, slice))
+    )
+      continue;
+    const status = effectiveSliceStatus(slice);
+    if (status === "active") return false;
+    if (status === "staged") {
+      const request = await ctx.db
+        .query("sliceRequests")
+        .withIndex("by_createdSliceId", (q) =>
+          q.eq("createdSliceId", slice._id),
+        )
+        .unique();
+      if (request && !sliceHandoff(request, slice, true, Date.now()).reasonCode)
+        return false;
+    }
+  }
+  return true;
 }

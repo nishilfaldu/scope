@@ -193,14 +193,23 @@ describe("agent onboarding approval link", () => {
     expect(sliceCreds.apps).toEqual(["github"]);
     expect(sliceCreds.name).toBe("Chat agent");
 
-    // Second claim is single-use.
+    // Lost HTTP responses can be retried within the claim window.
     const second = await test.fetch("/api/access-requests/claim", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ claimHandle: body.claimHandle }),
     });
-    expect(second.status).toBe(403);
-    expect(await second.json()).toMatchObject({ code: "APPROVAL_EXPIRED" });
+    expect(second.status).toBe(200);
+    expect((await second.json()).sliceSecret).toBe(sliceCreds.sliceSecret);
+    const ack = await test.fetch("/api/access-requests/ack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        claimHandle: body.claimHandle,
+        sliceSecret: sliceCreds.sliceSecret,
+      }),
+    });
+    expect(ack.status).toBe(200);
 
     // Claimed slice works for short-lived mint path without user pasting ss_ earlier.
     vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
@@ -329,7 +338,7 @@ describe("agent onboarding approval link", () => {
     const body = await created.json();
     await test.run(async (ctx) => {
       await ctx.db.patch("sliceRequests", body.requestId, {
-        expiresAt: Date.now() - 1_000,
+        approvalDeadlineAt: Date.now() - 1_000,
       });
     });
     const expired = await test.fetch("/api/access-requests/claim", {

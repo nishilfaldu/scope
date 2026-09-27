@@ -12,7 +12,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { APP_LABELS, APP_PERMISSIONS, type AppId } from "@/lib/capabilities";
+import {
+  APP_LABELS,
+  APP_PERMISSIONS,
+  handoffLabel,
+  type AppId,
+} from "@/lib/capabilities";
 import { useNow } from "@/hooks/use-now";
 import { AuthorizationShell } from "@/components/shared/authorization-shell";
 import { AppIcon } from "@/components/shared/app-icon";
@@ -39,9 +44,10 @@ export function RequestDecision({
   publicToken: string;
 }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const now = useNow();
   const newRequest = useQuery(
     api.tables.slices.sliceRequests.get,
-    isAuthenticated && kind === "new" ? { publicToken } : "skip",
+    isAuthenticated && kind === "new" ? { publicToken, now } : "skip",
   );
   const tokenRequest = useQuery(
     api.tables.slices.tokenRequests.get,
@@ -53,8 +59,8 @@ export function RequestDecision({
     Partial<Record<AppId, Id<"connections">[]>>
   >({});
   const [busy, setBusy] = useState(false);
+  const [mintPolicy, setMintPolicy] = useState<"auto" | "approve">("auto");
   const [error, setError] = useState("");
-  const now = useNow();
   const request = kind === "new" ? newRequest : tokenRequest;
   const currentPath = `/requests/${kind}/${publicToken}`;
 
@@ -95,7 +101,12 @@ export function RequestDecision({
         </div>
       </AuthorizationShell>
     );
-  const pending = request.status === "pending" && request.expiresAt > now;
+  const deadlineAt =
+    kind === "new" ? newRequest?.approvalDeadlineAt : tokenRequest?.expiresAt;
+  const pending =
+    kind === "new"
+      ? newRequest?.handoffStatus === "waiting_for_approval"
+      : request.status === "pending" && (deadlineAt ?? 0) > now;
 
   async function submit(decision: "approved" | "denied") {
     if (!request) return;
@@ -106,6 +117,7 @@ export function RequestDecision({
         await decideSlice({
           publicToken,
           decision,
+          mintPolicy: decision === "approved" ? mintPolicy : undefined,
           bindings:
             decision === "approved"
               ? bindingsFor(newRequest.apps, selected)
@@ -155,14 +167,36 @@ export function RequestDecision({
               </DecisionFact>
             </DecisionFacts>
             {pending ? (
-              <AccountBindings
-                apps={newRequest.apps}
-                selected={selected}
-                allowConnect={false}
-                onChange={(app, ids) =>
-                  setSelected((current) => ({ ...current, [app]: ids }))
-                }
-              />
+              <>
+                <div className="rounded-xl border p-4 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="mintPolicy"
+                      checked={mintPolicy === "auto"}
+                      onChange={() => setMintPolicy("auto")}
+                    />{" "}
+                    Allow automatic credential minting
+                  </label>
+                  <label className="mt-2 flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="mintPolicy"
+                      checked={mintPolicy === "approve"}
+                      onChange={() => setMintPolicy("approve")}
+                    />{" "}
+                    Approve each credential request
+                  </label>
+                </div>
+                <AccountBindings
+                  apps={newRequest.apps}
+                  selected={selected}
+                  allowConnect={false}
+                  onChange={(app, ids) =>
+                    setSelected((current) => ({ ...current, [app]: ids }))
+                  }
+                />
+              </>
             ) : (
               <div>
                 <p className="text-sm text-muted-foreground">
@@ -245,14 +279,50 @@ export function RequestDecision({
             </Button>
           </div>
         ) : (
-          <p className="text-sm">
-            This request is{" "}
-            <span className="font-medium">{request.status}</span>.
+          <p className="text-sm font-medium">
+            {kind === "new" && newRequest
+              ? handoffLabel(newRequest.handoffStatus)
+              : `This request is ${request.status}.`}
           </p>
         )}
-        <p className="mt-3 text-center text-xs text-muted-foreground">
-          Link expires {new Date(request.expiresAt).toLocaleString()}.
-        </p>
+        {!pending && request.status === "approved" ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Return to your agent chat. If the agent paused, reply
+            &ldquo;Continue&rdquo; so it can finish this request.
+          </p>
+        ) : null}
+        {request.status === "pending" ? (
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            Approval deadline: {new Date(deadlineAt ?? 0).toLocaleString()}
+          </p>
+        ) : null}
+        {kind === "new" && newRequest ? (
+          <div className="mt-3 text-xs text-muted-foreground">
+            {newRequest.handoffStatus === "waiting_for_pickup" &&
+            newRequest.pickupDeadlineAt ? (
+              <p>
+                Agent pickup deadline:{" "}
+                {new Date(newRequest.pickupDeadlineAt).toLocaleString()}
+              </p>
+            ) : null}
+            {newRequest.handoffStatus === "waiting_for_ack" &&
+            newRequest.ackDeadlineAt ? (
+              <p>
+                Agent acknowledgment deadline:{" "}
+                {new Date(newRequest.ackDeadlineAt).toLocaleString()}
+              </p>
+            ) : null}
+            {newRequest.sliceExpiresAt ? (
+              <p>
+                Grant expires:{" "}
+                {new Date(newRequest.sliceExpiresAt).toLocaleString()}
+              </p>
+            ) : null}
+            {newRequest.reasonCode ? (
+              <p>Cause: {handoffLabel(newRequest.reasonCode)}</p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </AuthorizationShell>
   );

@@ -31,6 +31,7 @@ describe("Notion OAuth", () => {
           refresh_token: "refresh-1",
           bot_id: "bot-1",
           workspace_name: "Roadmap",
+          workspace_id: "workspace-1",
           owner: { type: "user", user: { id: "user-1", name: "Nishil" } },
         }),
       )
@@ -45,16 +46,16 @@ describe("Notion OAuth", () => {
     await expect(notion.exchange("code-1")).resolves.toMatchObject({
       accessToken: "access-1",
       refreshToken: "refresh-1",
-      login: "Nishil",
-      providerUserId: "user-1",
+      login: "Roadmap · Nishil",
+      providerUserId: "workspace-1:bot-1",
     });
     await expect(
       notion.refresh({
         accessToken: "access-1",
         refreshToken: "refresh-1",
         tokenExpiresAt: null,
-        login: "Nishil",
-        providerUserId: "user-1",
+        login: "Roadmap · Nishil",
+        providerUserId: "workspace-1:bot-1",
       }),
     ).resolves.toMatchObject({
       accessToken: "access-2",

@@ -56,7 +56,7 @@ export function SignIn({
     try {
       const result = await signIn("email-otp", {
         email: email.trim().toLowerCase(),
-        code: code.trim(),
+        code: code.trim().toLowerCase(),
       });
       if (!result.signingIn) {
         setError(
@@ -125,8 +125,8 @@ export function SignIn({
                   autoFocus
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
-                  placeholder="000000"
-                  className="h-12 text-center font-mono text-lg tracking-[0.35em]"
+                  placeholder="6-digit code"
+                  className="h-12 font-mono text-sm"
                 />
                 <p className="text-xs text-muted-foreground">
                   Expires in 10 minutes.

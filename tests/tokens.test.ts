@@ -207,7 +207,7 @@ describe("credential authorization", () => {
         connectionId: allowed.connectionId,
       },
     );
-    expect(finalized).toEqual({ ok: true });
+    expect(finalized).toMatchObject({ ok: true });
     expect(JSON.stringify(allowed)).not.toMatch(/ghs_/);
     expect(JSON.stringify(finalized)).not.toMatch(/ghs_/);
   });
@@ -386,10 +386,10 @@ describe("credential authorization", () => {
     });
     const statuses = await backend.query(
       api.tables.connections.queries.statusesForApps,
-      { apps: ["gmail", "calendar", "drive", "docs", "sheets"] },
+      { apps: ["gmail", "calendar", "files"] },
     );
     expect(statuses.find((row) => row.app === "gmail")?.connected).toBe(true);
-    for (const app of ["calendar", "drive", "docs", "sheets"] as const) {
+    for (const app of ["calendar", "files"] as const) {
       expect(statuses.find((row) => row.app === app)?.connected).toBe(false);
     }
     await expect(

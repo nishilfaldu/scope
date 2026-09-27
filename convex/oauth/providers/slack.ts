@@ -10,7 +10,7 @@ import {
 import type { ProviderOAuth } from "../types";
 
 const SLACK_USER_SCOPES =
-  "admin,admin.users:read,bookmarks:read,bookmarks:write,channels:history,channels:read,chat:write,files:read,files:write,groups:history,groups:read,identify,im:history,im:read,mpim:history,mpim:read,pins:read,pins:write,reactions:read,reactions:write,search:read,users:read";
+  "bookmarks:read,bookmarks:write,channels:history,channels:read,chat:write,files:read,files:write,groups:history,groups:read,identify,im:history,im:read,mpim:history,mpim:read,pins:read,pins:write,reactions:read,reactions:write,search:read,users:read";
 
 export const slack: ProviderOAuth = {
   authorize(state) {

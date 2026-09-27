@@ -13,9 +13,11 @@ export const CONNECTION_APPS = [
     name: "Google Calendar",
     description: "Manage calendar events.",
   },
-  { id: "drive", name: "Google Drive", description: "Manage Drive files." },
-  { id: "docs", name: "Google Docs", description: "Manage documents." },
-  { id: "sheets", name: "Google Sheets", description: "Manage spreadsheets." },
+  {
+    id: "files",
+    name: "Google files",
+    description: "Drive, Docs, and Sheets in one connection.",
+  },
   { id: "slack", name: "Slack", description: "Slack workspace access." },
   {
     id: "airtable",
@@ -55,6 +57,8 @@ export const APP_CONNECT_URL = Object.fromEntries(
 export const CONNECT_ERRORS: Record<string, string> = {
   token: "The provider did not issue a token. Check the OAuth callback URL.",
   identity: "The provider did not return a stable account identity.",
+  scope:
+    "Google did not grant all requested permissions. Reconnect and approve every permission shown.",
   redirect_uri_mismatch:
     "The provider rejected the callback URL. Register this app's /api/<app>/callback URL.",
   state: "Connect session expired. Try connecting again.",
