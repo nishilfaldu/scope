@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BrandMark } from "@/components/shared/brand-mark";
+import { AgentOnboarding } from "@/components/agents/agent-onboarding";
 import { useNow } from "@/hooks/use-now";
 import { handoffLabel } from "@/lib/capabilities";
 
@@ -152,6 +153,23 @@ export function AgentsBoard() {
           ) : null}
         </div>
 
+        {pageStatus !== "LoadingFirstPage" ? (
+          <div className="mt-8">
+            {agents.length === 0 ? (
+              <AgentOnboarding />
+            ) : (
+              <details className="rounded-xl border bg-card">
+                <summary className="cursor-pointer px-5 py-4 text-sm font-medium sm:px-6">
+                  Connect another agent
+                </summary>
+                <div className="border-t p-3">
+                  <AgentOnboarding />
+                </div>
+              </details>
+            )}
+          </div>
+        ) : null}
+
         <div className="mt-8 overflow-hidden rounded-xl border bg-card">
           {pageStatus === "LoadingFirstPage" ? (
             <div className="divide-y">
@@ -169,7 +187,7 @@ export function AgentsBoard() {
           ) : agents.length === 0 ? (
             <EmptyState
               title="No connected agents"
-              description="Open a connection link from an agent to connect it to Scope."
+              description="Send the instructions above to your agent to get a connection link."
               icon={<BrandMark className="size-6" />}
             />
           ) : (

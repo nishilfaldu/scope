@@ -285,6 +285,12 @@ export function RequestDecision({
               : `This request is ${request.status}.`}
           </p>
         )}
+        {!pending && request.status === "approved" ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Return to your agent chat. If the agent paused, reply
+            &ldquo;Continue&rdquo; so it can finish this request.
+          </p>
+        ) : null}
         {request.status === "pending" ? (
           <p className="mt-3 text-center text-xs text-muted-foreground">
             Approval deadline: {new Date(deadlineAt ?? 0).toLocaleString()}

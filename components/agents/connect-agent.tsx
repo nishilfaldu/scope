@@ -142,6 +142,12 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
             </DecisionFact>
           ) : null}
         </DecisionFacts>
+        {pending ? (
+          <p className="mt-4 text-xs leading-5 text-muted-foreground">
+            Agent names are provided by the requester. Approve only the agent
+            you asked to connect.
+          </p>
+        ) : null}
         {pending && !invite.reconnecting && replacementOptions.length > 0 ? (
           <div className="mt-6">
             <p className="text-sm text-muted-foreground">
@@ -216,6 +222,12 @@ export function ConnectAgent({ publicToken }: { publicToken: string }) {
             {handoffLabel(invite.handoffStatus)}
           </div>
         )}
+        {!pending && invite.status === "approved" ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Return to your agent chat. If the agent paused, reply
+            &ldquo;Continue&rdquo; so it can finish connecting.
+          </p>
+        ) : null}
         {invite.status === "pending" ||
         invite.handoffStatus.startsWith("waiting_for_") ? (
           <p className="mt-3 text-center text-xs text-muted-foreground">
