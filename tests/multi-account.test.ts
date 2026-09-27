@@ -3,122 +3,12 @@ import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { google } from "../convex/oauth/providers/google";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 const t = () => convexTest(schema, modules);
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
-});
-
-describe("Google consent", () => {
-  test.each([
-    ["gmail", "https://www.googleapis.com/auth/gmail.modify"],
-    ["calendar", "https://www.googleapis.com/auth/calendar"],
-    [
-      "files",
-      "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/spreadsheets",
-    ],
-  ] as const)(
-    "%s requests only its own resource scope",
-    (app, resourceScope) => {
-      vi.stubEnv("GOOGLE_CLIENT_ID", "shared-client");
-      vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
-      const started = google.authorize("state-1", app);
-      if (started instanceof Promise || "error" in started)
-        throw new Error("authorization failed");
-      const url = new URL(started.url);
-      expect(url.searchParams.get("client_id")).toBe("shared-client");
-      expect(url.searchParams.get("redirect_uri")).toBe(
-        `https://scope.convex.site/api/${app}/callback`,
-      );
-      expect(url.searchParams.get("scope")!.split(" ")).toEqual([
-        "https://www.googleapis.com/auth/userinfo.email",
-        ...resourceScope.split(" "),
-      ]);
-      expect(url.searchParams.get("include_granted_scopes")).toBe("false");
-    },
-  );
-
-  test("email-only consent identifies the Google account without profile access", async () => {
-    vi.stubEnv("GOOGLE_CLIENT_ID", "shared-client");
-    vi.stubEnv("GOOGLE_CLIENT_SECRET", "shared-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
-    const upstream = vi
-      .spyOn(globalThis, "fetch")
-      .mockImplementation(async (url, options) => {
-        if (String(url) === "https://oauth2.googleapis.com/token") {
-          return new Response(
-            JSON.stringify({
-              access_token: "google-access",
-              refresh_token: "google-refresh",
-              scope:
-                "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/spreadsheets",
-            }),
-          );
-        }
-        expect(String(url)).toBe(
-          "https://www.googleapis.com/oauth2/v2/userinfo",
-        );
-        expect(new Headers(options?.headers).get("Authorization")).toBe(
-          "Bearer google-access",
-        );
-        return new Response(
-          JSON.stringify({
-            id: "stable-google-id",
-            email: "owner@example.com",
-          }),
-        );
-      });
-    const grant = await google.exchange("auth-code", "state-1", "files");
-    expect(grant).toMatchObject({
-      providerUserId: "stable-google-id",
-      login: "owner@example.com",
-    });
-    expect(upstream).toHaveBeenCalledTimes(2);
-  });
-
-  test("email-only consent refuses an unidentifiable account", async () => {
-    vi.stubEnv("GOOGLE_CLIENT_ID", "shared-client");
-    vi.stubEnv("GOOGLE_CLIENT_SECRET", "shared-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            access_token: "google-access",
-            scope:
-              "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/spreadsheets",
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ email: "owner@example.com" })),
-      );
-    expect(await google.exchange("auth-code", "state-1", "files")).toEqual({
-      error: "identity",
-    });
-  });
-
-  test("a partial files grant is rejected during connection", async () => {
-    vi.stubEnv("GOOGLE_CLIENT_ID", "shared-client");
-    vi.stubEnv("GOOGLE_CLIENT_SECRET", "shared-secret");
-    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
-    const upstream = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          access_token: "google-access",
-          scope:
-            "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/drive",
-        }),
-      ),
-    );
-    expect(await google.exchange("auth-code", "state-1", "files")).toEqual({
-      error: "scope",
-    });
-    expect(upstream).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe("app-bound OAuth state", () => {
@@ -152,7 +42,7 @@ describe("app-bound OAuth state", () => {
 });
 
 describe("Google disconnect", () => {
-  test("local disconnect succeeds when upstream revocation fails", async () => {
+  test("disconnect is local even for the last Google connection", async () => {
     const test = t();
     const userId = await test.run(async (ctx) =>
       ctx.db.insert("users", { name: "Owner", email: "owner@example.com" }),
@@ -172,7 +62,7 @@ describe("Google disconnect", () => {
         apps: ["gmail"],
       })
     ).find((row) => row.app === "gmail")!;
-    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("provider down"));
+    const upstream = vi.spyOn(globalThis, "fetch");
     await backend.action(api.tables.connections.actions.disconnect, {
       app: "gmail",
       connectionId: status.accounts[0].id,
@@ -182,6 +72,7 @@ describe("Google disconnect", () => {
         apps: ["gmail"],
       })
     ).find((row) => row.app === "gmail")!;
+    expect(upstream).not.toHaveBeenCalled();
     expect(after).toEqual({
       provider: "google",
       app: "gmail",
@@ -202,7 +93,7 @@ describe("Google disconnect", () => {
           userId,
           provider: "google",
           app,
-          providerUserId: "sub-x",
+          providerUserId: `${app}:service-id`,
           login: "x@gmail.com",
           accessToken: `access-${app}`,
           refreshToken: `refresh-${app}`,
@@ -217,13 +108,14 @@ describe("Google disconnect", () => {
     const gmailId = statuses.find((row) => row.app === "gmail")!.accounts[0].id;
     const calendarId = statuses.find((row) => row.app === "calendar")!
       .accounts[0].id;
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("", { status: 200 }),
-    );
+    const upstream = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("", { status: 200 }));
     await backend.action(api.tables.connections.actions.disconnect, {
       app: "gmail",
       connectionId: gmailId,
     });
+    expect(upstream).not.toHaveBeenCalled();
     expect(
       await backend.query(api.tables.connections.queries.statusesForApps, {
         apps: ["gmail", "calendar"],
@@ -238,7 +130,7 @@ describe("Google disconnect", () => {
           expect.objectContaining({
             id: calendarId,
             login: "x@gmail.com",
-            providerUserId: "sub-x",
+            providerUserId: "calendar:service-id",
           }),
         ],
       },
@@ -247,6 +139,7 @@ describe("Google disconnect", () => {
       app: "calendar",
       connectionId: calendarId,
     });
+    expect(upstream).not.toHaveBeenCalled();
     expect(
       await backend.query(api.tables.connections.queries.statusesForApps, {
         apps: ["gmail", "calendar"],

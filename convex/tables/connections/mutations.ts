@@ -20,24 +20,10 @@ export const clearConnection = internalMutation({
   handler: async (ctx, args) => {
     const row = await ctx.db.get("connections", args.connectionId);
     if (!row || row.userId !== args.userId || row.app !== args.app) return null;
-    let revokeUpstream = true;
-    if (providerForApp(row.app) === "google") {
-      for (const app of ["gmail", "calendar", "files"] as const) {
-        const others = await ctx.db
-          .query("connections")
-          .withIndex("by_user_app_providerUserId", (q) =>
-            q
-              .eq("userId", args.userId)
-              .eq("app", app)
-              .eq("providerUserId", row.providerUserId),
-          )
-          .take(2);
-        if (others.some((other) => other._id !== row._id)) {
-          revokeUpstream = false;
-          break;
-        }
-      }
-    }
+    // Google revocation invalidates the whole project's grant, including other
+    // apps and Scope users. Service IDs cannot safely establish that it is unused.
+    // Disconnect locally; project-wide revocation belongs in Google Account.
+    const revokeUpstream = providerForApp(row.app) !== "google";
     await ctx.db.delete("connections", row._id);
     return { storedAccessToken: row.accessToken, revokeUpstream };
   },

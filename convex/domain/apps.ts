@@ -98,38 +98,27 @@ export function providerForApp(app: AppId): ProviderId {
 const GOOGLE_APP_SCOPE: Record<GoogleAppId, string> = {
   gmail: "https://www.googleapis.com/auth/gmail.modify",
   calendar: "https://www.googleapis.com/auth/calendar",
-  files:
-    "https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/spreadsheets",
+  // Drive already authorizes the broker's Docs and Sheets operations.
+  files: "https://www.googleapis.com/auth/drive",
 };
 
-/** Request account email plus the scopes represented by this app. */
+/** Account identification uses each service's API, with no identity scopes. */
 export function scopesForGoogleApp(app: AppId): string {
   if (!isGoogleApp(app)) {
     throw new Error(`scopesForGoogleApp requires a Google app, got ${app}`);
   }
-  return [
-    "https://www.googleapis.com/auth/userinfo.email",
-    GOOGLE_APP_SCOPE[app],
-  ].join(" ");
+  return GOOGLE_APP_SCOPE[app];
 }
 
-/** Effective Google bearer-token authority for the requested app. */
+/** Accept exactly the requested service authority, with no legacy grant extras. */
 export function googleScopesAreBounded(
   app: AppId,
   scopes: readonly string[] | undefined,
 ): boolean {
   if (!isGoogleApp(app) || !scopes) return false;
-  const requested = new Set(scopesForGoogleApp(app).split(" "));
-  const actual = new Set(
-    scopes.map((scope) => {
-      if (scope === "email")
-        return "https://www.googleapis.com/auth/userinfo.email";
-      return scope;
-    }),
-  );
   return (
-    [...requested].every((scope) => actual.has(scope)) &&
-    [...actual].every((scope) => requested.has(scope))
+    scopes.length > 0 &&
+    scopes.every((scope) => scope === GOOGLE_APP_SCOPE[app])
   );
 }
 

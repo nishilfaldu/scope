@@ -11,8 +11,60 @@ import {
   googleScopesAreBounded,
   isGoogleApp,
   scopesForGoogleApp,
+  type GoogleAppId,
 } from "../../domain/apps";
 import type { ProviderOAuth } from "../types";
+
+const IDENTITY_URL: Record<GoogleAppId, string> = {
+  gmail:
+    "https://gmail.googleapis.com/gmail/v1/users/me/profile?fields=emailAddress",
+  calendar:
+    "https://www.googleapis.com/calendar/v3/calendars/primary?fields=id",
+  files:
+    "https://www.googleapis.com/drive/v3/about?fields=user(permissionId,emailAddress,me)",
+};
+
+function nonempty(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/** Keys identify service accounts within an app, not a cross-app Google sub. */
+async function serviceIdentity(app: GoogleAppId, accessToken: string) {
+  try {
+    const response = await fetch(IDENTITY_URL[app], {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      redirect: "error",
+    });
+    if (!response.ok) return null;
+    const raw: unknown = await response.json();
+    if (!isPlainObject(raw)) return null;
+    if (app === "gmail") {
+      const email = nonempty(raw.emailAddress);
+      return email
+        ? { login: email, providerUserId: `gmail:${email.toLowerCase()}` }
+        : null;
+    }
+    if (app === "calendar") {
+      // primary resolves to this authenticated user's calendar. dataOwner is
+      // only defined for secondary calendars; id need not be the current email.
+      const id = nonempty(raw.id);
+      return id && id !== "primary"
+        ? { login: id, providerUserId: `calendar:${id}` }
+        : null;
+    }
+    if (!isPlainObject(raw.user) || raw.user.me !== true) return null;
+    const id = nonempty(raw.user.permissionId);
+    return id
+      ? {
+          login: nonempty(raw.user.emailAddress) ?? `Drive account ${id}`,
+          providerUserId: `drive:${id}`,
+        }
+      : null;
+  } catch {
+    // Never include upstream bodies, bearer tokens, or account data in errors.
+    return null;
+  }
+}
 
 export const google: ProviderOAuth = {
   authorize(state, app) {
@@ -52,7 +104,11 @@ export const google: ProviderOAuth = {
       }).toString(),
     });
     const tokenRaw: unknown = await tokenResponse.json();
-    if (!isPlainObject(tokenRaw) || typeof tokenRaw.access_token !== "string") {
+    if (
+      !tokenResponse.ok ||
+      !isPlainObject(tokenRaw) ||
+      !nonempty(tokenRaw.access_token)
+    ) {
       return { error: oauthErrorReason(tokenRaw) };
     }
     if (
@@ -65,24 +121,9 @@ export const google: ProviderOAuth = {
     ) {
       return { error: "scope" };
     }
-    const userResponse = await fetch(
-      "https://www.googleapis.com/oauth2/v2/userinfo",
-      { headers: { Authorization: `Bearer ${tokenRaw.access_token}` } },
-    );
-    const userRaw: unknown = await userResponse.json();
-    if (
-      !userResponse.ok ||
-      !isPlainObject(userRaw) ||
-      typeof userRaw.id !== "string" ||
-      !userRaw.id ||
-      typeof userRaw.email !== "string" ||
-      !userRaw.email
-    )
-      return { error: "identity" };
-    return grantFromTokenPayload(tokenRaw, {
-      login: userRaw.email,
-      providerUserId: userRaw.id,
-    });
+    const identity = await serviceIdentity(app, String(tokenRaw.access_token));
+    if (!identity) return { error: "identity" };
+    return grantFromTokenPayload(tokenRaw, identity);
   },
 
   /**
@@ -109,9 +150,16 @@ export const google: ProviderOAuth = {
       }).toString(),
     });
     const tokenRaw: unknown = await tokenResponse.json();
-    if (!isPlainObject(tokenRaw) || typeof tokenRaw.access_token !== "string") {
+    if (
+      !tokenResponse.ok ||
+      !isPlainObject(tokenRaw) ||
+      !nonempty(tokenRaw.access_token)
+    ) {
       return null;
     }
+    // Only an omitted scope can inherit the previously verified grant.
+    if (tokenRaw.scope !== undefined && typeof tokenRaw.scope !== "string")
+      return null;
     return refreshedFromPayload(tokenRaw, connection.refreshToken);
   },
 
