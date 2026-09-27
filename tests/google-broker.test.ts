@@ -253,7 +253,7 @@ test("Drive rejects Docs and Sheets content and permits a binary file", async ()
   expect((await response.json()).contentBase64).toBe(btoa("PDF data"));
 });
 
-test("Drive listing filters Google Workspace files even if upstream returns them", async () => {
+test("Drive lists Docs and Sheets metadata but excludes shortcuts", async () => {
   vi.stubEnv("GOOGLE_CLIENT_ID", "client");
   vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
   const { mint, operate } = await setup(["drive"]);
@@ -265,11 +265,19 @@ test("Drive listing filters Google Workspace files even if upstream returns them
         expires_in: 3600,
         scope: scopes("drive").join(" "),
       });
+    const query = new URL(String(url)).searchParams.get("q");
+    expect(query).not.toContain("application/vnd.google-apps.document");
+    expect(query).not.toContain("application/vnd.google-apps.spreadsheet");
     return json({
       files: [
-        { id: "doc12345", mimeType: "application/vnd.google-apps.document" },
+        {
+          id: "doc12345",
+          name: "Project plan",
+          mimeType: "application/vnd.google-apps.document",
+        },
         {
           id: "sheet12345",
+          name: "Budget",
           mimeType: "application/vnd.google-apps.spreadsheet",
         },
         {
@@ -283,8 +291,49 @@ test("Drive listing filters Google Workspace files even if upstream returns them
   const response = await operate(credential.brokerToken, "drive.list");
   expect(response.status).toBe(200);
   expect((await response.json()).data.files).toEqual([
+    {
+      id: "doc12345",
+      name: "Project plan",
+      mimeType: "application/vnd.google-apps.document",
+    },
+    {
+      id: "sheet12345",
+      name: "Budget",
+      mimeType: "application/vnd.google-apps.spreadsheet",
+    },
     { id: "pdf12345", mimeType: "application/pdf" },
   ]);
+});
+
+test("Drive can inspect Docs and Sheets metadata without downloading their content", async () => {
+  const { mint, operate } = await setup(["drive"]);
+  const credential = await mint("drive");
+  let mimeType = "application/vnd.google-apps.document";
+  const upstream = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (url) => {
+      if (String(url) === "https://oauth2.googleapis.com/token")
+        return json({
+          access_token: "fresh-drive",
+          expires_in: 3600,
+          scope: scopes("drive").join(" "),
+        });
+      return json({ id: "file12345", name: "file", mimeType });
+    });
+  for (const type of [
+    "application/vnd.google-apps.document",
+    "application/vnd.google-apps.spreadsheet",
+  ]) {
+    mimeType = type;
+    const response = await operate(credential.brokerToken, "drive.metadata", {
+      id: "file12345",
+    });
+    expect(response.status).toBe(200);
+    expect((await response.json()).data).toMatchObject({ mimeType: type });
+  }
+  expect(
+    upstream.mock.calls.some(([url]) => String(url).includes("alt=media")),
+  ).toBe(false);
 });
 
 test("a refreshed Google token with broader scopes cannot be used by the broker", async () => {

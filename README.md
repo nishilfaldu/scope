@@ -34,7 +34,7 @@ Use a random, task-stable `Idempotency-Key` header (32–128 characters) when cr
 
 The signed-in operator connects apps from `/connections`. Each connection is keyed by user, provider, app, and the provider's stable account ID. The display login is never used as an account key. Slice creation and onboarding approval page through apps and account choices, retaining selections across pages. At least one account must be chosen for every selected app; several may be chosen.
 
-The underlying Google Drive grant can authorize Docs and Sheets operations, so Scope keeps the Drive bearer server-side and restricts agents to vetted non-Docs and non-Sheets file operations. The three connections, slice bindings, and broker credentials are independent. Google grants with missing or broader scope metadata must be reconnected. A GitHub App user grant can be bound to one active agent lineage because refreshing its user token invalidates the prior access token.
+The underlying Google Drive grant can authorize Docs and Sheets operations, so Scope keeps the Drive bearer server-side and restricts agents to vetted file-listing, metadata, and non-Docs/Sheets download operations. Docs and Sheets content operations require their separate connections. The three connections, slice bindings, and broker credentials are independent. Google grants with missing or broader scope metadata must be reconnected. A GitHub App user grant can be bound to one active agent lineage because refreshing its user token invalidates the prior access token.
 
 For Google, register five redirects on the same OAuth client:
 
@@ -64,7 +64,7 @@ For these apps, a successful credential response contains `brokerToken`, `tokenT
 | Docs   | `docs.get`, `docs.create`, `docs.batchUpdate`                              | `id` for get/update; `payload` for create/update                        |
 | Sheets | `sheets.get`, `sheets.create`, `sheets.values.get`, `sheets.values.update` | `id` for get; `range` for values; `payload` for create/update           |
 
-Drive list excludes Google Docs, Google Sheets, and shortcuts. Drive metadata and download reject these types even when the agent knows an ID; download returns `contentBase64` and `mimeType`. Docs and Sheets use only their respective APIs. The broker does not support arbitrary Google URLs, Drive upload, delete, copy, export, permissions, or listing Docs/Sheets by account. Agents needing those operations must use a future vetted broker operation. The broker does not claim parity with Google's APIs.
+Drive list includes Google Docs and Sheets names, IDs, and MIME types, but excludes shortcuts. Drive metadata can inspect Docs and Sheets, while Drive download rejects Docs, Sheets, and shortcuts even when the agent knows an ID; allowed downloads return `contentBase64` and `mimeType`. Docs and Sheets content uses only their respective APIs and connections. The broker does not support arbitrary Google URLs, Drive upload, delete, copy, export, or permissions. The broker does not claim parity with Google's APIs.
 
 An agent may reduce its own authority without operator approval. Connection credentials authorize `POST /api/agent-connections/revoke`; slice credentials authorize `POST /api/slices/revoke`. Private request credentials authorize cancellation through `/api/agent-connections/cancel`, `/api/access-requests/cancel`, and `/api/credentials/cancel`. Revocation and cancellation never expand access. Request fields are immutable after a link is created.
 

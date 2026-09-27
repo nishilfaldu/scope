@@ -24,7 +24,7 @@ export const APP_PERMISSIONS: Record<AppId, string> = {
   calendar:
     "Read and manage calendars and events in the selected Google account.",
   drive:
-    "List, inspect, and download non-Docs and non-Sheets Drive files through Scope's broker. Google Docs and Sheets files are excluded.",
+    "List Drive files, including Google Docs and Sheets, and inspect their metadata. Download other files through Scope's broker; reading Docs and Sheets content requires separate access.",
   docs: "Read, create, and edit Google Docs through Scope's broker.",
   sheets: "Read, create, and edit Google Sheets through Scope's broker.",
   slack:

@@ -8,11 +8,12 @@ import { isPlainObject } from "../lib/json";
 const MAX_REQUEST_BYTES = 64 * 1024;
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const FILE_ID = /^[A-Za-z0-9_-]{5,200}$/;
-const BLOCKED_MIME = new Set([
+const NON_DOWNLOADABLE_MIME = new Set([
   "application/vnd.google-apps.document",
   "application/vnd.google-apps.spreadsheet",
   "application/vnd.google-apps.shortcut",
 ]);
+const SHORTCUT_MIME = "application/vnd.google-apps.shortcut";
 
 type Operation = {
   method: "GET" | "POST" | "PUT";
@@ -52,7 +53,7 @@ export function operationFor(
       const url = new URL("https://www.googleapis.com/drive/v3/files");
       url.searchParams.set(
         "q",
-        "trashed = false and mimeType != 'application/vnd.google-apps.document' and mimeType != 'application/vnd.google-apps.spreadsheet' and mimeType != 'application/vnd.google-apps.shortcut'",
+        `trashed = false and mimeType != '${SHORTCUT_MIME}'`,
       );
       url.searchParams.set(
         "fields",
@@ -292,7 +293,9 @@ export const httpGoogleBrokerHandler = httpAction(async (ctx, request) => {
         if (
           !isPlainObject(metadata) ||
           typeof metadata.mimeType !== "string" ||
-          BLOCKED_MIME.has(metadata.mimeType)
+          (operation.download
+            ? NON_DOWNLOADABLE_MIME.has(metadata.mimeType)
+            : metadata.mimeType === SHORTCUT_MIME)
         ) {
           return errorResponse(
             403,
@@ -332,7 +335,7 @@ export const httpGoogleBrokerHandler = httpAction(async (ctx, request) => {
           (file) =>
             isPlainObject(file) &&
             typeof file.mimeType === "string" &&
-            !BLOCKED_MIME.has(file.mimeType),
+            file.mimeType !== SHORTCUT_MIME,
         );
         return jsonResponse(200, {
           app: "drive",
