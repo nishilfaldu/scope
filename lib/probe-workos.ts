@@ -23,16 +23,19 @@ export async function verifyRequester(
     !payload.sid
   )
     throw new Error("Invalid user token");
-  const user = await options.getUser(payload.sub);
-  if (
-    user.id !== payload.sub ||
-    typeof user.external_id !== "string" ||
-    !user.external_id.startsWith("scope:") ||
-    !user.external_id.slice(6)
-  )
+  // Standalone Connect preserves the user.id supplied by our authenticated
+  // completion endpoint in sub; it does not create a User Management record.
+  // Resolve this only after signature, issuer, audience and consent validation.
+  let externalId: unknown = payload.sub;
+  if (!payload.sub.startsWith("scope:")) {
+    const user = await options.getUser(payload.sub);
+    if (user.id !== payload.sub) throw new Error("Unlinked identity");
+    externalId = user.external_id;
+  }
+  if (typeof externalId !== "string" || !/^scope:[^:\s]+$/.test(externalId))
     throw new Error("Unlinked identity");
   return {
-    userId: user.external_id.slice(6),
+    userId: externalId.slice(6),
     requester: `${payload.sub}:${payload.client_id}:${payload.sid}`,
   };
 }

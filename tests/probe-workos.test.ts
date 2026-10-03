@@ -47,6 +47,40 @@ test("signed OAuth identity is mapped through WorkOS to an existing Convex owner
   });
   expect(opts.getUser).toHaveBeenCalledWith("user_one");
 });
+test("Standalone Connect uses the verified external subject without a User Management lookup", async () => {
+  const opts = options();
+  expect(
+    await verifyRequester(await signed({ sub: "scope:owner_one" }), opts),
+  ).toEqual({
+    userId: "owner_one",
+    requester: "scope:owner_one:client_one:consent_one",
+  });
+  expect(opts.getUser).not.toHaveBeenCalled();
+});
+test("Standalone subjects still require signed claims, the right resource and a nonempty owner", async () => {
+  const opts = options();
+  for (const override of [
+    { sub: "scope:" },
+    { sub: "scope:owner:extra" },
+    { sub: "scope: owner" },
+    { sub: "scope:owner_one", aud: "https://other.example" },
+    { sub: "scope:owner_one", iss: "https://other.example" },
+    { sub: "scope:owner_one", exp: 1 },
+    { sub: "scope:owner_one", sid: undefined },
+    { sub: "scope:owner_one", client_id: undefined },
+  ])
+    await expect(
+      verifyRequester(await signed(override), opts),
+    ).rejects.toThrow();
+  const wrong = await generateKeyPair("RS256");
+  await expect(
+    verifyRequester(
+      await signed({ sub: "scope:owner_one" }, wrong.privateKey),
+      opts,
+    ),
+  ).rejects.toThrow();
+  expect(opts.getUser).not.toHaveBeenCalled();
+});
 test("wrong resource, issuer, expiry, missing consent and bad signatures fail before lookup", async () => {
   const opts = options();
   for (const override of [
