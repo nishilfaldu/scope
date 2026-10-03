@@ -7,10 +7,7 @@ import {
 const isSignInPage = createRouteMatcher(["/signin"]);
 const isAuthApiRoute = createRouteMatcher(["/api/auth(.*)"]);
 
-const isConnectBridge = createRouteMatcher([
-  "/api/connect/bridge",
-  "/api/probe/(.*)",
-]);
+const isClientService = createRouteMatcher(["/api/mcp", "/api/agent/(.*)"]);
 const isPublicPage = createRouteMatcher(["/", "/privacy", "/terms"]);
 
 function safeRedirectPath(value: string | null): string {
@@ -22,7 +19,7 @@ function safeRedirectPath(value: string | null): string {
 
 export default convexAuthNextjsMiddleware(
   async (request, { convexAuth }) => {
-    if (isAuthApiRoute(request) || isConnectBridge(request)) {
+    if (isAuthApiRoute(request) || isClientService(request)) {
       return;
     }
     if (isPublicPage(request)) {
@@ -49,7 +46,7 @@ export default convexAuthNextjsMiddleware(
   },
   {
     shouldHandleCode: (request) =>
-      request.nextUrl.pathname !== "/oauth/complete",
+      request.nextUrl.pathname !== "/api/accounts/complete",
   },
 );
 

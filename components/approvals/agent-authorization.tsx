@@ -16,9 +16,12 @@ export function AgentAuthorization({
     setBusy(true);
     setError("");
     try {
-      const result = await approvalPost<{ url: string }>("workos", {
-        external_auth_id: externalAuthId,
-      });
+      const result = await approvalPost<{ url: string }>(
+        "/api/client/authorize",
+        {
+          external_auth_id: externalAuthId,
+        },
+      );
       location.assign(result.url);
     } catch {
       setError(

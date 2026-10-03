@@ -30,16 +30,13 @@ import type { DataModel } from "./dataModel.js";
 type Env = {
   readonly CONVEX_CLOUD_URL: string;
   readonly CONVEX_SITE_URL: string;
-  readonly BOARD_ORIGIN: string;
-  readonly CONNECT_BRIDGE_PROTECTION_COOKIE: string | undefined;
-  readonly CONNECT_BRIDGE_SECRET: string | undefined;
-  readonly CONNECT_BRIDGE_URL: string | undefined;
   readonly RESEND_API_KEY: string;
   readonly RESEND_FROM: string | undefined;
-  readonly SCOPE_PROBE_SECRET: string | undefined;
+  readonly SCOPE_HELPER_CLIENT_ID: string | undefined;
+  readonly SCOPE_ORIGIN: string;
+  readonly SCOPE_SERVICE_SECRET: string | undefined;
   readonly SCOPE_VAPID_PRIVATE_KEY: string | undefined;
   readonly SCOPE_VAPID_PUBLIC_KEY: string | undefined;
-  readonly TOKEN_ENCRYPTION_KEY: string;
 };
 
 /**

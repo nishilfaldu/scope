@@ -1,46 +1,51 @@
 # Scope
 
-Scope is an access inbox for WorkOS-authorized MCP connections. Owners review each Airtable account request, name their connections, manage provider accounts, and optionally enable push notifications.
+Scope lets people approve account access requested by their agents. Existing Scope sign-in remains the owner identity. WorkOS authorizes incoming MCP clients; Vercel Connect manages provider authorizations.
 
-## Current architecture
+## Architecture
 
-MCP at `/api/probe/mcp` accepts signed WorkOS resource tokens only. Signature, issuer, audience, expiry, client, consent and linked Scope ownership are checked before requests. The former direct agent invitations, secrets, claims, acknowledgments and slices are retired. Old approvals remain attached to their retired recipients; signing in through MCP cannot inherit them.
+`/api/mcp` exposes `list_accounts`, `list_collectors`, `request_access`, and `get_request_status`. Hosted tool results contain approval state and links. A native requester chooses an owned, active local helper to collect access privately; it cannot collect provider credentials itself.
 
-Each request selects one verified account and a stable retry key. The owner approves or denies in `/approvals`. Approval permits delivery within a fixed sharing window. An acquisition lease, encrypted replay, authenticated receipt, and live account/recipient checks protect retries. Provider credentials stay inside the private local helper and never enter MCP content, the chat, or owner views. See [credential flows](docs/credential-flows.md).
+Each approval freezes one account authorization, grant/profile version, requester, collector, intent, display snapshot, and thirty-minute deadline. The private helper calls `/api/agent/deliver`; every permitted attempt freshly resolves and verifies the provider credential, then rechecks authority in a Convex transaction after provider IO. Token bytes may change on retry. Provider tokens, refresh tokens, ciphertext and replay leases are absent from the database. See [credential flows](docs/credential-flows.md).
 
-Account sign-in creates a temporary browser-bound attempt. Only successful provider verification adds an account. Failed or cancelled sign-in adds nothing. The two configured Airtable read-only bindings remain isolated by owner, connector, provider identity and exact base. Connection names and request intent are display information, never authority.
-
-Stopping an account, connection or request blocks future sharing. Access already received may remain active at the provider. A receipt confirms access delivery, not completed work.
-
-Slack sign-in and account management remain available through Vercel Connect. Slack sharing through MCP requires a separate provider tool and is explicitly shown as unavailable. Airtable OAuth needs a correctly configured upstream connector; it has no fallback to an unverified account.
+Six product tables hold accounts, temporary connection attempts, client connections, approval requests, push subscriptions, and durable notification jobs. Scope authentication tables are unchanged. Owner views preserve the paper/green design, sidebar navigation, notification illustration and request timelines.
 
 ## Development
 
-```bash
+```sh
 pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Read `AGENTS.md`, installed Next.js guides, and `convex/_generated/ai/guidelines.md` before edits. Never use production deployment settings for preview work.
+Use [localhost:3000](http://localhost:3000). Read `AGENTS.md`, installed Next.js guides, and Convex guidelines before editing. The branch preview uses the development backend at [scope-preview.vercel.app](https://scope-preview.vercel.app). Production service calls are disabled.
 
-The current branch preview is [scope-preview.vercel.app](https://scope-preview.vercel.app), using the development backend. `/design-review` redirects to the real inbox. `/lab` remains a redirect for existing WorkOS callbacks and notification links.
+Owner authentication uses existing Convex email sign-in configuration. Frontend configuration includes `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CONVEX_SITE_URL`, `SCOPE_ORIGIN`, `SCOPE_SERVICE_SECRET`, `WORKOS_ISSUER`, and `WORKOS_API_KEY`. Convex uses the matching `SCOPE_SERVICE_SECRET`, the registered public `SCOPE_HELPER_CLIENT_ID`, and push keys `SCOPE_VAPID_PUBLIC_KEY`/`SCOPE_VAPID_PRIVATE_KEY`; the browser uses `NEXT_PUBLIC_VAPID_PUBLIC_KEY`. Never commit secrets.
 
-## Configuration
+Integrations are static entries in `lib/providers.ts`, each with an explicit connector, API origin, fixed minimal access profile and readiness gate. `SCOPE_AIRTABLE_REST_CONNECTOR` and `SCOPE_SLACK_CONNECTOR` must refer to separate nonproduction connectors. **Both integrations remain disabled pending live OAuth acceptance.** The previous Airtable connector targets MCP and cannot be used for this REST helper. The current Connect catalog offers Airtable MCP OAuth or API PAT; custom REST OAuth requires a separately registered Airtable OAuth client. There is no PAT fallback.
 
-Configure the existing Convex email sign-in (`RESEND_API_KEY`, optional `RESEND_FROM`, and `BOARD_ORIGIN`) and frontend Convex URL. Configure WorkOS issuer, API key, public client and protected resource for the intended frontend origin. The local helper uses PKCE login in `plugins/scope-local/login.mjs`, keeps its WorkOS token in a private file, and requires a fresh sign-in when that token expires. Old direct credentials are rejected.
+## Local helper
 
-The Airtable bridge uses `SCOPE_PROBE_SECRET`, a stable base64 32-byte `SCOPE_PROBE_TOKEN_KEY`, `SCOPE_PROBE_ORIGIN`, and the configured Connect connector. Read-only bindings additionally require the pinned `SCOPE_PAT_TEST_OWNER_ID`. Keep secrets in environment/private config files. The bridge is disabled when `VERCEL_ENV=production`.
+Install its declared dependencies in `plugins/scope-local` when distributing the plugin. Its SDK stdio server exposes account/collector listing and two fixed reads: `airtable_list_bases` and `slack_list_channels`. It supports either a stable request key or a designated hosted request ID. Hosted requests must use the corresponding exact intent: `List the available Airtable bases` or `List public Slack channels`.
 
-Slack uses the existing managed connector and bridge: frontend `CONNECT_SLACK_CONNECTOR`, `CONNECT_BRIDGE_SECRET`, `SCOPE_CONVEX_SITE_URL`, `SCOPE_BOARD_ORIGIN`; Convex `CONNECT_BRIDGE_URL`, matching bridge secret, and `BOARD_ORIGIN`. Browser-bound one-use tickets and exact installation/provider checks protect OAuth completion. `GET /api/health` reports configuration without revealing secrets.
+Create `~/.config/scope/config.json` (directory mode 0700, file mode 0600, owned by you) containing only the initial `origin`, HTTPS WorkOS `issuer`, and registered public `clientId`. The exact protected resource is `<origin>/api/mcp`, and the registered callback is `http://127.0.0.1:47831/callback`.
 
-## Validation
+```sh
+node plugins/scope-local/login.mjs
+node plugins/scope-local/server.mjs
+```
 
-```bash
+The SDK handles discovery, PKCE and `offline_access` refresh. The adapter saves issuer/client/resource-bound OAuth sessions atomically and serializes refresh across processes. Provider credentials remain memory-only, are sent to fixed REST destinations, and never enter tool output. Only safe reads retry once after provider 401; no arbitrary shell execution or ambiguous write replay exists.
+
+## Validation and live readiness
+
+```sh
 pnpm test
 pnpm lint
 pnpm exec tsc --noEmit
 pnpm build
-node --test prototypes/helper.check.mjs prototypes/mcp.check.mjs
+node --test prototypes/mcp.check.mjs
 ```
 
-Tests cover authorization and account isolation, retry/receipt/cancellation races, provider verification, OAuth callback proof, push retries, and truthful request states. Browser viewport checks complement these; they do not replace physical iPhone installation and push-delivery testing.
+Mocked tests cover owner isolation, requester/collector separation, grant/profile fencing, in-flight cancellation, callback proofs/retries, fresh SDK resolution, exact scopes/identity, private refresh persistence, push retries and UI states. The stdio check exercises long waits, caller cancellation and stable-key retry.
+
+Live acceptance still requires disposable Airtable identities A/B, two distinct selected base grants under one identity, Slack workspace consent, provider rotation/expiry, resource/scope denial, interruption/reconnect races, observed revocation limits, native requester/helper delivery and a physical phone push test. Historical PAT screenshots are not proof of the new OAuth flow. Superseded authorization cleanup can retry only within its original ten-minute connection window; previously received access may remain active.

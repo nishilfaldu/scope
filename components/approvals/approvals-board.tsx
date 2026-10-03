@@ -6,32 +6,26 @@ import { BoardShell } from "@/components/layout/board-shell";
 import { Button } from "@/components/ui/button";
 import { RequestRow } from "./request-row";
 import { useNow } from "@/hooks/use-now";
-import {
-  approvalStatus,
-  type ApprovalAccount,
-  type ApprovalRequest,
-} from "@/lib/approval-display";
+import { approvalStatus, type ApprovalRequest } from "@/lib/approval-display";
 import styles from "@/components/scope/scope.module.css";
 export function ApprovalsBoard({ requestId }: { requestId?: string }) {
   const now = useNow();
   const [decided, setDecided] = useState<Record<string, ApprovalRequest>>({});
   const [order, setOrder] = useState<string[]>([]);
   const retained = useQuery(
-    api.probe.retainedForOwner,
+    api.approvals.retainedForOwner,
     Object.keys(decided).length
       ? { ids: Object.values(decided).map((r) => r._id) }
       : "skip",
   );
-  const accounts = useQuery(api.probe.accountsForOwner, {}) as
-    ApprovalAccount[] | undefined;
-  const pendingRows = useQuery(api.probe.pendingForOwner, { now });
+  const pendingRows = useQuery(api.approvals.pendingForOwner, { now });
   const page = usePaginatedQuery(
-    api.probe.requestsForOwner,
+    api.approvals.forOwner,
     {},
     { initialNumItems: 20 },
   );
   const focused = useQuery(
-    api.probe.requestForOwner,
+    api.approvals.requestForOwner,
     requestId ? { reference: requestId } : "skip",
   );
   const rows = [
@@ -40,7 +34,7 @@ export function ApprovalsBoard({ requestId }: { requestId?: string }) {
     ...Object.values(decided),
     ...(retained ?? []),
   ] as ApprovalRequest[];
-  if (focused) rows.push(focused.request);
+  if (focused) rows.push(focused);
   const unique = [...new Map(rows.map((r) => [r._id, r])).values()];
   if (order.length)
     unique.sort((a, b) => {
@@ -50,15 +44,10 @@ export function ApprovalsBoard({ requestId }: { requestId?: string }) {
       };
       return rank(a) - rank(b);
     });
-  const accountFor = (r: ApprovalRequest) =>
-    focused?.request._id === r._id
-      ? (focused.account ?? undefined)
-      : accounts?.find((a) => a._id === r.accountId);
   const pending = unique.filter(
-    (r) => approvalStatus(r, now, accountFor(r)?.revoked) === "Needs approval",
+    (r) => approvalStatus(r, now) === "Needs approval",
   ).length;
-  const loading =
-    !accounts || !pendingRows || page.status === "LoadingFirstPage";
+  const loading = !pendingRows || page.status === "LoadingFirstPage";
   return (
     <BoardShell title="Requests">
       <header className={styles.pageHeading}>
@@ -88,14 +77,13 @@ export function ApprovalsBoard({ requestId }: { requestId?: string }) {
             <RequestRow
               key={r._id}
               request={r}
-              account={accountFor(r)}
               now={now}
-              focused={focused?.request._id === r._id}
+              focused={focused?._id === r._id}
               onDecision={() => {
                 setOrder(unique.map((row) => row._id));
                 setDecided((previous) =>
                   Object.fromEntries(
-                    Object.entries({ ...previous, [r._id]: r }).slice(-100),
+                    Object.entries({ ...previous, [r._id]: r }).slice(-50),
                   ),
                 );
               }}

@@ -4,19 +4,13 @@ Current work lives on `codex/scope-approval-prototypes` in the single shared che
 
 ## Current implementation — October 3, 2026
 
-The approved paper/green design now uses live owner data at `/approvals`, `/connections`, `/agents` and `/notifications`. `/design-review` redirects to the inbox. Pending decisions load independently of history; decided rows stay live. Saved MCP names follow their requests. Timelines distinguish approval, delivery attempt and receipt; ordinary state no longer has repeated explanatory text.
+The generic OAuth rewrite uses six product tables, one approval engine, SDK hosted/stdio MCP, and fresh provider resolution after each permitted delivery. Encrypted replay, token inventory, PAT routes and the separate Slack bridge were removed. Development product data was reset without touching Scope authentication users.
 
-WorkOS-authorized MCP is the sole agent access path. Direct agent invitations, claims, secret authentication, slices, public decision routes, schemas, UI and tests are retired. Old direct request history stays visible as blocked and cannot move to a new MCP authorization. Development retirement copied prior names, stopped direct recipients and cancelled obsolete scheduled expiry jobs before removal. Archived tables were left in the dev database, outside the active schema.
-
-Provider credentials remain private. Existing acquisition/replay/receipt fences, push retries, WorkOS resource validation and the two independent read-only Airtable bindings remain. Airtable account sign-in now uses temporary owner/browser-bound attempts; accounts appear only after verified provider success. Completion retries cannot duplicate an account or reactivate one that was blocked.
-
-Slack sign-in remains, while the interface explicitly says Slack MCP access is unavailable. Airtable OAuth depends on upstream connector configuration; the prior provider setup failure remains a limitation. Physical iPhone installation/push delivery and native remote-client OAuth have not been re-proven by desktop viewport checks. The historical successful WorkOS/PAT delivery below predates this UI rollout and is evidence for the preserved credential path, not a fresh claim of OAuth-provider refresh.
-
-Current architecture and setup: [README](../README.md), [credential flows](../docs/credential-flows.md).
+Both provider fixtures remain disabled until live acceptance is complete. Current UI preserves sidebar navigation, the notification phone illustration and concise timelines. Actual setup, tests and known limits: [README](../README.md), [credential flows](../docs/credential-flows.md).
 
 ## Historical evidence
 
-Everything below records earlier experiments. Instructions describing direct agent authentication, pairing, slices, `/lab` UI or the sample `/design-review` are superseded by the current implementation above. Historical screenshots and provider results remain evidence of those earlier runs.
+Everything below records earlier experiments. Instructions describing direct agent authentication, pairing, slices, `/lab` UI or the sample `/design-review` are superseded by the current implementation above; all commands below are historical and must not be run against the new flow. Historical screenshots and provider results remain evidence of those earlier runs.
 
 ## Live read-only PAT test
 

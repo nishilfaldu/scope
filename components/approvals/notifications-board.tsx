@@ -1,11 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { BoardShell } from "@/components/layout/board-shell";
 import { BrandMark } from "@/components/shared/brand-mark";
 import { Button } from "@/components/ui/button";
-import { approvalPost } from "@/lib/approval-display";
 import {
   notificationSupport,
   enableBrowserNotifications,
@@ -13,11 +12,12 @@ import {
 } from "@/lib/browser-notifications";
 import styles from "@/components/scope/scope.module.css";
 export function NotificationsBoard() {
-  const subscribe = useMutation(api.probe.subscribe);
+  const sendTest = useAction(api.notificationDelivery.test);
+  const subscribe = useMutation(api.notifications.subscribe);
   const [support, setSupport] = useState<NotificationSupport>("checking"),
     [endpoint, setEndpoint] = useState("");
   const saved = useQuery(
-    api.probe.deviceSubscribed,
+    api.notifications.pushStatus,
     endpoint ? { endpoint } : "skip",
   );
   const [busy, setBusy] = useState<string | null>(null),
@@ -36,7 +36,7 @@ export function NotificationsBoard() {
         const registrations = await navigator.serviceWorker.getRegistrations();
         const registration = registrations.find((r) =>
           [r.active, r.waiting, r.installing].some(
-            (w) => w && new URL(w.scriptURL).pathname === "/probe-sw.js",
+            (w) => w && new URL(w.scriptURL).pathname === "/scope-sw.js",
           ),
         );
         const subscription = await registration?.pushManager.getSubscription();
@@ -81,16 +81,12 @@ export function NotificationsBoard() {
     setError("");
     setMessage("");
     try {
-      const result = await approvalPost<{
-        sent: number;
-        failed: number;
-        configured: boolean;
-      }>("push-test", {});
+      const result = await sendTest({ endpoint });
       setMessage(
         !result.configured
           ? "Notifications are not configured for this Scope environment."
           : result.sent
-            ? "Test sent to your subscribed devices. Check your device for receipt; sending does not confirm delivery."
+            ? "Test sent to this device. Check it for receipt; sending does not confirm delivery."
             : "No test was sent. Enable notifications on a device and try again.",
       );
     } catch {
@@ -99,7 +95,7 @@ export function NotificationsBoard() {
       setBusy(null);
     }
   }
-  const enabled = support === "granted" && saved === true,
+  const enabled = support === "granted" && saved?.subscribed === true,
     canEnable = ["default", "granted"].includes(support);
   return (
     <BoardShell title="Notifications">

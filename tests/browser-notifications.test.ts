@@ -52,7 +52,7 @@ test("existing lab subscription is reused after moving notification settings", a
   };
   const registration = {
     scope: "https://scope.example/lab",
-    active: { scriptURL: "https://scope.example/probe-sw.js" },
+    active: { scriptURL: "https://scope.example/scope-sw.js" },
     pushManager: {
       getSubscription: vi.fn().mockResolvedValue(subscription),
       subscribe: vi.fn(),
@@ -68,7 +68,7 @@ test("existing lab subscription is reused after moving notification settings", a
     p256dh: "key",
     auth: "auth",
   });
-  expect(register).toHaveBeenCalledWith("/probe-sw.js", {
+  expect(register).toHaveBeenCalledWith("/scope-sw.js", {
     scope: "/lab",
     updateViaCache: "none",
   });
@@ -93,7 +93,7 @@ test("notification clicks stay on Scope and support old and new approval links",
   const listeners: Record<string, (event: unknown) => void> = {};
   const showNotification = vi.fn();
   const openWindow = vi.fn();
-  runInNewContext(readFileSync("public/probe-sw.js", "utf8"), {
+  runInNewContext(readFileSync("public/scope-sw.js", "utf8"), {
     URL,
     self: {
       addEventListener: (name: string, fn: (e: unknown) => void) =>

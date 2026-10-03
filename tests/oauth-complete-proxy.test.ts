@@ -30,23 +30,20 @@ test("auth middleware leaves provider callback codes for OAuth completion", asyn
   await import("../proxy");
   expect(auth.shouldHandleCode).toBeTypeOf("function");
   expect(
-    auth.shouldHandleCode!({ nextUrl: { pathname: "/oauth/complete" } }),
+    auth.shouldHandleCode!({ nextUrl: { pathname: "/api/accounts/complete" } }),
   ).toBe(false);
   expect(auth.shouldHandleCode!({ nextUrl: { pathname: "/signin" } })).toBe(
     true,
   );
 });
 
-test("only the bridge bypasses browser sign-in for its own server authentication", async () => {
+test("only the MCP service bypasses browser sign-in for its own server authentication", async () => {
   const { nextjsMiddlewareRedirect } =
     await import("@convex-dev/auth/nextjs/server");
   await import("../proxy");
   const isAuthenticated = vi.fn().mockResolvedValue(false);
   const ctx = { convexAuth: { isAuthenticated } };
-  await auth.handler!(
-    { nextUrl: { pathname: "/api/connect/bridge", search: "" } },
-    ctx,
-  );
+  await auth.handler!({ nextUrl: { pathname: "/api/mcp", search: "" } }, ctx);
   expect(isAuthenticated).not.toHaveBeenCalled();
   expect(nextjsMiddlewareRedirect).not.toHaveBeenCalled();
   await auth.handler!(

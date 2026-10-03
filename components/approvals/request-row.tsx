@@ -25,25 +25,22 @@ import {
   requestAccess,
   accessBoundary,
   requestExplanation,
-  type ApprovalAccount,
   type ApprovalRequest,
 } from "@/lib/approval-display";
 
 export function RequestRow({
   request,
-  account,
   now,
   focused = false,
   onDecision,
 }: {
   request: ApprovalRequest;
-  account?: ApprovalAccount;
   now: number;
   focused?: boolean;
   onDecision?: () => void;
 }) {
-  const decide = useMutation(api.probe.decide),
-    cancel = useMutation(api.probe.cancel);
+  const decide = useMutation(api.approvals.decide),
+    cancel = useMutation(api.approvals.cancel);
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [open, setOpen] = useState(focused),
@@ -52,16 +49,17 @@ export function RequestRow({
   useEffect(() => {
     if (focused) row.current?.scrollIntoView({ block: "nearest" });
   }, [focused]);
-  const status = approvalStatus(request, now, account?.revoked),
+  const status = approvalStatus(request, now),
     pending = status === "Needs approval";
   const attention = ["Receipt unconfirmed", "Not collected"].includes(status);
   const canStop =
     request.status === "approved" &&
     deliveryDeadline(request) > now &&
-    !account?.revoked &&
-    !request.requesterStopped;
+    request.accountAvailable &&
+    !request.requesterStopped &&
+    !request.collectorStopped;
   const time = requestTime(request, now),
-    name = request.requesterName ?? "MCP connection";
+    name = request.snapshot.requesterName;
   async function act(action: "approve" | "deny" | "stop") {
     onDecision?.();
     setBusy(true);
@@ -102,14 +100,12 @@ export function RequestRow({
           </span>
           <span className={styles.who}>
             <strong>{name}</strong>
-            <span>
-              {request.requesterSource ?? "Authorized MCP connection"}
-            </span>
+            <span>{"Authorized MCP connection"}</span>
           </span>
           <span className={styles.summaryEnd}>
             <time dateTime={time ? new Date(time).toISOString() : undefined}>
               {pending
-                ? `${Math.max(1, Math.ceil((request.expiresAt - now) / 60_000))} min to decide`
+                ? `${Math.max(1, Math.ceil((request.approvalExpiresAt - now) / 60_000))} min to decide`
                 : time
                   ? formatRequestTime(time)
                   : ""}
@@ -125,14 +121,15 @@ export function RequestRow({
         </button>
         <div className={styles.requestBody}>
           <div className={styles.access}>
-            <AppMark app="Airtable" />
+            <AppMark app={request.snapshot.providerName} />
             <div>
               <p>{requestAccess(request)}</p>
               <span>
-                Airtable / {accountName(account?.baseName || account?.label)}
+                {request.snapshot.providerName} /{" "}
+                {accountName(request.snapshot.accountLabel)}
               </span>
               {pending && (
-                <p className={styles.permission}>{accessBoundary(account)}</p>
+                <p className={styles.permission}>{accessBoundary(request)}</p>
               )}
             </div>
           </div>
@@ -140,7 +137,7 @@ export function RequestRow({
             <div className={styles.decision}>
               <Button
                 className={styles.approve}
-                disabled={busy || !account?.providerUserId}
+                disabled={busy}
                 onClick={() => void act("approve")}
               >
                 {busy ? "Saving…" : "Approve"}
@@ -181,14 +178,14 @@ export function RequestRow({
       </div>
       {open && !pending && (
         <div id={`detail-${request._id}`} className={styles.requestDetail}>
-          {requestExplanation(request, now, account) && (
+          {requestExplanation(request, now) && (
             <p className={styles.explanation}>
-              {requestExplanation(request, now, account)}
+              {requestExplanation(request, now)}
             </p>
           )}
           {!pending && (
             <ol aria-label="Request timeline" className={styles.evidence}>
-              {requestTimeline(request, now, account).map((event, i, all) => (
+              {requestTimeline(request, now).map((event, i, all) => (
                 <li
                   key={`${event.label}-${i}`}
                   className={
@@ -209,7 +206,12 @@ export function RequestRow({
             </ol>
           )}
           {!pending && (
-            <p className={styles.detailNote}>{accessBoundary(account)}</p>
+            <p className={styles.detailNote}>{accessBoundary(request)}</p>
+          )}
+          {request.collectorConnectionId !== request.requesterConnectionId && (
+            <p className={styles.detailNote}>
+              Delivered privately to {request.snapshot.collectorName}.
+            </p>
           )}
           {canStop && (
             <button
@@ -232,7 +234,8 @@ export function RequestRow({
           <DialogHeader>
             <DialogTitle>Stop further sharing?</DialogTitle>
             <DialogDescription>
-              Previously received access may remain active at Airtable.
+              Previously received access may remain active at{" "}
+              {request.snapshot.providerName}.
             </DialogDescription>
           </DialogHeader>
           {error && (

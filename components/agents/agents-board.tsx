@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import type { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 import { BoardShell } from "@/components/layout/board-shell";
 import { Button } from "@/components/ui/button";
@@ -15,12 +16,12 @@ import {
 } from "@/components/ui/dialog";
 import styles from "@/components/scope/scope.module.css";
 export function AgentsBoard() {
-  const connections = useQuery(api.probe.mcpConnections, {});
-  const update = useMutation(api.probe.updateMcpConnection);
+  const connections = useQuery(api.clientConnections.forOwner, {});
+  const update = useMutation(api.clientConnections.update);
   const [editing, setEditing] = useState<{
-    requester: string;
+    _id: Id<"clientConnections">;
     name: string;
-    stopped: boolean;
+    stoppedAt?: number;
   } | null>(null);
   const [name, setName] = useState(""),
     [stopping, setStopping] = useState(false),
@@ -33,7 +34,7 @@ export function AgentsBoard() {
     setError("");
     try {
       await update({
-        requester: editing.requester,
+        id: editing._id,
         name: stopping ? undefined : name,
         stop: stopping,
       });
@@ -54,7 +55,7 @@ export function AgentsBoard() {
       const origin =
         process.env.NEXT_PUBLIC_SCOPE_ORIGIN || window.location.origin;
       await navigator.clipboard.writeText(
-        `Connect to Scope through its MCP server at ${origin}/api/probe/mcp. Sign in with my Scope account when prompted. Ask only for the Airtable account needed for my task and share the approval link with me. Reuse the same request key on retries. Keep sign-in and provider credentials private; never return them in chat.`,
+        `Connect to Scope through its MCP server at ${origin}/api/mcp. Sign in with my Scope account when prompted. Ask only for the account needed for my task and share the approval link with me. Reuse the same request key on retries. Choose my authorized local helper as the collector. Keep sign-in and provider credentials private; never return them in chat.`,
       );
       setNotice(
         "Connection instructions copied. Send them to the agent you want to use.",
@@ -84,7 +85,7 @@ export function AgentsBoard() {
           </p>
         ) : (
           connections.map((c) => (
-            <article className={styles.agent} key={c.requester}>
+            <article className={styles.agent} key={c._id}>
               <span className={styles.avatar}>
                 {c.name
                   .split(/\s+/)
@@ -96,7 +97,7 @@ export function AgentsBoard() {
               <div>
                 <h2>{c.name}</h2>
                 <p>Authorized MCP connection</p>
-                {c.stopped && <span>Sharing stopped</span>}
+                {c.stoppedAt !== undefined && <span>Sharing stopped</span>}
               </div>
               <button
                 className={styles.textAction}
@@ -168,7 +169,7 @@ export function AgentsBoard() {
               {busy ? "Saving…" : stopping ? "Stop sharing" : "Save name"}
             </Button>
           </DialogFooter>
-          {!stopping && !editing?.stopped && (
+          {!stopping && editing?.stoppedAt === undefined && (
             <button
               className={styles.textAction}
               disabled={busy}

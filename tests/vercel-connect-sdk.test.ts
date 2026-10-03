@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { afterEach, expect, test, vi } from "vitest";
-import { POST } from "../app/api/connect/bridge/route";
-import { CONNECT_SLACK_SCOPES as SLACK_SCOPES } from "../convex/connect/contracts";
+import {
+  beginAuthorization,
+  acquireVerifiedCredential,
+  disconnect,
+} from "../lib/providers";
+const SLACK_SCOPES = ["channels:read"];
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -14,7 +18,7 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
   vi.stubEnv("VERCEL_REGION", "");
   vi.stubEnv("VERCEL_CONNECT_INTERACTIVE_AUTH_MODE", "");
   vi.stubEnv("CONNECT_BRIDGE_SECRET", secret);
-  vi.stubEnv("CONNECT_SLACK_CONNECTOR", "slack/scope");
+  vi.stubEnv("SCOPE_SLACK_CONNECTOR", "slack/scope");
   vi.stubEnv("SCOPE_CONVEX_SITE_URL", "https://scope.convex.site");
   vi.stubEnv("SCOPE_BOARD_ORIGIN", "https://scope.example.com");
   const ref = {
@@ -22,8 +26,12 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
     issuer: "https://scope.convex.site",
     connectorId: "scl_slack",
     installationId: "inst_T1",
+    integrationId: "slack-read",
+    profileId: "channels.read",
+    profileVersion: 1,
+    providerUserId: "U1",
+    providerTenantId: "T1",
   };
-  let operation: "authorize" | "token" | "revoke" = "authorize";
   let tokens = 0;
   const transport = vi
     .spyOn(globalThis, "fetch")
@@ -33,21 +41,6 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
       const headers = new Headers(init?.headers);
       const body =
         typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
-      if (url === "https://scope.convex.site/api/connect/ticket") {
-        expect(headers.get("authorization")).toBe(`Bearer ${secret}`);
-        return Response.json(
-          operation === "revoke"
-            ? { operation, reference: ref }
-            : operation === "authorize"
-              ? {
-                  operation,
-                  subjectId: ref.subjectId,
-                  issuer: ref.issuer,
-                  state: "12345678-1234-1234-1234-123456789abc",
-                }
-              : { operation, ...ref, providerUserId: "T1:U1" },
-        );
-      }
       if (url.startsWith("https://api.vercel.com/")) {
         expect(headers.get("authorization")).toBe(`Bearer ${oidc}`);
         if (url.endsWith("/connectors/slack%2Fscope"))
@@ -68,7 +61,7 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
           expect(method).toBe("POST");
           expect(body.scopes).toEqual(SLACK_SCOPES);
           expect(body.returnUrl).toBe(
-            "https://scope.example.com/oauth/complete?app=slack&state=12345678-1234-1234-1234-123456789abc&code=connect",
+            "https://scope.example.com/api/accounts/complete?attempt=attempt",
           );
           return Response.json({
             url: "https://vercel.com/connect/authorize",
@@ -97,29 +90,22 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
       if (url === "https://slack.com/api/auth.test")
         return Response.json(
           { ok: true, team_id: "T1", user_id: "U1" },
-          { headers: { "x-oauth-scopes": "chat:write" } },
+          { headers: { "x-oauth-scopes": "channels:read" } },
         );
       throw new Error(`Unexpected SDK request ${url}`);
     });
-  const invoke = () =>
-    POST(
-      new Request("https://scope.example.com/api/connect/bridge", {
-        method: "POST",
-        headers: { authorization: `Bearer ${secret}` },
-        body: JSON.stringify({ ticket: `cb_${"f".repeat(64)}` }),
-      }),
-    );
-  expect((await invoke()).status).toBe(200);
-  operation = "token";
-  expect(await (await invoke()).json()).toMatchObject({
+  await beginAuthorization(
+    ref,
+    "https://scope.example.com/api/accounts/complete?attempt=attempt",
+  );
+  expect(await acquireVerifiedCredential(ref)).toMatchObject({
     accessToken: "xoxe.xoxp-1",
-    providerUserId: "T1:U1",
+    providerUserId: "U1",
   });
-  expect(await (await invoke()).json()).toMatchObject({
+  expect(await acquireVerifiedCredential(ref)).toMatchObject({
     accessToken: "xoxe.xoxp-2",
   });
   expect(tokens).toBe(2);
-  operation = "revoke";
-  expect((await invoke()).status).toBe(200);
+  expect(await disconnect(ref)).toEqual({ outcome: "succeeded" });
   expect(transport).toHaveBeenCalled();
 });

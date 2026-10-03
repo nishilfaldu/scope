@@ -1,5 +1,5 @@
 {
   "name": "scope-local",
-  "version": "0.1.0",
-  "description": "Experimental local Airtable helper with Scope phone approval."
+  "version": "0.2.0",
+  "description": "Local account reads with Scope phone approval and private credential delivery."
 }

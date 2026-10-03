@@ -1,8 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
 import { BoardShell } from "@/components/layout/board-shell";
 import { AppMark } from "@/components/scope/app-mark";
 import { Button } from "@/components/ui/button";
@@ -19,48 +18,47 @@ import {
   approvalPost,
   type ApprovalAccount,
 } from "@/lib/approval-display";
-import { APP_CONNECT_URL, CONNECT_ERRORS } from "@/lib/connections";
 import styles from "@/components/scope/scope.module.css";
-
-type ManagedAccount =
-  | { app: "Airtable"; account: ApprovalAccount }
-  | { app: "Slack"; id: Id<"connections">; name: string };
+type IntegrationView = {
+  id: string;
+  provider: string;
+  enabled: boolean;
+  accessDescription: string;
+};
 export function ConnectionsBoard() {
-  const accounts = useQuery(api.probe.accountsForOwner, {}) as
-    ApprovalAccount[] | undefined;
-  const slack = useQuery(api.tables.connections.queries.statusesForApps, {
-    apps: ["slack"],
-  });
-  const disconnect = useAction(api.tables.connections.actions.disconnect);
-  const startOAuth = useMutation(api.tables.oauthStates.mutations.start);
+  const accounts = useQuery(api.accounts.forOwner, {});
+  const [integrations, setIntegrations] = useState<IntegrationView[]>();
   const [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(""),
     [error, setError] = useState("");
-  const [connect, setConnect] = useState<"Airtable" | "Slack" | null>(null),
-    [manage, setManage] = useState<ManagedAccount | null>(null);
-  const [connectApp, setConnectApp] = useState<"Airtable" | "Slack">(
-    "Airtable",
-  );
-  const [options, setOptions] = useState<{ key: string; label: string }[]>([]);
+  const [connect, setConnect] = useState<IntegrationView | null>(null),
+    [manage, setManage] = useState<ApprovalAccount | null>(null);
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const result =
-      url.searchParams.get("airtable") || url.searchParams.get("slack");
+    let active = true;
+    void fetch("/api/accounts/integrations", { cache: "no-store" })
+      .then(async (r) => {
+        if (!r.ok) throw new Error("Unavailable");
+        const data = await r.json();
+        if (active) setIntegrations(data.integrations);
+      })
+      .catch(() => {
+        if (active)
+          setError("Could not load available connections. Try again.");
+      });
+    const url = new URL(window.location.href),
+      result = url.searchParams.get("connection");
     if (result) {
-      if (result === "connected")
-        queueMicrotask(() => setNotice("Account connected."));
-      else
-        queueMicrotask(() =>
-          setError(
-            CONNECT_ERRORS[url.searchParams.get("reason") ?? ""] ||
-              "Sign-in did not complete. No new account was added. Try connecting again.",
-          ),
-        );
-      ["airtable", "slack", "reason", "account"].forEach((key) =>
-        url.searchParams.delete(key),
+      queueMicrotask(() =>
+        result === "connected"
+          ? setNotice("Account connected.")
+          : setError("Sign-in did not complete. Try connecting again."),
       );
+      url.searchParams.delete("connection");
       window.history.replaceState({}, "", url.pathname + url.search + url.hash);
     }
+    return () => {
+      active = false;
+    };
   }, []);
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -75,36 +73,6 @@ export function ConnectionsBoard() {
     } finally {
       setBusy(false);
     }
-  }
-  async function signIn(app: "Airtable" | "Slack") {
-    await run(async () => {
-      if (app === "Airtable") {
-        const result = await approvalPost<{ url: string }>("authorize", {});
-        window.location.assign(result.url);
-      } else {
-        const { state, browserProof } = await startOAuth({
-          app: "slack",
-          returnTo: `${window.location.origin}/connections`,
-        });
-        sessionStorage.setItem(`scope-oauth:${state}`, browserProof);
-        const url = new URL(APP_CONNECT_URL.slack);
-        url.searchParams.set("state", state);
-        window.location.assign(url.toString());
-      }
-    });
-  }
-  function openConnect(app: "Airtable" | "Slack") {
-    setConnectApp(app);
-    setConnect(app);
-    setOptions([]);
-    setError("");
-    if (app === "Airtable")
-      void approvalPost<{ bindings: { key: string; label: string }[] }>(
-        "pat-bindings",
-        {},
-      )
-        .then((r) => setOptions(r.bindings))
-        .catch(() => {});
   }
   return (
     <BoardShell title="Connections">
@@ -123,74 +91,66 @@ export function ConnectionsBoard() {
         </p>
       )}
       <div className={styles.connectionList}>
-        {(["Airtable", "Slack"] as const).map((app) => (
-          <section className={styles.appGroup} key={app}>
-            <header>
-              <AppMark app={app} />
-              <h2>{app}</h2>
-              <Button
-                variant="ghost"
-                className={styles.addAccount}
-                disabled={busy}
-                onClick={() => openConnect(app)}
-              >
-                Connect account
-              </Button>
-            </header>
-            {app === "Airtable" ? (
-              !accounts ? (
-                <p className={styles.loading}>Loading accounts…</p>
-              ) : accounts.length ? (
-                accounts.map((a) => (
+        {!integrations || !accounts ? (
+          <p className={styles.loading}>Loading accounts…</p>
+        ) : (
+          integrations.map((integration) => {
+            const rows = accounts.filter(
+              (a) => a.integrationId === integration.id,
+            );
+            return (
+              <section className={styles.appGroup} key={integration.id}>
+                <header>
+                  <AppMark app={integration.provider} />
+                  <h2>{integration.provider}</h2>
+                  {integration.enabled && (
+                    <Button
+                      variant="ghost"
+                      className={styles.addAccount}
+                      disabled={busy}
+                      onClick={() => {
+                        setConnect(integration);
+                        setError("");
+                      }}
+                    >
+                      Connect account
+                    </Button>
+                  )}
+                </header>
+                {rows.map((a) => (
                   <div className={styles.account} key={a._id}>
                     <div>
                       <h3>{accountName(a.baseName || a.label)}</h3>
                       {a.providerEmail && <p>{a.providerEmail}</p>}
-                      {a.revoked && (
+                      {a.state === "blocked" && (
                         <p className={styles.attention}>Sharing stopped</p>
                       )}
                     </div>
-                    {!(a.revoked && a.credentialKind === "shared-pat") && (
+                    {(a.state === "active" ||
+                      a.disconnectOutcome === "failed") && (
                       <button
                         className={styles.textAction}
                         onClick={() => {
+                          setManage(a);
                           setError("");
-                          setManage({ app, account: a });
                         }}
                       >
-                        {a.revoked ? "Disconnect account" : "Manage"}
+                        {a.state === "blocked" ? "Retry disconnect" : "Manage"}
                       </button>
                     )}
                   </div>
-                ))
-              ) : (
-                <p className={styles.empty}>No Airtable accounts connected.</p>
-              )
-            ) : !slack ? (
-              <p className={styles.loading}>Loading accounts…</p>
-            ) : slack[0]?.accounts.length ? (
-              slack[0].accounts.map((a) => (
-                <div className={styles.account} key={a.id}>
-                  <div>
-                    <h3>{a.login}</h3>
-                    <p>MCP access is not available yet</p>
-                  </div>
-                  <button
-                    className={styles.textAction}
-                    onClick={() => {
-                      setError("");
-                      setManage({ app, id: a.id, name: a.login });
-                    }}
-                  >
-                    Manage
-                  </button>
-                </div>
-              ))
-            ) : (
-              <p className={styles.empty}>No Slack accounts connected.</p>
-            )}
-          </section>
-        ))}
+                ))}
+                {!rows.length && (
+                  <p className={styles.empty}>
+                    {integration.enabled
+                      ? `No ${integration.provider} accounts connected.`
+                      : "Connection setup is being verified."}
+                  </p>
+                )}
+              </section>
+            );
+          })
+        )}
       </div>
       <Dialog
         open={!!connect}
@@ -200,45 +160,13 @@ export function ConnectionsBoard() {
       >
         <DialogContent className={styles.dialog}>
           <DialogHeader>
-            <DialogTitle>Connect {connectApp}</DialogTitle>
-            <DialogDescription>
-              {connectApp === "Slack"
-                ? "Account sign-in is available. Slack access through MCP is not available yet."
-                : "Choose an available account or sign in to Airtable."}
-            </DialogDescription>
+            <DialogTitle>Connect {connect?.provider}</DialogTitle>
+            <DialogDescription>{connect?.accessDescription}</DialogDescription>
           </DialogHeader>
           {error && (
             <p role="alert" className={styles.error}>
               {error}
             </p>
-          )}
-          {connectApp === "Airtable" && options.length > 0 && (
-            <div className="space-y-4">
-              <p className={styles.detailNote}>
-                Your available read-only accounts
-              </p>
-              {options.map((o) => (
-                <div
-                  className="flex items-center justify-between gap-4"
-                  key={o.key}
-                >
-                  <span>{accountName(o.label)}</span>
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() =>
-                      void run(async () => {
-                        await approvalPost("pat", { bindingKey: o.key });
-                        setConnect(null);
-                        setNotice("Account connected.");
-                      })
-                    }
-                  >
-                    {busy ? "Connecting…" : "Connect"}
-                  </Button>
-                </div>
-              ))}
-            </div>
           )}
           <DialogFooter>
             <Button
@@ -251,9 +179,18 @@ export function ConnectionsBoard() {
             <Button
               className={styles.approve}
               disabled={busy}
-              onClick={() => connect && void signIn(connect)}
+              onClick={() =>
+                void run(async () => {
+                  if (!connect) return;
+                  const result = await approvalPost<{ url: string }>(
+                    "/api/accounts/authorize",
+                    { integrationId: connect.id },
+                  );
+                  window.location.assign(result.url);
+                })
+              }
             >
-              {busy ? "Connecting…" : `Sign in to ${connectApp}`}
+              {busy ? "Connecting…" : `Sign in to ${connect?.provider}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -267,24 +204,13 @@ export function ConnectionsBoard() {
         <DialogContent className={styles.dialog}>
           <DialogHeader>
             <DialogTitle>
-              {manage?.app === "Airtable"
-                ? accountName(manage.account.baseName || manage.account.label)
-                : manage?.name}
+              {accountName(manage?.baseName || manage?.label)}
             </DialogTitle>
             <DialogDescription>
-              {manage?.app === "Airtable" &&
-              manage.account.credentialKind === "shared-pat"
-                ? "Previously received access is unaffected. The Airtable credential is not revoked."
-                : "Previously received access may remain active at the provider."}
+              Previously received access may remain active at the provider.
             </DialogDescription>
           </DialogHeader>
-          {manage?.app === "Airtable" && (
-            <p className={styles.detailNote}>
-              {manage.account.credentialKind === "shared-pat"
-                ? "Read-only access to the verified base."
-                : "Uses the permissions granted during Airtable sign-in."}
-            </p>
-          )}
+          <p className={styles.detailNote}>{manage?.accessDescription}</p>
           {error && (
             <p role="alert" className={styles.error}>
               {error}
@@ -298,51 +224,31 @@ export function ConnectionsBoard() {
             >
               Close
             </Button>
-            {!(
-              manage?.app === "Airtable" &&
-              manage.account.revoked &&
-              manage.account.credentialKind === "shared-pat"
-            ) && (
-              <Button
-                className={styles.approve}
-                disabled={busy}
-                onClick={() =>
-                  void run(async () => {
-                    if (!manage) return;
-                    if (manage.app === "Slack") {
-                      await disconnect({
-                        app: "slack",
-                        connectionId: manage.id,
-                      });
-                      setNotice(
-                        "Sharing stopped. Previously received access may remain active at Slack.",
-                      );
-                    } else {
-                      const result = await approvalPost<{
-                        sharedPat?: boolean;
-                        connectRevoked: boolean;
-                      }>("revoke", { id: manage.account._id });
-                      setNotice(
-                        result.sharedPat
-                          ? "Sharing stopped. Previously received access is unaffected."
-                          : result.connectRevoked
-                            ? "Sharing stopped and account disconnected."
-                            : "Sharing stopped. Disconnection failed; try Disconnect account again.",
-                      );
-                    }
-                    setManage(null);
-                  })
-                }
-              >
-                {manage?.app === "Airtable" && manage.account.revoked
-                  ? busy
-                    ? "Disconnecting…"
-                    : "Disconnect account"
-                  : busy
-                    ? "Stopping…"
-                    : "Stop sharing"}
-              </Button>
-            )}
+            <Button
+              className={styles.approve}
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  if (!manage) return;
+                  const result = await approvalPost<{ outcome: string }>(
+                    "/api/accounts/disconnect",
+                    { id: manage._id },
+                  );
+                  setNotice(
+                    result.outcome === "succeeded"
+                      ? "Sharing stopped and account disconnected."
+                      : "Sharing stopped. Disconnection failed; try again.",
+                  );
+                  setManage(null);
+                })
+              }
+            >
+              {busy
+                ? "Stopping…"
+                : manage?.state === "blocked"
+                  ? "Retry disconnect"
+                  : "Stop sharing"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

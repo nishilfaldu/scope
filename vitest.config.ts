@@ -7,8 +7,7 @@ export default defineConfig({
     environment: "edge-runtime",
 
     env: {
-      TOKEN_ENCRYPTION_KEY: "dGVzdC10b2tlbi1lbmNyeXB0aW9uLWtleS0zMmJ5ISE=",
-      BOARD_ORIGIN: "http://localhost:3000",
+      SCOPE_ORIGIN: "http://localhost:3000",
     },
     server: {
       deps: {

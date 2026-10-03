@@ -7,7 +7,6 @@ import {
   requestTimeline,
   approvalStatus,
   type ApprovalRequest,
-  type ApprovalAccount,
 } from "../lib/approval-display";
 import LegacyLabPage from "../app/lab/page";
 vi.mock("convex/react", () => ({ useMutation: () => vi.fn() }));
@@ -16,46 +15,44 @@ vi.mock("next/navigation", () => ({
     throw new Error(`redirect:${url}`);
   },
 }));
-const account = {
-  _id: "account",
-  label: "Work base",
-  providerUserId: "usr-work",
-  credentialKind: "shared-pat",
-  revoked: false,
-} as ApprovalAccount;
 const request = {
   _id: "request",
   accountId: "account",
-  requester: "scope:owner:client:consent",
+  requesterConnectionId: "requester",
+  collectorConnectionId: "requester",
   reason: "Read this base",
-  expiresAt: 2000,
+  approvalExpiresAt: 2000,
   status: "pending",
+  accountAvailable: true,
+  requesterStopped: false,
+  collectorStopped: false,
+  snapshot: {
+    accountLabel: "Work base",
+    providerName: "Airtable",
+    accessDescription: "Read-only access to Work base",
+    requesterName: "Research assistant",
+    collectorName: "Research assistant",
+  },
 } as ApprovalRequest;
 
 test("only a live unblocked pending request exposes the approval action", () => {
   expect(
-    renderToStaticMarkup(
-      <RequestRow request={request} account={account} now={1000} />,
-    ),
+    renderToStaticMarkup(<RequestRow request={request} now={1000} />),
   ).toContain(">Approve<");
-  for (const [r, a, now] of [
-    [request, account, 2000],
-    [request, { ...account, revoked: true }, 1000],
-    [{ ...request, status: "cancelled" }, account, 1000],
-    [{ ...request, status: "denied" }, account, 1000],
-  ] as [ApprovalRequest, ApprovalAccount, number][]) {
-    const html = renderToStaticMarkup(
-      <RequestRow request={r} account={a} now={now} />,
-    );
+  for (const [r, now] of [
+    [request, 2000],
+    [{ ...request, accountAvailable: false }, 1000],
+    [{ ...request, status: "cancelled" }, 1000],
+    [{ ...request, status: "denied" }, 1000],
+  ] as [ApprovalRequest, number][]) {
+    const html = renderToStaticMarkup(<RequestRow request={r} now={now} />);
     expect(html).not.toContain(">Approve<");
     expect(html).not.toContain("Stop further delivery");
   }
 });
 test("an expired approved request never says it is waiting for collection", () => {
   const r = { ...request, status: "approved" } as ApprovalRequest;
-  const html = renderToStaticMarkup(
-    <RequestRow request={r} account={account} now={2001} />,
-  );
+  const html = renderToStaticMarkup(<RequestRow request={r} now={2001} />);
   expect(html).toContain("Not collected");
   expect(html).not.toContain("Waiting for the helper to collect");
   expect(requestOutcome({ ...r, receivedAt: 1500 }, 2001)).toContain(
@@ -79,24 +76,18 @@ test("legacy links preserve the exact request and WorkOS transaction when redire
 test("a request is one compact row without technical metadata or its diagnostic reason", () => {
   const r = {
     ...request,
-    requesterName: "Research assistant",
     createdAt: 900,
     reason: "private diagnostic PAT reason",
   };
   const html = renderToStaticMarkup(
-    <RequestRow
-      request={r}
-      account={{ ...account, label: "Work base · shared read-only PAT" }}
-      now={1000}
-      focused
-    />,
+    <RequestRow request={r} now={1000} focused />,
   );
   expect(html.match(/<article/g)).toHaveLength(1);
   expect(html).toContain("Research assistant");
   expect(html).toContain("Read-only access to Work base");
   expect(html).not.toContain("Request timeline");
   expect(html).not.toContain("PAT");
-  expect(html).not.toContain(r.requester);
+  expect(html).not.toContain("scope:owner:client:consent");
   expect(html).not.toContain("usr-work");
   expect(html).not.toContain("private diagnostic");
 });
@@ -148,16 +139,16 @@ test("legacy stops have no invented timestamp and do not imply access was revoke
     ),
   ).toEqual(["Requested", "Denied"]);
 });
-test("the earlier recorded delivery deadline controls waiting and expiry", () => {
+test("provider expiry never shortens the fixed approval deadline", () => {
   const r = {
     ...request,
     status: "approved",
-    deliveryExpiresAt: 1200,
+    providerExpiresAt: 1200,
   } as ApprovalRequest;
-  expect(approvalStatus(r, 1500)).toBe("Not collected");
-  expect(requestTimeline(r, 1500).at(-1)).toMatchObject({
+  expect(approvalStatus(r, 1500)).toBe("Waiting for pickup");
+  expect(requestTimeline(r, 2100).at(-1)).toMatchObject({
     label: "Delivery window ended",
-    at: 1200,
+    at: 2000,
   });
 });
 

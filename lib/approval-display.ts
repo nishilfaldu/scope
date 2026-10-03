@@ -1,38 +1,11 @@
-import type { Doc } from "@/convex/_generated/dataModel";
-
-export type ApprovalAccount = Pick<
-  Doc<"probeAccounts">,
-  | "_id"
-  | "label"
-  | "providerUserId"
-  | "revoked"
-  | "credentialKind"
-  | "baseId"
-  | "blockedAt"
-  | "providerEmail"
-  | "baseName"
->;
-export type ApprovalRequest = Pick<
-  Doc<"probeRequests">,
-  | "_id"
-  | "accountId"
-  | "reason"
-  | "requester"
-  | "status"
-  | "expiresAt"
-  | "deliveryExpiresAt"
-  | "deliveredAt"
-  | "receivedAt"
-  | "decidedAt"
-  | "stoppedAt"
-> & {
-  createdAt?: number;
-  requesterName?: string;
-  requesterSource?: string;
-  intent?: string;
-  requesterStopped?: boolean;
-  requesterStoppedAt?: number;
-};
+import type { FunctionReturnType } from "convex/server";
+import type { api } from "@/convex/_generated/api";
+export type ApprovalAccount = FunctionReturnType<
+  typeof api.accounts.forOwner
+>[number];
+export type ApprovalRequest = FunctionReturnType<
+  typeof api.approvals.forOwner
+>["page"][number];
 export type TimelineEvent = {
   label: string;
   at?: number;
@@ -41,13 +14,10 @@ export type TimelineEvent = {
 };
 
 export function accountName(label?: string) {
-  return (
-    label?.replace(/\s*·\s*shared read-only PAT\s*$/i, "").trim() ||
-    "Unavailable account"
-  );
+  return label?.trim() || "Unavailable account";
 }
 export function deliveryDeadline(r: ApprovalRequest) {
-  return Math.min(r.expiresAt, r.deliveryExpiresAt ?? Infinity);
+  return r.approvalExpiresAt;
 }
 export function approvalStatus(
   r: ApprovalRequest,
@@ -56,7 +26,13 @@ export function approvalStatus(
 ) {
   if (r.status === "denied") return "Denied";
   if (r.status === "cancelled") return "Delivery stopped";
-  if (blocked || r.requesterStopped) return "Sharing blocked";
+  if (
+    blocked ||
+    !r.accountAvailable ||
+    r.requesterStopped ||
+    r.collectorStopped
+  )
+    return "Sharing blocked";
   if (r.receivedAt) return "Received";
   if (deliveryDeadline(r) <= now)
     return r.status === "pending"
@@ -108,7 +84,6 @@ export function requestTime(r: ApprovalRequest, now: number) {
 export function requestTimeline(
   r: ApprovalRequest,
   now: number,
-  account?: ApprovalAccount,
 ): TimelineEvent[] {
   const events: TimelineEvent[] = [
     { label: "Requested", at: r.createdAt, tone: "done" },
@@ -135,10 +110,12 @@ export function requestTimeline(
     r.status !== "denied" &&
     deadline <= now &&
     (r.status !== "cancelled" || (!!r.stoppedAt && deadline < r.stoppedAt)) &&
-    (!account?.revoked ||
-      (!!account.blockedAt && deadline < account.blockedAt)) &&
+    (r.accountAvailable ||
+      (!!r.accountBlockedAt && deadline < r.accountBlockedAt)) &&
     (!r.requesterStopped ||
-      (!!r.requesterStoppedAt && deadline < r.requesterStoppedAt))
+      (!!r.requesterStoppedAt && deadline < r.requesterStoppedAt)) &&
+    (!r.collectorStopped ||
+      (!!r.collectorStoppedAt && deadline < r.collectorStoppedAt))
   )
     events.push({
       label:
@@ -162,19 +139,19 @@ export function requestTimeline(
         ? "Previously received access is unaffected."
         : undefined,
     });
-  else if (account?.revoked && r.status !== "denied")
+  else if (!r.accountAvailable && r.status !== "denied")
     events.push({
       label: "Account sharing blocked",
-      at: account.blockedAt,
+      at: r.accountBlockedAt,
       tone: "stopped",
       detail: r.receivedAt
         ? "Previously received access is unaffected."
         : undefined,
     });
-  else if (r.requesterStopped && r.status !== "denied")
+  else if ((r.requesterStopped || r.collectorStopped) && r.status !== "denied")
     events.push({
       label: "Connection sharing stopped",
-      at: r.requesterStoppedAt,
+      at: r.requesterStoppedAt ?? r.collectorStoppedAt,
       tone: "stopped",
     });
   else if (deadline > now && r.status !== "denied" && !r.receivedAt)
@@ -198,11 +175,8 @@ export function formatRequestTime(at: number) {
     minute: "2-digit",
   });
 }
-export async function approvalPost<T>(
-  operation: string,
-  body: unknown,
-): Promise<T> {
-  const response = await fetch(`/api/probe/${operation}`, {
+export async function approvalPost<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -215,28 +189,24 @@ export async function approvalPost<T>(
 }
 
 export function requestAccess(r: ApprovalRequest) {
-  return r.intent || "Access to this Airtable account";
+  return r.intent || `Access to this ${r.snapshot.providerName} account`;
 }
-export function accessBoundary(a?: ApprovalAccount) {
-  return a?.credentialKind === "shared-pat"
-    ? `Read-only access to ${a.baseName || accountName(a.label)}.`
-    : "Shares the permissions granted to this Airtable account. Provider token lifetime applies.";
+export function accessBoundary(r: ApprovalRequest) {
+  return r.snapshot.accessDescription;
 }
-export function requestExplanation(
-  r: ApprovalRequest,
-  now: number,
-  a?: ApprovalAccount,
-) {
-  const status = approvalStatus(r, now, a?.revoked);
+export function requestExplanation(r: ApprovalRequest, now: number) {
+  const status = approvalStatus(r, now);
   if (
-    status === "Needs approval" ||
-    status === "Denied" ||
-    status === "Waiting for pickup" ||
-    status === "Waiting for receipt"
+    [
+      "Needs approval",
+      "Denied",
+      "Waiting for pickup",
+      "Waiting for receipt",
+    ].includes(status)
   )
     return "";
   if (status === "Received")
-    return "Scope cannot confirm completed work. Previously received access may remain active after sharing ends.";
+    return "Receipt confirms access arrived. Previously received access may remain active after sharing ends.";
   if (status === "Expired" || status === "Not collected")
     return "Ask the agent for a new request if you want it to continue.";
   if (status === "Receipt unconfirmed")

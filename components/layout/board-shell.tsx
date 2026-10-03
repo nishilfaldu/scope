@@ -34,16 +34,10 @@ export function BoardShell({
   const { signOut } = useAuthActions();
   const user = useQuery(api.users.viewer);
   const now = useNow();
-  const pending = useQuery(api.probe.pendingForOwner, { now });
-  const accounts = useQuery(api.probe.accountsForOwner, {});
+  const pending = useQuery(api.approvals.pendingForOwner, { now });
   const count =
     pending?.filter(
-      (r) =>
-        !r.requesterStopped &&
-        accounts?.some(
-          (a: { _id: string; revoked: boolean }) =>
-            a._id === r.accountId && !a.revoked,
-        ),
+      (r) => r.accountAvailable && !r.requesterStopped && !r.collectorStopped,
     ).length ?? 0;
   return (
     <div className={styles.review}>

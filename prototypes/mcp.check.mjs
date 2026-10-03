@@ -23,9 +23,21 @@ test(
         return;
       }
       res.setHeader("Content-Type", "application/json");
-      if (req.url === "/api/probe/request") {
+      if (req.url === "/api/agent/request") {
         if (!requests.has(body.key))
-          requests.set(body.key, { id: body.key, status: "pending" });
+          requests.set(body.key, {
+            id: body.key,
+            status: "pending",
+            accountId: body.accountId,
+            integrationId: "airtable-rest-read",
+            profileId: "bases.read",
+            profileVersion: 1,
+            grantVersion: 1,
+            requesterConnectionId: "helper",
+            collectorConnectionId: "helper",
+            intent: body.intent,
+            approvalExpiresAt: Date.now() + 1800_000,
+          });
         res.end(JSON.stringify(requests.get(body.key)));
         return;
       }
@@ -34,7 +46,7 @@ test(
         res.end("{}");
         return;
       }
-      if (req.url === "/api/probe/deliver") {
+      if (req.url === "/api/agent/status" || req.url === "/api/agent/deliver") {
         res.end(JSON.stringify(requests.get(body.id)));
         return;
       }
@@ -47,7 +59,19 @@ test(
     const file = join(temp, "config.json");
     await writeFile(
       file,
-      JSON.stringify({ origin, accessToken: "synthetic-probe-auth" }),
+      JSON.stringify({
+        origin,
+        issuer: "https://issuer.example",
+        clientId: "helper",
+        tokenResource: origin + "/api/mcp",
+        tokenClientId: "helper",
+        tokens: {
+          access_token: "synthetic-probe-auth",
+          refresh_token: "synthetic-refresh",
+          issuer: "https://issuer.example",
+        },
+        expiresAt: Date.now() + 3600_000,
+      }),
       { mode: 0o600 },
     );
     const clients = [];
@@ -62,7 +86,7 @@ test(
               "plugins/scope-local/server.mjs",
           ),
         ],
-        env: { SCOPE_PROBE_CONFIG: file },
+        env: { SCOPE_CONFIG: file },
         stderr: "pipe",
       });
       let stderr = "";
@@ -100,7 +124,10 @@ test(
         long = await client(),
         retry = await client();
       const catalog = await early.listTools();
-      assert.equal(catalog.tools[0].name, "airtable_list_bases");
+      assert.equal(
+        catalog.tools.some((t) => t.name === "airtable_list_bases"),
+        true,
+      );
       const pEarly = call(early, "probe-after-10-seconds", 60_000);
       const pLong = call(long, "probe-after-90-seconds", 110_000);
       const pRetry = call(retry, "probe-retry-same-key-90", 60_000).then(

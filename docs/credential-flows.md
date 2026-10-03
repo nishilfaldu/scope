@@ -1,36 +1,38 @@
 # Access delivery in Scope
 
-Scope has one agent authorization path: WorkOS-authorized MCP. There are no direct agent invitations or slice credentials. Old direct approvals are fenced to their retired recipients and never transferred to a new MCP authorization.
+Scope uses existing owner login, WorkOS Standalone client OAuth, and Vercel Connect provider authorization. An incoming client token must have a valid RS256 signature, issuer, exact `/api/mcp` audience, expiry and nonempty `sub`, `client_id`, `sid`. Signed `sub=scope:<ownerId>` must map to an existing Scope user. The issuer/subject/client/consent tuple identifies a client connection, not an individual chat.
 
-## Authenticate and request
+## Request and approve
 
-1. The MCP client signs in through WorkOS for Scope's exact protected resource. Public local clients use PKCE and a validated state/issuer callback. The server verifies the JWT signature, issuer, audience, expiry, subject, client and consent, then resolves the linked Scope owner.
-2. `request_approval` selects one verified Airtable account, a task-stable retry key and reason, with optional human-readable intent. It returns request status and an owner approval link. It returns no provider credential.
-3. The owner decides in Scope. Read and mutation ownership checks are independent of provider identity. Stopped accounts, stopped recipients and elapsed deadlines cannot authorize delivery. Retrying a key with another account or reason fails. Existing retries without the newer intent field remain compatible.
+Hosted MCP exposes four control-plane tools and no credential delivery tool. The requester chooses an owned active helper collector. Collector eligibility comes from server configuration, never caller policy. A local eligible helper defaults to collecting its own request.
 
-## Acquire, replay and confirm
+An approval binds one account authorization and grant/profile version, requester, collector, intent, immutable display snapshot, retry key and a thirty-minute deadline. Approval does not extend this deadline. Reusing a key with changed account, collector, reason or intent fails. The owner independently approves or denies in Scope.
 
-The private local helper calls the authenticated delivery endpoint. A single acquisition lease wins. Vercel Connect obtains the exact account's credential; Airtable verifies provider identity and, for read-only bindings, exactly the configured base. Scope rechecks account, requester, request and lease after the asynchronous provider call before saving encrypted delivery material.
+## Fresh acquisition and private receipt
 
-A lost response can replay the same encrypted delivery within its fixed deadline. Retry does not extend the window. Token history deduplicates the same provider credential while preserving each request's distinct expiry and receipt. Ciphertext, leases and receipt secrets are excluded from owner presentation.
+The designated helper authenticates at `/api/agent/deliver`. A preflight rejects unavailable requests before provider IO. Every permitted attempt calls Connect with the frozen opaque grant subject, optional selected installation, fixed scopes and `forceRefresh: true`. Provider verification checks expected identity, tenant where applicable, expiry, and exact granted scope evidence.
 
-The helper uses access only against its fixed Airtable API operation, then acknowledges receipt through the same authenticated recipient. The acknowledgment is idempotent. Approval, attempted delivery and confirmed receipt remain separate timeline milestones. Scope cannot confirm completed agent work.
+After IO, the final Convex transaction rechecks the current time, owner, exact collector, both connections, active account, integration and grant/profile versions. Only then may Next release the credential to that helper. No tokens, encrypted replay, credential fingerprints or acquisition leases are stored in Convex. A lost response obtains fresh credential bytes under the same approval; retries never move authority to another account or extend the deadline.
 
-## Boundaries
+A stable private receipt proof survives delivery retries. It is excluded from owner and hosted results. The exact collector may acknowledge historical receipt even after local sharing stops; acknowledgement never renews authority and does not assert completed provider work.
 
-| Event                     | Effect                                                                                       |
-| ------------------------- | -------------------------------------------------------------------------------------------- |
-| Denied or expired request | No new access delivery; a new task needs a new request.                                      |
-| Stop a request            | Blocks later delivery and replay for that request.                                           |
-| Stop an MCP connection    | Blocks its requests, acquisition finalization and replay. It does not revoke WorkOS consent. |
-| Stop an account           | Blocks future Scope sharing immediately; provider disconnection is reported separately.      |
-| Sharing window ends       | Clears encrypted replay material while preserving decision and receipt history.              |
-| Helper receipt            | Confirms received access, without asserting task completion or provider expiry.              |
+## Stop, reconnect and cleanup
 
-Previously received access may remain active until the provider expires or revokes it. The configured shared Airtable PAT is not revoked by local stop sharing. Slack account connection is supported, but no Slack MCP access tool currently exists.
+| Action                 | Effect                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Deny or expire         | Blocks new release; continuing requires another request.                                                      |
+| Stop request           | Blocks future release under that request.                                                                     |
+| Stop client connection | Blocks release for its existing approvals; WorkOS consent is unchanged.                                       |
+| Stop account           | Blocks Scope sharing immediately; Connect disconnect outcome is reported separately.                          |
+| Explicit reconnect     | Replaces the authorization with a new opaque subject and increments grantVersion; old requests cannot use it. |
+| Receipt                | Records received access without asserting completed work or token revocation.                                 |
 
-## Connections and notifications
+Previously released bearer access may remain active until provider expiry/revocation. JWT validation alone does not instantly observe external WorkOS consent revocation; Scope's local stop is immediate, while external revocation detection is bounded by token expiry.
 
-An Airtable OAuth attempt stores a unique subject and owner/browser proof for ten minutes. Failed, cancelled, expired or wrong-owner completion cannot add an account. Successful completion verifies the provider and exact installation before adding it; identical callback retries return the same account without duplicating or reactivating a blocked binding. Configured read-only bindings are verified before atomic save and cannot silently select the other base.
+Account connection attempts are owner/browser-proof-bound and expire after ten minutes. Completed callback retries validate the still-active exact account binding. Superseded Connect references remain on the attempt until successful cleanup acknowledgement, so lost responses and failed cleanup can retry. Expiry may discard an unforgotten reference; this is not a perpetual cleanup or provider-revocation guarantee.
 
-Push jobs are durable and use fenced retries. Expired subscriptions are retired. Notifications are optional. Browser permission alone does not mean this device has a saved subscription, and acceptance by a push service does not prove device delivery.
+## Provider readiness and notifications
+
+Airtable REST and Slack read operations share the same approval engine. Fixed profiles are `schema.bases:read` and `channels:read`. The old MCP-targeted Airtable connector is rejected for REST. Both integrations are disabled until their own live OAuth acceptance evidence is recorded; PAT fallbacks are removed.
+
+Push subscription endpoints use an explicit service allowlist. Durable notification jobs use fenced retries with cancellation and crash recovery. The owner-only test action returns counts, never subscription secrets. Push-service acceptance does not prove device receipt. Notification clicks open the authenticated exact request when available.

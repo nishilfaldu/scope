@@ -86,11 +86,11 @@ export async function enableBrowserNotifications(publicKey: string) {
     (r) =>
       ["/lab", "/"].includes(new URL(r.scope).pathname) &&
       [r.active, r.waiting, r.installing].some(
-        (w) => w && new URL(w.scriptURL).pathname === "/probe-sw.js",
+        (w) => w && new URL(w.scriptURL).pathname === "/scope-sw.js",
       ),
   );
   const registration = await activeRegistration(
-    await navigator.serviceWorker.register("/probe-sw.js", {
+    await navigator.serviceWorker.register("/scope-sw.js", {
       scope: existing ? new URL(existing.scope).pathname : "/",
       updateViaCache: "none",
     }),
