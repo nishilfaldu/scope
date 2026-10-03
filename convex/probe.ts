@@ -715,3 +715,73 @@ export const credentialsForOwner = query({
     };
   },
 });
+
+// A notification URL is an untrusted string, so normalize before reading it.
+const ownerRequestView = v.object({
+  _id: v.id("probeRequests"),
+  accountId: v.id("probeAccounts"),
+  reason: v.string(),
+  requester: v.string(),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("approved"),
+    v.literal("denied"),
+    v.literal("cancelled"),
+  ),
+  expiresAt: v.number(),
+  decidedAt: v.optional(v.number()),
+  deliveredAt: v.optional(v.number()),
+  receivedAt: v.optional(v.number()),
+});
+export const requestForOwner = query({
+  args: { reference: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({
+      request: ownerRequestView,
+      account: v.union(
+        v.null(),
+        v.object({
+          _id: v.id("probeAccounts"),
+          label: v.string(),
+          revoked: v.boolean(),
+          providerUserId: v.optional(v.string()),
+          credentialKind: v.optional(v.literal("shared-pat")),
+          baseId: v.optional(v.string()),
+        }),
+      ),
+    }),
+  ),
+  handler: async (ctx, { reference }) => {
+    const userId = await owner(ctx);
+    const id = ctx.db.normalizeId("probeRequests", reference);
+    if (!id) return null;
+    const r = await ctx.db.get("probeRequests", id);
+    if (!r || r.userId !== userId) return null;
+    const a = await ctx.db.get("probeAccounts", r.accountId);
+    return {
+      request: {
+        _id: r._id,
+        accountId: r.accountId,
+        reason: r.reason,
+        requester: r.requester,
+        status: r.status,
+        expiresAt: r.expiresAt,
+        decidedAt: r.decidedAt,
+        deliveredAt: r.deliveredAt,
+        receivedAt: r.receivedAt,
+      },
+      account:
+        a?.userId === userId
+          ? {
+              _id: a._id,
+              label: a.label,
+              revoked: a.revoked,
+              providerUserId: a.providerUserId,
+              credentialKind: a.credentialKind,
+              baseId: a.baseId,
+            }
+          : null,
+    };
+  },
+});

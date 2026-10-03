@@ -72,9 +72,8 @@ export async function POST(request: Request) {
                 status,
                 approvalUrl:
                   config("SCOPE_PROBE_ORIGIN") +
-                  "/lab?request=" +
-                  created.id +
-                  "#approvals",
+                  "/approvals?request=" +
+                  created.id,
                 retryKey: args.key,
               }),
             },

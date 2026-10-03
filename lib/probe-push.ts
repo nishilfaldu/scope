@@ -13,7 +13,10 @@ export async function notifyApproval(userId: Id<"users">) {
     subscriptions.map((s: { endpoint: string; p256dh: string; auth: string }) =>
       webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        JSON.stringify({ title: "Scope approval requested", url: "/lab" }),
+        JSON.stringify({
+          title: "Scope approval requested",
+          url: "/approvals",
+        }),
         {
           vapidDetails: {
             subject: "mailto:scope@example.com",

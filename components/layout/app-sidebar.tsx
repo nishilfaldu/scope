@@ -3,7 +3,12 @@
 import type { ComponentProps } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AiChat02Icon, Plug01Icon } from "@hugeicons/core-free-icons";
+import {
+  AiChat02Icon,
+  Plug01Icon,
+  Notification01Icon,
+  ShieldKeyIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
 import { SidebarUser } from "@/components/layout/sidebar-user";
@@ -21,9 +26,10 @@ import {
 } from "@/components/ui/sidebar";
 
 const NAV = [
-  { title: "Approvals", href: "/lab", icon: AiChat02Icon },
+  { title: "Approvals", href: "/approvals", icon: ShieldKeyIcon },
   { title: "Agents", href: "/agents", icon: AiChat02Icon },
   { title: "Connections", href: "/connections", icon: Plug01Icon },
+  { title: "Notifications", href: "/notifications", icon: Notification01Icon },
 ] as const;
 
 export function AppSidebar({ ...props }: ComponentProps<typeof Sidebar>) {
@@ -36,7 +42,7 @@ export function AppSidebar({ ...props }: ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
-              render={<Link href="/agents" />}
+              render={<Link href="/approvals" />}
               tooltip="Scope"
             >
               <BrandMark className="size-8" />

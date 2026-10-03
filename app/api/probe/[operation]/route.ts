@@ -66,10 +66,7 @@ export async function POST(
       return json({
         ...result,
         approvalUrl:
-          config("SCOPE_PROBE_ORIGIN") +
-          "/lab?request=" +
-          result.id +
-          "#approvals",
+          config("SCOPE_PROBE_ORIGIN") + "/approvals?request=" + result.id,
       });
     }
     sameOrigin(request);
@@ -174,7 +171,8 @@ export async function POST(
           },
         },
         {
-          callbackUrl: config("SCOPE_PROBE_ORIGIN") + "/lab?account=" + id,
+          callbackUrl:
+            config("SCOPE_PROBE_ORIGIN") + "/connections?account=" + id,
           expiresInMs: 600_000,
         },
       );

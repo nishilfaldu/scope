@@ -565,3 +565,35 @@ test("separate PAT connectors stay bound to their approvals and authenticated re
       .cipher,
   ).toBe("private-A");
 });
+
+test("notification detail reads only the owner's request and excludes delivery secrets", async () => {
+  const f = await fixture();
+  const created = await f.t.mutation(api.probe.request, f.args);
+  await f.t.run((ctx) =>
+    ctx.db.patch("probeRequests", created.id, {
+      deliveryCipher: "private-cipher",
+      receiptId: "private-receipt",
+      lease: "private-lease",
+    }),
+  );
+  const detail = await f.owner.query(api.probe.requestForOwner, {
+    reference: created.id,
+  });
+  expect(detail?.request._id).toBe(created.id);
+  expect(detail?.account?.providerUserId).toBe("usr-a");
+  expect(JSON.stringify(detail)).not.toContain("private-");
+  expect(detail?.account).not.toHaveProperty("subjectId");
+  expect(
+    await f.stranger.query(api.probe.requestForOwner, {
+      reference: created.id,
+    }),
+  ).toBeNull();
+  expect(
+    await f.owner.query(api.probe.requestForOwner, {
+      reference: "bad-url-reference",
+    }),
+  ).toBeNull();
+  await expect(
+    f.t.query(api.probe.requestForOwner, { reference: created.id }),
+  ).rejects.toThrow("Sign in required");
+});

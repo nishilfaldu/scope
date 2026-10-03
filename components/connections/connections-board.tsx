@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 
 import { BoardShell } from "@/components/layout/board-shell";
+import { AirtableAccounts } from "@/components/connections/airtable-accounts";
 import { ConnectionsTable } from "@/components/connections/connections-table";
 import { toast } from "@/components/ui/toast";
 import { CONNECT_ERRORS, ALL_APPS } from "@/lib/connections";
@@ -80,9 +81,10 @@ export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
             </div>
           ) : null}
         </div>
+        <AirtableAccounts />
         <div className="mt-8 overflow-hidden rounded-xl border bg-card">
           <div className="border-b px-5 py-4">
-            <h2 className="font-semibold">Apps and accounts</h2>
+            <h2 className="font-semibold">Other apps</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               Connect more than one account when you need separate identities.
             </p>
