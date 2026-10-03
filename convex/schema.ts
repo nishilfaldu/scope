@@ -3,6 +3,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { appValidator } from "./domain/apps";
 import { storedRequestStatusValidator } from "./domain/requests";
+import { probeTables } from "./probeSchema";
 import {
   bridgeCommandValidator,
   connectReferenceValidator,
@@ -29,6 +30,7 @@ const requestLifecycle = {
 
 export default defineSchema({
   ...authTables,
+  ...probeTables,
 
   agentConnections: defineTable({
     userId: v.id("users"),

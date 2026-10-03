@@ -20,6 +20,7 @@ type Env = {
   readonly CONNECT_BRIDGE_URL: string | undefined;
   readonly RESEND_API_KEY: string;
   readonly RESEND_FROM: string | undefined;
+  readonly SCOPE_PROBE_SECRET: string | undefined;
   readonly TOKEN_ENCRYPTION_KEY: string;
 };
 

@@ -4,6 +4,7 @@ import { v } from "convex/values";
 
 const app = defineApp({
   env: {
+    SCOPE_PROBE_SECRET: v.optional(v.string()),
     CONNECT_BRIDGE_URL: v.optional(v.string()),
     CONNECT_BRIDGE_SECRET: v.optional(v.string()),
     CONNECT_BRIDGE_PROTECTION_COOKIE: v.optional(v.string()),

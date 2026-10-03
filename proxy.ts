@@ -7,7 +7,10 @@ import {
 const isSignInPage = createRouteMatcher(["/signin"]);
 const isAuthApiRoute = createRouteMatcher(["/api/auth(.*)"]);
 
-const isConnectBridge = createRouteMatcher(["/api/connect/bridge"]);
+const isConnectBridge = createRouteMatcher([
+  "/api/connect/bridge",
+  "/api/probe/(.*)",
+]);
 const isPublicPage = createRouteMatcher(["/", "/privacy", "/terms"]);
 
 const isRequestLink = createRouteMatcher([
