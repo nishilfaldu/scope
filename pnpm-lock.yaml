@@ -25,6 +25,9 @@ importers:
       "@radix-ui/react-collapsible":
         specifier: ^1.1.20
         version: 1.1.20(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      "@vercel/connect":
+        specifier: 2.3.5
+        version: 2.3.5(@auth/core@0.41.3)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -2355,6 +2358,55 @@ packages:
       }
     cpu: [x64]
     os: [win32]
+
+  "@vercel/cli-config@0.3.0":
+    resolution:
+      {
+        integrity: sha512-kQLt5Pm8wKd7/imzDY9/9u0tf8OuRkAuXI+s7j057FSUrXapAmumJSKwDqnR4ZZqdWoUcNLlFAgVIAdiwcGTcw==,
+      }
+
+  "@vercel/cli-exec@1.0.1":
+    resolution:
+      {
+        integrity: sha512-g9XerViJ/paZujufXYcu5XYI2vU2rtB4sgdpjUHde5RnOkdmpu0ngH46LCFGHoPXO/C+qDPSczIHIRN+8Q2YKQ==,
+      }
+    engines: { node: ">= 18" }
+
+  "@vercel/connect@2.3.5":
+    resolution:
+      {
+        integrity: sha512-HwjREim8O1/EBjNujYIC64qe0edbRmfmrBc/1FpOx3saxpAqdVZ6uqE8KKRYp5vvBqvVA83iidAwb5kahepHqg==,
+      }
+    peerDependencies:
+      "@ai-sdk/mcp": ^1 || ^2
+      "@auth/core": ">=0.37.0"
+      "@chat-adapter/slack": ^4.0.0
+      "@modelcontextprotocol/sdk": ^1.29.0
+      ai: ^6 || ^7.0.0-beta.0
+      better-auth: ">=1.5.0"
+      eve: ">=0.39.1"
+    peerDependenciesMeta:
+      "@ai-sdk/mcp":
+        optional: true
+      "@auth/core":
+        optional: true
+      "@chat-adapter/slack":
+        optional: true
+      "@modelcontextprotocol/sdk":
+        optional: true
+      ai:
+        optional: true
+      better-auth:
+        optional: true
+      eve:
+        optional: true
+
+  "@vercel/oidc@3.8.9":
+    resolution:
+      {
+        integrity: sha512-TcbdH3YtGS2KU98T99dN4sbf+E4vbJZsJTRN97wKQ7QWQ0BR7U02QX3KN4+5GHxBtKTj1c5CnvTTitc2ZRad0A==,
+      }
+    engines: { node: ">= 20" }
 
   "@vitest/mocker@5.0.0":
     resolution:
@@ -5166,6 +5218,13 @@ packages:
       }
     engines: { node: ">=18" }
 
+  os-paths@4.4.0:
+    resolution:
+      {
+        integrity: sha512-wrAwOeXp1RRMFfQY8Sy7VaGVmPocaLwSFOYCGKSyo8qmJ+/yaafCl5BCA1IQZWqFSRBrKDYFeR9d/VyQzfH/jg==,
+      }
+    engines: { node: ">= 6.0" }
+
   own-keys@1.0.2:
     resolution:
       {
@@ -6450,6 +6509,20 @@ packages:
       }
     engines: { node: ">=20" }
 
+  xdg-app-paths@5.5.1:
+    resolution:
+      {
+        integrity: sha512-hI3flOB4PLZIy5prbtTpirobtPE2ZtZ52szO+2mM9Efp6ErM398La+C1lIpNWDfNoQk+6Lsi6nMcCwVB7pxeMQ==,
+      }
+    engines: { node: ">= 6.0" }
+
+  xdg-portable@7.3.0:
+    resolution:
+      {
+        integrity: sha512-sqMMuL1rc0FmMBOzCpd0yuy9trqF2yTTVe+E9ogwCSWQCdDEtQUwrZPT6AxqtsFGRNxycgncbP/xmOOSPw5ZUw==,
+      }
+    engines: { node: ">= 6.0" }
+
   y18n@5.0.8:
     resolution:
       {
@@ -6519,6 +6592,12 @@ packages:
     resolution:
       {
         integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==,
+      }
+
+  zod@4.1.11:
+    resolution:
+      {
+        integrity: sha512-WPsqwxITS2tzx1bzhIKsEs19ABD5vmCVa4xBo2tq/SrV4RNZtfws1EnCWQXM6yh8bD08a1idvkB5MZSBiZsjwg==,
       }
 
   zod@4.5.4:
@@ -7833,6 +7912,28 @@ snapshots:
 
   "@unrs/resolver-binding-win32-x64-msvc@1.12.2":
     optional: true
+
+  "@vercel/cli-config@0.3.0":
+    dependencies:
+      xdg-app-paths: 5.5.1
+      zod: 4.1.11
+
+  "@vercel/cli-exec@1.0.1":
+    dependencies:
+      execa: 5.1.1
+
+  "@vercel/connect@2.3.5(@auth/core@0.41.3)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))":
+    dependencies:
+      "@vercel/oidc": 3.8.9
+    optionalDependencies:
+      "@auth/core": 0.41.3
+      "@modelcontextprotocol/sdk": 1.30.0(zod@3.25.76)
+
+  "@vercel/oidc@3.8.9":
+    dependencies:
+      "@vercel/cli-config": 0.3.0
+      "@vercel/cli-exec": 1.0.1
+      jose: 5.10.0
 
   "@vitest/mocker@5.0.0(vite@8.2.2(@types/node@20.19.43)(esbuild@0.27.0)(jiti@2.7.0))":
     dependencies:
@@ -9572,6 +9673,8 @@ snapshots:
       string-width: 7.2.0
       strip-ansi: 7.2.0
 
+  os-paths@4.4.0: {}
+
   own-keys@1.0.2:
     dependencies:
       call-bound: 1.0.4
@@ -10429,6 +10532,15 @@ snapshots:
       is-wsl: 3.1.1
       powershell-utils: 0.1.0
 
+  xdg-app-paths@5.5.1:
+    dependencies:
+      os-paths: 4.4.0
+      xdg-portable: 7.3.0
+
+  xdg-portable@7.3.0:
+    dependencies:
+      os-paths: 4.4.0
+
   y18n@5.0.8: {}
 
   yallist@3.1.1: {}
@@ -10461,5 +10573,7 @@ snapshots:
       zod: 4.5.4
 
   zod@3.25.76: {}
+
+  zod@4.1.11: {}
 
   zod@4.5.4: {}

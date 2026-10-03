@@ -13,6 +13,7 @@ import {
   type AppId,
 } from "../domain/apps";
 import type { AgentErrorCode } from "../lib/errors";
+import { issueConnectAccess } from "../connect/access";
 
 async function persistRefresh(
   ctx: GenericActionCtx<DataModel>,
@@ -43,7 +44,12 @@ async function persistRefresh(
 }
 
 export type IssueShortLivedAccessResult =
-  | { accessToken: string; expiresAt: number | null; grantedScopes?: string[] }
+  | {
+      accessToken: string;
+      expiresAt: number | null;
+      grantedScopes?: string[];
+      connectionGrantVersion?: number;
+    }
   | { error: string; code: AgentErrorCode };
 
 const SHORT_LIVED_UNAVAILABLE_RESULT = {
@@ -68,6 +74,10 @@ export async function issueShortLivedAccess(
   connectionId: Id<"connections">,
   delivery: "agent" | "server" = "agent",
 ): Promise<IssueShortLivedAccessResult> {
+  if (app === "slack") {
+    const connected = await issueConnectAccess(ctx, userId, connectionId);
+    if (connected) return connected;
+  }
   const connection = await ctx.runQuery(
     internal.tables.connections.queries.getConnection,
     {

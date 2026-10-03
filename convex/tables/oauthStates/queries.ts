@@ -5,7 +5,11 @@ import { appValidator } from "../../domain/apps";
 export const get = internalQuery({
   args: { state: v.string() },
   returns: v.union(
-    v.object({ app: appValidator, pkceChallenge: v.optional(v.string()) }),
+    v.object({
+      app: appValidator,
+      pkceChallenge: v.optional(v.string()),
+      connectSubjectId: v.optional(v.string()),
+    }),
     v.null(),
   ),
   handler: async (ctx, args) => {
@@ -14,6 +18,10 @@ export const get = internalQuery({
       .withIndex("by_state", (q) => q.eq("state", args.state))
       .unique();
     if (!row || row.expiresAt <= Date.now()) return null;
-    return { app: row.app, pkceChallenge: row.pkceChallenge };
+    return {
+      app: row.app,
+      pkceChallenge: row.pkceChallenge,
+      connectSubjectId: row.connectSubjectId,
+    };
   },
 });

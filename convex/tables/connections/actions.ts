@@ -4,6 +4,7 @@ import { authenticatedAction } from "../../functions";
 import { revokeProviderGrant } from "../../oauth";
 import { appValidator, providerForApp } from "../../domain/apps";
 import { decryptToken } from "../../lib/tokenEncryption";
+import { callBridge } from "../../connect/bridge";
 
 export const disconnect = authenticatedAction({
   args: { app: appValidator, connectionId: v.id("connections") },
@@ -13,7 +14,16 @@ export const disconnect = authenticatedAction({
       internal.tables.connections.mutations.clearConnection,
       { userId: ctx.userId, app: args.app, connectionId: args.connectionId },
     );
-    if (removed?.revokeUpstream) {
+    if (removed?.connect) {
+      try {
+        await callBridge(ctx, {
+          operation: "revoke",
+          reference: removed.connect,
+        });
+      } catch {
+        /* Local disconnect committed; upstream revocation is best effort. */
+      }
+    } else if (removed?.revokeUpstream) {
       try {
         await revokeProviderGrant(
           providerForApp(args.app),

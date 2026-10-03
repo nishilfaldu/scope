@@ -8,6 +8,9 @@ import {
   googleScopesAreBounded,
 } from "../../domain/apps";
 import { exchangeAuthorizationCode } from "../../oauth";
+import { callBridge } from "../../connect/bridge";
+import { verifiedGrant } from "../../connect/access";
+import { env } from "../../_generated/server";
 
 export const complete = authenticatedAction({
   args: {
@@ -30,6 +33,7 @@ export const complete = authenticatedAction({
       app: typeof args.app;
       returnTo: string;
       pkceVerifier?: string;
+      connectSubjectId?: string;
     } | null = await ctx.runMutation(
       internal.tables.oauthStates.mutations.consume,
       {
@@ -40,6 +44,38 @@ export const complete = authenticatedAction({
     );
     if (!origin || origin.app !== args.app)
       throw new Error("OAuth browser proof or session mismatch");
+    if (origin.connectSubjectId) {
+      if (args.app !== "slack" || args.code !== "connect")
+        throw new Error("Connect callback mismatch");
+      try {
+        const grant = verifiedGrant(
+          await callBridge(ctx, {
+            operation: "token",
+            subjectId: origin.connectSubjectId,
+            issuer: env.CONVEX_SITE_URL,
+          }),
+        );
+        await ctx.runMutation(internal.connect.connections.save, {
+          userId: ctx.userId,
+          login: grant.login,
+          providerUserId: grant.providerUserId,
+          grantedScopes: grant.grantedScopes,
+          connect: {
+            subjectId: origin.connectSubjectId,
+            issuer: env.CONVEX_SITE_URL,
+            connectorId: grant.connectorId,
+            installationId: grant.installationId,
+          },
+        });
+        return { returnTo: origin.returnTo, connected: true };
+      } catch {
+        return {
+          returnTo: origin.returnTo,
+          connected: false,
+          reason: "connect",
+        };
+      }
+    }
     const provider = providerForApp(args.app);
     let grant;
     try {

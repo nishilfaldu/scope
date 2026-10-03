@@ -8,9 +8,9 @@ import {
   refreshedFromPayload,
 } from "../shared";
 import type { ProviderOAuth } from "../types";
+import { SLACK_SCOPES } from "../../connect/contracts";
 
-const SLACK_USER_SCOPES =
-  "bookmarks:read,bookmarks:write,channels:history,channels:read,chat:write,files:read,files:write,groups:history,groups:read,identify,im:history,im:read,mpim:history,mpim:read,pins:read,pins:write,reactions:read,reactions:write,search:read,users:read";
+const SLACK_USER_SCOPES = SLACK_SCOPES.join(",");
 
 export const slack: ProviderOAuth = {
   authorize(state) {

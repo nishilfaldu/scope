@@ -1,4 +1,5 @@
 import { httpRouter } from "convex/server";
+import { consumeTicket } from "./connect/bridge";
 import { httpAction } from "./_generated/server";
 import { httpAppsHandler } from "./http/httpAppsHandler";
 import { httpAccountsHandler } from "./http/httpAccountsHandler";
@@ -33,6 +34,11 @@ import {
 } from "./http/httpAgentSliceHandlers";
 
 const http = httpRouter();
+http.route({
+  path: "/api/connect/ticket",
+  method: "POST",
+  handler: consumeTicket,
+});
 const optionsOk = httpAction(async () => corsNoContent());
 
 // Auth routes

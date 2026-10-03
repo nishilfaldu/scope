@@ -55,6 +55,8 @@ export const APP_CONNECT_URL = Object.fromEntries(
   ALL_APPS.map((app) => [app, `${siteUrl}/api/${app}/connect`]),
 ) as Record<AppId, string>;
 export const CONNECT_ERRORS: Record<string, string> = {
+  connect:
+    "Slack could not verify this account and its permissions. Try connecting again or contact the Scope administrator.",
   token: "The provider did not issue a token. Check the OAuth callback URL.",
   identity:
     "The provider could not identify the connected account. Try connecting again.",

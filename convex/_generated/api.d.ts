@@ -9,6 +9,11 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as connect_access from "../connect/access.js";
+import type * as connect_bridge from "../connect/bridge.js";
+import type * as connect_connections from "../connect/connections.js";
+import type * as connect_contracts from "../connect/contracts.js";
+import type * as connect_tickets from "../connect/tickets.js";
 import type * as devSeed from "../devSeed.js";
 import type * as domain_apps from "../domain/apps.js";
 import type * as domain_handoff from "../domain/handoff.js";
@@ -78,6 +83,11 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  "connect/access": typeof connect_access;
+  "connect/bridge": typeof connect_bridge;
+  "connect/connections": typeof connect_connections;
+  "connect/contracts": typeof connect_contracts;
+  "connect/tickets": typeof connect_tickets;
   devSeed: typeof devSeed;
   "domain/apps": typeof domain_apps;
   "domain/handoff": typeof domain_handoff;

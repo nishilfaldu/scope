@@ -1,6 +1,7 @@
 import { env } from "../_generated/server";
 import type { AppId, ProviderId } from "../domain/apps";
 import { envConfigured } from "./shared";
+import { connectConfigured } from "../connect/bridge";
 import { PROVIDER_OAUTH } from "./providers";
 import type {
   AuthorizeStart,
@@ -20,8 +21,9 @@ export function oauthConfigured(): Record<ProviderId, boolean> {
       envConfigured(env.GOOGLE_CLIENT_ID) &&
       envConfigured(env.GOOGLE_CLIENT_SECRET),
     slack:
-      envConfigured(env.SLACK_CLIENT_ID) &&
-      envConfigured(env.SLACK_CLIENT_SECRET),
+      connectConfigured() ||
+      (envConfigured(env.SLACK_CLIENT_ID) &&
+        envConfigured(env.SLACK_CLIENT_SECRET)),
     airtable:
       envConfigured(env.AIRTABLE_CLIENT_ID) &&
       envConfigured(env.AIRTABLE_CLIENT_SECRET),

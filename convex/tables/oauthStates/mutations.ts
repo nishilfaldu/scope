@@ -16,6 +16,7 @@ import { normalizeReturnTo } from "../../domain/returnPaths";
 import { randomSecret, sha256Hex } from "../../lib/secrets";
 import { codeChallenge } from "../../oauth/providers/airtable";
 import { internal } from "../../_generated/api";
+import { connectConfigured } from "../../connect/bridge";
 
 const STATE_TTL_MS = 10 * 60 * 1000;
 
@@ -26,6 +27,7 @@ async function insertState(
     app: AppId;
     state: string;
     returnTo: string;
+    connectSubjectId?: string;
     browserProofHash?: string;
     pkceVerifier?: string;
     pkceChallenge?: string;
@@ -71,6 +73,10 @@ export const start = authenticatedMutation({
       userId: ctx.userId,
       app: args.app,
       state,
+      connectSubjectId:
+        args.app === "slack" && connectConfigured()
+          ? `scope:${ctx.userId}:${state}`
+          : undefined,
       browserProofHash: await sha256Hex(browserProof),
       pkceVerifier,
       pkceChallenge: pkceVerifier
@@ -109,6 +115,7 @@ export const consume = internalMutation({
   args: { state: v.string(), userId: v.id("users"), browserProof: v.string() },
   returns: v.union(
     v.object({
+      connectSubjectId: v.optional(v.string()),
       pkceVerifier: v.optional(v.string()),
       userId: v.id("users"),
       provider: providerValidator,
@@ -132,6 +139,7 @@ export const consume = internalMutation({
       return null;
     await ctx.db.delete("oauthStates", row._id);
     return {
+      connectSubjectId: row.connectSubjectId,
       pkceVerifier: row.pkceVerifier,
       userId: row.userId,
       provider: providerForApp(row.app),

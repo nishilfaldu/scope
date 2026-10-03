@@ -33,6 +33,8 @@ type Env = {
   readonly AIRTABLE_CLIENT_ID: string;
   readonly AIRTABLE_CLIENT_SECRET: string;
   readonly BOARD_ORIGIN: string;
+  readonly CONNECT_BRIDGE_SECRET: string | undefined;
+  readonly CONNECT_BRIDGE_URL: string | undefined;
   readonly GITHUB_CLIENT_ID: string;
   readonly GITHUB_CLIENT_SECRET: string;
   readonly GOOGLE_CLIENT_ID: string;

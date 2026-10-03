@@ -32,6 +32,8 @@ Use a random, task-stable `Idempotency-Key` header (32–128 characters) when cr
 
 ## Connect and account selection
 
+Slack can use Vercel Connect through an authenticated Vercel bridge. It is opt-in and preserves Scope pairing, account bindings, slices, approvals, and revocation. See [Vercel Connect setup, limitations, and cleanup comparison](docs/vercel-connect.md). Other providers and existing Slack OAuth accounts keep their current flows.
+
 The signed-in operator connects apps from `/connections`. Each connection is keyed by Scope user, app, and the provider service account ID. Google uses mailbox email for Gmail, primary calendar ID for Calendar, and permission ID for Files; these are not cross-app Google IDs. Gmail email changes create a new connection on reconnect. The display login alone never authorizes access. Slice creation and onboarding approval page through apps and account choices, retaining selections across pages. At least one account must be chosen for every selected app; several may be chosen.
 
 Scope keeps the Google files bearer server-side and restricts agents to vetted Drive file listing, metadata, and non-Docs/Sheets download operations, plus Docs and Sheets content operations. One connection, slice binding, and broker credential covers all three. Google grants must contain exactly the requested service scope; missing scopes or any extras are rejected, including old identity and redundant Files scopes. A GitHub App user grant can be bound to one active agent lineage because refreshing its user token invalidates the prior access token.
@@ -83,7 +85,7 @@ Open [http://localhost:3000](http://localhost:3000). Convex HTTP routes live on 
 
 Set OAuth client IDs and secrets on the Convex deployment. Set `BOARD_ORIGIN` to the board's origin, such as `http://localhost:3000` in development, so OAuth can return there. Set `RESEND_API_KEY` and verify `nishilfaldu.site` in Resend. OTP mail defaults to `Scope <login@nishilfaldu.site>`; set `RESEND_FROM` to override that sender.
 
-All connection secrets (upstream OAuth access and refresh tokens) are stored encrypted at rest with AES-256-GCM using `TOKEN_ENCRYPTION_KEY` in Convex env. Generate a base64-encoded 32-byte key and set it before connecting services:
+All legacy OAuth connection secrets (upstream access and refresh tokens) are stored encrypted at rest with AES-256-GCM using `TOKEN_ENCRYPTION_KEY` in Convex env. Generate a base64-encoded 32-byte key and set it before connecting services:
 
 ```bash
 openssl rand -base64 32
@@ -92,7 +94,7 @@ npx convex env set TOKEN_ENCRYPTION_KEY <base64-32-byte-key>
 
 Keep the same key across deploys. Rotating it without re-saving connections will break decryption of existing ciphertext. If anything was stored before encryption was enabled, reconnect those providers so tokens are stored as `enc:v1:` ciphertext.
 
-`GET /api/health` reports which OAuth providers have both a non-empty client ID and secret. It does not return the values.
+`GET /api/health` reports configured provider authorization: client ID/secret pairs, or the Slack Connect bridge settings. It does not verify external connector availability or return secret values.
 
 ## Test
 

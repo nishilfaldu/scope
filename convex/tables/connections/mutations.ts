@@ -6,6 +6,7 @@ import {
   providerValidator,
 } from "../../domain/apps";
 import { encryptToken } from "../../lib/tokenEncryption";
+import { connectReferenceValidator } from "../../connect/contracts";
 
 export const clearConnection = internalMutation({
   args: {
@@ -15,6 +16,7 @@ export const clearConnection = internalMutation({
   },
   returns: v.union(
     v.object({ storedAccessToken: v.string(), revokeUpstream: v.boolean() }),
+    v.object({ connect: connectReferenceValidator }),
     v.null(),
   ),
   handler: async (ctx, args) => {
@@ -25,7 +27,9 @@ export const clearConnection = internalMutation({
     // Disconnect locally; project-wide revocation belongs in Google Account.
     const revokeUpstream = providerForApp(row.app) !== "google";
     await ctx.db.delete("connections", row._id);
-    return { storedAccessToken: row.accessToken, revokeUpstream };
+    return "connect" in row
+      ? { connect: row.connect }
+      : { storedAccessToken: row.accessToken, revokeUpstream };
   },
 });
 
@@ -56,6 +60,8 @@ export const saveConnection = internalMutation({
       .unique();
     if (args.provider !== providerForApp(args.app))
       throw new Error("Provider/app mismatch");
+    if (existing && "connect" in existing)
+      throw new Error("Reconnect this account through Vercel Connect");
     const accessToken = await encryptToken(args.accessToken);
     const refreshToken =
       args.refreshToken === undefined
@@ -92,6 +98,7 @@ export const beginRefresh = internalMutation({
     const row = await ctx.db.get("connections", args.connectionId);
     if (
       !row ||
+      "connect" in row ||
       row.userId !== args.userId ||
       row.app !== args.app ||
       row.grantVersion !== args.grantVersion ||
@@ -111,7 +118,7 @@ export const releaseRefresh = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const row = await ctx.db.get("connections", args.connectionId);
-    if (row?.refreshLease === args.lease) {
+    if (row && !("connect" in row) && row.refreshLease === args.lease) {
       await ctx.db.patch("connections", row._id, {
         refreshLease: undefined,
         refreshLeaseExpiresAt: undefined,
@@ -139,6 +146,7 @@ export const refreshConnection = internalMutation({
     const row = await ctx.db.get("connections", args.connectionId);
     if (
       !row ||
+      "connect" in row ||
       row.userId !== args.userId ||
       row.app !== args.app ||
       row.providerUserId !== args.providerUserId ||

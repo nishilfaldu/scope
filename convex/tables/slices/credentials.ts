@@ -110,6 +110,7 @@ export const finalize = internalMutation({
     connectionId: v.id("connections"),
     requestId: v.optional(v.id("tokenRequests")),
     brokerSecretHash: v.optional(v.string()),
+    connectionGrantVersion: v.optional(v.number()),
   },
   returns: v.union(
     v.object({ ok: v.literal(true), expiresAt: v.number() }),
@@ -131,7 +132,9 @@ export const finalize = internalMutation({
       binding?.sliceId !== slice._id ||
       binding.app !== args.app ||
       binding.connectionId !== args.connectionId ||
-      !selected
+      !selected ||
+      (args.connectionGrantVersion !== undefined &&
+        selected.grantVersion !== args.connectionGrantVersion)
     ) {
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
     }

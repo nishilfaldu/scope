@@ -8,6 +8,8 @@ const app = defineApp({
     GITHUB_CLIENT_SECRET: v.string(),
     GOOGLE_CLIENT_ID: v.string(),
     GOOGLE_CLIENT_SECRET: v.string(),
+    CONNECT_BRIDGE_URL: v.optional(v.string()),
+    CONNECT_BRIDGE_SECRET: v.optional(v.string()),
     SLACK_CLIENT_ID: v.string(),
     SLACK_CLIENT_SECRET: v.string(),
     AIRTABLE_CLIENT_ID: v.string(),

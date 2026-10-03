@@ -2,6 +2,8 @@
 
 The public agent entry point is `GET /` on the Convex HTTP origin. It returns the route index, an ordered integration guide, and `rediscoveryUrl`. An agent can reread that guide at any time, but it must retain its private claim handles and credentials. Scope does not wake agents or send messages to their chats. A running or resumable agent must poll.
 
+Slack may use the opt-in [Vercel Connect provider layer](vercel-connect.md). Agent polling, durable credential storage, pairing, selected account bindings, slices, and approval/claim behavior remain the same. Connect owns upstream authorization and refresh for migrated Slack accounts; Scope stores account references only. Provider tokens already issued can outlive local revocation or slice expiry.
+
 ## Three separate clocks
 
 All `*At` values and `serverTime` are Unix milliseconds.

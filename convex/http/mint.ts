@@ -97,6 +97,7 @@ export async function mintCredential(
       bindingId: args.bindingId,
       connectionId: args.connectionId,
       requestId: args.requestId,
+      connectionGrantVersion: issued.connectionGrantVersion,
     },
   );
   if (!finalized.ok) {

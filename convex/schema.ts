@@ -3,6 +3,10 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { appValidator } from "./domain/apps";
 import { storedRequestStatusValidator } from "./domain/requests";
+import {
+  bridgeCommandValidator,
+  connectReferenceValidator,
+} from "./connect/contracts";
 
 const sliceStatusValidator = v.union(
   v.literal("staged"),
@@ -154,27 +158,50 @@ export default defineSchema({
     expiresAt: v.number(),
   }).index("by_secretHash", ["secretHash"]),
 
+  connectBridgeTickets: defineTable({
+    secretHash: v.string(),
+    expiresAt: v.number(),
+    command: bridgeCommandValidator,
+  }).index("by_secretHash", ["secretHash"]),
+
   // One row per (Scope user, app, service account). Google keys are service-local:
   // Gmail mailbox email, primary Calendar ID, or Drive permission ID, not OIDC sub.
-  connections: defineTable({
-    userId: v.id("users"),
-    app: appValidator,
-    accessToken: v.string(),
-    login: v.string(),
-    providerUserId: v.string(),
-    refreshToken: v.optional(v.string()),
-    tokenExpiresAt: v.optional(v.number()),
-    grantVersion: v.number(),
-    connectionGeneration: v.optional(v.number()),
-    refreshLease: v.optional(v.string()),
-    refreshLeaseExpiresAt: v.optional(v.number()),
-    grantedScopes: v.optional(v.array(v.string())),
-  }).index("by_user_app_providerUserId", ["userId", "app", "providerUserId"]),
+  // Connect Slack accounts use workspace ID + user ID. Legacy rows stay valid.
+  connections: defineTable(
+    v.union(
+      v.object({
+        userId: v.id("users"),
+        app: appValidator,
+        accessToken: v.string(),
+        login: v.string(),
+        providerUserId: v.string(),
+        refreshToken: v.optional(v.string()),
+        tokenExpiresAt: v.optional(v.number()),
+        grantVersion: v.number(),
+        connectionGeneration: v.optional(v.number()),
+        refreshLease: v.optional(v.string()),
+        refreshLeaseExpiresAt: v.optional(v.number()),
+        grantedScopes: v.optional(v.array(v.string())),
+      }),
+      v.object({
+        backend: v.literal("vercel-connect"),
+        userId: v.id("users"),
+        app: v.literal("slack"),
+        login: v.string(),
+        providerUserId: v.string(),
+        connect: connectReferenceValidator,
+        grantedScopes: v.array(v.string()),
+        grantVersion: v.number(),
+        connectionGeneration: v.optional(v.number()),
+      }),
+    ),
+  ).index("by_user_app_providerUserId", ["userId", "app", "providerUserId"]),
 
   oauthStates: defineTable({
     userId: v.id("users"),
     app: appValidator,
     state: v.string(),
+    connectSubjectId: v.optional(v.string()),
     browserProofHash: v.optional(v.string()),
     pkceVerifier: v.optional(v.string()),
     pkceChallenge: v.optional(v.string()),

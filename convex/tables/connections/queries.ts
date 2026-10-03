@@ -70,7 +70,7 @@ export const getConnection = internalQuery({
       args.app,
       args.connectionId,
     );
-    if (!row) return null;
+    if (!row || "connect" in row) return null;
     return {
       accessToken: await decryptToken(row.accessToken),
       login: row.login,
