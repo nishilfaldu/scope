@@ -145,9 +145,7 @@ export function ConnectionsBoard() {
                   <div className={styles.account} key={a._id}>
                     <div>
                       <h3>{accountName(a.baseName || a.label)}</h3>
-                      <p>
-                        {a.providerEmail || "Identity verified by Airtable"}
-                      </p>
+                      {a.providerEmail && <p>{a.providerEmail}</p>}
                       {a.revoked && (
                         <p className={styles.attention}>Sharing stopped</p>
                       )}
@@ -175,7 +173,6 @@ export function ConnectionsBoard() {
                 <div className={styles.account} key={a.id}>
                   <div>
                     <h3>{a.login}</h3>
-                    <p>Identity verified by Slack</p>
                     <p>MCP access is not available yet</p>
                   </div>
                   <button
