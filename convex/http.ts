@@ -1,169 +1,30 @@
 import { httpRouter } from "convex/server";
-import { consumeTicket } from "./connect/bridge";
-import { httpAction } from "./_generated/server";
-import { httpAppsHandler } from "./http/httpAppsHandler";
-import { httpAccountsHandler } from "./http/httpAccountsHandler";
-import { httpClaimHandler } from "./http/httpClaimHandler";
-import { httpCredentialsHandler } from "./http/httpCredentialsHandler";
-import {
-  httpAccessRequestClaimHandler,
-  httpAccessRequestAckHandler,
-  httpCancelAccessRequestHandler,
-  httpAccessRequestStatusHandler,
-  httpCreateAccessRequestHandler,
-} from "./http/httpAccessRequestHandlers";
-import { discoverySpec } from "./http/contracts";
+import { consumeTicket, connectConfigured } from "./connect/bridge";
+import { httpAction, env } from "./_generated/server";
 import { httpOAuthCallback, httpOAuthConnect } from "./http/oauth";
-import { corsNoContent, jsonResponse } from "./lib/responses";
+import { jsonResponse } from "./lib/responses";
 import { ALL_APPS } from "./domain/apps";
-import { connectConfigured } from "./connect/bridge";
 import { auth } from "./auth";
-import {
-  httpAgentConnectionClaimHandler,
-  httpAgentConnectionAckHandler,
-  httpActivateAgentConnectionHandler,
-  httpCancelAgentConnectionInviteHandler,
-  httpRevokeAgentConnectionHandler,
-  httpAgentConnectionStatusHandler,
-  httpCreateAgentConnectionHandler,
-} from "./http/httpAgentConnectionHandlers";
-import {
-  httpCancelTokenRequestHandler,
-  httpRevokeSliceHandler,
-} from "./http/httpAgentSliceHandlers";
-
 const http = httpRouter();
+auth.addHttpRoutes(http);
 http.route({
   path: "/api/connect/ticket",
   method: "POST",
   handler: consumeTicket,
 });
-const optionsOk = httpAction(async () => corsNoContent());
-
-auth.addHttpRoutes(http);
-
 http.route({
   path: "/",
   method: "GET",
-  handler: httpAction(async (_ctx, request) =>
+  handler: httpAction(async () =>
     jsonResponse(200, {
-      ...discoverySpec,
-      rediscoveryUrl: new URL("/", request.url).toString(),
+      name: "Scope",
+      agentAccess: "WorkOS-authorized MCP",
+      mcpUrl: new URL("/api/probe/mcp", env.BOARD_ORIGIN).toString(),
+      credentials:
+        "Provider credentials are used only by the private local helper. Sign in through MCP; approve each account request in Scope.",
     }),
   ),
 });
-
-for (const [path, handler] of [
-  ["/api/agent-connections", httpCreateAgentConnectionHandler],
-  ["/api/agent-connections/status", httpAgentConnectionStatusHandler],
-  ["/api/agent-connections/claim", httpAgentConnectionClaimHandler],
-  ["/api/agent-connections/ack", httpAgentConnectionAckHandler],
-  ["/api/agent-connections/activate", httpActivateAgentConnectionHandler],
-  ["/api/agent-connections/cancel", httpCancelAgentConnectionInviteHandler],
-  ["/api/agent-connections/revoke", httpRevokeAgentConnectionHandler],
-] as const) {
-  http.route({ path, method: "OPTIONS", handler: optionsOk });
-  http.route({ path, method: "POST", handler });
-}
-
-http.route({
-  path: "/api/access-requests",
-  method: "OPTIONS",
-  handler: optionsOk,
-});
-http.route({
-  path: "/api/access-requests/cancel",
-  method: "OPTIONS",
-  handler: optionsOk,
-});
-http.route({
-  path: "/api/access-requests/cancel",
-  method: "POST",
-  handler: httpCancelAccessRequestHandler,
-});
-http.route({
-  path: "/api/access-requests",
-  method: "POST",
-  handler: httpCreateAccessRequestHandler,
-});
-
-for (const [path, handler] of [
-  ["/api/slices/revoke", httpRevokeSliceHandler],
-  ["/api/credentials/cancel", httpCancelTokenRequestHandler],
-] as const) {
-  http.route({ path, method: "OPTIONS", handler: optionsOk });
-  http.route({ path, method: "POST", handler });
-}
-http.route({
-  path: "/api/access-requests/status",
-  method: "OPTIONS",
-  handler: optionsOk,
-});
-http.route({
-  path: "/api/access-requests/status",
-  method: "POST",
-  handler: httpAccessRequestStatusHandler,
-});
-http.route({
-  path: "/api/access-requests/claim",
-  method: "OPTIONS",
-  handler: optionsOk,
-});
-http.route({
-  path: "/api/access-requests/ack",
-  method: "OPTIONS",
-  handler: optionsOk,
-});
-http.route({
-  path: "/api/access-requests/ack",
-  method: "POST",
-  handler: httpAccessRequestAckHandler,
-});
-http.route({
-  path: "/api/access-requests/claim",
-  method: "POST",
-  handler: httpAccessRequestClaimHandler,
-});
-
-http.route({
-  path: "/api/credentials",
-  method: "OPTIONS",
-  handler: optionsOk,
-});
-http.route({
-  path: "/api/credentials",
-  method: "POST",
-  handler: httpCredentialsHandler,
-});
-
-http.route({
-  path: "/api/credentials/claim",
-  method: "OPTIONS",
-  handler: optionsOk,
-});
-http.route({
-  path: "/api/credentials/claim",
-  method: "POST",
-  handler: httpClaimHandler,
-});
-
-http.route({
-  path: "/api/apps",
-  method: "OPTIONS",
-  handler: optionsOk,
-});
-http.route({
-  path: "/api/apps",
-  method: "GET",
-  handler: httpAppsHandler,
-});
-http.route({ path: "/api/accounts", method: "OPTIONS", handler: optionsOk });
-http.route({
-  path: "/api/accounts",
-  method: "GET",
-  handler: httpAccountsHandler,
-});
-
 http.route({
   path: "/api/health",
   method: "GET",
@@ -171,7 +32,6 @@ http.route({
     jsonResponse(200, { ok: true, oauth: { slack: connectConfigured() } }),
   ),
 });
-
 for (const app of ALL_APPS) {
   http.route({
     path: `/api/${app}/connect`,
@@ -184,5 +44,4 @@ for (const app of ALL_APPS) {
     handler: httpOAuthCallback(app),
   });
 }
-
 export default http;

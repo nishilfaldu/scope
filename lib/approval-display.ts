@@ -9,6 +9,8 @@ export type ApprovalAccount = Pick<
   | "credentialKind"
   | "baseId"
   | "blockedAt"
+  | "providerEmail"
+  | "baseName"
 >;
 export type ApprovalRequest = Pick<
   Doc<"probeRequests">,
@@ -23,7 +25,13 @@ export type ApprovalRequest = Pick<
   | "receivedAt"
   | "decidedAt"
   | "stoppedAt"
-> & { createdAt?: number; requesterName?: string };
+> & {
+  createdAt?: number;
+  requesterName?: string;
+  requesterSource?: string;
+  intent?: string;
+  requesterStopped?: boolean;
+};
 export type TimelineEvent = {
   label: string;
   at?: number;
@@ -47,7 +55,7 @@ export function approvalStatus(
 ) {
   if (r.status === "denied") return "Denied";
   if (r.status === "cancelled") return "Delivery stopped";
-  if (blocked) return "Sharing blocked";
+  if (blocked || r.requesterStopped) return "Sharing blocked";
   if (r.receivedAt) return "Received";
   if (deliveryDeadline(r) <= now)
     return r.status === "pending"
@@ -192,4 +200,38 @@ export async function approvalPost<T>(
       "The request could not be completed. Check your sign-in and try again.",
     );
   return response.json();
+}
+
+export function requestAccess(r: ApprovalRequest) {
+  return r.intent || "Access to this Airtable account";
+}
+export function accessBoundary(a?: ApprovalAccount) {
+  return a?.credentialKind === "shared-pat"
+    ? `Read-only access to ${a.baseName || accountName(a.label)}.`
+    : "Shares the permissions granted to this Airtable account. Provider token lifetime applies.";
+}
+export function requestExplanation(
+  r: ApprovalRequest,
+  now: number,
+  a?: ApprovalAccount,
+) {
+  const status = approvalStatus(r, now, a?.revoked);
+  if (
+    status === "Needs approval" ||
+    status === "Denied" ||
+    status === "Waiting for pickup" ||
+    status === "Waiting for receipt"
+  )
+    return "";
+  if (status === "Received")
+    return "Scope cannot confirm completed work. Previously received access may remain active after sharing ends.";
+  if (status === "Expired" || status === "Not collected")
+    return "Ask the agent for a new request if you want it to continue.";
+  if (status === "Receipt unconfirmed")
+    return "Check with the agent before asking it to try again.";
+  return r.receivedAt
+    ? "Previously received access may remain active."
+    : r.deliveredAt
+      ? "The agent did not confirm receipt. Check with it before retrying."
+      : "";
 }

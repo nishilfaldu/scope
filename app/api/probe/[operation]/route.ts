@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import { createHash, randomBytes } from "node:crypto";
 import { startAuthorization, revokeToken } from "@vercel/connect";
 import { notifyApproval } from "@/lib/probe-push";
 import { patBindings, patBindingForKey } from "@/lib/probe-pat-bindings";
@@ -62,6 +64,7 @@ export async function POST(
         key: body.key,
         accountId: body.accountId,
         reason: body.reason,
+        intent: body.intent,
       });
       return json({
         ...result,
@@ -80,36 +83,24 @@ export async function POST(
           bindings: patBindings.map(({ key, label }) => ({ key, label })),
         });
       const binding = patBindingForKey(body.bindingKey);
-      const accounts = await client.query(api.probe.accountsForOwner, {});
-      const existing = accounts.find(
-        (account: {
-          credentialKind?: string;
-          connectorId: string;
-          baseId?: string;
-          revoked: boolean;
-        }) =>
-          account.credentialKind === "shared-pat" &&
-          !account.revoked &&
-          account.connectorId === binding.connectorId &&
-          account.baseId === binding.baseId,
-      );
-      const id =
-        existing?._id ??
-        (await client.mutation(api.probe.addAccount, {
-          secret: config("SCOPE_PROBE_SECRET"),
-          label: binding.label,
-          connectorId: binding.connectorId,
-          issuer: config("NEXT_PUBLIC_CONVEX_SITE_URL"),
-          credentialKind: "shared-pat",
-          baseId: binding.baseId,
-        }));
-      const account = await client.query(api.probe.account, { id });
-      const grant = await airtableGrant(account);
-      await client.mutation(api.probe.confirmAccount, {
+      const grant = await airtableGrant({
+        userId: identity.id,
+        connectorId: binding.connectorId,
+        baseId: binding.baseId,
+        credentialKind: "shared-pat",
+        revoked: false,
+        subjectId: "",
+        issuer: config("NEXT_PUBLIC_CONVEX_SITE_URL"),
+      });
+      const id = await client.mutation(api.probe.saveVerifiedPat, {
         secret: config("SCOPE_PROBE_SECRET"),
-        id,
+        connectorId: binding.connectorId,
+        baseId: binding.baseId,
+        issuer: config("NEXT_PUBLIC_CONVEX_SITE_URL"),
+        label: grant.baseName || binding.label,
         providerUserId: grant.providerUserId,
-        installationId: grant.installationId,
+        providerEmail: grant.providerEmail,
+        baseName: grant.baseName,
       });
       return json({
         id,
@@ -154,43 +145,37 @@ export async function POST(
       return json({ url: url.toString() });
     }
     if (operation === "authorize") {
-      const id = await client.mutation(api.probe.addAccount, {
+      const proof = randomBytes(32).toString("hex");
+      const id = await client.mutation(api.probe.beginConnection, {
         secret: config("SCOPE_PROBE_SECRET"),
-        label: body.label,
+        proofHash: createHash("sha256").update(proof).digest("hex"),
         connectorId: config("CONNECT_AIRTABLE_CONNECTOR"),
         issuer: config("NEXT_PUBLIC_CONVEX_SITE_URL"),
       });
-      const account = await client.query(api.probe.account, { id });
+      const attempt = await client.query(api.probe.connectionAttempt, { id });
       const auth = await startAuthorization(
-        account.connectorId,
+        attempt.connectorId,
         {
           subject: {
             type: "user",
-            id: account.subjectId,
-            issuer: account.issuer,
+            id: attempt.subjectId,
+            issuer: attempt.issuer,
           },
         },
         {
           callbackUrl:
-            config("SCOPE_PROBE_ORIGIN") + "/connections?account=" + id,
+            config("SCOPE_PROBE_ORIGIN") + "/api/probe/complete?attempt=" + id,
           expiresInMs: 600_000,
         },
       );
-      return json({ id, url: auth.url });
-    }
-    if (operation === "confirm") {
-      const account = await client.query(api.probe.account, { id: body.id });
-      const grant = await airtableGrant(account);
-      await client.mutation(api.probe.confirmAccount, {
-        secret: config("SCOPE_PROBE_SECRET"),
-        id: body.id,
-        providerUserId: grant.providerUserId,
-        installationId: grant.installationId,
+      (await cookies()).set("scope-connect-" + id, proof, {
+        httpOnly: true,
+        sameSite: "lax",
+        secure: config("SCOPE_PROBE_ORIGIN").startsWith("https:"),
+        maxAge: 600,
+        path: "/api/probe/complete",
       });
-      return json({
-        providerUserId: grant.providerUserId,
-        expiresAt: grant.expiresAt,
-      });
+      return json({ url: auth.url });
     }
     if (operation === "revoke") {
       const account = await client.query(api.probe.account, { id: body.id });

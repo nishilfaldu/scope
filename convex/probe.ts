@@ -12,10 +12,6 @@ import {
 } from "./_generated/server";
 import { hashesEqual, randomSecret } from "./lib/secrets";
 import { internal } from "./_generated/api";
-import {
-  activeAgentConnection,
-  activeConnectionForAgent,
-} from "./tables/agentConnections";
 
 async function owner(ctx: QueryCtx | MutationCtx) {
   const id = await getAuthUserId(ctx);
@@ -40,42 +36,20 @@ async function authorizeActor(
   args: { secret: string; userId: string; requester: string },
 ) {
   service(args.secret);
-  if (args.requester.startsWith("scope-agent:")) {
-    const [, agentId, connectionId, extra] = args.requester.split(":");
-    const connection = agentId
-      ? await activeConnectionForAgent(ctx, agentId)
-      : null;
-    if (
-      extra ||
-      !connection ||
-      connection._id !== connectionId ||
-      connection.userId !== args.userId
-    )
-      throw new Error("Unauthorized");
-  }
+  // Direct Scope secrets cannot be exchanged for MCP authorization. Old
+  // approvals stay bound to their retired recipient, never to a new sign-in.
+  if (args.requester.startsWith("scope-agent:"))
+    throw new Error("Unauthorized");
+  const connection = await ctx.db
+    .query("probeRequesters")
+    .withIndex("by_requester", (q) => q.eq("requester", args.requester))
+    .unique();
+  if (
+    connection &&
+    (connection.userId !== args.userId || connection.stoppedAt !== undefined)
+  )
+    throw new Error("Unauthorized");
 }
-
-export const existingAgent = query({
-  args: {
-    secret: v.string(),
-    connectionId: v.string(),
-    connectionSecret: v.string(),
-  },
-  returns: v.object({ userId: v.id("users"), requester: v.string() }),
-  handler: async (ctx, args) => {
-    service(args.secret);
-    const connection = await activeAgentConnection(
-      ctx,
-      args.connectionId,
-      args.connectionSecret,
-    );
-    if (!connection) throw new Error("Unauthorized");
-    return {
-      userId: connection.userId,
-      requester: `scope-agent:${connection.agentId}:${connection._id}`,
-    };
-  },
-});
 
 export const agentStatus = query({
   args: { ...agentArgs, id: v.id("probeRequests") },
@@ -111,36 +85,6 @@ export const identity = query({
     return user?.email ? { id, email: user.email } : null;
   },
 });
-export const addAccount = mutation({
-  args: {
-    secret: v.string(),
-    label: v.string(),
-    connectorId: v.string(),
-    issuer: v.string(),
-    credentialKind: v.optional(v.literal("shared-pat")),
-    baseId: v.optional(v.string()),
-  },
-  returns: v.id("probeAccounts"),
-  handler: async (ctx, args) => {
-    service(args.secret);
-    const userId = await owner(ctx);
-    if (
-      !args.label.trim() ||
-      args.label.length > 100 ||
-      !args.connectorId ||
-      !args.issuer.startsWith("https://")
-    )
-      throw new Error("Invalid account");
-    const { secret: _secret, ...binding } = args;
-    void _secret;
-    return ctx.db.insert("probeAccounts", {
-      ...binding,
-      userId,
-      subjectId: `scope:probe:${userId}:${randomSecret("", 16)}`,
-      revoked: false,
-    });
-  },
-});
 export const account = query({
   args: { id: v.id("probeAccounts") },
   returns: v.any(),
@@ -149,32 +93,6 @@ export const account = query({
     const row = await ctx.db.get("probeAccounts", id);
     if (!row || row.userId !== userId) throw new Error("Account unavailable");
     return row;
-  },
-});
-export const confirmAccount = mutation({
-  args: {
-    secret: v.string(),
-    id: v.id("probeAccounts"),
-    installationId: v.optional(v.string()),
-    providerUserId: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    service(args.secret);
-    const userId = await owner(ctx);
-    const row = await ctx.db.get("probeAccounts", args.id);
-    if (!row || row.userId !== userId || row.revoked)
-      throw new Error("Account unavailable");
-    if (
-      (row.providerUserId && row.providerUserId !== args.providerUserId) ||
-      (row.installationId && row.installationId !== args.installationId)
-    )
-      throw new Error("Account identity changed");
-    await ctx.db.patch("probeAccounts", args.id, {
-      installationId: args.installationId,
-      providerUserId: args.providerUserId,
-    });
-    return null;
   },
 });
 export const revokeAccount = mutation({
@@ -253,6 +171,8 @@ export const decide = mutation({
       throw new Error("Already decided");
     }
     const a = await ctx.db.get("probeAccounts", r.accountId);
+    if (approve && (await ownerRequestPresentation(ctx, r)).requesterStopped)
+      throw new Error("Connection stopped");
     if (approve && (!a || a.revoked || !a.providerUserId))
       throw new Error("Account unavailable");
     await ctx.db.patch("probeRequests", id, {
@@ -268,6 +188,7 @@ export const request = mutation({
     key: v.string(),
     accountId: v.id("probeAccounts"),
     reason: v.string(),
+    intent: v.optional(v.string()),
   },
   returns: v.any(),
   handler: async (ctx, args) => {
@@ -275,7 +196,9 @@ export const request = mutation({
     if (
       !/^[\w-]{16,128}$/.test(args.key) ||
       !args.reason.trim() ||
-      args.reason.length > 1000
+      args.reason.length > 1000 ||
+      (args.intent !== undefined &&
+        (!args.intent.trim() || args.intent.length > 240))
     )
       throw new Error("Invalid request");
     const account = await ctx.db.get("probeAccounts", args.accountId);
@@ -296,7 +219,10 @@ export const request = mutation({
       if (
         old.userId !== args.userId ||
         old.accountId !== args.accountId ||
-        old.reason !== args.reason
+        old.reason !== args.reason ||
+        (old.intent !== undefined &&
+          args.intent !== undefined &&
+          old.intent !== args.intent)
       )
         throw new Error("Idempotency conflict");
       return {
@@ -308,13 +234,26 @@ export const request = mutation({
     }
     const pending = await ctx.db
       .query("probeRequests")
-      .withIndex("by_user_status", (q) =>
-        q.eq("userId", args.userId).eq("status", "pending"),
+      .withIndex("by_user_status_deadline", (q) =>
+        q
+          .eq("userId", args.userId)
+          .eq("status", "pending")
+          .gt("expiresAt", Date.now()),
       )
-      .order("desc")
-      .take(100);
-    if (pending.filter((r) => r.expiresAt > Date.now()).length >= 50)
-      throw new Error("Pending request limit");
+      .take(50);
+    if (pending.length >= 50) throw new Error("Pending request limit");
+    if (!args.requester.startsWith("scope-agent:")) {
+      const connection = await ctx.db
+        .query("probeRequesters")
+        .withIndex("by_requester", (q) => q.eq("requester", args.requester))
+        .unique();
+      if (!connection)
+        await ctx.db.insert("probeRequesters", {
+          userId: args.userId,
+          requester: args.requester,
+          name: "MCP connection",
+        });
+    }
     const expiresAt = Date.now() + 30 * 60_000;
     const id = await ctx.db.insert("probeRequests", {
       userId: args.userId,
@@ -322,6 +261,7 @@ export const request = mutation({
       key: args.key,
       accountId: args.accountId,
       reason: args.reason,
+      intent: args.intent?.trim(),
       status: "pending",
       expiresAt,
     });
@@ -671,7 +611,8 @@ export const accountsForOwner = query({
       .query("probeAccounts")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("desc")
-      .take(100);
+      .take(100)
+      .then((rows) => rows.filter((r) => !!r.providerUserId));
   },
 });
 export const requestsForOwner = query({
@@ -717,6 +658,9 @@ export const credentialsForOwner = query({
 const ownerRequestView = v.object({
   createdAt: v.number(),
   requesterName: v.string(),
+  requesterSource: v.string(),
+  requesterStopped: v.optional(v.boolean()),
+  intent: v.optional(v.string()),
   stoppedAt: v.optional(v.number()),
   deliveryExpiresAt: v.optional(v.number()),
   _id: v.id("probeRequests"),
@@ -745,6 +689,8 @@ export const requestForOwner = query({
         v.object({
           _id: v.id("probeAccounts"),
           label: v.string(),
+          providerEmail: v.optional(v.string()),
+          baseName: v.optional(v.string()),
           revoked: v.boolean(),
           blockedAt: v.optional(v.number()),
           providerUserId: v.optional(v.string()),
@@ -768,6 +714,8 @@ export const requestForOwner = query({
           ? {
               _id: a._id,
               label: a.label,
+              providerEmail: a.providerEmail,
+              baseName: a.baseName,
               revoked: a.revoked,
               blockedAt: a.blockedAt,
               providerUserId: a.providerUserId,
@@ -783,14 +731,16 @@ async function ownerRequestPresentation(
   ctx: QueryCtx,
   r: Doc<"probeRequests">,
 ) {
-  let requesterName = "Local helper";
-  if (r.requester.startsWith("scope-agent:")) {
-    const [, agentId, reference] = r.requester.split(":");
-    const id = ctx.db.normalizeId("agentConnections", reference ?? "");
-    const connection = id ? await ctx.db.get("agentConnections", id) : null;
-    if (connection?.userId === r.userId && connection.agentId === agentId)
-      requesterName = connection.name;
-    else requesterName = "Connected agent";
+  let requesterName = "MCP connection";
+  const legacy = r.requester.startsWith("scope-agent:");
+  let requesterStopped = legacy;
+  const connection = await ctx.db
+    .query("probeRequesters")
+    .withIndex("by_requester", (q) => q.eq("requester", r.requester))
+    .unique();
+  if (connection?.userId === r.userId) {
+    requesterName = connection.name;
+    requesterStopped = legacy || connection.stoppedAt !== undefined;
   }
   return {
     _id: r._id,
@@ -798,6 +748,11 @@ async function ownerRequestPresentation(
     reason: r.reason,
     requester: r.requester,
     requesterName,
+    requesterStopped,
+    requesterSource: legacy
+      ? "Retired Scope connection"
+      : "Authorized MCP connection",
+    intent: r.intent,
     createdAt: r._creationTime,
     status: r.status,
     expiresAt: r.expiresAt,
@@ -808,3 +763,288 @@ async function ownerRequestPresentation(
     stoppedAt: r.stoppedAt,
   };
 }
+
+// Pending decisions are queried independently of paginated history, so an older
+// live request cannot be hidden behind a page of recent completed requests.
+export const pendingForOwner = query({
+  args: { now: v.number() },
+  returns: v.array(ownerRequestView),
+  handler: async (ctx, { now }) => {
+    const userId = await owner(ctx);
+    const rows = await ctx.db
+      .query("probeRequests")
+      .withIndex("by_user_status_deadline", (q) =>
+        q.eq("userId", userId).eq("status", "pending").gt("expiresAt", now),
+      )
+      .take(50);
+    return Promise.all(rows.map((r) => ownerRequestPresentation(ctx, r)));
+  },
+});
+
+// Decisions made beyond the history page remain live in the mounted inbox.
+export const retainedForOwner = query({
+  args: { ids: v.array(v.id("probeRequests")) },
+  returns: v.array(ownerRequestView),
+  handler: async (ctx, { ids }) => {
+    const userId = await owner(ctx);
+    if (ids.length > 100) throw new Error("Too many requests");
+    const rows = await Promise.all(
+      ids.map((id) => ctx.db.get("probeRequests", id)),
+    );
+    return Promise.all(
+      rows
+        .filter((r): r is Doc<"probeRequests"> => !!r && r.userId === userId)
+        .map((r) => ownerRequestPresentation(ctx, r)),
+    );
+  },
+});
+
+export const beginConnection = mutation({
+  args: {
+    secret: v.string(),
+    connectorId: v.string(),
+    issuer: v.string(),
+    proofHash: v.string(),
+  },
+  returns: v.id("probeConnectionAttempts"),
+  handler: async (ctx, args) => {
+    service(args.secret);
+    const userId = await owner(ctx);
+    if (
+      !args.connectorId ||
+      !args.issuer.startsWith("https://") ||
+      !/^[a-f0-9]{64}$/.test(args.proofHash)
+    )
+      throw new Error("Invalid connection");
+    const expiresAt = Date.now() + 600_000;
+    const id = await ctx.db.insert("probeConnectionAttempts", {
+      userId,
+      connectorId: args.connectorId,
+      issuer: args.issuer,
+      proofHash: args.proofHash,
+      subjectId: `scope:probe:${userId}:${randomSecret("", 16)}`,
+      expiresAt,
+    });
+    await ctx.scheduler.runAt(
+      expiresAt,
+      internal.probe.clearConnectionAttempt,
+      { id },
+    );
+    return id;
+  },
+});
+export const connectionAttempt = query({
+  args: { id: v.id("probeConnectionAttempts") },
+  returns: v.any(),
+  handler: async (ctx, { id }) => {
+    const userId = await owner(ctx);
+    const row = await ctx.db.get("probeConnectionAttempts", id);
+    if (!row || row.userId !== userId)
+      throw new Error("Connection unavailable");
+    return row;
+  },
+});
+export const completeConnection = mutation({
+  args: {
+    secret: v.string(),
+    id: v.id("probeConnectionAttempts"),
+    proofHash: v.string(),
+    providerUserId: v.string(),
+    providerEmail: v.optional(v.string()),
+    installationId: v.string(),
+  },
+  returns: v.id("probeAccounts"),
+  handler: async (ctx, args) => {
+    service(args.secret);
+    const userId = await owner(ctx);
+    const row = await ctx.db.get("probeConnectionAttempts", args.id);
+    if (
+      !row ||
+      row.userId !== userId ||
+      row.expiresAt <= Date.now() ||
+      row.proofHash !== args.proofHash ||
+      !args.providerUserId ||
+      !args.installationId ||
+      args.installationId === "*"
+    )
+      throw new Error("Connection unavailable");
+    if (row.accountId) {
+      const existing = await ctx.db.get("probeAccounts", row.accountId);
+      if (
+        !existing ||
+        existing.userId !== userId ||
+        existing.revoked ||
+        existing.providerUserId !== args.providerUserId ||
+        existing.installationId !== args.installationId
+      )
+        throw new Error("Account identity changed");
+      return existing._id;
+    }
+    const id = await ctx.db.insert("probeAccounts", {
+      userId,
+      connectorId: row.connectorId,
+      subjectId: row.subjectId,
+      issuer: row.issuer,
+      label: args.providerEmail || "Airtable account",
+      providerUserId: args.providerUserId,
+      providerEmail: args.providerEmail,
+      installationId: args.installationId,
+      revoked: false,
+    });
+    await ctx.db.patch("probeConnectionAttempts", row._id, { accountId: id });
+    return id;
+  },
+});
+export const saveVerifiedPat = mutation({
+  args: {
+    secret: v.string(),
+    connectorId: v.string(),
+    issuer: v.string(),
+    baseId: v.string(),
+    label: v.string(),
+    providerUserId: v.string(),
+    providerEmail: v.optional(v.string()),
+    baseName: v.optional(v.string()),
+  },
+  returns: v.id("probeAccounts"),
+  handler: async (ctx, args) => {
+    service(args.secret);
+    const userId = await owner(ctx);
+    if (!args.providerUserId || !args.baseId)
+      throw new Error("Account unavailable");
+    const rows = await ctx.db
+      .query("probeAccounts")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .take(100);
+    const existing = rows.find(
+      (r) =>
+        !r.revoked &&
+        r.credentialKind === "shared-pat" &&
+        r.connectorId === args.connectorId &&
+        r.baseId === args.baseId,
+    );
+    const { secret: _secret, ...metadata } = args;
+    void _secret;
+    if (existing) {
+      if (
+        existing.providerUserId &&
+        existing.providerUserId !== args.providerUserId
+      )
+        throw new Error("Account identity changed");
+      await ctx.db.patch("probeAccounts", existing._id, metadata);
+      return existing._id;
+    }
+    return ctx.db.insert("probeAccounts", {
+      ...metadata,
+      userId,
+      credentialKind: "shared-pat",
+      subjectId: `scope:probe:${userId}:${randomSecret("", 16)}`,
+      revoked: false,
+    });
+  },
+});
+export const clearConnectionAttempt = internalMutation({
+  args: { id: v.id("probeConnectionAttempts") },
+  returns: v.null(),
+  handler: async (ctx, { id }) => {
+    const row = await ctx.db.get("probeConnectionAttempts", id);
+    if (row && row.expiresAt <= Date.now())
+      await ctx.db.delete("probeConnectionAttempts", id);
+    return null;
+  },
+});
+
+export const deviceSubscribed = query({
+  args: { endpoint: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, { endpoint }) => {
+    const userId = await owner(ctx);
+    const rows = await ctx.db
+      .query("probePush")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .take(10);
+    return rows.some((row) => row.endpoint === endpoint);
+  },
+});
+
+export const mcpConnections = query({
+  args: {},
+  returns: v.array(
+    v.object({ requester: v.string(), name: v.string(), stopped: v.boolean() }),
+  ),
+  handler: async (ctx) => {
+    const userId = await owner(ctx);
+    const saved = await ctx.db
+      .query("probeRequesters")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .take(100);
+    const recent = await ctx.db
+      .query("probeRequests")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .order("desc")
+      .take(100);
+    const rows = new Map(
+      saved
+        .filter((r) => !r.requester.startsWith("scope-agent:"))
+        .map((r) => [
+          r.requester,
+          {
+            requester: r.requester,
+            name: r.name,
+            stopped: r.stoppedAt !== undefined,
+          },
+        ]),
+    );
+    for (const r of recent)
+      if (!r.requester.startsWith("scope-agent:") && !rows.has(r.requester))
+        rows.set(r.requester, {
+          requester: r.requester,
+          name: "MCP connection",
+          stopped: false,
+        });
+    return [...rows.values()];
+  },
+});
+export const updateMcpConnection = mutation({
+  args: {
+    requester: v.string(),
+    name: v.optional(v.string()),
+    stop: v.optional(v.boolean()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const userId = await owner(ctx);
+    if (args.requester.startsWith("scope-agent:"))
+      throw new Error("Connection unavailable");
+    const existing = await ctx.db
+      .query("probeRequesters")
+      .withIndex("by_requester", (q) => q.eq("requester", args.requester))
+      .unique();
+    const proof =
+      existing ??
+      (await ctx.db
+        .query("probeRequests")
+        .withIndex("by_requester_key", (q) => q.eq("requester", args.requester))
+        .first());
+    if (!proof || proof.userId !== userId)
+      throw new Error("Connection unavailable");
+    const name = args.name?.trim();
+    if (args.name !== undefined && (!name || name.length > 80))
+      throw new Error("Invalid name");
+    if (existing)
+      await ctx.db.patch("probeRequesters", existing._id, {
+        name: name ?? existing.name,
+        stoppedAt: args.stop
+          ? (existing.stoppedAt ?? Date.now())
+          : existing.stoppedAt,
+      });
+    else
+      await ctx.db.insert("probeRequesters", {
+        userId,
+        requester: args.requester,
+        name: name ?? "MCP connection",
+        stoppedAt: args.stop ? Date.now() : undefined,
+      });
+    return null;
+  },
+});

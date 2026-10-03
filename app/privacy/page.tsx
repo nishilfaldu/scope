@@ -85,11 +85,11 @@ const sections: PolicySection[] = [
     content: (
       <p>
         Vercel Connect manages Slack authorization and credentials. Scope
-        encrypts recoverable agent and slice claim secrets and keeps them out of
-        browser approval pages and applies ownership checks before issuing
-        credentials. Data is encrypted in transit using HTTPS. No security
-        measure is perfect, but we limit access to the systems and data required
-        to operate Scope.
+        encrypts temporary credential replay data and applies ownership and
+        recipient checks before sharing credentials through WorkOS-authorized
+        MCP. Browser approval pages never receive provider credentials. Data is
+        encrypted in transit using HTTPS. No security measure is perfect, but we
+        limit access to the systems and data required to operate Scope.
       </p>
     ),
   },
@@ -107,11 +107,11 @@ const sections: PolicySection[] = [
           protect users and investigate service abuse.
         </p>
         <p>
-          You can disconnect a provider account or revoke an agent connection or
-          slice in Scope. This stops future credentials from being issued
-          through that connection. You can also revoke Scope in the connected
-          provider&apos;s account settings. To request deletion of your Scope
-          account and associated data, email{" "}
+          You can stop further sharing through an account, request, or
+          authorized MCP connection in Scope. Previously received credentials
+          may remain active at the provider. You can also revoke Scope in the
+          connected provider&apos;s account settings. To request deletion of
+          your Scope account and associated data, email{" "}
           <a href="mailto:nishilfaldu@gmail.com">nishilfaldu@gmail.com</a>.
         </p>
       </>

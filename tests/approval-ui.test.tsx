@@ -93,7 +93,8 @@ test("a request is one compact row without technical metadata or its diagnostic 
   );
   expect(html.match(/<article/g)).toHaveLength(1);
   expect(html).toContain("Research assistant");
-  expect(html).toContain("Request timeline");
+  expect(html).toContain("Read-only access to Work base");
+  expect(html).not.toContain("Request timeline");
   expect(html).not.toContain("PAT");
   expect(html).not.toContain(r.requester);
   expect(html).not.toContain("usr-work");

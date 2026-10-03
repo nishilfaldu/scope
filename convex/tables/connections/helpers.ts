@@ -12,15 +12,5 @@ export async function connectionsForApp(
     .withIndex("by_user_app_providerUserId", (q) =>
       q.eq("userId", userId).eq("app", app),
     )
-    .collect();
-}
-
-export async function selectedConnection(
-  ctx: Pick<QueryCtx | MutationCtx, "db">,
-  userId: Id<"users">,
-  app: AppId,
-  connectionId: Id<"connections">,
-) {
-  const row = await ctx.db.get("connections", connectionId);
-  return row && row.userId === userId && row.app === app ? row : null;
+    .take(100);
 }

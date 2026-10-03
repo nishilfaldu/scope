@@ -116,8 +116,8 @@ const sections: TermsSection[] = [
     content: (
       <p>
         You may stop using Scope at any time, disconnect provider accounts, and
-        revoke agent connections or slices. To request deletion of your Scope
-        account, email{" "}
+        stop further sharing through authorized MCP connections and requests. To
+        request deletion of your Scope account, email{" "}
         <a href="mailto:nishilfaldu@gmail.com">nishilfaldu@gmail.com</a>. We may
         suspend or terminate access for a material breach of these terms or when
         needed to protect the service.

@@ -13,12 +13,6 @@ const isConnectBridge = createRouteMatcher([
 ]);
 const isPublicPage = createRouteMatcher(["/", "/privacy", "/terms"]);
 
-const isRequestLink = createRouteMatcher([
-  "/connect/(.*)",
-  "/requests/new/(.*)",
-  "/requests/token/(.*)",
-]);
-
 function safeRedirectPath(value: string | null): string {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
     return "/";
@@ -42,9 +36,6 @@ export default convexAuthNextjsMiddleware(
         );
         return nextjsMiddlewareRedirect(request, redirectTo);
       }
-      return;
-    }
-    if (isRequestLink(request)) {
       return;
     }
     if (!isAuthenticated) {

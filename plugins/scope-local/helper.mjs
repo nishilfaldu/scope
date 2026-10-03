@@ -48,19 +48,19 @@ export async function listBases(
     throw new Error("Invalid wait");
   config ??= await loadConfig();
   if (
-    Boolean(config.agentConnectionId) !== Boolean(config.agentConnectionSecret)
+    typeof config.accessToken !== "string" ||
+    !config.accessToken ||
+    config.agentConnectionId ||
+    config.agentConnectionSecret
   )
-    throw new Error("Incomplete Scope agent credentials");
+    throw new Error(
+      "Sign in to Scope through WorkOS MCP before requesting access",
+    );
   async function scope(operation, body) {
     const response = await fetcher(config.origin + "/api/probe/" + operation, {
       method: "POST",
       headers: {
-        ...(config.agentConnectionId
-          ? {
-              "x-agent-connection-id": config.agentConnectionId,
-              "x-agent-connection-secret": config.agentConnectionSecret,
-            }
-          : { Authorization: `Bearer ${config.accessToken}` }),
+        Authorization: `Bearer ${config.accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -77,6 +77,7 @@ export async function listBases(
     accountId: args.accountId,
     key: args.key,
     reason: args.reason,
+    intent: "List the available Airtable bases",
   });
   const until = Date.now() + seconds * 1000;
   do {

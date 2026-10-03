@@ -37,6 +37,14 @@ export async function POST(request: Request) {
         accountId: z.string(),
         key: z.string().min(16).max(128),
         reason: z.string().min(1).max(1000),
+        intent: z
+          .string()
+          .min(1)
+          .max(240)
+          .optional()
+          .describe(
+            "A short task description shown to the owner; never include identifiers or diagnostics.",
+          ),
         waitSeconds: z.number().int().min(0).max(240).default(90),
       },
     },
@@ -47,6 +55,7 @@ export async function POST(request: Request) {
           key: args.key,
           accountId: args.accountId as Id<"probeAccounts">,
           reason: args.reason,
+          intent: args.intent,
         });
         const until = Date.now() + args.waitSeconds * 1000;
         let status: string = created.status;

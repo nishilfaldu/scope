@@ -1,6 +1,6 @@
 import { SlackIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import type { AppId } from "@/lib/capabilities";
+import type { AppId } from "@/convex/domain/apps";
 import { cn } from "@/lib/utils";
 
 export function AppIcon({ className }: { app: AppId; className?: string }) {

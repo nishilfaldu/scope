@@ -5,6 +5,8 @@ export const probeTables = {
   probeAccounts: defineTable({
     userId: v.id("users"),
     label: v.string(),
+    providerEmail: v.optional(v.string()),
+    baseName: v.optional(v.string()),
     subjectId: v.string(),
     issuer: v.string(),
     connectorId: v.string(),
@@ -15,12 +17,30 @@ export const probeTables = {
     revoked: v.boolean(),
     blockedAt: v.optional(v.number()),
   }).index("by_user", ["userId"]),
+  probeRequesters: defineTable({
+    userId: v.id("users"),
+    requester: v.string(),
+    name: v.string(),
+    stoppedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_requester", ["requester"]),
+  probeConnectionAttempts: defineTable({
+    userId: v.id("users"),
+    subjectId: v.string(),
+    issuer: v.string(),
+    connectorId: v.string(),
+    proofHash: v.string(),
+    accountId: v.optional(v.id("probeAccounts")),
+    expiresAt: v.number(),
+  }).index("by_expiry", ["expiresAt"]),
   probeRequests: defineTable({
     userId: v.id("users"),
     requester: v.string(),
     key: v.string(),
     accountId: v.id("probeAccounts"),
     reason: v.string(),
+    intent: v.optional(v.string()),
     status: v.union(
       v.literal("pending"),
       v.literal("approved"),
@@ -45,7 +65,10 @@ export const probeTables = {
     // Chronological owner history needs a separate order from status grouping.
     // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user", ["userId"])
+    // Chronological status history uses creation order, not deadline order.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user_status", ["userId", "status"])
+    .index("by_user_status_deadline", ["userId", "status", "expiresAt"])
     .index("by_credential", ["credentialId"])
     .index("by_cleanup", ["cleanupAt"]),
   probeCredentials: defineTable({

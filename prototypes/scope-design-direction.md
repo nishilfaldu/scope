@@ -1,5 +1,7 @@
 # Scope: a quiet access inbox
 
+The approved design described here has been adopted into the real app. `/design-review` now redirects to `/approvals`. The review boundary, sample interactions and screenshots below document the earlier prototype; current validation is recorded in `implementation-review.md`.
+
 ## What the person is trying to do
 
 On a phone, a request interrupts something else. The first view must answer who is asking, which account, and what access is involved. The decision belongs beside that information. The person should not have to expand a technical timeline to judge an approval.
@@ -35,7 +37,7 @@ A dashboard of cards and badges would still make the person scan a report. An al
 
 Notifications are an optional setup journey, not a dashboard of transport states. Agent naming belongs with the source connection, with clear limits: a chosen name is not proof of a particular chat. Connections share the same app/account pattern for Airtable and Slack.
 
-## Review boundary
+## Historical review boundary
 
 `/design-review` is an authenticated, development/preview-only interactive implementation. All identities, records, connection callbacks and notification permissions are sample states. There are no backend mutations, credential requests, provider sign-ins, notification grants or persistent browser writes. Refresh resets the example. The real app routes and security implementation stay intact.
 

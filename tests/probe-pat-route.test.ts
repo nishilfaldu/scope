@@ -94,13 +94,13 @@ test("registration selects B from server metadata and ignores caller connector/b
     ).status,
   ).toBe(200);
   const create = mocks.mutation.mock.calls.find(
-    ([ref]) => getFunctionName(ref) === "probe:addAccount",
+    ([ref]) => getFunctionName(ref) === "probe:saveVerifiedPat",
   );
   expect(create?.[1]).toMatchObject({
     connectorId: binding.connectorId,
     baseId: binding.baseId,
     label: binding.label,
-    credentialKind: "shared-pat",
+    providerUserId: "usrB",
     secret: "private-bridge",
   });
   mocks.mutation.mockClear();
@@ -108,9 +108,9 @@ test("registration selects B from server metadata and ignores caller connector/b
   expect((await invoke("pat", { bindingKey: binding.key })).status).toBe(200);
   expect(
     mocks.mutation.mock.calls.some(
-      ([ref]) => getFunctionName(ref) === "probe:addAccount",
+      ([ref]) => getFunctionName(ref) === "probe:saveVerifiedPat",
     ),
-  ).toBe(false);
+  ).toBe(true);
 });
 test("unknown binding or missing selection cannot fall back to account A", async () => {
   for (const body of [
@@ -120,5 +120,13 @@ test("unknown binding or missing selection cannot fall back to account A", async
   ])
     expect((await invoke("pat", body)).status).toBe(400);
   expect(mocks.grant).not.toHaveBeenCalled();
+  expect(mocks.mutation).not.toHaveBeenCalled();
+});
+
+test("provider verification failure never inserts or updates an account", async () => {
+  mocks.grant.mockRejectedValueOnce(new Error("Account mismatch"));
+  expect((await invoke("pat", { bindingKey: patBindings[1].key })).status).toBe(
+    400,
+  );
   expect(mocks.mutation).not.toHaveBeenCalled();
 });

@@ -2,38 +2,8 @@ import { convexTest } from "convex-test";
 import { beforeEach, expect, test, vi } from "vitest";
 import schema from "../convex/schema";
 import { api, internal } from "../convex/_generated/api";
-import { sha256Hex } from "../convex/lib/secrets";
 const modules = import.meta.glob("../convex/**/*.ts");
 
-test("existing Scope authentication derives ownership and rejects wrong or revoked credentials", async () => {
-  const f = await fixture();
-  const id = await f.t.run(async (ctx) =>
-    ctx.db.insert("agentConnections", {
-      userId: f.userId,
-      agentId: "test-agent",
-      name: "Test",
-      secretHash: await sha256Hex("private-test-secret"),
-      status: "active",
-    }),
-  );
-  const args = {
-    secret: f.actor.secret,
-    connectionId: id,
-    connectionSecret: "private-test-secret",
-  };
-  expect((await f.t.query(api.probe.existingAgent, args)).userId).toBe(
-    f.userId,
-  );
-  await expect(
-    f.t.query(api.probe.existingAgent, { ...args, connectionSecret: "wrong" }),
-  ).rejects.toThrow("Unauthorized");
-  await f.t.run((ctx) =>
-    ctx.db.patch("agentConnections", id, { status: "revoked" }),
-  );
-  await expect(f.t.query(api.probe.existingAgent, args)).rejects.toThrow(
-    "Unauthorized",
-  );
-});
 beforeEach(() => vi.stubEnv("SCOPE_PROBE_SECRET", "probe-test-service-secret"));
 async function fixture() {
   const t = convexTest(schema, modules);
@@ -45,18 +15,18 @@ async function fixture() {
   );
   const owner = t.withIdentity({ subject: `${userId}|session` }),
     stranger = t.withIdentity({ subject: `${strangerId}|session` });
-  const accountId = await owner.mutation(api.probe.addAccount, {
-    secret: "probe-test-service-secret",
-    label: "A",
-    connectorId: "connector",
-    issuer: "https://scope.example",
-  });
-  await owner.mutation(api.probe.confirmAccount, {
-    secret: "probe-test-service-secret",
-    id: accountId,
-    installationId: "install-a",
-    providerUserId: "usr-a",
-  });
+  const accountId = await t.run((ctx) =>
+    ctx.db.insert("probeAccounts", {
+      userId,
+      subjectId: "subject-a",
+      revoked: false,
+      providerUserId: "usr-a",
+      installationId: "install-a",
+      label: "A",
+      connectorId: "connector",
+      issuer: "https://scope.example",
+    }),
+  );
   const actor = {
     secret: "probe-test-service-secret",
     userId,
@@ -79,7 +49,7 @@ test("request is bound to authenticated owner, agent and immutable account; retr
   ).rejects.toThrow("Idempotency conflict");
   await expect(
     f.t.mutation(api.probe.request, { ...f.args, userId: f.strangerId }),
-  ).rejects.toThrow("Account unavailable");
+  ).rejects.toThrow("Unauthorized");
   await expect(
     f.t.mutation(api.probe.request, { ...f.args, secret: "wrong" }),
   ).rejects.toThrow("Unauthorized");
@@ -158,18 +128,18 @@ test("denial and expiry never acquire a provider token", async () => {
 
 test("two accounts use distinct subjects and approval for one never unlocks the other", async () => {
   const f = await fixture();
-  const accountB = await f.owner.mutation(api.probe.addAccount, {
-    secret: "probe-test-service-secret",
-    label: "B",
-    connectorId: "connector",
-    issuer: "https://scope.example",
-  });
-  await f.owner.mutation(api.probe.confirmAccount, {
-    secret: "probe-test-service-secret",
-    id: accountB,
-    installationId: "install-b",
-    providerUserId: "usr-b",
-  });
+  const accountB = await f.t.run((ctx) =>
+    ctx.db.insert("probeAccounts", {
+      userId: f.userId,
+      revoked: false,
+      subjectId: "subject-b",
+      providerUserId: "usr-b",
+      installationId: "install-b",
+      label: "B",
+      connectorId: "connector",
+      issuer: "https://scope.example",
+    }),
+  );
   const a = await f.owner.query(api.probe.account, { id: f.accountId });
   const b = await f.owner.query(api.probe.account, { id: accountB });
   expect(a.subjectId).not.toBe(b.subjectId);
@@ -246,47 +216,16 @@ async function approved(f: Awaited<ReturnType<typeof fixture>>, args = f.args) {
   return { request, claim };
 }
 
-test("binding verification requires the server and cannot change an installation after approval", async () => {
-  const f = await fixture();
-  await expect(
-    f.owner.mutation(api.probe.confirmAccount, {
-      secret: "wrong",
-      id: f.accountId,
-      providerUserId: "usr-a",
-      installationId: "install-a",
-    }),
-  ).rejects.toThrow("Unauthorized");
-  await expect(
-    f.owner.mutation(api.probe.confirmAccount, {
-      secret: f.actor.secret,
-      id: f.accountId,
-      providerUserId: "usr-a",
-      installationId: "install-b",
-    }),
-  ).rejects.toThrow("Account identity changed");
-});
-
 test("revoked recipient is fenced after provider acquisition and before replay", async () => {
   const f = await fixture();
-  const connectionId = await f.t.run((ctx) =>
-    ctx.db.insert("agentConnections", {
-      userId: f.userId,
-      agentId: "live-agent",
-      name: "Live agent",
-      status: "active",
-      secretHash: "hash",
-    }),
-  );
-  const actor = {
-    ...f.actor,
-    requester: `scope-agent:live-agent:${connectionId}`,
-  };
+  const actor = f.actor;
   const r = await f.t.mutation(api.probe.request, { ...f.args, ...actor });
   await f.owner.mutation(api.probe.decide, { id: r.id, approve: true });
   const c = await f.t.mutation(api.probe.claim, { ...actor, id: r.id });
-  await f.t.run((ctx) =>
-    ctx.db.patch("agentConnections", connectionId, { status: "revoked" }),
-  );
+  await f.owner.mutation(api.probe.updateMcpConnection, {
+    requester: actor.requester,
+    stop: true,
+  });
   await expect(
     f.t.mutation(api.probe.finalize, {
       ...actor,
@@ -487,31 +426,44 @@ test("durable push retries reuse one job; stale attempts and expired subscriptio
 
 test("separate PAT connectors stay bound to their approvals and authenticated recipients", async () => {
   const f = await fixture();
-  const a = await f.owner.mutation(api.probe.addAccount, {
-    secret: f.actor.secret,
-    label: "PAT A",
-    connectorId: "scl_A",
-    issuer: "https://scope.example",
-    credentialKind: "shared-pat",
-    baseId: "appBaseA",
-  });
-  const b = await f.owner.mutation(api.probe.addAccount, {
-    secret: f.actor.secret,
-    label: "PAT B",
-    connectorId: "scl_B",
-    issuer: "https://scope.example",
-    credentialKind: "shared-pat",
-    baseId: "appBaseB",
-  });
-  for (const [id, providerUserId] of [
-    [a, "usrA"],
-    [b, "usrB"],
-  ] as const)
-    await f.owner.mutation(api.probe.confirmAccount, {
-      secret: f.actor.secret,
-      id,
-      providerUserId,
+  const a = await f.t.run((ctx) =>
+    ctx.db.insert("probeAccounts", {
+      userId: f.userId,
+      revoked: false,
+      subjectId: "subject-b",
+      providerUserId: "usr-b",
+      installationId: "install-b",
+      label: "PAT A",
+      connectorId: "scl_A",
+      issuer: "https://scope.example",
+      credentialKind: "shared-pat",
+      baseId: "appBaseA",
+    }),
+  );
+  const b = await f.t.run((ctx) =>
+    ctx.db.insert("probeAccounts", {
+      userId: f.userId,
+      revoked: false,
+      subjectId: "subject-b",
+      providerUserId: "usr-b",
+      installationId: "install-b",
+      label: "PAT B",
+      connectorId: "scl_B",
+      issuer: "https://scope.example",
+      credentialKind: "shared-pat",
+      baseId: "appBaseB",
+    }),
+  );
+  await f.t.run(async (ctx) => {
+    await ctx.db.patch("probeAccounts", a, {
+      providerUserId: "usrA",
+      subjectId: "subject-pat-a",
     });
+    await ctx.db.patch("probeAccounts", b, {
+      providerUserId: "usrB",
+      subjectId: "subject-pat-b",
+    });
+  });
   const recipientB = { ...f.actor, requester: "other-authenticated-recipient" };
   const requestA = await f.t.mutation(api.probe.request, {
     ...f.args,
@@ -598,26 +550,23 @@ test("notification detail reads only the owner's request and excludes delivery s
   ).rejects.toThrow("Sign in required");
 });
 
-test("owner timelines resolve only owned agent names and preserve real event timestamps", async () => {
+test("owner names follow the authenticated MCP recipient and keep recorded event times", async () => {
   const f = await fixture();
-  const connectionId = await f.t.run((ctx) =>
-    ctx.db.insert("agentConnections", {
-      userId: f.userId,
-      agentId: "timeline-agent",
-      name: "Research assistant",
-      secretHash: "unused",
-      status: "active",
+  const created = await f.t.mutation(api.probe.request, f.args);
+  await f.owner.mutation(api.probe.updateMcpConnection, {
+    requester: f.actor.requester,
+    name: "Research assistant",
+  });
+  expect(
+    (await f.owner.query(api.probe.requestForOwner, { reference: created.id }))
+      ?.request.requesterName,
+  ).toBe("Research assistant");
+  await expect(
+    f.stranger.mutation(api.probe.updateMcpConnection, {
+      requester: f.actor.requester,
+      name: "Impersonator",
     }),
-  );
-  const created = await f.t.mutation(api.probe.request, {
-    ...f.args,
-    requester: `scope-agent:timeline-agent:${connectionId}`,
-  });
-  const before = await f.owner.query(api.probe.requestForOwner, {
-    reference: created.id,
-  });
-  expect(before?.request.requesterName).toBe("Research assistant");
-  expect(before?.request.createdAt).toBeGreaterThan(0);
+  ).rejects.toThrow("Connection unavailable");
   await f.owner.mutation(api.probe.decide, { id: created.id, approve: true });
   await f.owner.mutation(api.probe.cancel, { id: created.id });
   const stopped = await f.owner.query(api.probe.requestForOwner, {
@@ -632,11 +581,171 @@ test("owner timelines resolve only owned agent names and preserve real event tim
     (await f.owner.query(api.probe.requestForOwner, { reference: created.id }))
       ?.request.stoppedAt,
   ).toBe(stopped?.request.stoppedAt);
+});
+
+test("connection attempts create no account until owner, browser proof and verified identity agree", async () => {
+  const f = await fixture();
+  const proofHash = "a".repeat(64);
+  const id = await f.owner.mutation(api.probe.beginConnection, {
+    secret: f.actor.secret,
+    connectorId: "oauth",
+    issuer: "https://scope.example",
+    proofHash,
+  });
+  expect(await f.owner.query(api.probe.accountsForOwner, {})).toHaveLength(1);
+  const completion = {
+    secret: f.actor.secret,
+    id,
+    proofHash,
+    providerUserId: "usr-new",
+    providerEmail: "personal@example.com",
+    installationId: "install-new",
+  };
+  for (const actor of [f.stranger, f.t])
+    await expect(
+      actor.mutation(api.probe.completeConnection, completion),
+    ).rejects.toThrow();
+  for (const change of [
+    { proofHash: "b".repeat(64) },
+    { installationId: "*" },
+    { providerUserId: "" },
+    { secret: "wrong" },
+  ])
+    await expect(
+      f.owner.mutation(api.probe.completeConnection, {
+        ...completion,
+        ...change,
+      }),
+    ).rejects.toThrow();
+  expect(await f.owner.query(api.probe.accountsForOwner, {})).toHaveLength(1);
+  const accountId = await f.owner.mutation(
+    api.probe.completeConnection,
+    completion,
+  );
+  expect(await f.owner.mutation(api.probe.completeConnection, completion)).toBe(
+    accountId,
+  );
+  expect(await f.owner.query(api.probe.accountsForOwner, {})).toHaveLength(2);
+  expect(
+    await f.owner.query(api.probe.account, { id: accountId }),
+  ).toMatchObject({
+    label: "personal@example.com",
+    providerUserId: "usr-new",
+    installationId: "install-new",
+  });
+  await expect(
+    f.owner.mutation(api.probe.completeConnection, {
+      ...completion,
+      installationId: "different",
+    }),
+  ).rejects.toThrow("Account identity changed");
+  await f.owner.mutation(api.probe.revokeAccount, { id: accountId });
+  await expect(
+    f.owner.mutation(api.probe.completeConnection, completion),
+  ).rejects.toThrow("Account identity changed");
+});
+
+test("expired connection attempts cannot add accounts", async () => {
+  const f = await fixture(),
+    proofHash = "a".repeat(64);
+  const id = await f.owner.mutation(api.probe.beginConnection, {
+    secret: f.actor.secret,
+    connectorId: "oauth",
+    issuer: "https://scope.example",
+    proofHash,
+  });
   await f.t.run((ctx) =>
-    ctx.db.patch("agentConnections", connectionId, { userId: f.strangerId }),
+    ctx.db.patch("probeConnectionAttempts", id, { expiresAt: Date.now() - 1 }),
+  );
+  await expect(
+    f.owner.mutation(api.probe.completeConnection, {
+      secret: f.actor.secret,
+      id,
+      proofHash,
+      providerUserId: "usr",
+      installationId: "install",
+    }),
+  ).rejects.toThrow("Connection unavailable");
+  expect(await f.owner.query(api.probe.accountsForOwner, {})).toHaveLength(1);
+});
+
+test("pending decisions remain discoverable behind more than one page of completed history", async () => {
+  const f = await fixture();
+  const first = await f.t.mutation(api.probe.request, f.args);
+  for (let i = 0; i < 25; i++) {
+    const r = await f.t.mutation(api.probe.request, {
+      ...f.args,
+      key: `completed-request-key-${i}`,
+    });
+    await f.owner.mutation(api.probe.decide, { id: r.id, approve: false });
+  }
+  const page = await f.owner.query(api.probe.requestsForOwner, {
+    paginationOpts: { numItems: 20, cursor: null },
+  });
+  expect(page.page.some((r: { _id: string }) => r._id === first.id)).toBe(
+    false,
   );
   expect(
-    (await f.owner.query(api.probe.requestForOwner, { reference: created.id }))
-      ?.request.requesterName,
-  ).toBe("Connected agent");
+    (await f.owner.query(api.probe.pendingForOwner, { now: Date.now() })).map(
+      (r) => r._id,
+    ),
+  ).toEqual([first.id]);
+  expect(
+    await f.stranger.query(api.probe.pendingForOwner, { now: Date.now() }),
+  ).toEqual([]);
+  await f.owner.mutation(api.probe.decide, { id: first.id, approve: false });
+  expect(
+    (await f.owner.query(api.probe.requestForOwner, { reference: first.id }))
+      ?.request.status,
+  ).toBe("denied");
+});
+
+test("retained decisions are live, owner checked and secret free", async () => {
+  const f = await fixture();
+  const r = await f.t.mutation(api.probe.request, f.args);
+  await f.owner.mutation(api.probe.decide, { id: r.id, approve: false });
+  await f.t.run((ctx) =>
+    ctx.db.patch("probeRequests", r.id, {
+      deliveryCipher: "private-retained",
+      receiptId: "private-receipt",
+    }),
+  );
+  const rows = await f.owner.query(api.probe.retainedForOwner, { ids: [r.id] });
+  expect(rows[0].status).toBe("denied");
+  expect(JSON.stringify(rows)).not.toContain("private-");
+  expect(
+    await f.stranger.query(api.probe.retainedForOwner, { ids: [r.id] }),
+  ).toEqual([]);
+});
+
+test("legacy recipients cannot authenticate or transfer an old approval to MCP", async () => {
+  const f = await fixture();
+  const legacy = { ...f.args, requester: "scope-agent:retired:connection" };
+  await expect(f.t.mutation(api.probe.request, legacy)).rejects.toThrow(
+    "Unauthorized",
+  );
+  const id = await f.t.run((ctx) =>
+    ctx.db.insert("probeRequests", {
+      userId: f.userId,
+      accountId: f.accountId,
+      requester: legacy.requester,
+      key: legacy.key,
+      reason: legacy.reason,
+      status: "approved",
+      expiresAt: Date.now() + 300_000,
+    }),
+  );
+  await expect(
+    f.t.mutation(api.probe.claim, { ...f.actor, id }),
+  ).rejects.toThrow("Request unavailable");
+  expect(
+    (await f.owner.query(api.probe.requestForOwner, { reference: id }))?.request
+      .requesterStopped,
+  ).toBe(true);
+  await expect(
+    f.owner.mutation(api.probe.updateMcpConnection, {
+      requester: legacy.requester,
+      name: "MCP",
+    }),
+  ).rejects.toThrow("Connection unavailable");
 });

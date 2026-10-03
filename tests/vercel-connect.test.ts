@@ -161,39 +161,8 @@ async function connect(
     })
   )[0].accounts.find((a) => a.providerUserId === `${team}:${user}`)!;
 }
-async function slice(
-  client: ReturnType<typeof backend.withIdentity>,
-  connectionIds: string[],
-  mintPolicy: "auto" | "approve" = "auto",
-) {
-  const ids = await backend.run((ctx) =>
-    connectionIds.map((id) => ctx.db.normalizeId("connections", id)!),
-  );
-  return await client.mutation(internal.tables.slices.mutations.createFixture, {
-    name: "Slack agent",
-    apps: ["slack"],
-    bindings: ids.map((connectionId) => ({ app: "slack", connectionId })),
-    ttlMs: 60_000,
-    mintPolicy,
-  });
-}
-function credential(
-  created: { sliceToken: string; sliceSecret: string },
-  bindingId?: string,
-) {
-  return backend.fetch("/api/credentials", {
-    method: "POST",
-    body: JSON.stringify({
-      sliceToken: created.sliceToken,
-      sliceSecret: created.sliceSecret,
-      app: "slack",
-      bindingId,
-    }),
-  });
-}
-
 describe("Slack Connect end to end with mocked Vercel and Slack", () => {
-  test("authorize -> verify -> bind -> mint keeps only references and provider expiry", async () => {
+  test("authorize -> verify -> bind stores references without provider credentials", async () => {
     const user = await owner();
     const account = await connect(user.client);
     expect(sdk.startAuthorization).toHaveBeenCalledWith(
@@ -228,30 +197,6 @@ describe("Slack Connect end to end with mocked Vercel and Slack", () => {
       "refreshLeaseExpiresAt",
     ])
       expect(row).not.toHaveProperty(obsolete);
-    const created = await slice(user.client, [account.id]);
-    const response = await credential(created);
-    expect(response.status).toBe(200);
-    const result = await response.json();
-    expect(result).toMatchObject({
-      accessToken: "xoxe.xoxp-T1-U1",
-      credentialExpiresAt: expect.any(Number),
-      tokenType: "Bearer",
-    });
-    expect(result.credentialExpiresAt).toBeGreaterThan(Date.now() + 60_000);
-    expect(result).not.toHaveProperty("refreshToken");
-    expect(sdk.getTokenResponse).toHaveBeenLastCalledWith(
-      connector.id,
-      expect.objectContaining({
-        installationId: "inst_T1",
-        scopes: SLACK_SCOPES,
-      }),
-      { forceRefresh: true },
-    );
-    expect(
-      await backend.run((ctx) =>
-        ctx.db.query("connectBridgeTickets").collect(),
-      ),
-    ).toEqual([]);
   });
 
   test("another Scope user cannot complete, bind, read, or disconnect the owner's account", async () => {
@@ -276,13 +221,6 @@ describe("Slack Connect end to end with mocked Vercel and Slack", () => {
         })
       )[0].accounts,
     ).toEqual([]);
-    await expect(slice(b.client, [account.id])).rejects.toThrow();
-    expect(
-      await backend.query(internal.connect.connections.get, {
-        userId: b.id,
-        connectionId: account.id,
-      }),
-    ).toBeNull();
     await b.client.action(api.tables.connections.actions.disconnect, {
       app: "slack",
       connectionId: account.id,
@@ -350,120 +288,9 @@ describe("Slack Connect end to end with mocked Vercel and Slack", () => {
     ).toBe(400);
   });
 
-  test("two workspaces require account selection; mint remains pinned if the default changes", async () => {
-    const user = await owner();
-    const a = await connect(user.client, "T1", "U1"),
-      b = await connect(user.client, "T2", "U1");
-    const created = await slice(user.client, [a.id, b.id]);
-    const accounts = await backend.query(
-      internal.tables.slices.queries.discoverAccounts,
-      {
-        sliceToken: created.sliceToken,
-        sliceSecret: created.sliceSecret,
-        app: "slack",
-        now: Date.now(),
-      },
-    );
-    if (!accounts.ok) throw new Error("Discovery failed");
-    expect(accounts.accounts).toHaveLength(2);
-    expect((await credential(created)).status).toBe(409);
-    const selected = accounts.accounts.find((a) => a.login === "U1 (T2)")!;
-    expect((await credential(created, selected.bindingId)).status).toBe(200);
-    vi.mocked(sdk.getTokenResponse).mockResolvedValue(
-      providerToken("T1", "U1"),
-    );
-    const denied = await credential(created, selected.bindingId);
-    expect(denied.status).toBe(503);
-    expect(await denied.text()).not.toContain("xoxe");
-  });
-
-  test("approve policy consumes only the selected approved request once", async () => {
-    const user = await owner(),
-      account = await connect(user.client);
-    const created = await slice(user.client, [account.id], "approve");
-    sdk.getTokenResponse.mockClear();
-    const pending = await credential(created);
-    expect(pending.status).toBe(202);
-    expect(sdk.getTokenResponse).not.toHaveBeenCalled();
-    const request = await pending.json();
-    expect(request).toMatchObject({
-      code: "APPROVAL_REQUIRED",
-      status: "pending",
-    });
-    expect(request).not.toHaveProperty("accessToken");
-    const poll = () =>
-      backend.fetch("/api/credentials/claim", {
-        method: "POST",
-        body: JSON.stringify({
-          sliceToken: created.sliceToken,
-          sliceSecret: created.sliceSecret,
-          requestId: request.requestId,
-        }),
-      });
-    expect((await poll()).status).toBe(202);
-    await user.client.mutation(api.tables.slices.tokenRequests.decide, {
-      publicToken: new URL(request.approvalUrl).pathname.split("/").at(-1)!,
-      decision: "approved",
-    });
-    const issued = await poll();
-    expect(issued.status).toBe(200);
-    expect(await issued.json()).toMatchObject({
-      accessToken: "xoxe.xoxp-T1-U1",
-      requestId: request.requestId,
-    });
-    const replay = await poll();
-    expect(replay.status).toBe(403);
-    expect(await replay.json()).toMatchObject({ code: "APPROVAL_EXPIRED" });
-  });
-
-  test.each(["revoke", "expire", "binding", "disconnect", "reconnect"])(
-    "%s during issuance prevents token delivery",
-    async (reason) => {
-      const user = await owner(),
-        account = await connect(user.client);
-      const created = await slice(user.client, [account.id]);
-      duringToken = async () => {
-        await backend.run(async (ctx) => {
-          if (reason === "revoke")
-            await ctx.db.patch("slices", created.id, { status: "revoked" });
-          if (reason === "expire")
-            await ctx.db.patch("slices", created.id, { expiresAt: 0 });
-          if (reason === "disconnect")
-            await ctx.db.delete("connections", account.id);
-          if (reason === "reconnect") {
-            const row = await ctx.db.get("connections", account.id);
-            await ctx.db.patch("connections", account.id, {
-              grantVersion: row!.grantVersion + 1,
-            });
-          }
-          if (reason === "binding") {
-            const binding = await ctx.db
-              .query("sliceBindings")
-              .withIndex("by_slice_app_connectionId", (q) =>
-                q.eq("sliceId", created.id),
-              )
-              .unique();
-            await ctx.db.delete("sliceBindings", binding!._id);
-          }
-        });
-      };
-      const response = await credential(created);
-      expect(response.status).toBe(403);
-      expect(await response.text()).not.toContain("xoxe");
-      if (reason !== "reconnect") {
-        sdk.getTokenResponse.mockClear();
-        const retry = await credential(created);
-        expect(retry.status).toBe(403);
-        expect(await retry.text()).not.toContain("xoxe");
-        expect(sdk.getTokenResponse).not.toHaveBeenCalled();
-      }
-    },
-  );
-
   test("disconnect commits locally even when upstream revocation fails, and targets only its subject/installation", async () => {
     const user = await owner(),
       account = await connect(user.client);
-    const created = await slice(user.client, [account.id]);
     vi.mocked(sdk.revokeToken).mockRejectedValue(new Error("vendor secret"));
     await user.client.action(api.tables.connections.actions.disconnect, {
       app: "slack",
@@ -477,15 +304,9 @@ describe("Slack Connect end to end with mocked Vercel and Slack", () => {
       },
       installationId: "inst_T1",
     });
-    expect((await credential(created)).status).toBe(403);
     expect(
       await backend.run((ctx) => ctx.db.get("connections", account.id)),
     ).toBeNull();
-    expect(
-      await user.client.query(api.tables.slices.queries.get, {
-        sliceId: created.id,
-      }),
-    ).toMatchObject({ status: "active", name: "Slack agent" });
   });
 });
 
@@ -495,14 +316,8 @@ describe("managed account isolation", () => {
       b = await owner();
     const accountA = await connect(a.client),
       accountB = await connect(b.client);
-    const rowA = await backend.query(internal.connect.connections.get, {
-      userId: a.id,
-      connectionId: accountA.id,
-    });
-    const rowB = await backend.query(internal.connect.connections.get, {
-      userId: b.id,
-      connectionId: accountB.id,
-    });
+    const rowA = await storedConnection(a.id, accountA.id);
+    const rowB = await storedConnection(b.id, accountB.id);
     expect(rowA!.connect.subjectId).not.toBe(rowB!.connect.subjectId);
     await a.client.action(api.tables.connections.actions.disconnect, {
       app: "slack",
@@ -512,38 +327,23 @@ describe("managed account isolation", () => {
       subject: { type: "user", id: rowA!.connect.subjectId, issuer: site },
       installationId: "inst_T1",
     });
-    const createdB = await slice(b.client, [accountB.id]);
-    expect((await credential(createdB)).status).toBe(200);
+    expect(
+      await backend.run((ctx) => ctx.db.get("connections", accountB.id)),
+    ).not.toBeNull();
   });
-  test("reconnecting preserves bindings, replaces the reference, and fences stale delivery", async () => {
+  test("reconnecting keeps one account and replaces its provider reference", async () => {
     const user = await owner(),
       account = await connect(user.client);
-    const created = await slice(user.client, [account.id]);
-    const old = await backend.query(internal.connect.connections.get, {
-      userId: user.id,
-      connectionId: account.id,
-    });
-    const binding = await backend.run((ctx) =>
-      ctx.db.query("sliceBindings").unique(),
-    );
+    const old = await storedConnection(user.id, account.id);
     const reconnected = await connect(user.client);
     expect(reconnected.id).toBe(account.id);
     expect(
       await backend.run((ctx) => ctx.db.query("connections").collect()),
     ).toHaveLength(1);
     expect(sdk.revokeToken).not.toHaveBeenCalled();
-    const denied = await backend.mutation(
-      internal.tables.slices.credentials.finalize,
-      {
-        sliceId: created.id,
-        app: "slack",
-        bindingId: binding!._id,
-        connectionId: account.id,
-        connectionGrantVersion: old!.grantVersion,
-      },
-    );
-    expect(denied).toMatchObject({ ok: false, code: "APP_UNAVAILABLE" });
-    expect((await credential(created)).status).toBe(200);
+    const current = await storedConnection(user.id, account.id);
+    expect(current!.grantVersion).toBeGreaterThan(old!.grantVersion);
+    expect(current!.connect.subjectId).not.toBe(old!.connect.subjectId);
   });
 });
 
@@ -684,3 +484,11 @@ describe("authenticated, one-use bridge commands", () => {
     expect(await result.text()).not.toContain("xoxe");
   });
 });
+
+async function storedConnection(userId: string, id: string) {
+  return backend.run(async (ctx) => {
+    const normalized = ctx.db.normalizeId("connections", id);
+    const row = normalized ? await ctx.db.get("connections", normalized) : null;
+    return row?.userId === userId ? row : null;
+  });
+}

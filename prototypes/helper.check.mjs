@@ -85,12 +85,11 @@ test("wrong account, expired token and credential echoed in provider data fail c
   }
 });
 
-test("shared PAT uses existing Scope auth, labels unverified expiry and rejects extra bases", async () => {
+test("shared PAT uses WorkOS auth, labels unverified expiry and rejects extra bases", async () => {
   const f = fixture();
   const cfg = {
     origin: config.origin,
-    agentConnectionId: "test-connection",
-    agentConnectionSecret: "test-secret",
+    accessToken: "synthetic-workos-token",
   };
   let extraBase = false;
   const fetcher = async (url, options) => {
@@ -118,8 +117,8 @@ test("shared PAT uses existing Scope auth, labels unverified expiry and rejects 
   assert.equal(result.providerExpiresAt, null);
   assert.equal(result.credentialKind, "shared-pat");
   assert.equal(
-    f.calls[0].options.headers["x-agent-connection-secret"],
-    "test-secret",
+    f.calls[0].options.headers.Authorization,
+    "Bearer synthetic-workos-token",
   );
   assert.ok(!JSON.stringify(result).includes(token));
   extraBase = true;

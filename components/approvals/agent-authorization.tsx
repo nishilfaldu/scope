@@ -31,16 +31,11 @@ export function AgentAuthorization({
     <AuthorizationShell>
       <div className="space-y-5 p-6 sm:p-8">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Connect your helper
+          Connect an agent
         </h1>
         <p className="text-sm leading-6 text-muted-foreground">
-          Continue with your Scope identity. You’ll review the helper’s
-          requested permissions on the next screen.
+          Each account access request still needs your approval.
         </p>
-        <div className="rounded-xl bg-muted p-4 text-sm leading-6">
-          Connecting a helper does not approve access to your accounts. Each
-          credential delivery needs a separate decision from you.
-        </div>
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
@@ -52,7 +47,7 @@ export function AgentAuthorization({
             disabled={busy}
             onClick={() => void continueAuthorization()}
           >
-            {busy ? "Continuing…" : "Continue agent authorization"}
+            {busy ? "Continuing…" : "Continue"}
           </Button>
         ) : (
           <p role="status" className="text-sm">

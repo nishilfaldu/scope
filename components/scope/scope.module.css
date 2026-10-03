@@ -42,7 +42,7 @@
   grid-template-columns: 220px minmax(0, 1fr);
   max-width: 1440px;
   margin: auto;
-  min-height: calc(100vh - 34px);
+  min-height: 100vh;
 }
 .rail {
   padding: 35px 22px;
@@ -51,7 +51,7 @@
   flex-direction: column;
   position: sticky;
   top: 0;
-  height: calc(100vh - 34px);
+  height: 100vh;
 }
 .brand {
   display: flex;
@@ -67,7 +67,7 @@
   gap: 5px;
   margin-top: 46px;
 }
-.navigation button {
+.navigation a {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -77,10 +77,10 @@
   color: var(--quiet);
   text-align: left;
 }
-.navigation button:hover {
+.navigation a:hover {
   background: #eef2ee;
 }
-.navigation button[aria-current] {
+.navigation a[aria-current] {
   background: #e8eee8;
   color: var(--ink);
   font-weight: 550;
@@ -674,7 +674,7 @@
     border-top: 1px solid var(--line);
     backdrop-filter: blur(12px);
   }
-  .navigation button {
+  .navigation a {
     flex: 1;
     flex-direction: column;
     justify-content: center;
@@ -685,11 +685,11 @@
     position: relative;
     min-height: 49px;
   }
-  .navigation button[aria-current] {
+  .navigation a[aria-current] {
     background: transparent;
     color: var(--green);
   }
-  .navigation button[aria-current]::before {
+  .navigation a[aria-current]::before {
     content: "";
     position: absolute;
     top: -10px;
@@ -877,5 +877,88 @@
 @media (prefers-reduced-motion: reduce) {
   .summaryEnd svg {
     transition: none;
+  }
+}
+
+.accountMenu {
+  margin-top: auto;
+  padding: 20px 12px 0;
+  color: var(--quiet);
+  font-size: 12px;
+}
+.accountMenu summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.accountMenu button {
+  margin-top: 12px;
+}
+.accountMenu p {
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.loading,
+.empty {
+  padding: 28px;
+  color: var(--quiet);
+  line-height: 1.8;
+}
+.error {
+  color: #90652c;
+  margin: 12px 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+}
+.agent > div {
+  min-width: 0;
+  flex: 1;
+}
+.agent h2 {
+  overflow-wrap: anywhere;
+}
+.account > div {
+  min-width: 0;
+}
+.evidence time {
+  display: block;
+  font-size: 10px;
+}
+.evidence {
+  max-width: 100%;
+  flex-wrap: wrap;
+  row-gap: 20px;
+}
+.evidence li {
+  min-width: 60px;
+}
+@media (max-width: 700px) {
+  .accountMenu {
+    position: absolute;
+    top: 18px;
+    right: 20px;
+    margin: 0;
+    padding: 0;
+    max-width: 190px;
+    z-index: 25;
+    background: #f7f9f7;
+  }
+  .accountMenu[open] {
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .summaryEnd {
+    flex-shrink: 1;
+    text-align: right;
+  }
+  .summaryEnd time {
+    white-space: normal;
+    max-width: 90px;
   }
 }

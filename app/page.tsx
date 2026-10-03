@@ -17,24 +17,24 @@ import { Button } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "Scope · Approve agent access to your accounts",
   description:
-    "Scope lets you connect accounts and approve exactly which apps, accounts, and duration an AI agent may use.",
+    "Scope lets you review agent requests for access to connected accounts.",
 };
 
 const controls = [
   {
     icon: ShieldKeyIcon,
     title: "Approval before access",
-    body: "An agent can ask, but only you can approve a request for a specific app and connected account.",
+    body: "Review the account and permissions before deciding.",
   },
   {
     icon: Clock01Icon,
-    title: "Access with an end time",
-    body: "Every approved slice has a duration. You can revoke the slice or its agent connection sooner.",
+    title: "Sharing with an end time",
+    body: "Each request has a sharing window. Stop further sharing at any time; previously received access may remain active.",
   },
   {
     icon: Key01Icon,
     title: "Credentials stay out of the browser",
-    body: "Provider credentials remain in Scope's encrypted vault. Approval pages never expose them.",
+    body: "Your local helper uses access privately.",
   },
 ];
 
@@ -55,15 +55,13 @@ export default function HomePage() {
               Let agents ask. You decide what they can reach.
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-[#526054] dark:text-muted-foreground">
-              Scope is an access control service for AI agents. Connect your
-              accounts once, then review each agent request by app, account,
-              permissions, reason, and duration.
+              Review each agent’s request for a connected account.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Button
                 size="lg"
                 nativeButton={false}
-                render={<Link href="/signin?redirectTo=/agents" />}
+                render={<Link href="/signin?redirectTo=/approvals" />}
               >
                 Sign in to Scope
                 <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
@@ -80,16 +78,15 @@ export default function HomePage() {
           </div>
 
           <div className="relative lg:pl-4">
-            <div className="absolute -inset-7 -z-0 rounded-[2rem] bg-[radial-gradient(circle_at_50%_45%,rgba(139,224,0,0.2),transparent_67%)]" />
-            <div className="relative overflow-hidden rounded-[1.5rem] border border-[#d8e1d4] bg-white shadow-[0_32px_80px_-48px_rgba(26,48,25,0.5)] dark:border-border dark:bg-card">
+            <div className="relative overflow-hidden rounded-[1.5rem] border border-[#d8e1d4] bg-white dark:border-border dark:bg-card">
               <div className="flex items-center justify-between border-b border-[#e4eae1] px-6 py-5 dark:border-border">
                 <div>
                   <p className="text-sm font-semibold">Research assistant</p>
                   <p className="mt-0.5 text-xs text-[#68746a] dark:text-muted-foreground">
-                    requests access for 2 hours
+                    Example request
                   </p>
                 </div>
-                <span className="size-2.5 rounded-full bg-[#8be000] shadow-[0_0_0_5px_rgba(139,224,0,0.16)]" />
+                <span className="size-2.5 rounded-full bg-[#8be000]" />
               </div>
               <div className="px-6 py-6 sm:px-8">
                 <p className="text-sm text-[#68746a] dark:text-muted-foreground">
@@ -97,9 +94,9 @@ export default function HomePage() {
                 </p>
                 <div className="mt-3 flex items-center justify-between rounded-xl bg-[#f3f6f1] px-4 py-4 dark:bg-muted">
                   <div>
-                    <p className="font-medium">Slack</p>
+                    <p className="font-medium">Airtable</p>
                     <p className="mt-0.5 text-sm text-[#68746a] dark:text-muted-foreground">
-                      You (Workspace)
+                      Research base
                     </p>
                   </div>
                   <HugeiconsIcon
@@ -112,15 +109,15 @@ export default function HomePage() {
                   <span className="text-[#68746a] dark:text-muted-foreground">
                     Can do
                   </span>
-                  <span>Read conversations and manage pins</span>
+                  <span>Read-only base access</span>
                   <span className="text-[#68746a] dark:text-muted-foreground">
-                    Reason
+                    Task
                   </span>
-                  <span>Summarize the project channel</span>
+                  <span>List available Airtable bases</span>
                   <span className="text-[#68746a] dark:text-muted-foreground">
-                    Ends
+                    Decide within
                   </span>
-                  <span>Today at 4:30 PM</span>
+                  <span>30 minutes</span>
                 </div>
                 <div className="mt-7 flex gap-3 border-t border-[#e4eae1] pt-6 dark:border-border">
                   <span className="flex h-10 flex-1 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground">

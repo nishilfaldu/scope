@@ -1,34 +1,7 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "../_generated/server";
-import { selectedConnection } from "../tables/connections/helpers";
+import { internalMutation } from "../_generated/server";
 import { connectReferenceValidator } from "./contracts";
 
-export const get = internalQuery({
-  args: { userId: v.id("users"), connectionId: v.id("connections") },
-  returns: v.union(
-    v.object({
-      connect: connectReferenceValidator,
-      providerUserId: v.string(),
-      grantVersion: v.number(),
-    }),
-    v.null(),
-  ),
-  handler: async (ctx, args) => {
-    const row = await selectedConnection(
-      ctx,
-      args.userId,
-      "slack",
-      args.connectionId,
-    );
-    return row
-      ? {
-          connect: row.connect,
-          providerUserId: row.providerUserId,
-          grantVersion: row.grantVersion,
-        }
-      : null;
-  },
-});
 export const save = internalMutation({
   args: {
     userId: v.id("users"),

@@ -21,7 +21,7 @@ export default async function SignInPage({
 }) {
   const params = await searchParams;
   const redirectTo = safeRedirectPath(params.redirectTo);
-  const returningToApproval = redirectTo.startsWith("/requests/");
+  const returningToApproval = redirectTo.startsWith("/approvals");
   return (
     <SignIn
       redirectTo={redirectTo}

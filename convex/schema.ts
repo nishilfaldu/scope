@@ -2,154 +2,20 @@ import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { appValidator } from "./domain/apps";
-import { storedRequestStatusValidator } from "./domain/requests";
 import { probeTables } from "./probeSchema";
 import {
   bridgeCommandValidator,
   connectReferenceValidator,
 } from "./connect/contracts";
 
-const sliceStatusValidator = v.union(
-  v.literal("staged"),
-  v.literal("active"),
-  v.literal("revoked"),
-);
-
-const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
-const agentConnectionStatusValidator = v.union(
-  v.literal("staged"),
-  v.literal("active"),
-  v.literal("revoked"),
-);
-
-const requestLifecycle = {
-  publicToken: v.string(),
-  status: storedRequestStatusValidator,
-  expiresAt: v.number(),
-};
-
 export default defineSchema({
   ...authTables,
   ...probeTables,
-
-  agentConnections: defineTable({
-    userId: v.id("users"),
-    agentId: v.string(),
-    name: v.string(),
-    secretHash: v.string(),
-    status: agentConnectionStatusValidator,
-    lastUsedAt: v.optional(v.number()),
-    revokedAt: v.optional(v.number()),
-    revocationReason: v.optional(v.string()),
-  })
-    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
-    .index("by_user", ["userId"])
-    .index("by_user_status", ["userId", "status"])
-    .index("by_agentId_status", ["agentId", "status"]),
-
-  agentLineages: defineTable({
-    agentId: v.string(),
-    userId: v.id("users"),
-    revokedAt: v.optional(v.number()),
-  }).index("by_agentId", ["agentId"]),
-
-  agentConnectionInvites: defineTable({
-    publicToken: v.string(),
-    claimSecretHash: v.string(),
-    agentId: v.string(),
-    agentName: v.string(),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("approved"),
-      v.literal("denied"),
-      v.literal("claimed"),
-      v.literal("expired"),
-    ),
-    approvalDeadlineAt: v.number(),
-    pickupDeadlineAt: v.optional(v.number()),
-    ackDeadlineAt: v.optional(v.number()),
-    activationDeadlineAt: v.optional(v.number()),
-    firstClaimedAt: v.optional(v.number()),
-    activatedAt: v.optional(v.number()),
-    terminalReason: v.optional(v.string()),
-    userId: v.optional(v.id("users")),
-    replacesAgentConnectionId: v.optional(v.id("agentConnections")),
-    agentConnectionId: v.optional(v.id("agentConnections")),
-    issuedSecretCipher: v.optional(v.string()),
-    claimAcknowledgedAt: v.optional(v.number()),
-  })
-    .index("by_public_token", ["publicToken"])
-    .index("by_claim_secret_hash", ["claimSecretHash"])
-    .index("by_agent_connection_id", ["agentConnectionId"]),
-
-  slices: defineTable({
-    userId: v.id("users"),
-    agentId: v.string(),
-    name: v.string(),
-    token: v.string(),
-    secretHash: v.string(),
-    status: sliceStatusValidator,
-    revocationReason: v.optional(v.string()),
-    revokedAt: v.optional(v.number()),
-    expiresAt: v.number(),
-    mintPolicy: mintPolicyValidator,
-  })
-    .index("by_token", ["token"])
-    .index("by_agentId", ["agentId"]),
-
-  sliceBindings: defineTable({
-    sliceId: v.id("slices"),
-    app: appValidator,
-    connectionId: v.id("connections"),
-  }).index("by_slice_app_connectionId", ["sliceId", "app", "connectionId"]),
-
-  sliceRequests: defineTable({
-    publicToken: v.string(),
-    status: storedRequestStatusValidator,
-    approvalDeadlineAt: v.number(),
-    pickupDeadlineAt: v.optional(v.number()),
-    ackDeadlineAt: v.optional(v.number()),
-    firstClaimedAt: v.optional(v.number()),
-    terminalReason: v.optional(v.string()),
-    claimSecretHash: v.string(),
-    agentId: v.string(),
-    userId: v.optional(v.id("users")),
-    createdSliceId: v.optional(v.id("slices")),
-    apps: v.array(appValidator),
-    ttlMs: v.number(),
-    reason: v.string(),
-    issuedSliceSecretCipher: v.optional(v.string()),
-    claimAcknowledgedAt: v.optional(v.number()),
-    idempotencyKeyHash: v.optional(v.string()),
-    claimHandleCipher: v.optional(v.string()),
-  })
-    .index("by_public_token", ["publicToken"])
-    .index("by_claim_secret_hash", ["claimSecretHash"])
-    .index("by_idempotency_key_hash", ["idempotencyKeyHash"])
-    .index("by_agentId", ["agentId"])
-    .index("by_createdSliceId", ["createdSliceId"])
-    .index("by_userId_status_approvalDeadlineAt", [
-      "userId",
-      "status",
-      "approvalDeadlineAt",
-    ])
-    .index("by_status_approvalDeadlineAt", ["status", "approvalDeadlineAt"]),
-
-  tokenRequests: defineTable({
-    ...requestLifecycle,
-    sliceId: v.id("slices"),
-    app: appValidator,
-    bindingId: v.id("sliceBindings"),
-  })
-    .index("by_public_token", ["publicToken"])
-    .index("by_slice_status_expiresAt", ["sliceId", "status", "expiresAt"]),
-
   connectBridgeTickets: defineTable({
     secretHash: v.string(),
     expiresAt: v.number(),
     command: bridgeCommandValidator,
   }).index("by_secretHash", ["secretHash"]),
-
   connections: defineTable({
     backend: v.literal("vercel-connect"),
     userId: v.id("users"),
@@ -160,7 +26,6 @@ export default defineSchema({
     grantedScopes: v.array(v.string()),
     grantVersion: v.number(),
   }).index("by_user_app_providerUserId", ["userId", "app", "providerUserId"]),
-
   oauthStates: defineTable({
     userId: v.id("users"),
     app: appValidator,
