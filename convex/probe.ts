@@ -109,55 +109,6 @@ export const revokeAccount = mutation({
     return null;
   },
 });
-export const dashboard = query({
-  args: {},
-  returns: v.any(),
-  handler: async (ctx) => {
-    const userId = await owner(ctx);
-    const accounts = await ctx.db
-      .query("probeAccounts")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .take(100);
-    const requests = await ctx.db
-      .query("probeRequests")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .take(100);
-    const credentials = await ctx.db
-      .query("probeCredentials")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .take(100);
-    return {
-      accounts,
-      requests: requests.map(
-        ({
-          lease: _lease,
-          deliveryCipher: _cipher,
-          receiptId: _receipt,
-          ...r
-        }) => {
-          void _lease;
-          void _cipher;
-          void _receipt;
-          return r;
-        },
-      ),
-      credentials: credentials.map((c) => ({
-        id: c._id,
-        accountId: c.accountId,
-        expiresAt: c.expiresAt,
-        recipients: [
-          ...new Set(
-            requests
-              .filter((r) => r.credentialId === c._id)
-              .map((r) => r.requester),
-          ),
-        ],
-      })),
-    };
-  },
-});
 export const decide = mutation({
   args: { id: v.id("probeRequests"), approve: v.boolean() },
   returns: v.null(),
@@ -473,37 +424,6 @@ export const cancel = mutation({
     return null;
   },
 });
-export const credentialDeliveries = query({
-  args: {
-    id: v.id("probeCredentials"),
-    paginationOpts: paginationOptsValidator,
-  },
-  returns: v.any(),
-  handler: async (ctx, { id, paginationOpts }) => {
-    const userId = await owner(ctx);
-    const c = await ctx.db.get("probeCredentials", id);
-    if (!c || c.userId !== userId) throw new Error("Credential unavailable");
-    const result = await ctx.db
-      .query("probeRequests")
-      .withIndex("by_credential", (q) => q.eq("credentialId", id))
-      .order("desc")
-      .paginate(paginationOpts);
-    return {
-      ...result,
-      page: result.page.map((r) => ({
-        id: r._id,
-        requester: r.requester,
-        reason: r.reason,
-        status: r.status,
-        decidedAt: r.decidedAt,
-        deliveredAt: r.deliveredAt,
-        receivedAt: r.receivedAt,
-        deliveryAttempts: r.deliveryAttempts ?? 0,
-        expiresAt: r.deliveryExpiresAt ?? c.expiresAt,
-      })),
-    };
-  },
-});
 export const clearDelivery = internalMutation({
   args: { id: v.id("probeRequests") },
   returns: v.null(),
@@ -633,27 +553,6 @@ export const requestsForOwner = query({
     };
   },
 });
-export const credentialsForOwner = query({
-  args: { paginationOpts: paginationOptsValidator },
-  returns: v.any(),
-  handler: async (ctx, { paginationOpts }) => {
-    const userId = await owner(ctx);
-    const rows = await ctx.db
-      .query("probeCredentials")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .order("desc")
-      .paginate(paginationOpts);
-    return {
-      ...rows,
-      page: rows.page.map((c) => ({
-        id: c._id,
-        accountId: c.accountId,
-        expiresAt: c.expiresAt,
-      })),
-    };
-  },
-});
-
 // A notification URL is an untrusted string, so normalize before reading it.
 const ownerRequestView = v.object({
   createdAt: v.number(),

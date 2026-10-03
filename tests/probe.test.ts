@@ -83,10 +83,12 @@ test("approval has one acquisition lease and lost delivery responses recover ide
   expect(
     (await f.t.mutation(api.probe.claim, { ...f.actor, id: r.id })).cipher,
   ).toBe(first.cipher);
-  const dashboard = await f.owner.query(api.probe.dashboard, {});
-  expect(JSON.stringify(dashboard)).not.toContain("cipher-only");
-  expect(dashboard.credentials).toHaveLength(1);
-  expect(dashboard.credentials[0].recipients).toEqual([f.actor.requester]);
+  const history = await f.owner.query(api.probe.requestsForOwner, {
+    paginationOpts: { numItems: 10, cursor: null },
+  });
+  expect(JSON.stringify(history)).not.toContain("cipher-only");
+  expect(history.page).toHaveLength(1);
+  expect(history.page[0].requester).toBe(f.actor.requester);
 });
 test("revoking during acquisition blocks finalize and keeps prior history", async () => {
   const f = await fixture();
@@ -107,9 +109,13 @@ test("revoking during acquisition blocks finalize and keeps prior history", asyn
   await expect(
     f.t.mutation(api.probe.claim, { ...f.actor, id: r.id }),
   ).rejects.toThrow("Account unavailable");
-  expect((await f.owner.query(api.probe.dashboard, {})).requests).toHaveLength(
-    1,
-  );
+  expect(
+    (
+      await f.owner.query(api.probe.requestsForOwner, {
+        paginationOpts: { numItems: 10, cursor: null },
+      })
+    ).page,
+  ).toHaveLength(1);
 });
 test("denial and expiry never acquire a provider token", async () => {
   const f = await fixture();
@@ -168,7 +174,7 @@ test("two accounts use distinct subjects and approval for one never unlocks the 
   ).toBe("usr-b");
 });
 
-test("the same provider token has one history entry across separately approved recipients", async () => {
+test("separately approved recipients retain independent owner history without delivery secrets", async () => {
   const f = await fixture();
   const actors = [
     f.actor,
@@ -182,9 +188,6 @@ test("the same provider token has one history entry across separately approved r
       id: r.id,
     });
     expect(status.status).toBe("approved");
-    expect(
-      (await f.owner.query(api.probe.dashboard, {})).credentials.length,
-    ).toBe(actors.indexOf(actor) === 0 ? 0 : 1);
     const c = await f.t.mutation(api.probe.claim, { ...actor, id: r.id });
     await f.t.mutation(api.probe.finalize, {
       ...actor,
@@ -196,11 +199,19 @@ test("the same provider token has one history entry across separately approved r
     });
     await f.t.mutation(api.probe.claim, { ...actor, id: r.id });
   }
-  const history = await f.owner.query(api.probe.dashboard, {});
-  expect(history.credentials).toHaveLength(1);
-  expect(new Set(history.credentials[0].recipients)).toEqual(
-    new Set(actors.map((a) => a.requester)),
-  );
+  const history = await f.owner.query(api.probe.requestsForOwner, {
+    paginationOpts: { numItems: 10, cursor: null },
+  });
+  expect(history.page).toHaveLength(2);
+  expect(
+    new Set(history.page.map((r: { requester: string }) => r.requester)),
+  ).toEqual(new Set(actors.map((a) => a.requester)));
+  expect(
+    history.page.every(
+      (r: { status: string; deliveredAt?: number }) =>
+        r.status === "approved" && r.deliveredAt !== undefined,
+    ),
+  ).toBe(true);
   expect(JSON.stringify(history)).not.toContain("encrypted-token");
 });
 
@@ -268,21 +279,29 @@ test("receipt is authenticated, idempotent, and independent from attempted deliv
     f.t.mutation(api.probe.acknowledge, { ...args, receiptId: "wrong" }),
   ).rejects.toThrow("Receipt unavailable");
   expect(
-    (await f.owner.query(api.probe.dashboard, {})).requests[0].receivedAt,
+    (await f.owner.query(api.probe.requestForOwner, { reference: request.id }))
+      ?.request.receivedAt,
   ).toBeUndefined();
   await f.t.mutation(api.probe.acknowledge, args);
-  const first = (await f.owner.query(api.probe.dashboard, {})).requests[0];
+  const first = (await f.owner.query(api.probe.requestForOwner, {
+    reference: request.id,
+  }))!.request;
   await f.t.mutation(api.probe.claim, { ...f.actor, id: request.id });
   await f.t.mutation(api.probe.acknowledge, args);
-  const second = (await f.owner.query(api.probe.dashboard, {})).requests[0];
+  const second = (await f.owner.query(api.probe.requestForOwner, {
+    reference: request.id,
+  }))!.request;
   expect(second.receivedAt).toBe(first.receivedAt);
   expect(second.deliveredAt).toBe(first.deliveredAt);
-  expect(second.deliveryAttempts).toBe(2);
+  expect(
+    (await f.t.run((ctx) => ctx.db.get("probeRequests", request.id)))
+      ?.deliveryAttempts,
+  ).toBe(2);
   expect(JSON.stringify(second)).not.toContain("private-cipher");
   expect(JSON.stringify(second)).not.toContain(ready.receiptId);
 });
 
-test("the same token keeps one history row but each approval has its own fixed expiry", async () => {
+test("each approval retains its fixed expiry in owner history and history pagination enforces ownership", async () => {
   const f = await fixture();
   const expiryA = Date.now() + 120_000,
     expiryB = Date.now() + 300_000;
@@ -308,20 +327,38 @@ test("the same token keeps one history row but each approval has its own fixed e
   expect(
     (await f.t.mutation(api.probe.claim, { ...f.actor, id: ids[1] })).expiresAt,
   ).toBe(expiryB);
-  const dashboard = await f.owner.query(api.probe.dashboard, {});
-  expect(dashboard.credentials).toHaveLength(1);
-  const page = await f.owner.query(api.probe.credentialDeliveries, {
-    id: dashboard.credentials[0].id,
+  const page = await f.owner.query(api.probe.requestsForOwner, {
     paginationOpts: { numItems: 1, cursor: null },
   });
   expect(page.page).toHaveLength(1);
   expect(page.isDone).toBe(false);
+  const next = await f.owner.query(api.probe.requestsForOwner, {
+    paginationOpts: { numItems: 1, cursor: page.continueCursor },
+  });
+  expect(next.page).toHaveLength(1);
+  expect(next.isDone).toBe(true);
+  const history = [...page.page, ...next.page];
+  expect(new Set(history.map((r: { _id: string }) => r._id))).toEqual(
+    new Set(ids),
+  );
+  expect(
+    history.find((r: { _id: string }) => r._id === ids[0]).deliveryExpiresAt,
+  ).toBe(expiryA);
+  expect(
+    history.find((r: { _id: string }) => r._id === ids[1]).deliveryExpiresAt,
+  ).toBe(expiryB);
+  expect(
+    (
+      await f.stranger.query(api.probe.requestsForOwner, {
+        paginationOpts: { numItems: 10, cursor: null },
+      })
+    ).page,
+  ).toEqual([]);
   await expect(
-    f.stranger.query(api.probe.credentialDeliveries, {
-      id: dashboard.credentials[0].id,
+    f.t.query(api.probe.requestsForOwner, {
       paginationOpts: { numItems: 10, cursor: null },
     }),
-  ).rejects.toThrow("Credential unavailable");
+  ).rejects.toThrow("Sign in required");
 });
 
 test("cancel during acquisition and expired cleanup preserve history without credential delivery", async () => {
