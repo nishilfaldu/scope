@@ -67,6 +67,9 @@ export default function Lab() {
     subscribe = useMutation(api.probe.subscribe);
   const [message, setMessage] = useState("");
   const [label, setLabel] = useState("Airtable A");
+  const [patOptions, setPatOptions] = useState<
+    { key: string; label: string }[]
+  >([]);
   async function post(operation: string, body: unknown) {
     const response = await fetch("/api/probe/" + operation, {
       method: "POST",
@@ -283,15 +286,29 @@ export default function Lab() {
             className="rounded border px-4 py-2"
             onClick={() =>
               void run(async () => {
-                await post("pat", {});
-                setMessage(
-                  "Shared read-only test base added. PAT expiry is unverified; each delivery still requires approval.",
-                );
+                const result = await post("pat-bindings", {});
+                setPatOptions(result.bindings);
               })
             }
           >
-            Add shared read-only test base
+            Choose a read-only test account
           </button>
+          {patOptions.map((binding) => (
+            <button
+              key={binding.key}
+              className="rounded border px-4 py-2"
+              onClick={() =>
+                void run(async () => {
+                  await post("pat", { bindingKey: binding.key });
+                  setMessage(
+                    `${binding.label} verified. Each delivery requires approval; PAT expiry remains unverified.`,
+                  );
+                })
+              }
+            >
+              Add {binding.label}
+            </button>
+          ))}
           <input
             aria-label="Account label"
             className="rounded border p-2"

@@ -165,3 +165,55 @@ test("helper confirms private receipt before provider work and preserves retry a
   );
   assert.ok(!JSON.stringify(output).includes("private-receipt"));
 });
+
+test("two PAT accounts use the delivered base binding and reject cross-account results", async () => {
+  for (const id of ["A", "B"]) {
+    let wrongIdentity = false,
+      wrongBase = false;
+    const fetcher = async (url) => {
+      if (url.endsWith("/request"))
+        return Response.json({ id: "request-" + id });
+      if (url.endsWith("/deliver"))
+        return Response.json({
+          status: "ready",
+          accountId: "account-" + id,
+          providerUserId: "usr" + id,
+          baseId: "appBase" + id,
+          accessToken: token,
+          expiresAt: Date.now() + 60_000,
+          approvalExpiresAt: Date.now() + 60_000,
+          providerExpiresAt: null,
+          credentialKind: "shared-pat",
+        });
+      if (url.endsWith("/whoami"))
+        return Response.json({ id: wrongIdentity ? "usrOther" : "usr" + id });
+      if (url.endsWith("/bases"))
+        return Response.json({
+          bases: [
+            {
+              id: wrongBase ? "appOther" : "appBase" + id,
+              name: "Account " + id,
+              permissionLevel: "read",
+            },
+          ],
+        });
+      throw new Error("Unexpected endpoint");
+    };
+    const requestArgs = { ...args, accountId: "account-" + id };
+    const result = await listBases(requestArgs, { config, fetcher });
+    assert.equal(result.bases[0].id, "appBase" + id);
+    assert.equal(result.providerUserId, "usr" + id);
+    assert.ok(!JSON.stringify(result).includes(token));
+    wrongIdentity = true;
+    await assert.rejects(
+      listBases(requestArgs, { config, fetcher }),
+      /Airtable account mismatch/,
+    );
+    wrongIdentity = false;
+    wrongBase = true;
+    await assert.rejects(
+      listBases(requestArgs, { config, fetcher }),
+      /Unexpected PAT base scope/,
+    );
+  }
+});

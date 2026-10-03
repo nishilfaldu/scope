@@ -1,5 +1,6 @@
 import { startAuthorization, revokeToken } from "@vercel/connect";
 import { notifyApproval } from "@/lib/probe-push";
+import { patBindings, patBindingForKey } from "@/lib/probe-pat-bindings";
 import { api } from "@/convex/_generated/api";
 import {
   config,
@@ -73,18 +74,38 @@ export async function POST(
     }
     sameOrigin(request);
     const client = await ownerDb();
-    if (operation === "pat") {
+    if (operation === "pat" || operation === "pat-bindings") {
       const identity = await client.query(api.probe.identity, {});
       if (identity?.id !== config("SCOPE_PAT_TEST_OWNER_ID"))
         throw new Error("Test owner required");
-      const id = await client.mutation(api.probe.addAccount, {
-        secret: config("SCOPE_PROBE_SECRET"),
-        label: "Scope Prototype Test · shared read-only PAT",
-        connectorId: config("CONNECT_AIRTABLE_PAT_CONNECTOR"),
-        issuer: config("NEXT_PUBLIC_CONVEX_SITE_URL"),
-        credentialKind: "shared-pat",
-        baseId: "app2SVjDmWa26jwo6",
-      });
+      if (operation === "pat-bindings")
+        return json({
+          bindings: patBindings.map(({ key, label }) => ({ key, label })),
+        });
+      const binding = patBindingForKey(body.bindingKey);
+      const accounts = await client.query(api.probe.accountsForOwner, {});
+      const existing = accounts.find(
+        (account: {
+          credentialKind?: string;
+          connectorId: string;
+          baseId?: string;
+          revoked: boolean;
+        }) =>
+          account.credentialKind === "shared-pat" &&
+          !account.revoked &&
+          account.connectorId === binding.connectorId &&
+          account.baseId === binding.baseId,
+      );
+      const id =
+        existing?._id ??
+        (await client.mutation(api.probe.addAccount, {
+          secret: config("SCOPE_PROBE_SECRET"),
+          label: binding.label,
+          connectorId: binding.connectorId,
+          issuer: config("NEXT_PUBLIC_CONVEX_SITE_URL"),
+          credentialKind: "shared-pat",
+          baseId: binding.baseId,
+        }));
       const account = await client.query(api.probe.account, { id });
       const grant = await airtableGrant(account);
       await client.mutation(api.probe.confirmAccount, {

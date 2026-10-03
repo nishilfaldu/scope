@@ -2,6 +2,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
 import { createRemoteJWKSet } from "jose";
 import { verifyRequester } from "./probe-workos";
+import { requirePatAccount } from "./probe-pat-bindings";
 import {
   createCipheriv,
   createDecipheriv,
@@ -17,6 +18,7 @@ export function config(name: string) {
     throw new Error("Prototype disabled in production");
   if (
     name === "SCOPE_PROBE_ORIGIN" &&
+    !process.env.SCOPE_PROBE_ORIGIN &&
     process.env.VERCEL_ENV === "preview" &&
     process.env.VERCEL_URL
   )
@@ -125,13 +127,7 @@ export function fingerprint(value: string) {
 export async function airtableGrant(account: Doc<"probeAccounts">) {
   if (account.revoked) throw new Error("Account unavailable");
   const sharedPat = account.credentialKind === "shared-pat";
-  if (
-    sharedPat &&
-    (account.userId !== config("SCOPE_PAT_TEST_OWNER_ID") ||
-      account.connectorId !== config("CONNECT_AIRTABLE_PAT_CONNECTOR") ||
-      account.baseId !== "app2SVjDmWa26jwo6")
-  )
-    throw new Error("Test account unavailable");
+  if (sharedPat) requirePatAccount(account, config("SCOPE_PAT_TEST_OWNER_ID"));
   const token = await getTokenResponse(
     account.connectorId,
     sharedPat
@@ -170,6 +166,26 @@ export async function airtableGrant(account: Doc<"probeAccounts">) {
     (account.providerUserId && identity.id !== account.providerUserId)
   )
     throw new Error("Account mismatch");
+  if (sharedPat) {
+    const basesResponse = await fetch(
+      "https://api.airtable.com/v0/meta/bases",
+      {
+        headers: { Authorization: `Bearer ${token.token}` },
+        redirect: "error",
+        cache: "no-store",
+        signal: AbortSignal.timeout(10_000),
+      },
+    );
+    if (!basesResponse.ok) throw new Error("PAT base unavailable");
+    const bases = await basesResponse.json();
+    if (
+      !Array.isArray(bases.bases) ||
+      bases.bases.length !== 1 ||
+      bases.bases[0]?.id !== account.baseId ||
+      bases.offset
+    )
+      throw new Error("Unexpected PAT base scope");
+  }
   return {
     token: token.token,
     expiresAt: token.expiresAt,
@@ -183,6 +199,8 @@ export async function retrieve(
 ) {
   const client = db();
   let claim = await client.mutation(api.probe.claim, { ...actor, id });
+  if (claim.account?.credentialKind === "shared-pat")
+    requirePatAccount(claim.account, config("SCOPE_PAT_TEST_OWNER_ID"));
   if (claim.status === "acquire" && claim.account && claim.lease) {
     const grant = await airtableGrant(claim.account);
     await client.mutation(api.probe.finalize, {

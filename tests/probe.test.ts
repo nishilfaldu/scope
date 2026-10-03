@@ -484,3 +484,84 @@ test("durable push retries reuse one job; stale attempts and expired subscriptio
     vi.useRealTimers();
   }
 });
+
+test("separate PAT connectors stay bound to their approvals and authenticated recipients", async () => {
+  const f = await fixture();
+  const a = await f.owner.mutation(api.probe.addAccount, {
+    secret: f.actor.secret,
+    label: "PAT A",
+    connectorId: "scl_A",
+    issuer: "https://scope.example",
+    credentialKind: "shared-pat",
+    baseId: "appBaseA",
+  });
+  const b = await f.owner.mutation(api.probe.addAccount, {
+    secret: f.actor.secret,
+    label: "PAT B",
+    connectorId: "scl_B",
+    issuer: "https://scope.example",
+    credentialKind: "shared-pat",
+    baseId: "appBaseB",
+  });
+  for (const [id, providerUserId] of [
+    [a, "usrA"],
+    [b, "usrB"],
+  ] as const)
+    await f.owner.mutation(api.probe.confirmAccount, {
+      secret: f.actor.secret,
+      id,
+      providerUserId,
+    });
+  const recipientB = { ...f.actor, requester: "other-authenticated-recipient" };
+  const requestA = await f.t.mutation(api.probe.request, {
+    ...f.args,
+    accountId: a,
+  });
+  const requestB = await f.t.mutation(api.probe.request, {
+    ...f.args,
+    ...recipientB,
+    accountId: b,
+    key: "separate-pat-B-request",
+  });
+  await f.owner.mutation(api.probe.decide, { id: requestA.id, approve: true });
+  await expect(
+    f.t.mutation(api.probe.claim, { ...recipientB, id: requestA.id }),
+  ).rejects.toThrow("Request unavailable");
+  const claimA = await f.t.mutation(api.probe.claim, {
+    ...f.actor,
+    id: requestA.id,
+  });
+  expect(claimA.account).toMatchObject({
+    connectorId: "scl_A",
+    baseId: "appBaseA",
+    providerUserId: "usrA",
+  });
+  expect(
+    await f.t.mutation(api.probe.claim, { ...recipientB, id: requestB.id }),
+  ).toEqual({ status: "pending" });
+  await f.t.mutation(api.probe.finalize, {
+    ...f.actor,
+    id: requestA.id,
+    lease: claimA.lease,
+    cipher: "private-A",
+    fingerprint: "fingerprint-A",
+    expiresAt: Date.now() + 300_000,
+  });
+  await f.owner.mutation(api.probe.decide, { id: requestB.id, approve: true });
+  const claimB = await f.t.mutation(api.probe.claim, {
+    ...recipientB,
+    id: requestB.id,
+  });
+  expect(claimB.account).toMatchObject({
+    connectorId: "scl_B",
+    baseId: "appBaseB",
+    providerUserId: "usrB",
+  });
+  await expect(
+    f.t.mutation(api.probe.claim, { ...f.actor, id: requestB.id }),
+  ).rejects.toThrow("Request unavailable");
+  expect(
+    (await f.t.mutation(api.probe.claim, { ...f.actor, id: requestA.id }))
+      .cipher,
+  ).toBe("private-A");
+});

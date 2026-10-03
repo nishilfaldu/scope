@@ -12,7 +12,7 @@ Connect supplies an `expiresAt` value even for this connector. The probe preserv
 
 This test uses the existing Scope agent-connection authentication instead of WorkOS. Run `node prototypes/pair-existing-auth.mjs` from the repo, then approve the named agent through Scope's existing pairing page. The script privately claims, saves and acknowledges the connection; model-visible output contains only the approval URL and completion status. The helper keeps the agent credential in its private configuration, and sends it only to Scope. The server validates that connection's active state and derives its owner; a client-supplied owner is never accepted.
 
-The local server requires `SCOPE_PAT_TEST_OWNER_ID` and `CONNECT_AIRTABLE_PAT_CONNECTOR`. The former is pinned to the existing test owner, and the latter to the supplied connector. Add the shared test base in `/lab`, then invoke the actual Codex `airtable_list_bases` tool with its account ID. Approve the access request in `/lab`. Both approval and provider-data delivery must be observed before calling the full test successful. The “Revoke” control for this shared PAT blocks Scope delivery only; it deliberately does not revoke the shared connector for other uses.
+The server requires `SCOPE_PAT_TEST_OWNER_ID`, pinned to the existing test owner, and the nonsecret named bindings in `config/airtable-pat-bindings.json`. Each entry binds one connector to one expected base; raw PATs remain in Vercel Connect. `CONNECT_AIRTABLE_PAT_CONNECTOR` is no longer used. Choose a configured read-only test account in `/lab`, then invoke the actual Codex `airtable_list_bases` tool with its account ID. Registration accepts only the binding key, verifies its exact base scope, and reuses the matching active account on repeated registration. Approve the access request in `/lab`. Both approval and provider-data delivery must be observed before calling the full test successful. The “Revoke” control for this shared PAT blocks Scope delivery only; it deliberately does not revoke the shared connector for other uses.
 
 **The real end-to-end test passed.** The human reported receiving the notification on their iPhone and approving the actual request. The outstanding native Codex `airtable_list_bases` call then returned `Scope Prototype Test` (`app2SVjDmWa26jwo6`), with no provider token in its result. A native same-key retry returned the same base and expiry; Scope showed one credential history row. This is separate from the earlier SDK timing simulation.
 
@@ -23,6 +23,23 @@ After hardening the implementation, the updated helper was additionally run thro
 The returned `permissionLevel` field is included unchanged as Airtable metadata. The operation only read identity and base metadata. No write operation or provider-expiry/refresh experiment was performed.
 
 ![Actual approval and delivery history](pat-approved.png)
+
+## Two-account PAT implementation and live proof
+
+The server map now contains two real, separately owned Airtable accounts:
+
+| Binding       | Connect connector           | Expected base                              | Verified provider identity |
+| ------------- | --------------------------- | ------------------------------------------ | -------------------------- |
+| `prototype-a` | `scl_KfyFWYC864MEEK9JTdDRQ` | `app2SVjDmWa26jwo6` · Scope Prototype Test | `usrjN3TNbJDt0TRC0`        |
+| `prototype-b` | `scl_pT19xygPR0LeNnCxDiIA`  | `appwt2UGDqUP0iZqY` · Untitled Base        | `usrfe7qGqbNku1Pdv`        |
+
+Private preflight calls returned HTTP 200 for both identities and base lists, each exposing exactly its expected base. The owner registered B through the actual Scope UI. Both real requests were then created through the native Codex tool. After the human approved A on their phone, A returned its base while a same-key B call still returned `pending`. Only after the human separately approved B did B return its own base and distinct provider identity. Requests: A `k57cbbk153bkex7158tx3zbcxs8fj5jq`, B `k573n25wzabe4snp1y1tnqqnv98fj9fw`; retry keys `two-pat-live-A-20261003-01` and `two-pat-live-B-20261003-01`.
+
+Fresh installed-helper runs through the official MCP SDK reused those same approvals, returned the correct bases with PAT-specific validation/expiry labels, confirmed receipt for each in Scope, and emitted zero stderr bytes. The native process already loaded in this chat returned the older result format; it proves the native round trip, while the fresh helper runs prove the current implementation. Credentials were not returned to the model.
+
+Owner pinning, exact connector/base pairing, separate approvals, and authenticated recipient checks remain enforced. Automated tests additionally reject a wrong owner, swapped connector/base, substituted provider identity, extra base, removed binding on cached delivery, and another authenticated recipient. Both live requests used the same existing Scope agent connection; a second real recipient and live WorkOS authentication were not tested. No schema or migration was needed for this extension.
+
+![Two real approvals with confirmed helper receipt](two-pat-approved.png)
 
 ## Implemented after the live proof
 
@@ -102,7 +119,7 @@ Create `~/.config/scope-probe/config.json` privately (`0600`, parent directory `
 
 ```json
 {
-  "origin": "https://YOUR-SCOPE-PREVIEW",
+  "origin": "https://scope-preview.vercel.app",
   "issuer": "https://YOUR-WORKOS-ISSUER",
   "clientId": "YOUR-PUBLIC-OAUTH-CLIENT"
 }
@@ -129,7 +146,9 @@ Local install is proven. Public distribution is a separate gate: OpenAI's [plugi
 
 ## Phone and timeout test procedure
 
-Implementation preview: [Scope approvals](https://scope-njifgndqk-nishil-faldus-projects.vercel.app/lab). Vercel reported `READY`, target `preview`, build command `pnpm build`, with a 300-second MCP function limit. The deployment explicitly uses the development Convex URLs and probe secrets. WorkOS environment fields are still absent, so live MCP authorization cannot complete yet. The new preview was opened and correctly redirected to Scope sign-in. The successful phone approval used the earlier preview origin; sign in and enable notifications on this new origin when testing this build on a phone.
+Canonical preview: [Scope approvals](https://scope-preview.vercel.app/lab). WorkOS staging now uses this stable external sign-in URI and `https://scope-preview.vercel.app/api/probe/mcp` as its sole default resource. Staging issuer/API-key fields are configured; live WorkOS sign-in remains unverified. The server respects the configured stable origin for same-origin checks, callback URLs and JWT audience. Generated deployment URLs are build references rather than the canonical sign-in address.
+
+The prototype branch has preview-only environment overrides for the development Convex URLs, probe encryption/bridge secrets, pinned test owner, VAPID configuration and stable origin. Production is unchanged. The build command is `pnpm build`, without a Convex deployment. Phone notifications are origin-specific: use the stable address for future sign-in, Home Screen installation and subscription setup.
 
 The development backend is `bright-dinosaur-692`. The frontend lab runs locally at `http://localhost:3001/lab`; use the HTTPS preview recorded below for a physical phone. The preview build uses `pnpm build`, not `convex deploy`. Probe server code refuses Vercel production execution. Existing production flows are not a substitute test target.
 
@@ -145,7 +164,7 @@ The request lifetime is 30 minutes, acquisition lease 30 seconds, helper/server 
 
 ## Checks and remaining limits
 
-Latest local validation: 111 application tests, five helper tests, TypeScript and lint passed; the complete Webpack production build passed. The final development functions were deployed to `bright-dinosaur-692`. The native live result and updated-helper live receipt are recorded above.
+Latest local validation: 123 application tests and six helper tests, plus TypeScript, lint and the Webpack production build. See the draft PR checks for the latest commit result. The final development functions were deployed to `bright-dinosaur-692`. The native live result and updated-helper live receipt are recorded above.
 
 `pnpm build` explicitly uses Next's supported Webpack builder. The default Turbopack builder repeatedly failed locally during CSS processing with `binding to a port: Operation not permitted`; the Webpack production build passed. Pre-push still runs the full normal build and tests.
 
@@ -158,7 +177,7 @@ node --test prototypes/helper.check.mjs
 SCOPE_INSTALLED_HELPER=/absolute/installed/plugin/server.mjs node --test prototypes/mcp.check.mjs
 ```
 
-This is a development/preview implementation, not a completed production cutover. The owner inbox and credential/recipient history are paginated; connected accounts are limited to 100 displayed rows. Token deduplication is per account. JavaScript clears references after a local call but does not guarantee secure memory zeroing. A canceled call may have already finalized a credential, which is why retry is idempotent. Provider refresh/rotation behavior, live provider revocation, WorkOS staging sign-in, and two-account isolation remain live verification gates. Physical-phone receipt/approval was reported by the user, and the ordinary native Codex tool completed successfully. Sleep/restart and idle-chat wakeup are not proven; after a timeout, manually re-prompt and retry the same key.
+This is a development/preview implementation, not a completed production cutover. The owner inbox and credential/recipient history are paginated; connected accounts are limited to 100 displayed rows. Token deduplication is per account. JavaScript clears references after a local call but does not guarantee secure memory zeroing. A canceled call may have already finalized a credential, which is why retry is idempotent. Provider refresh/rotation behavior, live provider revocation, and WorkOS staging sign-in remain live verification gates. Two-account PAT selection and independent approvals passed as recorded above; they do not establish multi-account OAuth behavior. Physical-phone receipt/approval was reported by the user, and the ordinary native Codex tool completed successfully. Sleep/restart and idle-chat wakeup are not proven; after a timeout, manually re-prompt and retry the same key.
 
 Private setup files are ignored by Git and Vercel uploads. `SCOPE_PROBE_SECRET` is shared only between the prototype server and development Convex deployment; `SCOPE_PROBE_TOKEN_KEY` is the server's AES-GCM key; VAPID private material remains server-only. No WorkOS or Airtable provider secret is committed.
 

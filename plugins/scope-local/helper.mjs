@@ -85,7 +85,8 @@ export async function listBases(
       const sharedPat = grant.credentialKind === "shared-pat";
       if (
         sharedPat &&
-        (grant.baseId !== "app2SVjDmWa26jwo6" ||
+        (typeof grant.baseId !== "string" ||
+          !/^app[A-Za-z0-9]+$/.test(grant.baseId) ||
           grant.providerExpiresAt !== null ||
           !Number.isFinite(grant.approvalExpiresAt) ||
           grant.approvalExpiresAt <= Date.now())
