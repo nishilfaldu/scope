@@ -31,6 +31,7 @@ export type ApprovalRequest = Pick<
   requesterSource?: string;
   intent?: string;
   requesterStopped?: boolean;
+  requesterStoppedAt?: number;
 };
 export type TimelineEvent = {
   label: string;
@@ -93,6 +94,8 @@ export function requestOutcome(
 }
 export function requestTime(r: ApprovalRequest, now: number) {
   if (r.stoppedAt) return r.stoppedAt;
+  if (r.requesterStoppedAt && r.status !== "denied" && r.status !== "cancelled")
+    return r.requesterStoppedAt;
   if (r.receivedAt) return r.receivedAt;
   if (
     r.status !== "denied" &&
@@ -132,7 +135,10 @@ export function requestTimeline(
     r.status !== "denied" &&
     deadline <= now &&
     (r.status !== "cancelled" || (!!r.stoppedAt && deadline < r.stoppedAt)) &&
-    (!account?.revoked || (!!account.blockedAt && deadline < account.blockedAt))
+    (!account?.revoked ||
+      (!!account.blockedAt && deadline < account.blockedAt)) &&
+    (!r.requesterStopped ||
+      (!!r.requesterStoppedAt && deadline < r.requesterStoppedAt))
   )
     events.push({
       label:
@@ -164,6 +170,12 @@ export function requestTimeline(
       detail: r.receivedAt
         ? "Previously received access is unaffected."
         : undefined,
+    });
+  else if (r.requesterStopped && r.status !== "denied")
+    events.push({
+      label: "Connection sharing stopped",
+      at: r.requesterStoppedAt,
+      tone: "stopped",
     });
   else if (deadline > now && r.status !== "denied" && !r.receivedAt)
     events.push({

@@ -4,7 +4,7 @@ The approved design now uses real data on the single shared checkout and `codex/
 
 ## Automated validation
 
-85 Vitest tests pass, along with ESLint, TypeScript and the optimized Next.js build. Seven helper checks cover private credential use, exact Airtable endpoints, two-base isolation, receipt/retry behavior and rejection of retired direct credentials before network IO. The protocol check passes a real 90-second stdio wait, caller timeout and same-key retry. PR CI also passes.
+86 Vitest tests pass, along with ESLint, TypeScript and the optimized Next.js build. Seven helper checks cover private credential use, exact Airtable endpoints, two-base isolation, receipt/retry behavior and rejection of retired direct credentials before network IO. The protocol check passes a real 90-second stdio wait, caller timeout and same-key retry. PR CI also passes.
 
 New checks cover owner/browser/expiry fencing and idempotency of OAuth completion; provider failure before any PAT write; old pending requests behind more than a page of completed history; secret-free live retained decisions; saved MCP names; stopped recipients during acquisition; and refusal to transfer legacy approvals to a new MCP recipient.
 
@@ -26,7 +26,7 @@ Airtable OAuth still fails upstream with `invalid client_id or mismatched redire
 
 At a 390 × 844 viewport, page width is exactly 390 px and both decision buttons are 44 px high. Navigation moves to the bottom. The real notification screen offered Enable notifications and did not claim this browser was subscribed or show a test action without a saved subscription. No permission prompt or test push was sent in this run. Desktop sizing was restored afterward.
 
-Final visual cleanup removes an empty pending expansion, unused sample-review styles, and transient null text while a connection dialog closes.
+Final visual cleanup removes an empty pending expansion, unused sample-review styles, and transient null text while a connection dialog closes. Stopped MCP connections use their recorded stop milestone; their timelines cannot keep waiting or invent an expiry after sharing was stopped.
 
 ## Limits of this evidence
 

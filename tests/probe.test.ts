@@ -226,6 +226,10 @@ test("revoked recipient is fenced after provider acquisition and before replay",
     requester: actor.requester,
     stop: true,
   });
+  expect(
+    (await f.owner.query(api.probe.requestForOwner, { reference: r.id }))
+      ?.request.requesterStoppedAt,
+  ).toBeGreaterThan(0);
   await expect(
     f.t.mutation(api.probe.finalize, {
       ...actor,

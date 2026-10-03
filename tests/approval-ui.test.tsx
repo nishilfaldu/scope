@@ -160,3 +160,28 @@ test("the earlier recorded delivery deadline controls waiting and expiry", () =>
     at: 1200,
   });
 });
+
+test("stopped MCP timelines never wait and use only recorded stop times", () => {
+  const stopped = {
+    ...request,
+    status: "approved",
+    decidedAt: 200,
+    requesterStopped: true,
+    requesterStoppedAt: 500,
+  } as ApprovalRequest;
+  for (const now of [1000, 3000]) {
+    const events = requestTimeline(stopped, now);
+    expect(events.at(-1)).toMatchObject({
+      label: "Connection sharing stopped",
+      at: 500,
+    });
+    expect(events.some((e) => /Waiting|window ended/.test(e.label))).toBe(
+      false,
+    );
+  }
+  const unknown = { ...stopped, requesterStoppedAt: undefined };
+  expect(requestTimeline(unknown, 3000).at(-1)).toMatchObject({
+    label: "Connection sharing stopped",
+    at: undefined,
+  });
+});

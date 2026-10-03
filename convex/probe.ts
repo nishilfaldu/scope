@@ -660,6 +660,7 @@ const ownerRequestView = v.object({
   requesterName: v.string(),
   requesterSource: v.string(),
   requesterStopped: v.optional(v.boolean()),
+  requesterStoppedAt: v.optional(v.number()),
   intent: v.optional(v.string()),
   stoppedAt: v.optional(v.number()),
   deliveryExpiresAt: v.optional(v.number()),
@@ -749,6 +750,8 @@ async function ownerRequestPresentation(
     requester: r.requester,
     requesterName,
     requesterStopped,
+    requesterStoppedAt:
+      connection?.userId === r.userId ? connection.stoppedAt : undefined,
     requesterSource: legacy
       ? "Retired Scope connection"
       : "Authorized MCP connection",
