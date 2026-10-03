@@ -152,15 +152,17 @@ export function ConnectionsBoard() {
                         <p className={styles.attention}>Sharing stopped</p>
                       )}
                     </div>
-                    <button
-                      className={styles.textAction}
-                      onClick={() => {
-                        setError("");
-                        setManage({ app, account: a });
-                      }}
-                    >
-                      Manage
-                    </button>
+                    {!(a.revoked && a.credentialKind === "shared-pat") && (
+                      <button
+                        className={styles.textAction}
+                        onClick={() => {
+                          setError("");
+                          setManage({ app, account: a });
+                        }}
+                      >
+                        {a.revoked ? "Disconnect account" : "Manage"}
+                      </button>
+                    )}
                   </div>
                 ))
               ) : (
@@ -328,14 +330,20 @@ export function ConnectionsBoard() {
                           ? "Sharing stopped. Previously received access is unaffected."
                           : result.connectRevoked
                             ? "Sharing stopped and account disconnected."
-                            : "Sharing stopped. Disconnection failed; open Manage to try again.",
+                            : "Sharing stopped. Disconnection failed; try Disconnect account again.",
                       );
                     }
                     setManage(null);
                   })
                 }
               >
-                {busy ? "Stopping…" : "Stop sharing"}
+                {manage?.app === "Airtable" && manage.account.revoked
+                  ? busy
+                    ? "Disconnecting…"
+                    : "Disconnect account"
+                  : busy
+                    ? "Stopping…"
+                    : "Stop sharing"}
               </Button>
             )}
           </DialogFooter>
