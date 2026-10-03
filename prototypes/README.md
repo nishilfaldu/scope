@@ -129,7 +129,7 @@ Local install is proven. Public distribution is a separate gate: OpenAI's [plugi
 
 ## Phone and timeout test procedure
 
-HTTPS preview: [Scope approval lab](https://scope-nfltfn2kz-nishil-faldus-projects.vercel.app/lab). Vercel reported `READY`, target `preview`, build command `pnpm build`, with a 300-second MCP function limit. The deployment explicitly uses the development Convex URLs and probe secrets. WorkOS environment fields are still absent, so live MCP authorization cannot complete yet. Existing Vercel preview protection may require signing in before Scope's own sign-in.
+Implementation preview: [Scope approvals](https://scope-njifgndqk-nishil-faldus-projects.vercel.app/lab). Vercel reported `READY`, target `preview`, build command `pnpm build`, with a 300-second MCP function limit. The deployment explicitly uses the development Convex URLs and probe secrets. WorkOS environment fields are still absent, so live MCP authorization cannot complete yet. The new preview was opened and correctly redirected to Scope sign-in. The successful phone approval used the earlier preview origin; sign in and enable notifications on this new origin when testing this build on a phone.
 
 The development backend is `bright-dinosaur-692`. The frontend lab runs locally at `http://localhost:3001/lab`; use the HTTPS preview recorded below for a physical phone. The preview build uses `pnpm build`, not `convex deploy`. Probe server code refuses Vercel production execution. Existing production flows are not a substitute test target.
 
