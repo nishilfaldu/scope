@@ -37,14 +37,14 @@ Private preflight calls returned HTTP 200 for both identities and base lists, ea
 
 Fresh installed-helper runs through the official MCP SDK reused those same approvals, returned the correct bases with PAT-specific validation/expiry labels, confirmed receipt for each in Scope, and emitted zero stderr bytes. The native process already loaded in this chat returned the older result format; it proves the native round trip, while the fresh helper runs prove the current implementation. Credentials were not returned to the model.
 
-Owner pinning, exact connector/base pairing, separate approvals, and authenticated recipient checks remain enforced. Automated tests additionally reject a wrong owner, swapped connector/base, substituted provider identity, extra base, removed binding on cached delivery, and another authenticated recipient. Both live requests used the same existing Scope agent connection; a second real recipient and live WorkOS authentication were not tested. No schema or migration was needed for this extension.
+Owner pinning, exact connector/base pairing, separate approvals, and authenticated recipient checks remain enforced. Automated tests additionally reject a wrong owner, swapped connector/base, substituted provider identity, extra base, removed binding on cached delivery, and another authenticated recipient. Both requests in that first pass used the same existing Scope agent connection. The subsequent WorkOS pass below adds live authentication and a second real recipient check. No schema or migration was needed for this extension.
 
 ![Two real approvals with confirmed helper receipt](two-pat-approved.png)
 
 ## Implemented after the live proof
 
 - Requests bind the authenticated recipient, selected account, reason and idempotency key. Account/provider/installation bindings cannot be silently replaced after verification. Only the authenticated owner plus the private server bridge can confirm bindings.
-- Existing Scope agent authority is checked in each request/delivery transaction, including after provider acquisition. Revocation or cancellation during the external call fences delivery. WorkOS JWT verification remains a separate supported code path requiring live setup.
+- Existing Scope agent authority is checked in each request/delivery transaction, including after provider acquisition. Revocation or cancellation during the external call fences delivery. WorkOS JWT verification is now live-tested against the stable preview; provider release to that new recipient still requires its separate approval.
 - Each request has a fixed approval window and its own encrypted replay payload/deadline. Exact token fingerprints group history without sharing or extending another request's delivery expiry. New history rows contain no ciphertext. Scheduled cleanup removes expired delivery ciphertext, preserving decisions and nonsecret history.
 - The helper acknowledges receipt after validation and before provider work. Scope preserves first-attempt and receipt timestamps separately. Receipt means receipt into the helper process, not durable local token storage or completed Airtable work. Retries remain possible within the original deadline.
 - The app has an approval inbox, cancellation, paginated history and per-credential recipient pagination. Push links target the request. PAT expiry and local blocking are labeled separately from provider revocation.
@@ -52,9 +52,25 @@ Owner pinning, exact connector/base pairing, separate approvals, and authenticat
 
 Removed/replaced: synchronous push sending from request handlers, encrypted-token storage in newly created history rows, history recipient discovery limited to the latest 100 requests, mutable installation confirmation, and the ambiguous PAT expiry/revocation labels. The manual test-push endpoint remains for setup.
 
-Existing agent pairing, Slack slices and their regression tests are retained: existing authentication is currently the proven path, and WorkOS/live multi-account OAuth have not passed their replacement gates. No legacy-data migration is required; the user explicitly permits deleting development data. No idle-chat wakeup, custom launcher, Dots integration, production rollout or PR merge was added.
+Existing agent pairing, Slack slices and their regression tests are retained: existing authentication is proven end to end, while the WorkOS provider-release step and live multi-account OAuth remain outside the completed replacement gates. No legacy-data migration is required; the user explicitly permits deleting development data. No idle-chat wakeup, custom launcher, Dots integration, production rollout or PR merge was added.
 
 ![Implemented Scope inbox with confirmed receipt](scope-implemented.png)
+
+## Live WorkOS and Scope-blocking checks
+
+On October 3, 2026, the registered staging helper followed WorkOS authorization to the stable preview, used Scope's existing email-code sign-in, and received explicit human consent for identity/profile/email access. The authorization-code/PKCE exchange saved a WorkOS access token privately. The local callback completed even though Chrome displayed a blocked callback page. Neither a provider token nor the WorkOS token was printed. The original helper's Scope agent configuration is preserved; this test uses a separate mode-0600 `workos-test.json` configuration.
+
+The first authenticated MCP call exposed the Standalone subject-mapping bug described above. After the fix, the real signed token mapped to the correct Scope owner, and the deployed remote MCP endpoint completed initialization, listed `request_approval`, and created separate A/B requests. The same existing consent was reused on another login without broadening permissions. This is repeated sign-in, not an OAuth refresh-token test; the prototype login does not retain refresh tokens.
+
+- A (`k5716vnz3fs9ytg3x9291hwmjs8fje79`, key `workos-cancel-A-20261003-01`) was denied through the actual UI without releasing a PAT. The helper returned `denied` on the same key.
+- B (`k5728j0jn1z1v85pseg4hxrem98fk8db`, key `workos-live-B-20261003-01`) remains pending for human approval. Its WorkOS-authenticated delivery check returned `pending` with no token. A different real authenticated recipient, the existing Scope agent connection, received HTTP 400 for B's request and no credential.
+- The UI's **Block future delivery** control was exercised on A (`j975rpvz3estx8mjbyfrmjajs18fkyjz`). New A requests were rejected while B remained independently pending. A private Connect/Airtable `whoami` check after the block returned HTTP 200 for A's expected identity: the PAT remains active at the provider. No provider-side revocation was attempted.
+
+A is intentionally left blocked in Scope after this test. The underlying connector is untouched. Re-registering the configured A binding creates a new account record whose future deliveries require fresh approval. The account status label says **Scope delivery blocked**, avoiding an ambiguous claim that the PAT itself was revoked.
+
+The live WorkOS-authenticated Airtable data call is the remaining human-approval step. PATs do not exercise Airtable OAuth refresh or provider revocation; those require an OAuth setup or an explicit provider-side revocation experiment and do not block the current PAT flow.
+
+![WorkOS request pending and independent denial](workos-pending.png)
 
 ## Earlier prototype evidence (before the live PAT test)
 
@@ -98,7 +114,7 @@ The server calls `getTokenResponse` with the selected subject and installation, 
 - A public OAuth client for the local helper, with redirect URI `http://127.0.0.1:47831/callback` and authorization-code/PKCE support.
 - For Codex remote MCP sign-in, enable the registration method supported by the client (WorkOS documents CIMD and optional dynamic registration).
 
-Scope completes `external_auth_id` only after its own authenticated session, using external identity `scope:<Convex user ID>`. Resource requests verify the WorkOS JWT's signature, issuer, audience, expiry, subject, client ID and consent/session ID. The server retrieves the [WorkOS user](https://workos.com/docs/reference/authkit/user) and maps its `external_id` back to the existing Convex owner. Requester IDs are derived from verified claims; tool arguments cannot nominate another owner.
+Scope completes `external_auth_id` only after its own authenticated session, using external identity `scope:<Convex user ID>`. Resource requests verify the WorkOS JWT's signature, issuer, audience, expiry, subject, client ID and consent/session ID. For Standalone Connect, the signed `sub` preserves the `scope:<Convex user ID>` supplied by the authenticated completion endpoint. Resolve that namespaced subject only after JWT verification. It is not a User Management record: the first live attempt exposed an incorrect lookup that returned 404 and has been fixed. For native WorkOS user subjects, the server retains the [WorkOS user](https://workos.com/docs/reference/authkit/user) lookup and verifies its linked `external_id`. Requester IDs are derived from verified claims; tool arguments cannot nominate another owner.
 
 The requester displayed in the approval is `sub:client_id:sid`. This identifies an authenticated OAuth user/client/consent. It does **not** distinguish two chats sharing the same OAuth consent. Unique cryptographic identity per agent/chat needs separate client credentials or another attested identity design.
 
@@ -146,7 +162,7 @@ Local install is proven. Public distribution is a separate gate: OpenAI's [plugi
 
 ## Phone and timeout test procedure
 
-Canonical preview: [Scope approvals](https://scope-preview.vercel.app/lab). WorkOS staging now uses this stable external sign-in URI and `https://scope-preview.vercel.app/api/probe/mcp` as its sole default resource. Staging issuer/API-key fields are configured; live WorkOS sign-in remains unverified. The server respects the configured stable origin for same-origin checks, callback URLs and JWT audience. Generated deployment URLs are build references rather than the canonical sign-in address.
+Canonical preview: [Scope approvals](https://scope-preview.vercel.app/lab). WorkOS staging now uses this stable external sign-in URI and `https://scope-preview.vercel.app/api/probe/mcp` as its sole default resource. Staging issuer/API-key fields are configured; live WorkOS sign-in and authenticated MCP tool discovery now pass. The server respects the configured stable origin for same-origin checks, callback URLs and JWT audience. Generated deployment URLs are build references rather than the canonical sign-in address.
 
 Vercel has a verified project-domain binding from `scope-preview.vercel.app` to `codex/scope-approval-prototypes`. Its native Git deployment integration automatically assigns this address after successful deployments from that branch. Other branches and production cannot claim the address through this binding; no additional GitHub deployment secret or alias workflow is needed. See [Vercel branch domains](https://vercel.com/docs/domains/working-with-domains/assign-domain-to-a-git-branch).
 
@@ -166,7 +182,7 @@ The request lifetime is 30 minutes, acquisition lease 30 seconds, helper/server 
 
 ## Checks and remaining limits
 
-Latest local validation: 123 application tests and six helper tests, plus TypeScript, lint and the Webpack production build. See the draft PR checks for the latest commit result. The final development functions were deployed to `bright-dinosaur-692`. The native live result and updated-helper live receipt are recorded above.
+Latest local validation: 125 application tests and six helper tests, plus TypeScript, lint and the Webpack production build. See the draft PR checks for the latest commit result. The final development functions were deployed to `bright-dinosaur-692`. The native live result and updated-helper live receipt are recorded above.
 
 `pnpm build` explicitly uses Next's supported Webpack builder. The default Turbopack builder repeatedly failed locally during CSS processing with `binding to a port: Operation not permitted`; the Webpack production build passed. Pre-push still runs the full normal build and tests.
 
@@ -179,7 +195,7 @@ node --test prototypes/helper.check.mjs
 SCOPE_INSTALLED_HELPER=/absolute/installed/plugin/server.mjs node --test prototypes/mcp.check.mjs
 ```
 
-This is a development/preview implementation, not a completed production cutover. The owner inbox and credential/recipient history are paginated; connected accounts are limited to 100 displayed rows. Token deduplication is per account. JavaScript clears references after a local call but does not guarantee secure memory zeroing. A canceled call may have already finalized a credential, which is why retry is idempotent. Provider refresh/rotation behavior, live provider revocation, and WorkOS staging sign-in remain live verification gates. Two-account PAT selection and independent approvals passed as recorded above; they do not establish multi-account OAuth behavior. Physical-phone receipt/approval was reported by the user, and the ordinary native Codex tool completed successfully. Sleep/restart and idle-chat wakeup are not proven; after a timeout, manually re-prompt and retry the same key.
+This is a development/preview implementation, not a completed production cutover. The owner inbox and credential/recipient history are paginated; connected accounts are limited to 100 displayed rows. Token deduplication is per account. JavaScript clears references after a local call but does not guarantee secure memory zeroing. A canceled call may have already finalized a credential, which is why retry is idempotent. Provider refresh/rotation behavior and live provider revocation remain unverified. WorkOS staging sign-in and authenticated remote MCP discovery passed; its separate provider-release request remains pending. Two-account PAT selection and independent approvals passed as recorded above; they do not establish multi-account OAuth behavior. Physical-phone receipt/approval was reported by the user, and the ordinary native Codex tool completed successfully. Sleep/restart and idle-chat wakeup are not proven; after a timeout, manually re-prompt and retry the same key.
 
 Private setup files are ignored by Git and Vercel uploads. `SCOPE_PROBE_SECRET` is shared only between the prototype server and development Convex deployment; `SCOPE_PROBE_TOKEN_KEY` is the server's AES-GCM key; VAPID private material remains server-only. No WorkOS or Airtable provider secret is committed.
 

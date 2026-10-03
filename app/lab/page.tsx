@@ -335,7 +335,11 @@ export default function Lab() {
               <strong>{a.label}</strong>
               <p>
                 {a.providerUserId ?? "Authorization not verified"}{" "}
-                {a.revoked ? "· Revoked" : ""}
+                {a.revoked
+                  ? a.credentialKind === "shared-pat"
+                    ? "· Scope delivery blocked"
+                    : "· Disconnected in Scope"
+                  : ""}
                 {a.credentialKind === "shared-pat"
                   ? " · Shared PAT; provider expiry unverified"
                   : ""}
