@@ -154,7 +154,7 @@ export function RequestRow({
                 Deny
               </Button>
             </div>
-          ) : (
+          ) : !open ? (
             <button
               className={`${styles.outcome} ${attention ? styles.attention : ""}`}
               aria-expanded={open}
@@ -171,7 +171,7 @@ export function RequestRow({
                   : status}
               {attention && <span aria-hidden>?</span>}
             </button>
-          )}
+          ) : null}
         </div>
         {error && (
           <p role="alert" className={styles.error}>
