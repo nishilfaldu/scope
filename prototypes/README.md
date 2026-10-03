@@ -76,6 +76,12 @@ The agreed PAT flow is complete with no remaining human approval step. This Work
 
 ![Stopping the approved WorkOS delivery](workos-cancelled.png)
 
+## Interactive product design review
+
+A new review area at [`/design-review`](https://scope-preview.vercel.app/design-review) explores a calmer experience across decisions, outcomes, connections, agent identity and notifications. Local address: `http://localhost:3000/design-review`. It uses sample data and local React state only, remains behind Scope sign-in, and returns not-found in Vercel production. The working approval routes, WorkOS/MCP, private helper and account bindings are unchanged by this review.
+
+[Design direction, journeys, tradeoffs and visual evidence](scope-design-direction.md) explain the reasoning. Try Approve/Deny, expand an uncertain outcome, cancel or complete an example account sign-in, rename an agent, and walk through notification choices. This is a reviewable implementation before broader adoption; it does not claim the redesigned connection callback or sample permission scopes are already wired into live accounts.
+
 ## Integrated Scope UI (October 3, 2026)
 
 The working flow uses Scope’s existing typography, green accents, shared controls and sidebar. `/approvals` is one unified paginated list with one row per request. Each row shows the saved agent name where available, account, current outcome and a contextual timestamp. Pending requests sort first within loaded results and expose Approve/Deny directly. The optional Needs approval filter applies to loaded requests; earlier requests remain loadable.
