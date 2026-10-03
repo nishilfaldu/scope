@@ -76,6 +76,30 @@ The agreed PAT flow is complete with no remaining human approval step. This Work
 
 ![Stopping the approved WorkOS delivery](workos-cancelled.png)
 
+## Integrated Scope UI (October 3, 2026)
+
+The working flow now uses Scope’s existing Inter typography, green accents, shared buttons/badges/dialogs and sidebar. `/approvals` separates open requests, recent decisions and paginated delivery history. Requests show the account, reason, delivery window, exact recipient details and receipt state. Expired approvals no longer say they are waiting for collection. A direct owner-checked request lookup opens notification targets beyond the first history page without exposing delivery ciphertext, leases or receipt secrets.
+
+Airtable accounts now live in Connections alongside the existing Slack path. Account IDs and base IDs remain copyable for helper setup. Verification, configured PAT registration and delivery blocking remain available; the OAuth path is retained under connection options. `/notifications` explains Home Screen installation and device permissions, detects unsupported/blocked states, reuses existing subscriptions, and distinguishes push-service acceptance from physical receipt. `/authorize-agent` presents the WorkOS continuation only when sign-in is initiated.
+
+Removed: the monolithic lab UI, its unstyled controls and anchors, the always-visible agent sign-in control, and the “Scope Approval Lab” installed-app name. Compatibility retained: `/lab` redirects request/account/WorkOS query parameters, the registered WorkOS external-login address is unchanged, `/probe-sw.js` keeps existing phone subscriptions valid, and the manifest’s explicit `/lab` identity preserves existing installations while its start URL moves to `/approvals`. API/plugin/configuration identifiers remain unchanged because the installed helper and existing integrations still use them. No provider or legacy Slack/pairing implementation was removed.
+
+Validation on `http://localhost:3000` used the existing sign-in and real development data. The 390 px phone layout displayed request `k571e3vch86fbwhsq138mrpn4s8fjqf6`; tapping Deny made a native helper retry with key `scope-ui-review-B-20261003-01` return `denied` without a credential. Connections verified B’s API access while A stayed blocked. The notification test was accepted for one existing subscribed device; physical receipt was not re-confirmed in this pass. Mobile history and connections had no horizontal overflow. The mobile check also exposed and fixed an existing sidebar hydration mismatch using a consistent server snapshot.
+
+The deployed authorization screen completed another real WorkOS PKCE sign-in using existing consent. A same-key call through the installed helper still refused the cancelled B delivery. The original helper configuration remains intact.
+
+New automated checks cover owner-only deep links and secret exclusion, terminal/expired approval actions, legacy redirects, iPhone installation gating, denied notification permission, existing subscription reuse, worker activation timeout, safe notification destinations and the mobile hydration snapshot. This pass checks desktop Chrome at a phone viewport and installation logic; it does not claim a new physical iPhone installation test. Installation guidance follows [WebKit’s Home Screen push requirements](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/) and [WebKit’s Open as Web App guidance](https://webkit.org/blog/17333/webkit-features-in-safari-26-0/).
+
+![Mobile approval decision](scope-ui-denied.png)
+
+![Connections integrated into Scope](scope-ui-connections.png)
+
+![Delivery history](scope-ui-history.png)
+
+![Notification setup on a phone viewport](scope-ui-notifications-mobile.png)
+
+![WorkOS helper authorization](scope-ui-authorization.png)
+
 ## Earlier prototype evidence (before the live PAT test)
 
 | Experiment           | Observed result                                                                                                                                                                                                                               | Still unverified                                                                         |
@@ -166,13 +190,13 @@ Local install is proven. Public distribution is a separate gate: OpenAI's [plugi
 
 ## Phone and timeout test procedure
 
-Canonical preview: [Scope approvals](https://scope-preview.vercel.app/lab). WorkOS staging now uses this stable external sign-in URI and `https://scope-preview.vercel.app/api/probe/mcp` as its sole default resource. Staging issuer/API-key fields are configured; live WorkOS sign-in and authenticated MCP tool discovery now pass. The server respects the configured stable origin for same-origin checks, callback URLs and JWT audience. Generated deployment URLs are build references rather than the canonical sign-in address.
+Canonical preview: [Scope approvals](https://scope-preview.vercel.app/approvals). WorkOS staging now uses this stable external sign-in URI and `https://scope-preview.vercel.app/api/probe/mcp` as its sole default resource. Staging issuer/API-key fields are configured; live WorkOS sign-in and authenticated MCP tool discovery now pass. The server respects the configured stable origin for same-origin checks, callback URLs and JWT audience. Generated deployment URLs are build references rather than the canonical sign-in address.
 
 Vercel has a verified project-domain binding from `scope-preview.vercel.app` to `codex/scope-approval-prototypes`. Its native Git deployment integration automatically assigns this address after successful deployments from that branch. Other branches and production cannot claim the address through this binding; no additional GitHub deployment secret or alias workflow is needed. See [Vercel branch domains](https://vercel.com/docs/domains/working-with-domains/assign-domain-to-a-git-branch).
 
 The prototype branch has preview-only environment overrides for the development Convex URLs, probe encryption/bridge secrets, pinned test owner, VAPID configuration and stable origin. Production is unchanged. The build command is `pnpm build`, without a Convex deployment. Phone notifications are origin-specific: use the stable address for future sign-in, Home Screen installation and subscription setup.
 
-The development backend is `bright-dinosaur-692`. The frontend lab runs locally at `http://localhost:3001/lab`; use the HTTPS preview recorded below for a physical phone. The preview build uses `pnpm build`, not `convex deploy`. Probe server code refuses Vercel production execution. Existing production flows are not a substitute test target.
+The development backend is `bright-dinosaur-692`. The frontend runs locally at `http://localhost:3000/approvals`; use the HTTPS preview recorded below for a physical phone. The preview build uses `pnpm build`, not `convex deploy`. Probe server code refuses Vercel production execution. Existing production flows are not a substitute test target.
 
 1. Open the HTTPS preview on iPhone, sign in using the existing Scope flow, add it to Home Screen, and launch it from the icon.
 2. Tap Enable notifications, grant permission, and send a test notification. Confirm actual device receipt separately from server acceptance.
@@ -186,7 +210,7 @@ The request lifetime is 30 minutes, acquisition lease 30 seconds, helper/server 
 
 ## Checks and remaining limits
 
-Latest local validation: 125 application tests and six helper tests, plus TypeScript, lint and the Webpack production build. See the draft PR checks for the latest commit result. The final development functions were deployed to `bright-dinosaur-692`. The native live result and updated-helper live receipt are recorded above.
+Latest local validation: 135 application tests and six helper tests, plus TypeScript, lint and the Webpack production build. See the draft PR checks for the latest commit result. The final development functions were deployed to `bright-dinosaur-692`. The native live result and updated-helper live receipt are recorded above.
 
 `pnpm build` explicitly uses Next's supported Webpack builder. The default Turbopack builder repeatedly failed locally during CSS processing with `binding to a port: Operation not permitted`; the Webpack production build passed. Pre-push still runs the full normal build and tests.
 

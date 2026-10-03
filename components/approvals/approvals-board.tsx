@@ -130,30 +130,34 @@ export function ApprovalsBoard({
               </div>
             ) : (
               <>
-                <section className="space-y-4">
-                  <h2 className="text-sm font-medium">Open requests</h2>
-                  {active.length ? (
-                    active.map((r) => (
-                      <RequestCard
-                        key={r._id}
-                        request={r}
-                        account={accounts.find((a) => a._id === r.accountId)}
-                        now={now}
-                      />
-                    ))
-                  ) : (
-                    <div className="rounded-xl border bg-card">
-                      <EmptyState
-                        title={
-                          page.status === "CanLoadMore"
-                            ? "No open requests in this activity"
-                            : "You’re all caught up"
-                        }
-                        description="New requests appear here when an agent asks for access. Enable notifications to review them on your phone."
-                      />
-                    </div>
-                  )}
-                </section>
+                {(!requestId || active.length > 0) && (
+                  <section className="space-y-4">
+                    <h2 className="text-sm font-medium">
+                      {requestId ? "Other open requests" : "Open requests"}
+                    </h2>
+                    {active.length ? (
+                      active.map((r) => (
+                        <RequestCard
+                          key={r._id}
+                          request={r}
+                          account={accounts.find((a) => a._id === r.accountId)}
+                          now={now}
+                        />
+                      ))
+                    ) : (
+                      <div className="rounded-xl border bg-card">
+                        <EmptyState
+                          title={
+                            page.status === "CanLoadMore"
+                              ? "No open requests in this activity"
+                              : "You’re all caught up"
+                          }
+                          description="New requests appear here when an agent asks for access. Enable notifications to review them on your phone."
+                        />
+                      </div>
+                    )}
+                  </section>
+                )}
                 {!!recent.length && (
                   <section className="space-y-4">
                     <h2 className="text-sm font-medium">Recent decisions</h2>

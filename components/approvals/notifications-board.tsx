@@ -34,7 +34,13 @@ export function NotificationsBoard() {
       const data = await enableBrowserNotifications(
         process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
       );
-      await subscribe(data);
+      try {
+        await subscribe(data);
+      } catch {
+        throw new Error(
+          "Could not save notification setup. Check your sign-in and try again.",
+        );
+      }
       setEnabled(true);
       setMessage(
         "Notifications enabled on this device. Send a test to check delivery.",
