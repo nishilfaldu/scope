@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { BoardShell } from "@/components/layout/board-shell";
@@ -109,16 +108,14 @@ export function NotificationsBoard() {
         <p>Know when an agent needs your decision.</p>
       </header>
       <section className={styles.notificationSetup}>
-        {support === "install" && (
-          <div className={styles.phoneIllustration} aria-hidden>
-            <div>
-              <BrandMark className="size-6" />
-              <span>
-                Scope<strong>An agent needs your approval</strong>
-              </span>
-            </div>
+        <div className={styles.phoneIllustration} aria-hidden>
+          <div>
+            <BrandMark className="size-6" />
+            <span>
+              Scope<strong>An agent needs your approval</strong>
+            </span>
           </div>
-        )}
+        </div>
         <h2>
           {enabled
             ? "You’re ready for the next request"
@@ -193,11 +190,6 @@ export function NotificationsBoard() {
             {error}
           </p>
         )}
-        <p className={styles.setupAside}>
-          <Link className={styles.textAction} href="/approvals">
-            Open requests
-          </Link>
-        </p>
       </section>
     </BoardShell>
   );

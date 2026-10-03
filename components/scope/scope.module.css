@@ -539,10 +539,6 @@
   color: var(--quiet);
   font-size: 11px;
 }
-.notificationSetup .setupAside {
-  font-size: 12px;
-  margin: 23px 0 4px;
-}
 
 .dialog {
   --green: #285c40;

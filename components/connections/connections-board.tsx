@@ -1,6 +1,5 @@
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -26,7 +25,7 @@ import styles from "@/components/scope/scope.module.css";
 type ManagedAccount =
   | { app: "Airtable"; account: ApprovalAccount }
   | { app: "Slack"; id: Id<"connections">; name: string };
-export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
+export function ConnectionsBoard() {
   const accounts = useQuery(api.probe.accountsForOwner, {}) as
     ApprovalAccount[] | undefined;
   const slack = useQuery(api.tables.connections.queries.statusesForApps, {
@@ -113,11 +112,6 @@ export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
         <h1>Connections</h1>
         <p>Choose the accounts your agents can ask to use.</p>
       </header>
-      {returnTo && (
-        <p className={styles.notice}>
-          <Link href={returnTo}>Return to request</Link>
-        </p>
-      )}
       {notice && (
         <p role="status" className={styles.notice}>
           {notice}

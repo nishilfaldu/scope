@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
-import { AuthorizationShell } from "@/components/shared/authorization-shell";
+import { BoardShell } from "@/components/layout/board-shell";
+import styles from "@/components/scope/scope.module.css";
 import { Button } from "@/components/ui/button";
 import { approvalPost } from "@/lib/approval-display";
 
@@ -28,14 +28,12 @@ export function AgentAuthorization({
     }
   }
   return (
-    <AuthorizationShell>
-      <div className="space-y-5 p-6 sm:p-8">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Connect an agent
-        </h1>
-        <p className="text-sm leading-6 text-muted-foreground">
-          Each account access request still needs your approval.
-        </p>
+    <BoardShell title="Connect an agent">
+      <div className="max-w-xl">
+        <header className={styles.pageHeading}>
+          <h1>Connect an agent</h1>
+          <p>Each account access request still needs your approval.</p>
+        </header>
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
@@ -43,7 +41,7 @@ export function AgentAuthorization({
         )}
         {externalAuthId ? (
           <Button
-            className="h-11 w-full"
+            className={styles.approve}
             disabled={busy}
             onClick={() => void continueAuthorization()}
           >
@@ -54,15 +52,7 @@ export function AgentAuthorization({
             Start sign-in from your local helper to continue here.
           </p>
         )}
-        <Button
-          variant="ghost"
-          className="w-full"
-          nativeButton={false}
-          render={<Link href="/approvals" />}
-        >
-          Back to approvals
-        </Button>
       </div>
-    </AuthorizationShell>
+    </BoardShell>
   );
 }
