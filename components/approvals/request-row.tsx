@@ -87,8 +87,9 @@ export function RequestRow({
       <div className={styles.requestHead}>
         <button
           className={styles.requestSummary}
-          aria-expanded={open}
-          aria-controls={`detail-${request._id}`}
+          disabled={pending}
+          aria-expanded={pending ? undefined : open}
+          aria-controls={pending ? undefined : `detail-${request._id}`}
           onClick={() => setOpen(!open)}
         >
           <span className={styles.avatar}>
@@ -113,11 +114,13 @@ export function RequestRow({
                   ? formatRequestTime(time)
                   : ""}
             </time>
-            <HugeiconsIcon
-              icon={ArrowDown01Icon}
-              size={16}
-              className={open ? styles.rotated : ""}
-            />
+            {!pending && (
+              <HugeiconsIcon
+                icon={ArrowDown01Icon}
+                size={16}
+                className={open ? styles.rotated : ""}
+              />
+            )}
           </span>
         </button>
         <div className={styles.requestBody}>
@@ -176,7 +179,7 @@ export function RequestRow({
           </p>
         )}
       </div>
-      {open && (
+      {open && !pending && (
         <div id={`detail-${request._id}`} className={styles.requestDetail}>
           {requestExplanation(request, now, account) && (
             <p className={styles.explanation}>

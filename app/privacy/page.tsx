@@ -27,11 +27,10 @@ const sections: PolicySection[] = [
           reference. Scope does not store Slack access or refresh tokens.
         </p>
         <p>
-          Scope connects Slack accounts through Vercel Connect. The approved
-          permissions can allow access to conversations, messages, files, pins,
-          reactions, and related workspace metadata. Slack shows the permissions
-          before you connect. Slack authorization is separate from Scope
-          sign-in.
+          Scope connects Airtable and Slack accounts through Vercel Connect.
+          Provider sign-in shows the requested permissions and is separate from
+          Scope sign-in. Access through MCP is currently available for Airtable;
+          Slack account connection does not enable Slack MCP access.
         </p>
       </>
     ),
@@ -45,7 +44,7 @@ const sections: PolicySection[] = [
           Scope uses provider authorization data to show you which accounts are
           connected and to provide the access-control features you request. When
           an agent requests access, Scope shows you the app, connected account,
-          requested permissions, reason, and duration. Scope issues credentials
+          access permissions, task, and sharing window. Scope issues credentials
           for that request only after the required approval and ownership checks
           succeed.
         </p>
@@ -100,11 +99,11 @@ const sections: PolicySection[] = [
       <>
         <p>
           Scope retains your account information while your account is active.
-          Connection credentials and metadata are retained until you disconnect
-          that provider account or request account deletion, unless a longer
-          period is required for security, fraud prevention, or law. Request,
-          approval, and audit records may be retained for a limited period to
-          protect users and investigate service abuse.
+          Scope removes temporary encrypted replay material after its sharing
+          window and retains connection metadata and request history. A longer
+          retention period may be required for security, fraud prevention, or
+          law. Request, approval, and audit records may be retained for a
+          limited period to protect users and investigate service abuse.
         </p>
         <p>
           You can stop further sharing through an account, request, or

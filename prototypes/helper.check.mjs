@@ -216,3 +216,30 @@ test("two PAT accounts use the delivered base binding and reject cross-account r
     );
   }
 });
+
+test("retired direct or mixed credentials fail before any network request", async () => {
+  let called = false;
+  for (const legacy of [
+    {
+      origin: config.origin,
+      agentConnectionId: "retired",
+      agentConnectionSecret: "synthetic-secret",
+    },
+    {
+      ...config,
+      agentConnectionId: "retired",
+      agentConnectionSecret: "synthetic-secret",
+    },
+  ])
+    await assert.rejects(
+      listBases(args, {
+        config: legacy,
+        fetcher: async () => {
+          called = true;
+          throw new Error("Should not call");
+        },
+      }),
+      /WorkOS MCP/,
+    );
+  assert.equal(called, false);
+});

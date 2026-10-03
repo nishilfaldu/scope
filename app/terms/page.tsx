@@ -31,9 +31,10 @@ const sections: TermsSection[] = [
     content: (
       <>
         <p>
-          Scope connects to Slack through Vercel Connect. Your use of a
-          connected service remains subject to that provider&apos;s terms and
-          policies. Scope is not operated by or endorsed by those providers.
+          Scope connects Airtable and Slack accounts through Vercel Connect.
+          Your use of a connected service remains subject to that
+          provider&apos;s terms and policies. Scope is not operated by or
+          endorsed by those providers.
         </p>
         <p>
           You may connect only accounts you are authorized to use. You control
@@ -51,15 +52,14 @@ const sections: TermsSection[] = [
         <p>
           Agents are operated by you or by third parties you choose. Scope does
           not verify an agent&apos;s claims, instructions, or fitness for a
-          task. Review the agent, requested app, account, permissions, reason,
-          and duration before approving access.
+          task. Review the connection, account, permissions, task, and sharing
+          window before approving access.
         </p>
         <p>
-          An approval allows the identified agent to request credentials within
-          the approved scope and duration. The agent may use those credentials
-          to read, create, change, or delete data when the connected provider
-          permissions allow it. You are responsible for approvals you grant and
-          for the agents you authorize.
+          An approval allows the identified MCP connection to receive access
+          within its sharing window. Previously received access may remain
+          active at the provider after Scope stops sharing. You are responsible
+          for approvals you grant and for the agents you authorize.
         </p>
       </>
     ),

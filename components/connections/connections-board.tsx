@@ -39,6 +39,9 @@ export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
     [error, setError] = useState("");
   const [connect, setConnect] = useState<"Airtable" | "Slack" | null>(null),
     [manage, setManage] = useState<ManagedAccount | null>(null);
+  const [connectApp, setConnectApp] = useState<"Airtable" | "Slack">(
+    "Airtable",
+  );
   const [options, setOptions] = useState<{ key: string; label: string }[]>([]);
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -92,6 +95,7 @@ export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
     });
   }
   function openConnect(app: "Airtable" | "Slack") {
+    setConnectApp(app);
     setConnect(app);
     setOptions([]);
     setError("");
@@ -203,9 +207,9 @@ export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
       >
         <DialogContent className={styles.dialog}>
           <DialogHeader>
-            <DialogTitle>Connect {connect}</DialogTitle>
+            <DialogTitle>Connect {connectApp}</DialogTitle>
             <DialogDescription>
-              {connect === "Slack"
+              {connectApp === "Slack"
                 ? "Account sign-in is available. Slack access through MCP is not available yet."
                 : "Choose an available account or sign in to Airtable."}
             </DialogDescription>
@@ -215,7 +219,7 @@ export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
               {error}
             </p>
           )}
-          {connect === "Airtable" && options.length > 0 && (
+          {connectApp === "Airtable" && options.length > 0 && (
             <div className="space-y-4">
               <p className={styles.detailNote}>
                 Your available read-only accounts
@@ -256,7 +260,7 @@ export function ConnectionsBoard({ returnTo }: { returnTo: string | null }) {
               disabled={busy}
               onClick={() => connect && void signIn(connect)}
             >
-              {busy ? "Connecting…" : `Sign in to ${connect}`}
+              {busy ? "Connecting…" : `Sign in to ${connectApp}`}
             </Button>
           </DialogFooter>
         </DialogContent>

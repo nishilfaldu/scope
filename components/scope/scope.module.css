@@ -543,40 +543,7 @@
   font-size: 12px;
   margin: 23px 0 4px;
 }
-.reviewControls {
-  margin-top: 45px;
-  padding-top: 16px;
-  border-top: 1px dashed #dbe2db;
-  color: #7b877e;
-  font-size: 11px;
-}
-.reviewControls summary {
-  cursor: pointer;
-  width: fit-content;
-  padding: 4px 0;
-}
-.reviewControls > div {
-  padding-top: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-}
-.reviewControls p {
-  flex-basis: 100%;
-  margin-bottom: 5px;
-}
-.reviewControls select {
-  border: 1px solid var(--line);
-  background: white;
-  border-radius: 6px;
-  color: var(--ink);
-  padding: 7px;
-  font-size: 12px;
-}
-.reviewControls .textAction {
-  margin-left: auto;
-}
+
 .dialog {
   --green: #285c40;
   border-radius: 18px;
@@ -863,12 +830,6 @@
   }
   .installSteps li {
     font-size: 13px;
-  }
-  .reviewControls {
-    margin-top: 32px;
-  }
-  .reviewControls .textAction {
-    margin-left: 0;
   }
   .dialog .approve {
     height: 42px;
