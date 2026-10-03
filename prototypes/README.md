@@ -78,27 +78,23 @@ The agreed PAT flow is complete with no remaining human approval step. This Work
 
 ## Integrated Scope UI (October 3, 2026)
 
-The working flow now uses Scope’s existing Inter typography, green accents, shared buttons/badges/dialogs and sidebar. `/approvals` separates open requests, recent decisions and paginated delivery history. Requests show the account, reason, delivery window, exact recipient details and receipt state. Expired approvals no longer say they are waiting for collection. A direct owner-checked request lookup opens notification targets beyond the first history page without exposing delivery ciphertext, leases or receipt secrets.
+The working flow uses Scope’s existing typography, green accents, shared controls and sidebar. `/approvals` is one unified paginated list with one row per request. Each row shows the saved agent name where available, account, current outcome and a contextual timestamp. Pending requests sort first within loaded results and expose Approve/Deny directly. The optional Needs approval filter applies to loaded requests; earlier requests remain loadable.
 
-Airtable accounts now live in Connections alongside the existing Slack path. Account IDs and base IDs remain copyable for helper setup. Verification, configured PAT registration and delivery blocking remain available; the OAuth path is retained under connection options. `/notifications` explains Home Screen installation and device permissions, detects unsupported/blocked states, reuses existing subscriptions, and distinguishes push-service acceptance from physical receipt. `/authorize-agent` presents the WorkOS continuation only when sign-in is initiated.
+Expanding a row reveals a lightweight visual timeline: requested, decision, recorded delivery attempt, confirmed receipt, window ending and stopped sharing where known. Approval never implies receipt. A window that ended before any collection says “Not collected”; an attempted delivery without receipt says “Receipt unconfirmed.” New stops record their actual timestamp; old records do not invent one. Confirmed receipt remains visible after expiry or blocking, and blocking explicitly leaves previously received access unaffected.
 
-Removed: the monolithic lab UI, its unstyled controls and anchors, the always-visible agent sign-in control, and the “Scope Approval Lab” installed-app name. Compatibility retained: `/lab` redirects request/account/WorkOS query parameters, the registered WorkOS external-login address is unchanged, `/probe-sw.js` keeps existing phone subscriptions valid, and the manifest’s explicit `/lab` identity preserves existing installations while its start URL moves to `/approvals`. API/plugin/configuration identifiers remain unchanged because the installed helper and existing integrations still use them. No provider or legacy Slack/pairing implementation was removed.
+Product views omit raw IDs, exact recipient strings, delivery counts, technical expiry diagnostics, PAT labels and diagnostic reasons. Airtable accounts live in Connections alongside Slack, with connection checking, adding configured accounts and future-delivery blocking. The Airtable sign-in option remains available. Helper configuration still uses the existing backend identifiers, which are no longer exposed as product UI fields. No logs screen was added.
 
-Validation on `http://localhost:3000` used the existing sign-in and real development data. The 390 px phone layout displayed request `k571e3vch86fbwhsq138mrpn4s8fjqf6`; tapping Deny made a native helper retry with key `scope-ui-review-B-20261003-01` return `denied` without a credential. Connections verified B’s API access while A stayed blocked. The notification test was accepted for one existing subscribed device; physical receipt was not re-confirmed in this pass. Mobile history and connections had no horizontal overflow. The mobile check also exposed and fixed an existing sidebar hydration mismatch using a consistent server snapshot.
+`/notifications` retains Home Screen installation guidance, permission handling and subscription reuse. `/authorize-agent` retains the WorkOS continuation. `/lab` redirects request/account/WorkOS parameters, `/probe-sw.js` preserves existing subscriptions, and the manifest’s `/lab` identity preserves existing installations while opening `/approvals`. Private helper, authenticated recipient bindings, replay recovery and provider calls remain unchanged.
 
-The deployed authorization screen completed another real WorkOS PKCE sign-in using existing consent. A same-key call through the installed helper still refused the cancelled B delivery. The original helper configuration remains intact.
+The latest check used `http://localhost:3000` and real development data. Request `k574f9dbh0dz665cadgqwzesah8fkzcv` appeared once with its timeline open at a 390 px viewport. Both action buttons measured 44 px high with no horizontal overflow. Tapping Deny kept the same row, added its decision event and made a native helper retry with key `scope-timeline-B-20261003-01` return `denied` without a credential. Desktop inspection covered a previously received delivery that was later stopped. Account A remains blocked and B remains active.
 
-New automated checks cover owner-only deep links and secret exclusion, terminal/expired approval actions, legacy redirects, iPhone installation gating, denied notification permission, existing subscription reuse, worker activation timeout, safe notification destinations and the mobile hydration snapshot. This pass checks desktop Chrome at a phone viewport and installation logic; it does not claim a new physical iPhone installation test. Installation guidance follows [WebKit’s Home Screen push requirements](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/) and [WebKit’s Open as Web App guidance](https://webkit.org/blog/17333/webkit-features-in-safari-26-0/).
+Earlier integration checks verified B’s connection, push-service acceptance for one existing subscription and a WorkOS PKCE sign-in with existing consent. A new physical iPhone installation or receipt was not re-confirmed in this UI pass. Automated checks cover owner-only names and deep links, secret exclusion, terminal actions, distinct approval/delivery/receipt states, real stop timestamps, legacy redirects and notification installation behavior.
 
-![Mobile approval decision](scope-ui-denied.png)
+![Unified request list and expanded timeline](scope-timeline-desktop.png)
 
-![Connections integrated into Scope](scope-ui-connections.png)
+![Phone approval actions and timeline](scope-timeline-mobile.png)
 
-![Delivery history](scope-ui-history.png)
-
-![Notification setup on a phone viewport](scope-ui-notifications-mobile.png)
-
-![WorkOS helper authorization](scope-ui-authorization.png)
+![Same request after denial](scope-timeline-denied.png)
 
 ## Earlier prototype evidence (before the live PAT test)
 
@@ -144,7 +140,7 @@ The server calls `getTokenResponse` with the selected subject and installation, 
 
 Scope completes `external_auth_id` only after its own authenticated session, using external identity `scope:<Convex user ID>`. Resource requests verify the WorkOS JWT's signature, issuer, audience, expiry, subject, client ID and consent/session ID. For Standalone Connect, the signed `sub` preserves the `scope:<Convex user ID>` supplied by the authenticated completion endpoint. Resolve that namespaced subject only after JWT verification. It is not a User Management record: the first live attempt exposed an incorrect lookup that returned 404 and has been fixed. For native WorkOS user subjects, the server retains the [WorkOS user](https://workos.com/docs/reference/authkit/user) lookup and verifies its linked `external_id`. Requester IDs are derived from verified claims; tool arguments cannot nominate another owner.
 
-The requester displayed in the approval is `sub:client_id:sid`. This identifies an authenticated OAuth user/client/consent. It does **not** distinguish two chats sharing the same OAuth consent. Unique cryptographic identity per agent/chat needs separate client credentials or another attested identity design.
+The internal WorkOS requester binding is `sub:client_id:sid`; product rows use a human-readable helper label. This identifies an authenticated OAuth user/client/consent. It does **not** distinguish two chats sharing the same OAuth consent. Unique cryptographic identity per agent/chat needs separate client credentials or another attested identity design.
 
 WorkOS publishes free staging access to all products, AuthKit free through one million monthly active users, and an optional custom domain at $99/month. No payment blocker was observed. This is not a quote for every possible Connect feature or production usage; confirm the desired production configuration in the dashboard. [Published pricing](https://workos.com/pricing).
 
@@ -171,11 +167,11 @@ Create `~/.config/scope-probe/config.json` privately (`0600`, parent directory `
 
 Run `node plugins/scope-local/login.mjs` locally and open its sign-in link. This performs loopback authorization with PKCE and saves the **WorkOS** access credential in that private file. It never saves a provider credential. The login prototype does not retain refresh tokens; repeat login when the WorkOS access credential expires. Do not paste access tokens into chat or tool arguments.
 
-Once the installed plugin is loaded by a Codex chat, invoke `airtable_list_bases` with the account ID shown in `/lab`, a reason, and a random 16–128-character key containing letters, numbers, underscores or hyphens. Preserve exactly the same key/account/reason on retry. Example non-secret arguments:
+Once the installed plugin is loaded by a Codex chat, invoke `airtable_list_bases` with the account ID from private developer setup, a reason, and a random 16–128-character key containing letters, numbers, underscores or hyphens. Preserve exactly the same key/account/reason on retry. Example non-secret arguments:
 
 ```json
 {
-  "accountId": "ACCOUNT-ID-FROM-LAB",
+  "accountId": "ACCOUNT-ID-FROM-SETUP",
   "reason": "List bases for this task",
   "key": "unique-request-key-123456",
   "waitSeconds": 90
@@ -200,9 +196,9 @@ The development backend is `bright-dinosaur-692`. The frontend runs locally at `
 
 1. Open the HTTPS preview on iPhone, sign in using the existing Scope flow, add it to Home Screen, and launch it from the icon.
 2. Tap Enable notifications, grant permission, and send a test notification. Confirm actual device receipt separately from server acceptance.
-3. Start the local tool call in an ordinary Codex chat. On the phone, inspect the requester, exact account and reason; approve. Confirm the waiting chat receives provider data, with no bearer credential visible.
+3. Start the local tool call in an ordinary Codex chat. On the phone, inspect the requester, account and access requested; approve. Confirm the waiting chat receives provider data, with no bearer credential visible.
 4. Repeat with a delay longer than the client's tool timeout. After the user sends another message, retry with the identical key. Verify the same request/credential is used. No idle wakeup is required.
-5. Deny another request; try a different signed-in owner; revoke during acquisition. Each must fail without delivering credentials. Inspect one history accordion per unique token and its recipient list.
+5. Deny another request; try a different signed-in owner; revoke during acquisition. Each must fail without delivering credentials. Inspect the same request row and its timeline.
 
 The development backend additionally requires `SCOPE_VAPID_PUBLIC_KEY` and `SCOPE_VAPID_PRIVATE_KEY`, matching the frontend subscription key pair. Configure them privately; never paste them into chat.
 
@@ -210,7 +206,7 @@ The request lifetime is 30 minutes, acquisition lease 30 seconds, helper/server 
 
 ## Checks and remaining limits
 
-Latest local validation: 135 application tests and six helper tests, plus TypeScript, lint and the Webpack production build. See the draft PR checks for the latest commit result. The final development functions were deployed to `bright-dinosaur-692`. The native live result and updated-helper live receipt are recorded above.
+Latest local validation: 140 application tests and six helper tests, plus TypeScript, lint and the Webpack production build. See the draft PR checks for the latest commit result. The final development functions were deployed to `bright-dinosaur-692`. The native live result and updated-helper live receipt are recorded above.
 
 `pnpm build` explicitly uses Next's supported Webpack builder. The default Turbopack builder repeatedly failed locally during CSS processing with `binding to a port: Operation not permitted`; the Webpack production build passed. Pre-push still runs the full normal build and tests.
 

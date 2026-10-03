@@ -13,6 +13,7 @@ export const probeTables = {
     installationId: v.optional(v.string()),
     providerUserId: v.optional(v.string()),
     revoked: v.boolean(),
+    blockedAt: v.optional(v.number()),
   }).index("by_user", ["userId"]),
   probeRequests: defineTable({
     userId: v.id("users"),
@@ -32,6 +33,7 @@ export const probeTables = {
     credentialId: v.optional(v.id("probeCredentials")),
     deliveredAt: v.optional(v.number()),
     decidedAt: v.optional(v.number()),
+    stoppedAt: v.optional(v.number()),
     receivedAt: v.optional(v.number()),
     deliveryAttempts: v.optional(v.number()),
     deliveryCipher: v.optional(v.string()),

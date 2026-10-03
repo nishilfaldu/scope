@@ -597,3 +597,46 @@ test("notification detail reads only the owner's request and excludes delivery s
     f.t.query(api.probe.requestForOwner, { reference: created.id }),
   ).rejects.toThrow("Sign in required");
 });
+
+test("owner timelines resolve only owned agent names and preserve real event timestamps", async () => {
+  const f = await fixture();
+  const connectionId = await f.t.run((ctx) =>
+    ctx.db.insert("agentConnections", {
+      userId: f.userId,
+      agentId: "timeline-agent",
+      name: "Research assistant",
+      secretHash: "unused",
+      status: "active",
+    }),
+  );
+  const created = await f.t.mutation(api.probe.request, {
+    ...f.args,
+    requester: `scope-agent:timeline-agent:${connectionId}`,
+  });
+  const before = await f.owner.query(api.probe.requestForOwner, {
+    reference: created.id,
+  });
+  expect(before?.request.requesterName).toBe("Research assistant");
+  expect(before?.request.createdAt).toBeGreaterThan(0);
+  await f.owner.mutation(api.probe.decide, { id: created.id, approve: true });
+  await f.owner.mutation(api.probe.cancel, { id: created.id });
+  const stopped = await f.owner.query(api.probe.requestForOwner, {
+    reference: created.id,
+  });
+  expect(stopped?.request.decidedAt).toBeGreaterThan(0);
+  expect(stopped?.request.stoppedAt).toBeGreaterThanOrEqual(
+    stopped!.request.decidedAt!,
+  );
+  await f.owner.mutation(api.probe.cancel, { id: created.id });
+  expect(
+    (await f.owner.query(api.probe.requestForOwner, { reference: created.id }))
+      ?.request.stoppedAt,
+  ).toBe(stopped?.request.stoppedAt);
+  await f.t.run((ctx) =>
+    ctx.db.patch("agentConnections", connectionId, { userId: f.strangerId }),
+  );
+  expect(
+    (await f.owner.query(api.probe.requestForOwner, { reference: created.id }))
+      ?.request.requesterName,
+  ).toBe("Connected agent");
+});

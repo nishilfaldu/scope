@@ -2,7 +2,13 @@ import type { Doc } from "@/convex/_generated/dataModel";
 
 export type ApprovalAccount = Pick<
   Doc<"probeAccounts">,
-  "_id" | "label" | "providerUserId" | "revoked" | "credentialKind" | "baseId"
+  | "_id"
+  | "label"
+  | "providerUserId"
+  | "revoked"
+  | "credentialKind"
+  | "baseId"
+  | "blockedAt"
 >;
 export type ApprovalRequest = Pick<
   Doc<"probeRequests">,
@@ -12,46 +18,166 @@ export type ApprovalRequest = Pick<
   | "requester"
   | "status"
   | "expiresAt"
+  | "deliveryExpiresAt"
   | "deliveredAt"
   | "receivedAt"
   | "decidedAt"
->;
+  | "stoppedAt"
+> & { createdAt?: number; requesterName?: string };
+export type TimelineEvent = {
+  label: string;
+  at?: number;
+  detail?: string;
+  tone: "done" | "waiting" | "stopped";
+};
 
+export function accountName(label?: string) {
+  return (
+    label?.replace(/\s*·\s*shared read-only PAT\s*$/i, "").trim() ||
+    "Unavailable account"
+  );
+}
+export function deliveryDeadline(r: ApprovalRequest) {
+  return Math.min(r.expiresAt, r.deliveryExpiresAt ?? Infinity);
+}
 export function approvalStatus(
-  request: ApprovalRequest,
+  r: ApprovalRequest,
   now: number,
   blocked = false,
 ) {
-  if (request.status === "denied") return "Denied";
-  if (request.status === "cancelled") return "Delivery stopped";
-  if (blocked) return "Account blocked";
-  if (request.expiresAt <= now) return "Expired";
-  return request.status === "approved" ? "Approved" : "Needs approval";
+  if (r.status === "denied") return "Denied";
+  if (r.status === "cancelled") return "Delivery stopped";
+  if (blocked) return "Sharing blocked";
+  if (r.receivedAt) return "Received";
+  if (deliveryDeadline(r) <= now)
+    return r.status === "pending"
+      ? "Expired"
+      : r.deliveredAt
+        ? "Receipt unconfirmed"
+        : "Not collected";
+  if (r.status === "approved")
+    return r.deliveredAt ? "Waiting for receipt" : "Waiting for pickup";
+  return "Needs approval";
 }
-
-export function receiptDescription(
-  request: ApprovalRequest,
+export function requestOutcome(
+  r: ApprovalRequest,
   now: number,
   blocked = false,
 ) {
-  if (request.receivedAt)
-    return `Helper confirmed receipt ${new Date(request.receivedAt).toLocaleString()}.`;
+  const status = approvalStatus(r, now, blocked);
+  if (["Delivery stopped", "Sharing blocked"].includes(status))
+    return r.receivedAt
+      ? "Received earlier; further delivery is blocked."
+      : r.deliveredAt
+        ? "Receipt was never confirmed."
+        : "No delivery recorded.";
+  if (status === "Denied") return "Access was not approved.";
+  if (status === "Expired") return "No decision before the deadline.";
+  if (status === "Receipt unconfirmed")
+    return "The window ended without a confirmed receipt.";
+  if (status === "Not collected") return "Approved, but never collected.";
+  if (status === "Waiting for pickup")
+    return "Approved. The agent has not collected access yet.";
+  if (status === "Waiting for receipt")
+    return "Delivery started. Receipt is not confirmed yet.";
+  if (status === "Received") return "The agent confirmed receipt.";
+  return "Waiting for your decision.";
+}
+export function requestTime(r: ApprovalRequest, now: number) {
+  if (r.stoppedAt) return r.stoppedAt;
+  if (r.receivedAt) return r.receivedAt;
   if (
-    request.status === "cancelled" ||
-    request.status === "denied" ||
-    blocked ||
-    request.expiresAt <= now
+    r.status !== "denied" &&
+    r.status !== "cancelled" &&
+    deliveryDeadline(r) <= now
   )
-    return request.deliveredAt
-      ? "Delivery was attempted; receipt was not confirmed."
-      : "No access was delivered.";
-  return request.deliveredAt
-    ? "Delivery attempted; waiting for the helper to confirm receipt."
-    : request.status === "approved"
-      ? "Waiting for the helper to collect access."
-      : "Access stays blocked until you approve.";
+    return deliveryDeadline(r);
+  return r.deliveredAt ?? r.decidedAt ?? r.createdAt;
 }
-
+export function requestTimeline(
+  r: ApprovalRequest,
+  now: number,
+  account?: ApprovalAccount,
+): TimelineEvent[] {
+  const events: TimelineEvent[] = [
+    { label: "Requested", at: r.createdAt, tone: "done" },
+  ];
+  const approved =
+    r.status === "approved" ||
+    (!!r.decidedAt && r.status === "cancelled") ||
+    !!r.deliveredAt ||
+    !!r.receivedAt;
+  if (r.status === "denied")
+    events.push({ label: "Denied", at: r.decidedAt, tone: "stopped" });
+  else if (approved)
+    events.push({ label: "Approved", at: r.decidedAt, tone: "done" });
+  if (r.deliveredAt)
+    events.push({
+      label: "Delivery attempted",
+      at: r.deliveredAt,
+      tone: "done",
+    });
+  if (r.receivedAt)
+    events.push({ label: "Receipt confirmed", at: r.receivedAt, tone: "done" });
+  const deadline = deliveryDeadline(r);
+  if (
+    r.status !== "denied" &&
+    deadline <= now &&
+    (r.status !== "cancelled" || (!!r.stoppedAt && deadline < r.stoppedAt)) &&
+    (!account?.revoked || (!!account.blockedAt && deadline < account.blockedAt))
+  )
+    events.push({
+      label:
+        r.status === "pending" ? "Request expired" : "Delivery window ended",
+      at: deadline,
+      tone: r.receivedAt ? "done" : "stopped",
+      detail: r.receivedAt
+        ? undefined
+        : r.status === "pending"
+          ? "No decision was made."
+          : r.deliveredAt
+            ? "Receipt was not confirmed."
+            : "Access was not collected.",
+    });
+  if (r.status === "cancelled")
+    events.push({
+      label: "Delivery stopped",
+      at: r.stoppedAt,
+      tone: "stopped",
+      detail: r.receivedAt
+        ? "Previously received access is unaffected."
+        : undefined,
+    });
+  else if (account?.revoked && r.status !== "denied")
+    events.push({
+      label: "Account sharing blocked",
+      at: account.blockedAt,
+      tone: "stopped",
+      detail: r.receivedAt
+        ? "Previously received access is unaffected."
+        : undefined,
+    });
+  else if (deadline > now && r.status !== "denied" && !r.receivedAt)
+    events.push({
+      label:
+        r.status === "pending"
+          ? "Waiting for your decision"
+          : r.deliveredAt
+            ? "Waiting for receipt"
+            : "Waiting for pickup",
+      detail: `Until ${formatRequestTime(deadline)}`,
+      tone: "waiting",
+    });
+  return events;
+}
+export function formatRequestTime(at: number) {
+  return new Date(at).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 export async function approvalPost<T>(
   operation: string,
   body: unknown,

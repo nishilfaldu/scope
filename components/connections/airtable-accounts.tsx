@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/empty-state";
-import { CopyableField } from "@/components/shared/copyable-field";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +17,11 @@ import {
   DialogClose,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { approvalPost, type ApprovalAccount } from "@/lib/approval-display";
+import {
+  accountName,
+  approvalPost,
+  type ApprovalAccount,
+} from "@/lib/approval-display";
 
 export function AirtableAccounts() {
   const accounts = useQuery(api.probe.accountsForOwner, {}) as
@@ -84,18 +87,18 @@ export function AirtableAccounts() {
       {options && (
         <div className="space-y-3 border-b bg-muted/30 p-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium">Choose a configured account</h3>
+            <h3 className="text-sm font-medium">Choose an account</h3>
             <Button size="sm" variant="ghost" onClick={() => setOptions(null)}>
               Close
             </Button>
           </div>
           <p className="text-xs leading-5 text-muted-foreground">
-            Scope verifies the configured identity and base before adding it.
             Adding an account does not approve agent access.
           </p>
           {!options.length && (
             <p className="text-sm">
-              No accounts are configured. Contact your Scope administrator.
+              No accounts are available to add. Contact your Scope
+              administrator.
             </p>
           )}
           {options.map((option) => (
@@ -103,7 +106,9 @@ export function AirtableAccounts() {
               key={option.key}
               className="flex flex-col justify-between gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center"
             >
-              <span className="break-words text-sm">{option.label}</span>
+              <span className="break-words text-sm">
+                {accountName(option.label)}
+              </span>
               <Button
                 variant="outline"
                 disabled={!!busy}
@@ -131,7 +136,7 @@ export function AirtableAccounts() {
       ) : !accounts.length ? (
         <EmptyState
           title="No Airtable accounts"
-          description="Add a configured account to start receiving access requests."
+          description="Add an account to start receiving access requests."
         />
       ) : (
         <div className="divide-y">
@@ -140,25 +145,16 @@ export function AirtableAccounts() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="break-words text-sm font-medium">
-                    {account.label}
+                    {accountName(account.label)}
                   </h3>
-                  <p className="mt-1 break-all text-xs text-muted-foreground">
-                    {account.providerUserId ?? "Identity verification needed"}
-                  </p>
                 </div>
                 <Badge variant={account.revoked ? "outline" : "secondary"}>
                   {account.revoked
-                    ? "Scope delivery blocked"
+                    ? "Sharing blocked"
                     : account.providerUserId
                       ? "Connected"
                       : "Not verified"}
                 </Badge>
-              </div>
-              <div className="flex flex-wrap gap-5">
-                <CopyableField label="Scope account ID" value={account._id} />
-                {account.baseId && (
-                  <CopyableField label="Airtable base" value={account.baseId} />
-                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -168,13 +164,11 @@ export function AirtableAccounts() {
                   onClick={() =>
                     void run(account._id, async () => {
                       await approvalPost("confirm", { id: account._id });
-                      setMessage(
-                        "API access verified for this account. No approval was created.",
-                      );
+                      setMessage("Connection checked. No access was approved.");
                     })
                   }
                 >
-                  {busy === account._id ? "Updating…" : "Verify access"}
+                  {busy === account._id ? "Updating…" : "Check connection"}
                 </Button>
                 {(!account.revoked ||
                   account.credentialKind !== "shared-pat") && (
@@ -196,10 +190,10 @@ export function AirtableAccounts() {
                             : "Disconnect this account?"}
                         </DialogTitle>
                         <DialogDescription>
-                          {account.label}.{" "}
+                          {accountName(account.label)}.{" "}
                           {account.credentialKind === "shared-pat"
-                            ? "Scope will stop delivering this account’s credential. The token remains active at Airtable, including copies already received."
-                            : "Scope will block delivery and attempt to revoke the Connect grant. Issued token validity depends on the provider."}
+                            ? "Stops future sharing through Scope. Access already received is unaffected."
+                            : "Stops future sharing through Scope and disconnects the account where possible. Access already received may remain active."}
                         </DialogDescription>
                       </DialogHeader>
                       <DialogFooter>
@@ -219,10 +213,10 @@ export function AirtableAccounts() {
                                   }>("revoke", { id: account._id });
                                   setMessage(
                                     result.sharedPat
-                                      ? "Future Scope delivery blocked. The token remains active at Airtable."
+                                      ? "Future sharing is blocked. Access already received is unaffected."
                                       : result.connectRevoked
-                                        ? "Delivery blocked and Connect grant revoked."
-                                        : "Delivery blocked. Connect revocation failed; disconnect again to retry.",
+                                        ? "Sharing stopped and account disconnected."
+                                        : "Sharing stopped. Disconnection failed; try disconnecting again.",
                                   );
                                 })
                               }
@@ -236,12 +230,6 @@ export function AirtableAccounts() {
                   </Dialog>
                 )}
               </div>
-              {account.credentialKind === "shared-pat" && (
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Personal access token. Provider expiry is unverified; stopping
-                  Scope delivery does not revoke the token.
-                </p>
-              )}
             </article>
           ))}
         </div>
@@ -252,8 +240,8 @@ export function AirtableAccounts() {
         </summary>
         <div className="mt-4 space-y-3">
           <p className="max-w-xl text-xs leading-5 text-muted-foreground">
-            OAuth connections require an administrator-configured Airtable
-            connector. Existing connections remain available.
+            Connect another account using Airtable sign-in. Your Scope
+            administrator must enable this option.
           </p>
           <label className="block text-sm font-medium" htmlFor="airtable-label">
             Account label
@@ -279,7 +267,7 @@ export function AirtableAccounts() {
                 })
               }
             >
-              Connect with OAuth
+              Sign in to Airtable
             </Button>
           </div>
         </div>

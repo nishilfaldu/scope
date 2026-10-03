@@ -1,3 +1,4 @@
+import type { Doc } from "./_generated/dataModel";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
@@ -183,7 +184,10 @@ export const revokeAccount = mutation({
     const userId = await owner(ctx);
     const row = await ctx.db.get("probeAccounts", id);
     if (!row || row.userId !== userId) throw new Error("Account unavailable");
-    await ctx.db.patch("probeAccounts", id, { revoked: true });
+    await ctx.db.patch("probeAccounts", id, {
+      revoked: true,
+      blockedAt: row.blockedAt ?? Date.now(),
+    });
     return null;
   },
 });
@@ -521,6 +525,7 @@ export const cancel = mutation({
     if (r.status === "denied" || r.status === "cancelled") return null;
     await ctx.db.patch("probeRequests", id, {
       status: "cancelled",
+      stoppedAt: Date.now(),
       deliveryCipher: undefined,
       lease: undefined,
       leaseUntil: undefined,
@@ -681,17 +686,9 @@ export const requestsForOwner = query({
       .paginate(paginationOpts);
     return {
       ...rows,
-      page: rows.page.map((r) => ({
-        _id: r._id,
-        accountId: r.accountId,
-        reason: r.reason,
-        requester: r.requester,
-        status: r.status,
-        expiresAt: r.expiresAt,
-        decidedAt: r.decidedAt,
-        deliveredAt: r.deliveredAt,
-        receivedAt: r.receivedAt,
-      })),
+      page: await Promise.all(
+        rows.page.map((r) => ownerRequestPresentation(ctx, r)),
+      ),
     };
   },
 });
@@ -718,6 +715,10 @@ export const credentialsForOwner = query({
 
 // A notification URL is an untrusted string, so normalize before reading it.
 const ownerRequestView = v.object({
+  createdAt: v.number(),
+  requesterName: v.string(),
+  stoppedAt: v.optional(v.number()),
+  deliveryExpiresAt: v.optional(v.number()),
   _id: v.id("probeRequests"),
   accountId: v.id("probeAccounts"),
   reason: v.string(),
@@ -745,6 +746,7 @@ export const requestForOwner = query({
           _id: v.id("probeAccounts"),
           label: v.string(),
           revoked: v.boolean(),
+          blockedAt: v.optional(v.number()),
           providerUserId: v.optional(v.string()),
           credentialKind: v.optional(v.literal("shared-pat")),
           baseId: v.optional(v.string()),
@@ -760,23 +762,14 @@ export const requestForOwner = query({
     if (!r || r.userId !== userId) return null;
     const a = await ctx.db.get("probeAccounts", r.accountId);
     return {
-      request: {
-        _id: r._id,
-        accountId: r.accountId,
-        reason: r.reason,
-        requester: r.requester,
-        status: r.status,
-        expiresAt: r.expiresAt,
-        decidedAt: r.decidedAt,
-        deliveredAt: r.deliveredAt,
-        receivedAt: r.receivedAt,
-      },
+      request: await ownerRequestPresentation(ctx, r),
       account:
         a?.userId === userId
           ? {
               _id: a._id,
               label: a.label,
               revoked: a.revoked,
+              blockedAt: a.blockedAt,
               providerUserId: a.providerUserId,
               credentialKind: a.credentialKind,
               baseId: a.baseId,
@@ -785,3 +778,33 @@ export const requestForOwner = query({
     };
   },
 });
+
+async function ownerRequestPresentation(
+  ctx: QueryCtx,
+  r: Doc<"probeRequests">,
+) {
+  let requesterName = "Local helper";
+  if (r.requester.startsWith("scope-agent:")) {
+    const [, agentId, reference] = r.requester.split(":");
+    const id = ctx.db.normalizeId("agentConnections", reference ?? "");
+    const connection = id ? await ctx.db.get("agentConnections", id) : null;
+    if (connection?.userId === r.userId && connection.agentId === agentId)
+      requesterName = connection.name;
+    else requesterName = "Connected agent";
+  }
+  return {
+    _id: r._id,
+    accountId: r.accountId,
+    reason: r.reason,
+    requester: r.requester,
+    requesterName,
+    createdAt: r._creationTime,
+    status: r.status,
+    expiresAt: r.expiresAt,
+    deliveryExpiresAt: r.deliveryExpiresAt,
+    decidedAt: r.decidedAt,
+    deliveredAt: r.deliveredAt,
+    receivedAt: r.receivedAt,
+    stoppedAt: r.stoppedAt,
+  };
+}

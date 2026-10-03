@@ -10,7 +10,6 @@ export default async function ApprovalsPage({
       requestId={
         typeof params.request === "string" ? params.request : undefined
       }
-      history={params.view === "history" && !params.request}
     />
   );
 }
