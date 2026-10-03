@@ -44,7 +44,7 @@ Owner pinning, exact connector/base pairing, separate approvals, and authenticat
 ## Implemented after the live proof
 
 - Requests bind the authenticated recipient, selected account, reason and idempotency key. Account/provider/installation bindings cannot be silently replaced after verification. Only the authenticated owner plus the private server bridge can confirm bindings.
-- Existing Scope agent authority is checked in each request/delivery transaction, including after provider acquisition. Revocation or cancellation during the external call fences delivery. WorkOS JWT verification is now live-tested against the stable preview; provider release to that new recipient still requires its separate approval.
+- Existing Scope agent authority is checked in each request/delivery transaction, including after provider acquisition. Revocation or cancellation during the external call fences delivery. WorkOS JWT verification and separately approved provider delivery are live-tested against the stable preview.
 - Each request has a fixed approval window and its own encrypted replay payload/deadline. Exact token fingerprints group history without sharing or extending another request's delivery expiry. New history rows contain no ciphertext. Scheduled cleanup removes expired delivery ciphertext, preserving decisions and nonsecret history.
 - The helper acknowledges receipt after validation and before provider work. Scope preserves first-attempt and receipt timestamps separately. Receipt means receipt into the helper process, not durable local token storage or completed Airtable work. Retries remain possible within the original deadline.
 - The app has an approval inbox, cancellation, paginated history and per-credential recipient pagination. Push links target the request. PAT expiry and local blocking are labeled separately from provider revocation.
@@ -52,7 +52,7 @@ Owner pinning, exact connector/base pairing, separate approvals, and authenticat
 
 Removed/replaced: synchronous push sending from request handlers, encrypted-token storage in newly created history rows, history recipient discovery limited to the latest 100 requests, mutable installation confirmation, and the ambiguous PAT expiry/revocation labels. The manual test-push endpoint remains for setup.
 
-Existing agent pairing, Slack slices and their regression tests are retained: existing authentication is proven end to end, while the WorkOS provider-release step and live multi-account OAuth remain outside the completed replacement gates. No legacy-data migration is required; the user explicitly permits deleting development data. No idle-chat wakeup, custom launcher, Dots integration, production rollout or PR merge was added.
+Existing agent pairing, Slack slices and their regression tests are retained: both existing Scope authentication and WorkOS staging authentication are proven through real PAT delivery. Live multi-account OAuth remains unverified. No legacy-data migration is required; the user explicitly permits deleting development data. No idle-chat wakeup, custom launcher, Dots integration, production rollout or PR merge was added.
 
 ![Implemented Scope inbox with confirmed receipt](scope-implemented.png)
 
@@ -63,14 +63,18 @@ On October 3, 2026, the registered staging helper followed WorkOS authorization 
 The first authenticated MCP call exposed the Standalone subject-mapping bug described above. After the fix, the real signed token mapped to the correct Scope owner, and the deployed remote MCP endpoint completed initialization, listed `request_approval`, and created separate A/B requests. The same existing consent was reused on another login without broadening permissions. This is repeated sign-in, not an OAuth refresh-token test; the prototype login does not retain refresh tokens.
 
 - A (`k5716vnz3fs9ytg3x9291hwmjs8fje79`, key `workos-cancel-A-20261003-01`) was denied through the actual UI without releasing a PAT. The helper returned `denied` on the same key.
-- B (`k5728j0jn1z1v85pseg4hxrem98fk8db`, key `workos-live-B-20261003-01`) remains pending for human approval. Its WorkOS-authenticated delivery check returned `pending` with no token. A different real authenticated recipient, the existing Scope agent connection, received HTTP 400 for B's request and no credential.
+- B (`k5728j0jn1z1v85pseg4hxrem98fk8db`, key `workos-live-B-20261003-01`) initially returned `pending` with no token. A different real authenticated recipient, the existing Scope agent connection, received HTTP 400 for B's request and no credential. The human later approved B, but collection happened after its original approval deadline; the helper correctly returned `expired`.
+- The human separately approved fresh B request `k57baqv0zfwttvf4x7psz4jnvx8fkm8j` (key `workos-live-B-20261003-02`). The installed helper, launched through the official MCP SDK with the real WorkOS token, returned B's expected identity `usrfe7qGqbNku1Pdv` and base `appwt2UGDqUP0iZqY` (Untitled Base). Scope recorded helper receipt at 11:46:10 AM Pacific. Output contained provider data and nonsecret expiry metadata, no credential; stderr was empty.
+- Clicking **Stop further delivery** on that approved B request changed it to `cancelled`. The same helper/key then returned `cancelled` with no credential and empty stderr. B's account remains active; this cancelled only the specific approval.
 - The UI's **Block future delivery** control was exercised on A (`j975rpvz3estx8mjbyfrmjajs18fkyjz`). New A requests were rejected while B remained independently pending. A private Connect/Airtable `whoami` check after the block returned HTTP 200 for A's expected identity: the PAT remains active at the provider. No provider-side revocation was attempted.
 
 A is intentionally left blocked in Scope after this test. The underlying connector is untouched. Re-registering the configured A binding creates a new account record whose future deliveries require fresh approval. The account status label says **Scope delivery blocked**, avoiding an ambiguous claim that the PAT itself was revoked.
 
-The live WorkOS-authenticated Airtable data call is the remaining human-approval step. PATs do not exercise Airtable OAuth refresh or provider revocation; those require an OAuth setup or an explicit provider-side revocation experiment and do not block the current PAT flow.
+The agreed PAT flow is complete with no remaining human approval step. This WorkOS proof uses the installed helper through the official MCP SDK; the earlier native Codex tool proof used existing Scope agent authentication. Native remote Codex OAuth sign-in has not been tested. PATs do not exercise Airtable OAuth refresh or provider revocation; those require an OAuth setup or an explicit provider-side revocation experiment and do not block the current PAT flow.
 
-![WorkOS request pending and independent denial](workos-pending.png)
+![WorkOS-approved delivery with confirmed helper receipt](workos-approved.png)
+
+![Stopping the approved WorkOS delivery](workos-cancelled.png)
 
 ## Earlier prototype evidence (before the live PAT test)
 
@@ -195,7 +199,7 @@ node --test prototypes/helper.check.mjs
 SCOPE_INSTALLED_HELPER=/absolute/installed/plugin/server.mjs node --test prototypes/mcp.check.mjs
 ```
 
-This is a development/preview implementation, not a completed production cutover. The owner inbox and credential/recipient history are paginated; connected accounts are limited to 100 displayed rows. Token deduplication is per account. JavaScript clears references after a local call but does not guarantee secure memory zeroing. A canceled call may have already finalized a credential, which is why retry is idempotent. Provider refresh/rotation behavior and live provider revocation remain unverified. WorkOS staging sign-in and authenticated remote MCP discovery passed; its separate provider-release request remains pending. Two-account PAT selection and independent approvals passed as recorded above; they do not establish multi-account OAuth behavior. Physical-phone receipt/approval was reported by the user, and the ordinary native Codex tool completed successfully. Sleep/restart and idle-chat wakeup are not proven; after a timeout, manually re-prompt and retry the same key.
+This is a development/preview implementation, not a completed production cutover. The owner inbox and credential/recipient history are paginated; connected accounts are limited to 100 displayed rows. Token deduplication is per account. JavaScript clears references after a local call but does not guarantee secure memory zeroing. A canceled call may have already finalized a credential, which is why retry is idempotent. Provider refresh/rotation behavior and live provider revocation remain unverified. WorkOS staging sign-in, authenticated remote MCP discovery, separately approved PAT delivery, and cancellation of that delivery passed. An expired real WorkOS token returned HTTP 401 with an OAuth challenge; this does not prove refresh-token handling or provider PAT expiry. Two-account PAT selection and independent approvals passed as recorded above; they do not establish multi-account OAuth behavior. Physical-phone receipt/approval was reported by the user, and the ordinary native Codex tool completed successfully. Sleep/restart and idle-chat wakeup are not proven; after a timeout, manually re-prompt and retry the same key.
 
 Private setup files are ignored by Git and Vercel uploads. `SCOPE_PROBE_SECRET` is shared only between the prototype server and development Convex deployment; `SCOPE_PROBE_TOKEN_KEY` is the server's AES-GCM key; VAPID private material remains server-only. No WorkOS or Airtable provider secret is committed.
 
