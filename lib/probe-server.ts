@@ -48,9 +48,27 @@ export function json(value: unknown) {
   return Response.json(value, { headers: { "Cache-Control": "no-store" } });
 }
 export async function requester(request: Request) {
+  let connectionId = request.headers.get("x-agent-connection-id");
+  let connectionSecret = request.headers.get("x-agent-connection-secret");
   const token = request.headers
     .get("authorization")
     ?.match(/^Bearer (.+)$/)?.[1];
+  if (token?.startsWith("scope-agent.") && !connectionId && !connectionSecret) {
+    const parts = token.split(".");
+    if (parts.length !== 3) throw new Error("Unauthorized");
+    connectionId = parts[1];
+    connectionSecret = parts[2];
+  }
+  if (connectionId || connectionSecret) {
+    if (!connectionId || !connectionSecret) throw new Error("Unauthorized");
+    const secret = config("SCOPE_PROBE_SECRET");
+    const identity = await db().query(api.probe.existingAgent, {
+      secret,
+      connectionId,
+      connectionSecret,
+    });
+    return { secret, ...identity };
+  }
   if (!token) throw new Error("Unauthorized");
   const issuer = config("WORKOS_ISSUER");
   const resource = config("SCOPE_PROBE_ORIGIN") + "/api/probe/mcp";
@@ -105,20 +123,36 @@ export function fingerprint(value: string) {
   return createHmac("sha256", key()).update(value).digest("hex");
 }
 export async function airtableGrant(account: Doc<"probeAccounts">) {
+  if (account.revoked) throw new Error("Account unavailable");
+  const sharedPat = account.credentialKind === "shared-pat";
+  if (
+    sharedPat &&
+    (account.userId !== config("SCOPE_PAT_TEST_OWNER_ID") ||
+      account.connectorId !== config("CONNECT_AIRTABLE_PAT_CONNECTOR") ||
+      account.baseId !== "app2SVjDmWa26jwo6")
+  )
+    throw new Error("Test account unavailable");
   const token = await getTokenResponse(
     account.connectorId,
-    {
-      subject: { type: "user", id: account.subjectId, issuer: account.issuer },
-      installationId: account.installationId,
-    },
+    sharedPat
+      ? { subject: { type: "app" } }
+      : {
+          subject: {
+            type: "user",
+            id: account.subjectId,
+            issuer: account.issuer,
+          },
+          installationId: account.installationId,
+        },
     { forceRefresh: true },
   );
   if (
     token.connector.id !== account.connectorId ||
-    !token.installationId ||
-    token.installationId === "*" ||
-    (account.installationId &&
-      token.installationId !== account.installationId) ||
+    (!sharedPat &&
+      (!token.installationId ||
+        token.installationId === "*" ||
+        (account.installationId &&
+          token.installationId !== account.installationId))) ||
     !Number.isFinite(token.expiresAt) ||
     token.expiresAt <= Date.now() + 30_000
   )

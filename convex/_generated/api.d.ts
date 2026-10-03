@@ -30,6 +30,7 @@ import type * as lib_responses from "../lib/responses.js";
 import type * as lib_secrets from "../lib/secrets.js";
 import type * as lib_tokenEncryption from "../lib/tokenEncryption.js";
 import type * as probe from "../probe.js";
+import type * as probeNotifications from "../probeNotifications.js";
 import type * as probeSchema from "../probeSchema.js";
 import type * as tables_agentConnectionExpiry from "../tables/agentConnectionExpiry.js";
 import type * as tables_agentConnections from "../tables/agentConnections.js";
@@ -91,6 +92,7 @@ declare const fullApi: ApiFromModules<{
   "lib/secrets": typeof lib_secrets;
   "lib/tokenEncryption": typeof lib_tokenEncryption;
   probe: typeof probe;
+  probeNotifications: typeof probeNotifications;
   probeSchema: typeof probeSchema;
   "tables/agentConnectionExpiry": typeof tables_agentConnectionExpiry;
   "tables/agentConnections": typeof tables_agentConnections;

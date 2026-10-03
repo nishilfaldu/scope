@@ -21,6 +21,8 @@ type Env = {
   readonly RESEND_API_KEY: string;
   readonly RESEND_FROM: string | undefined;
   readonly SCOPE_PROBE_SECRET: string | undefined;
+  readonly SCOPE_VAPID_PRIVATE_KEY: string | undefined;
+  readonly SCOPE_VAPID_PUBLIC_KEY: string | undefined;
   readonly TOKEN_ENCRYPTION_KEY: string;
 };
 

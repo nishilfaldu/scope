@@ -84,3 +84,84 @@ test("wrong account, expired token and credential echoed in provider data fail c
     await assert.rejects(listBases(args, { config, fetcher: f.fetcher }));
   }
 });
+
+test("shared PAT uses existing Scope auth, labels unverified expiry and rejects extra bases", async () => {
+  const f = fixture();
+  const cfg = {
+    origin: config.origin,
+    agentConnectionId: "test-connection",
+    agentConnectionSecret: "test-secret",
+  };
+  let extraBase = false;
+  const fetcher = async (url, options) => {
+    const response = await f.fetcher(url, options);
+    const body = await response.json();
+    if (url.endsWith("/deliver"))
+      Object.assign(body, {
+        credentialKind: "shared-pat",
+        baseId: "app2SVjDmWa26jwo6",
+        providerExpiresAt: null,
+        approvalExpiresAt: Date.now() + 60_000,
+      });
+    if (url.endsWith("/bases"))
+      body.bases = [
+        {
+          id: "app2SVjDmWa26jwo6",
+          name: "Scope Prototype Test",
+          permissionLevel: "read",
+        },
+        ...(extraBase ? [{ id: "unapproved-base", name: "Other" }] : []),
+      ];
+    return Response.json(body);
+  };
+  const result = await listBases(args, { config: cfg, fetcher });
+  assert.equal(result.providerExpiresAt, null);
+  assert.equal(result.credentialKind, "shared-pat");
+  assert.equal(
+    f.calls[0].options.headers["x-agent-connection-secret"],
+    "test-secret",
+  );
+  assert.ok(!JSON.stringify(result).includes(token));
+  extraBase = true;
+  await assert.rejects(
+    listBases(args, { config: cfg, fetcher }),
+    /Unexpected PAT base scope/,
+  );
+});
+
+test("helper confirms private receipt before provider work and preserves retry after acknowledgement failure", async () => {
+  const f = fixture();
+  let failAck = true;
+  const steps = [];
+  const fetcher = async (url, options) => {
+    steps.push(url);
+    if (url.endsWith("/ack")) {
+      assert.equal(
+        options.headers.Authorization,
+        `Bearer ${config.accessToken}`,
+      );
+      assert.deepEqual(JSON.parse(options.body), {
+        id: "request-a",
+        receiptId: "private-receipt",
+      });
+      return Response.json({ received: true }, { status: failAck ? 503 : 200 });
+    }
+    const response = await f.fetcher(url, options);
+    if (url.endsWith("/deliver"))
+      return Response.json({
+        ...(await response.json()),
+        receiptId: "private-receipt",
+      });
+    return response;
+  };
+  await assert.rejects(listBases(args, { config, fetcher }));
+  assert.ok(!steps.some((url) => url.includes("api.airtable.com")));
+  failAck = false;
+  steps.length = 0;
+  const output = await listBases(args, { config, fetcher });
+  assert.ok(
+    steps.findIndex((url) => url.endsWith("/ack")) <
+      steps.findIndex((url) => url.endsWith("/whoami")),
+  );
+  assert.ok(!JSON.stringify(output).includes("private-receipt"));
+});

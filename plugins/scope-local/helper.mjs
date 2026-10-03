@@ -47,11 +47,20 @@ export async function listBases(
   if (!Number.isInteger(seconds) || seconds < 0 || seconds > 240)
     throw new Error("Invalid wait");
   config ??= await loadConfig();
+  if (
+    Boolean(config.agentConnectionId) !== Boolean(config.agentConnectionSecret)
+  )
+    throw new Error("Incomplete Scope agent credentials");
   async function scope(operation, body) {
     const response = await fetcher(config.origin + "/api/probe/" + operation, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${config.accessToken}`,
+        ...(config.agentConnectionId
+          ? {
+              "x-agent-connection-id": config.agentConnectionId,
+              "x-agent-connection-secret": config.agentConnectionSecret,
+            }
+          : { Authorization: `Bearer ${config.accessToken}` }),
         "Content-Type": "application/json",
       },
       body: JSON.stringify(body),
@@ -73,6 +82,15 @@ export async function listBases(
   do {
     const grant = await scope("deliver", { id: request.id });
     if (grant.status === "ready") {
+      const sharedPat = grant.credentialKind === "shared-pat";
+      if (
+        sharedPat &&
+        (grant.baseId !== "app2SVjDmWa26jwo6" ||
+          grant.providerExpiresAt !== null ||
+          !Number.isFinite(grant.approvalExpiresAt) ||
+          grant.approvalExpiresAt <= Date.now())
+      )
+        throw new Error("Invalid PAT test scope");
       if (
         grant.accountId !== args.accountId ||
         typeof grant.accessToken !== "string" ||
@@ -85,6 +103,10 @@ export async function listBases(
       let token = grant.accessToken;
       delete grant.accessToken;
       try {
+        // Receipt means this process has validated and received the credential;
+        // it does not claim durable local storage or completed provider work.
+        if (grant.receiptId)
+          await scope("ack", { id: request.id, receiptId: grant.receiptId });
         const headers = { Authorization: `Bearer ${token}` };
         const options = {
           headers,
@@ -110,10 +132,25 @@ export async function listBases(
         const data = await response.json();
         if (!Array.isArray(data.bases))
           throw new Error("Invalid Airtable response");
+        if (
+          sharedPat &&
+          (data.bases.length !== 1 ||
+            data.bases[0].id !== grant.baseId ||
+            data.offset)
+        )
+          throw new Error("Unexpected PAT base scope");
         const output = {
           accountId: args.accountId,
           providerUserId: identity.id,
           expiresAt: grant.expiresAt,
+          ...(sharedPat
+            ? {
+                credentialKind: "shared-pat",
+                expiryMeaning: "Connect response expiry; PAT expiry unverified",
+                providerExpiresAt: null,
+                approvalExpiresAt: grant.approvalExpiresAt,
+              }
+            : {}),
           bases: data.bases.slice(0, 100).map((b) => ({
             id: b.id,
             name: b.name,

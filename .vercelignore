@@ -1,4 +1,4 @@
 .env*
 .git
 node_modules
-prototypes/approval-lab.png
+prototypes/*.png

@@ -24,8 +24,20 @@ export async function POST(
     if (Number(request.headers.get("content-length") ?? 0) > 8192)
       return new Response(null, { status: 413 });
     const body = await request.json();
-    if (operation === "request" || operation === "deliver") {
+    if (
+      operation === "request" ||
+      operation === "deliver" ||
+      operation === "ack"
+    ) {
       const actor = await requester(request);
+      if (operation === "ack") {
+        await db().mutation(api.probe.acknowledge, {
+          ...actor,
+          id: body.id,
+          receiptId: body.receiptId,
+        });
+        return json({ received: true });
+      }
       if (operation === "deliver") {
         const c = await retrieve(actor, body.id);
         return c.status === "ready" && c.cipher && c.account
@@ -35,6 +47,12 @@ export async function POST(
               expiresAt: c.expiresAt,
               accountId: c.account._id,
               providerUserId: c.account.providerUserId,
+              credentialKind: c.account.credentialKind ?? "oauth",
+              baseId: c.account.baseId,
+              providerExpiresAt:
+                c.account.credentialKind === "shared-pat" ? null : c.expiresAt,
+              approvalExpiresAt: c.approvalExpiresAt,
+              receiptId: c.receiptId,
             })
           : json({ status: c.status });
       }
@@ -44,14 +62,43 @@ export async function POST(
         accountId: body.accountId,
         reason: body.reason,
       });
-      if (result.created) await notifyApproval(actor.userId);
       return json({
         ...result,
-        approvalUrl: config("SCOPE_PROBE_ORIGIN") + "/lab",
+        approvalUrl:
+          config("SCOPE_PROBE_ORIGIN") +
+          "/lab?request=" +
+          result.id +
+          "#approvals",
       });
     }
     sameOrigin(request);
     const client = await ownerDb();
+    if (operation === "pat") {
+      const identity = await client.query(api.probe.identity, {});
+      if (identity?.id !== config("SCOPE_PAT_TEST_OWNER_ID"))
+        throw new Error("Test owner required");
+      const id = await client.mutation(api.probe.addAccount, {
+        secret: config("SCOPE_PROBE_SECRET"),
+        label: "Scope Prototype Test · shared read-only PAT",
+        connectorId: config("CONNECT_AIRTABLE_PAT_CONNECTOR"),
+        issuer: config("NEXT_PUBLIC_CONVEX_SITE_URL"),
+        credentialKind: "shared-pat",
+        baseId: "app2SVjDmWa26jwo6",
+      });
+      const account = await client.query(api.probe.account, { id });
+      const grant = await airtableGrant(account);
+      await client.mutation(api.probe.confirmAccount, {
+        secret: config("SCOPE_PROBE_SECRET"),
+        id,
+        providerUserId: grant.providerUserId,
+        installationId: grant.installationId,
+      });
+      return json({
+        id,
+        providerUserId: grant.providerUserId,
+        providerExpiresAt: null,
+      });
+    }
     if (operation === "push-test") {
       const identity = await client.query(api.probe.identity, {});
       if (!identity) throw new Error("Sign in required");
@@ -90,6 +137,7 @@ export async function POST(
     }
     if (operation === "authorize") {
       const id = await client.mutation(api.probe.addAccount, {
+        secret: config("SCOPE_PROBE_SECRET"),
         label: body.label,
         connectorId: config("CONNECT_AIRTABLE_CONNECTOR"),
         issuer: config("NEXT_PUBLIC_CONVEX_SITE_URL"),
@@ -115,6 +163,7 @@ export async function POST(
       const account = await client.query(api.probe.account, { id: body.id });
       const grant = await airtableGrant(account);
       await client.mutation(api.probe.confirmAccount, {
+        secret: config("SCOPE_PROBE_SECRET"),
         id: body.id,
         providerUserId: grant.providerUserId,
         installationId: grant.installationId,
@@ -127,6 +176,12 @@ export async function POST(
     if (operation === "revoke") {
       const account = await client.query(api.probe.account, { id: body.id });
       await client.mutation(api.probe.revokeAccount, { id: body.id });
+      if (account.credentialKind === "shared-pat")
+        return json({
+          localRevoked: true,
+          connectRevoked: false,
+          sharedPat: true,
+        });
       try {
         await revokeToken(account.connectorId, {
           subject: {

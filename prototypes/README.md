@@ -1,8 +1,45 @@
 # Scope approval experiments
 
-Experimental branch: `codex/scope-approval-prototypes`, based exactly on cleanup commit `9ac1df0`. The cleanup is [PR 48](https://github.com/nishilfaldu/scope/pull/48), targeting main and left unmerged. These experiments add `/lab` and separate probe tables; they do not replace the Slack flow.
+Experimental branch: `codex/scope-approval-prototypes`, based exactly on cleanup commit `9ac1df0`. The cleanup is [PR 48](https://github.com/nishilfaldu/scope/pull/48), targeting main and left unmerged. The implemented approval flow lives at `/lab`, linked as **Approvals** in the actual Scope sidebar. It uses separate tables while the verified Slack flow remains available. The original checkout is the only active checkout.
 
-## Evidence recorded October 3, 2026
+## Live read-only PAT test
+
+Continue in the single shared checkout `/Users/happyhome/Desktop/agent-passport`. Inspect the current branch and changes before editing; switch branches here rather than creating worktrees.
+
+The user supplied `airtable/scope-prototype-read-only` (`scl_KfyFWYC864MEEK9JTdDRQ`), a shared app-subject PAT connector bound to development and preview only. The dedicated base is `app2SVjDmWa26jwo6`, **Scope Prototype Test**. Real `getTokenResponse(..., { subject: { type: "app" } })` retrieval succeeded. Private calls to Airtable's `whoami` and `bases` endpoints both returned HTTP 200, and the credential exposed exactly that one base. No provider token was printed or saved locally.
+
+Connect supplies an `expiresAt` value even for this connector. The probe preserves that as the **Connect response expiry**, while marking the PAT's provider expiry as unverified (`providerExpiresAt: null`). This is not evidence of OAuth refresh, short-lived provider tokens, or two-account isolation. The helper rejects an unexpected base or extra base results.
+
+This test uses the existing Scope agent-connection authentication instead of WorkOS. Run `node prototypes/pair-existing-auth.mjs` from the repo, then approve the named agent through Scope's existing pairing page. The script privately claims, saves and acknowledges the connection; model-visible output contains only the approval URL and completion status. The helper keeps the agent credential in its private configuration, and sends it only to Scope. The server validates that connection's active state and derives its owner; a client-supplied owner is never accepted.
+
+The local server requires `SCOPE_PAT_TEST_OWNER_ID` and `CONNECT_AIRTABLE_PAT_CONNECTOR`. The former is pinned to the existing test owner, and the latter to the supplied connector. Add the shared test base in `/lab`, then invoke the actual Codex `airtable_list_bases` tool with its account ID. Approve the access request in `/lab`. Both approval and provider-data delivery must be observed before calling the full test successful. The “Revoke” control for this shared PAT blocks Scope delivery only; it deliberately does not revoke the shared connector for other uses.
+
+**The real end-to-end test passed.** The human reported receiving the notification on their iPhone and approving the actual request. The outstanding native Codex `airtable_list_bases` call then returned `Scope Prototype Test` (`app2SVjDmWa26jwo6`), with no provider token in its result. A native same-key retry returned the same base and expiry; Scope showed one credential history row. This is separate from the earlier SDK timing simulation.
+
+The request is `k578yh42hj91z5rv41rrxskf9d8fjcss`, key `pat-live-native-20261003-01`. During setup, an authenticated diagnostic created the pending request after the already-running helper used its older Bearer authentication format. The server now accepts that existing Scope credential envelope as well as the new helper's connection headers. The native call reused the pending request and completed after phone approval. No user identity or provider credential was fabricated.
+
+After hardening the implementation, the updated helper was additionally run through the official MCP SDK against the **same real approval**. It returned the same base, explicitly reported `providerExpiresAt: null`, confirmed its receipt in Scope, and emitted zero stderr bytes. This additional run proves the new receipt path; the original native call is the proof of desktop-tool continuation. The older process loaded in this chat did not exercise the new PAT-specific checks; those were exercised by the updated helper and fixtures.
+
+The returned `permissionLevel` field is included unchanged as Airtable metadata. The operation only read identity and base metadata. No write operation or provider-expiry/refresh experiment was performed.
+
+![Actual approval and delivery history](pat-approved.png)
+
+## Implemented after the live proof
+
+- Requests bind the authenticated recipient, selected account, reason and idempotency key. Account/provider/installation bindings cannot be silently replaced after verification. Only the authenticated owner plus the private server bridge can confirm bindings.
+- Existing Scope agent authority is checked in each request/delivery transaction, including after provider acquisition. Revocation or cancellation during the external call fences delivery. WorkOS JWT verification remains a separate supported code path requiring live setup.
+- Each request has a fixed approval window and its own encrypted replay payload/deadline. Exact token fingerprints group history without sharing or extending another request's delivery expiry. New history rows contain no ciphertext. Scheduled cleanup removes expired delivery ciphertext, preserving decisions and nonsecret history.
+- The helper acknowledges receipt after validation and before provider work. Scope preserves first-attempt and receipt timestamps separately. Receipt means receipt into the helper process, not durable local token storage or completed Airtable work. Retries remain possible within the original deadline.
+- The app has an approval inbox, cancellation, paginated history and per-credential recipient pagination. Push links target the request. PAT expiry and local blocking are labeled separately from provider revocation.
+- Request creation atomically schedules one notification job per saved subscription. Jobs use leases, crash recovery, bounded retries and 404/410 subscription cleanup. Provider errors are never logged. A failed notification does not lose the approval request.
+
+Removed/replaced: synchronous push sending from request handlers, encrypted-token storage in newly created history rows, history recipient discovery limited to the latest 100 requests, mutable installation confirmation, and the ambiguous PAT expiry/revocation labels. The manual test-push endpoint remains for setup.
+
+Existing agent pairing, Slack slices and their regression tests are retained: existing authentication is currently the proven path, and WorkOS/live multi-account OAuth have not passed their replacement gates. No legacy-data migration is required; the user explicitly permits deleting development data. No idle-chat wakeup, custom launcher, Dots integration, production rollout or PR merge was added.
+
+![Implemented Scope inbox with confirmed receipt](scope-implemented.png)
+
+## Earlier prototype evidence (before the live PAT test)
 
 | Experiment           | Observed result                                                                                                                                                                                                                               | Still unverified                                                                         |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -102,9 +139,15 @@ The development backend is `bright-dinosaur-692`. The frontend lab runs locally 
 4. Repeat with a delay longer than the client's tool timeout. After the user sends another message, retry with the identical key. Verify the same request/credential is used. No idle wakeup is required.
 5. Deny another request; try a different signed-in owner; revoke during acquisition. Each must fail without delivering credentials. Inspect one history accordion per unique token and its recipient list.
 
+The development backend additionally requires `SCOPE_VAPID_PUBLIC_KEY` and `SCOPE_VAPID_PRIVATE_KEY`, matching the frontend subscription key pair. Configure them privately; never paste them into chat.
+
 The request lifetime is 30 minutes, acquisition lease 30 seconds, helper/server wait at most 240 seconds, and remote route maximum duration 300 seconds. These are implementation bounds, not a promise that a host will wait that long. Lost responses recover the stored encrypted credential until the approval or provider token expires.
 
 ## Checks and remaining limits
+
+Latest local validation: 111 application tests, five helper tests, TypeScript and lint passed; the complete Webpack production build passed. The final development functions were deployed to `bright-dinosaur-692`. The native live result and updated-helper live receipt are recorded above.
+
+`pnpm build` explicitly uses Next's supported Webpack builder. The default Turbopack builder repeatedly failed locally during CSS processing with `binding to a port: Operation not permitted`; the Webpack production build passed. Pre-push still runs the full normal build and tests.
 
 ```sh
 pnpm test
@@ -115,7 +158,7 @@ node --test prototypes/helper.check.mjs
 SCOPE_INSTALLED_HELPER=/absolute/installed/plugin/server.mjs node --test prototypes/mcp.check.mjs
 ```
 
-This is a development experiment, not launch-ready replacement infrastructure. History is bounded to the latest 100 rows and has no retention/purge job. Push sends have no durable retry queue or expired-subscription cleanup. Token deduplication is per account. JavaScript clears references after a local call but does not guarantee secure memory zeroing. A canceled call may have already finalized a credential, which is why retry is idempotent. Provider refresh/rotation behavior, live revocation, physical-phone receipt and ordinary Codex chat completion remain live verification gates.
+This is a development/preview implementation, not a completed production cutover. The owner inbox and credential/recipient history are paginated; connected accounts are limited to 100 displayed rows. Token deduplication is per account. JavaScript clears references after a local call but does not guarantee secure memory zeroing. A canceled call may have already finalized a credential, which is why retry is idempotent. Provider refresh/rotation behavior, live provider revocation, WorkOS staging sign-in, and two-account isolation remain live verification gates. Physical-phone receipt/approval was reported by the user, and the ordinary native Codex tool completed successfully. Sleep/restart and idle-chat wakeup are not proven; after a timeout, manually re-prompt and retry the same key.
 
 Private setup files are ignored by Git and Vercel uploads. `SCOPE_PROBE_SECRET` is shared only between the prototype server and development Convex deployment; `SCOPE_PROBE_TOKEN_KEY` is the server's AES-GCM key; VAPID private material remains server-only. No WorkOS or Airtable provider secret is committed.
 

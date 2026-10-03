@@ -75,6 +75,8 @@ callback.on("request", async (req, res) => {
       token.expires_in <= 0
     )
       throw new Error("Invalid response");
+    delete config.agentConnectionId;
+    delete config.agentConnectionSecret;
     const temp = configPath + "." + randomBytes(8).toString("hex");
     await writeFile(
       temp,

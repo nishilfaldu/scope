@@ -4,7 +4,6 @@ import { z } from "zod";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { config, db, requester } from "@/lib/probe-server";
-import { notifyApproval } from "@/lib/probe-push";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -49,7 +48,6 @@ export async function POST(request: Request) {
           accountId: args.accountId as Id<"probeAccounts">,
           reason: args.reason,
         });
-        if (created.created) await notifyApproval(actor.userId);
         const until = Date.now() + args.waitSeconds * 1000;
         let status: string = created.status;
         while (Date.now() < until && !extra.signal.aborted) {
@@ -72,7 +70,11 @@ export async function POST(request: Request) {
               text: JSON.stringify({
                 requestId: created.id,
                 status,
-                approvalUrl: config("SCOPE_PROBE_ORIGIN") + "/lab",
+                approvalUrl:
+                  config("SCOPE_PROBE_ORIGIN") +
+                  "/lab?request=" +
+                  created.id +
+                  "#approvals",
                 retryKey: args.key,
               }),
             },
