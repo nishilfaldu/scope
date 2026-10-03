@@ -1,9 +1,6 @@
 import { v } from "convex/values";
 
-// Scope's existing Slack app boundary. Never use Connect's wildcard defaults.
-export const SLACK_SCOPES = [
-  "bookmarks:read",
-  "bookmarks:write",
+export const CONNECT_SLACK_SCOPES = [
   "channels:history",
   "channels:read",
   "chat:write",
@@ -11,7 +8,6 @@ export const SLACK_SCOPES = [
   "files:write",
   "groups:history",
   "groups:read",
-  "identify",
   "im:history",
   "im:read",
   "mpim:history",
@@ -20,7 +16,6 @@ export const SLACK_SCOPES = [
   "pins:write",
   "reactions:read",
   "reactions:write",
-  "search:read",
   "users:read",
 ];
 
@@ -51,8 +46,6 @@ export const bridgeCommandValidator = v.union(
   }),
 );
 
-// Slack rotation is the proof of provider-native expiration; Connect cache TTL
-// alone cannot make an unrotated xoxp token short-lived.
 export function isRotatingSlackUserToken(token: unknown): token is string {
   return typeof token === "string" && /^xoxe\.xoxp-/.test(token);
 }
@@ -61,7 +54,9 @@ export function slackScopesAreBounded(scopes: unknown): scopes is string[] {
     Array.isArray(scopes) &&
     scopes.length > 0 &&
     scopes.every(
-      (scope) => typeof scope === "string" && SLACK_SCOPES.includes(scope),
+      (scope) =>
+        typeof scope === "string" &&
+        (scope === "identify" || CONNECT_SLACK_SCOPES.includes(scope)),
     )
   );
 }

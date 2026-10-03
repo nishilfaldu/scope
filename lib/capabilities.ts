@@ -2,35 +2,10 @@ import { ALL_APPS, type AppId } from "../convex/domain/apps";
 
 export { ALL_APPS, type AppId };
 
-export const APP_LABELS: Record<AppId, string> = {
-  github: "GitHub",
-  gmail: "Gmail",
-  calendar: "Calendar",
-  files: "Google files",
-  slack: "Slack",
-  airtable: "Airtable",
-  notion: "Notion",
-  linear: "Linear",
-  vercel: "Vercel",
-  zoom: "Zoom",
-};
-
+export const APP_LABELS: Record<AppId, string> = { slack: "Slack" };
 export const APP_PERMISSIONS: Record<AppId, string> = {
-  github:
-    "Repository, workflow, and account permissions granted by the GitHub connection.",
-  gmail: "Read, send, and manage mail in the selected Gmail account.",
-  calendar:
-    "Read and manage calendars and events in the selected Google account.",
-  files:
-    "List and inspect Drive files, download non-Google files, and read, create, or edit Google Docs and Sheets through Scope's broker.",
   slack:
-    "Read conversations and files, send messages, and manage bookmarks, pins, and reactions with the connected Slack user.",
-  airtable:
-    "Read and write records and schemas in bases approved during Airtable consent.",
-  notion: "Read and edit pages shared with the Notion integration.",
-  linear: "Read and write issues, projects, and teams in Linear.",
-  vercel: "Access the Vercel account authorized by its OAuth grant.",
-  zoom: "Access meetings and other data allowed by the configured Zoom app scopes.",
+    "Read conversations and files, send messages, and manage pins and reactions with the connected Slack user.",
 };
 
 export const STATUS_LABELS = {

@@ -31,8 +31,7 @@ const sections: TermsSection[] = [
     content: (
       <>
         <p>
-          Scope can connect to GitHub, Google services, Slack, Airtable, Notion,
-          Linear, Vercel, Zoom, and other services we may support. Your use of a
+          Scope connects to Slack through Vercel Connect. Your use of a
           connected service remains subject to that provider&apos;s terms and
           policies. Scope is not operated by or endorsed by those providers.
         </p>
@@ -147,7 +146,7 @@ export default function TermsPage() {
           <aside className="lg:sticky lg:top-10 lg:self-start">
             <p className="text-sm font-semibold">Scope</p>
             <p className="mt-1 text-sm text-[#68746a] dark:text-muted-foreground">
-              Effective September 20, 2026
+              Effective October 3, 2026
             </p>
             <nav
               className="mt-7 hidden border-l border-[#d8e1d4] pl-4 text-sm lg:block dark:border-border"

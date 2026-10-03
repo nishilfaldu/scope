@@ -1,10 +1,7 @@
-// Decision, historical completion, and current authority are independent.
-// Deadlines are events, even when their cleanup job has not run yet.
 export type ResourceStatus = "staged" | "active" | "revoked" | "expired";
 type TerminalEvent = { at: number; reason: string };
 
 function firstEvent(events: TerminalEvent[], now: number) {
-  // At equal timestamps a deadline wins: completion at its deadline is too late.
   return events
     .filter((event) => event.at <= now)
     .sort((a, b) => a.at - b.at)[0];

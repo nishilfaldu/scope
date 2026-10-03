@@ -1,11 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation } from "../../_generated/server";
-import {
-  isAppId,
-  appValidator,
-  providerForApp,
-  providerValidator,
-} from "../../domain/apps";
+import { isAppId, appValidator } from "../../domain/apps";
 import {
   denyResultValidator,
   APP_UNAVAILABLE_ERROR,
@@ -15,7 +10,6 @@ import { selectedConnection } from "../connections/helpers";
 import {
   bindingsForApp,
   denyCreate,
-  githubGrantIsExclusive,
   sliceAccessDenial,
   sliceBySecret,
 } from "./helpers";
@@ -35,7 +29,7 @@ export const authorizeCreate = internalMutation({
       sliceId: v.id("slices"),
       userId: v.id("users"),
       app: appValidator,
-      provider: providerValidator,
+      provider: appValidator,
       bindingId: v.id("sliceBindings"),
       connectionId: v.id("connections"),
       mintPolicy: mintPolicyValidator,
@@ -77,22 +71,12 @@ export const authorizeCreate = internalMutation({
         : null;
     if (!connection)
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
-    if (
-      args.app === "github" &&
-      !(await githubGrantIsExclusive(ctx, connection._id, slice.agentId))
-    ) {
-      return denyCreate(
-        403,
-        "GitHub grant is shared by multiple agents",
-        "APP_UNAVAILABLE",
-      );
-    }
     return {
       ok: true as const,
       sliceId: slice._id,
       userId: slice.userId,
       app: args.app,
-      provider: providerForApp(args.app),
+      provider: args.app,
       bindingId: binding!._id,
       connectionId: connection._id,
       mintPolicy: slice.mintPolicy,
@@ -100,8 +84,6 @@ export const authorizeCreate = internalMutation({
   },
 });
 
-// Run after the provider refresh. This is the final policy check before returning
-// a bearer token, and the only place an approved mint request is consumed.
 export const finalize = internalMutation({
   args: {
     sliceId: v.id("slices"),
@@ -109,13 +91,9 @@ export const finalize = internalMutation({
     bindingId: v.id("sliceBindings"),
     connectionId: v.id("connections"),
     requestId: v.optional(v.id("tokenRequests")),
-    brokerSecretHash: v.optional(v.string()),
-    connectionGrantVersion: v.optional(v.number()),
+    connectionGrantVersion: v.number(),
   },
-  returns: v.union(
-    v.object({ ok: v.literal(true), expiresAt: v.number() }),
-    denyResultValidator,
-  ),
+  returns: v.union(v.object({ ok: v.literal(true) }), denyResultValidator),
   handler: async (ctx, args) => {
     const slice = await ctx.db.get("slices", args.sliceId);
     if (!slice) return denyCreate(401, UNAUTHORIZED_ERROR, "UNAUTHORIZED");
@@ -133,20 +111,9 @@ export const finalize = internalMutation({
       binding.app !== args.app ||
       binding.connectionId !== args.connectionId ||
       !selected ||
-      (args.connectionGrantVersion !== undefined &&
-        selected.grantVersion !== args.connectionGrantVersion)
+      selected.grantVersion !== args.connectionGrantVersion
     ) {
       return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
-    }
-    if (
-      args.app === "github" &&
-      !(await githubGrantIsExclusive(ctx, args.connectionId, slice.agentId))
-    ) {
-      return denyCreate(
-        403,
-        "GitHub grant is shared by multiple agents",
-        "APP_UNAVAILABLE",
-      );
     }
     if (args.requestId) {
       const request = await ctx.db.get("tokenRequests", args.requestId);
@@ -170,21 +137,6 @@ export const finalize = internalMutation({
     } else if (slice.mintPolicy !== "auto") {
       return denyCreate(403, "Operator approval required", "APPROVAL_REQUIRED");
     }
-    const expiresAt = Math.min(slice.expiresAt, Date.now() + 15 * 60_000);
-    if (args.brokerSecretHash) {
-      if (args.app !== "files") {
-        return denyCreate(403, APP_UNAVAILABLE_ERROR, "APP_UNAVAILABLE");
-      }
-      await ctx.db.insert("googleBrokerCredentials", {
-        secretHash: args.brokerSecretHash,
-        sliceId: args.sliceId,
-        bindingId: args.bindingId,
-        connectionId: args.connectionId,
-        app: args.app,
-        connectionGeneration: selected.connectionGeneration ?? 0,
-        expiresAt,
-      });
-    }
-    return { ok: true as const, expiresAt };
+    return { ok: true as const };
   },
 });

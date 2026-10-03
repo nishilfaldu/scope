@@ -6,7 +6,7 @@ import {
 } from "@vercel/connect";
 import { timingSafeEqual } from "node:crypto";
 import {
-  SLACK_SCOPES,
+  CONNECT_SLACK_SCOPES,
   isRotatingSlackUserToken,
   slackScopesAreBounded,
   slackExpiryIsBounded,
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
       id: reference.subjectId,
       issuer: siteUrl.origin,
     };
-    // Project OIDC is read by the SDK. Never substitute a Vercel access token.
+
     const metadata = await getConnectorMetadata(connector);
     if (
       metadata.type !== "slack" ||
@@ -114,7 +114,7 @@ export async function POST(request: Request) {
       await revokeToken(metadata.id, { subject, installationId });
       return Response.json({ ok: true }, { headers: noStore });
     }
-    const params = { subject, installationId, scopes: SLACK_SCOPES };
+    const params = { subject, installationId, scopes: CONNECT_SLACK_SCOPES };
     if (command.operation === "authorize") {
       if (
         typeof command.state !== "string" ||
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       const callback = new URL("/oauth/complete", board);
       callback.searchParams.set("app", "slack");
       callback.searchParams.set("state", command.state);
-      // Connect handles the provider callback. Scope then verifies the subject grant.
+
       callback.searchParams.set("code", "connect");
       const result = await startAuthorization(metadata.id, params, {
         callbackUrl: callback.toString(),
@@ -142,13 +142,28 @@ export async function POST(request: Request) {
       !token.installationId ||
       token.installationId === "*" ||
       (installationId && token.installationId !== installationId)
-    )
+    ) {
+      console.warn("Slack Connect account reference rejected", {
+        connectorMatches: token.connector.id === metadata.id,
+        slackConnector: token.connector.type === "slack",
+        installationPresent: Boolean(token.installationId),
+        installationMatches:
+          !installationId || token.installationId === installationId,
+      });
       return fail(403);
+    }
     if (
       !isRotatingSlackUserToken(token.token) ||
       !slackExpiryIsBounded(token.expiresAt)
-    )
+    ) {
+      console.warn("Slack Connect credential rejected", {
+        rotatingUser: isRotatingSlackUserToken(token.token),
+        unrotatedUser:
+          typeof token.token === "string" && token.token.startsWith("xoxp-"),
+        boundedExpiry: slackExpiryIsBounded(token.expiresAt),
+      });
       return fail(503);
+    }
     const identityResponse = await fetch("https://slack.com/api/auth.test", {
       method: "POST",
       headers: { Authorization: `Bearer ${token.token}` },
@@ -170,14 +185,36 @@ export async function POST(request: Request) {
       typeof identity.user_id !== "string" ||
       !identity.user_id ||
       !slackScopesAreBounded(scopes)
-    )
+    ) {
+      console.warn("Slack Connect identity rejected", {
+        providerOk:
+          identityResponse.ok &&
+          isPlainObject(identity) &&
+          identity.ok === true,
+        userIdentity:
+          isPlainObject(identity) &&
+          !identity.bot_id &&
+          typeof identity.team_id === "string" &&
+          typeof identity.user_id === "string",
+        boundedScopes: slackScopesAreBounded(scopes),
+        grantedScopes: scopes,
+      });
       return fail(403);
+    }
     if (
       (token.tenantId !== undefined && token.tenantId !== identity.team_id) ||
       (token.externalSubject !== undefined &&
         token.externalSubject !== identity.user_id)
-    )
+    ) {
+      console.warn("Slack Connect provider subject rejected", {
+        tenantMatches:
+          token.tenantId === undefined || token.tenantId === identity.team_id,
+        subjectMatches:
+          token.externalSubject === undefined ||
+          token.externalSubject === identity.user_id,
+      });
       return fail(403);
+    }
     const providerUserId = `${identity.team_id}:${identity.user_id}`;
     if (
       command.providerUserId !== undefined &&
@@ -197,7 +234,6 @@ export async function POST(request: Request) {
       { headers: noStore },
     );
   } catch {
-    // Do not disclose SDK/vendor payloads, upstream credentials, or bridge secrets.
     return fail(503);
   }
 }

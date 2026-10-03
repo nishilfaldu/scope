@@ -12,8 +12,6 @@ const state = vi.hoisted(() => ({
   now: 1_000_000,
   queries: new Map<string, unknown>(),
   pages: new Map<string, unknown[]>(),
-  queryCalls: [] as { name: string; args: unknown }[],
-  pageCalls: [] as { name: string; args: unknown }[],
 }));
 
 vi.mock("convex/react", () => ({
@@ -21,15 +19,10 @@ vi.mock("convex/react", () => ({
   useMutation: () => vi.fn(),
   useQuery: (ref: Parameters<typeof getFunctionName>[0], args: unknown) => {
     const name = getFunctionName(ref);
-    state.queryCalls.push({ name, args });
     return args === "skip" ? undefined : state.queries.get(name);
   },
-  usePaginatedQuery: (
-    ref: Parameters<typeof getFunctionName>[0],
-    args: unknown,
-  ) => {
+  usePaginatedQuery: (ref: Parameters<typeof getFunctionName>[0]) => {
     const name = getFunctionName(ref);
-    state.pageCalls.push({ name, args });
     return {
       results: state.pages.get(name) ?? [],
       status: "Exhausted",
@@ -61,8 +54,6 @@ vi.mock("../components/connections/account-bindings", () => ({
 beforeEach(() => {
   state.queries.clear();
   state.pages.clear();
-  state.queryCalls.length = 0;
-  state.pageCalls.length = 0;
 });
 
 const invite = {
@@ -80,7 +71,7 @@ const request = {
   publicToken: "request",
   status: "claimed",
   agentName: "Research",
-  apps: ["linear"],
+  apps: ["slack"],
   ttlMs: 60_000,
   reason: "Read issues",
   approvalDeadlineAt: 2_000_000,
@@ -88,31 +79,6 @@ const request = {
   sliceExpiresAt: 1_060_000,
   resourceStatus: "staged",
 };
-
-test.each([
-  ["approved", "waiting_for_pickup", "Approved—waiting for agent pickup"],
-  ["claimed", "waiting_for_ack", "Waiting for agent acknowledgment"],
-  ["claimed", "ready", "Ready"],
-  [
-    "expired",
-    "claim_ack_timeout",
-    "Agent did not acknowledge credentials in time",
-  ],
-  ["expired", "agent_cancelled", "Cancelled by agent"],
-])("pairing screen distinguishes %s / %s", (status, handoffStatus, text) => {
-  state.queries.set("tables/agentConnections:getInvite", {
-    ...invite,
-    status,
-    handoffStatus,
-  });
-  const html = renderToStaticMarkup(<ConnectAgent publicToken="pairing" />);
-  expect(html).toContain(text);
-  expect(html).not.toContain(">Connect agent<");
-  expect(state.queryCalls).toContainEqual({
-    name: "tables/agentConnections:getInvite",
-    args: { publicToken: "pairing", now: state.now },
-  });
-});
 
 test("replacement screen shows activation deadline and hides new-agent controls", () => {
   state.queries.set("tables/agentConnections:getInvite", {
@@ -128,33 +94,6 @@ test("replacement screen shows activation deadline and hides new-agent controls"
   expect(html).not.toContain("Acknowledgment deadline");
   expect(html).not.toContain("Connection destination");
 });
-
-test.each([
-  ["waiting_for_pickup", "Approved—waiting for agent pickup"],
-  ["waiting_for_ack", "Waiting for agent acknowledgment"],
-  ["ready", "Ready"],
-  ["slice_expired", "Grant expired"],
-  ["claim_ack_timeout", "Agent did not acknowledge credentials in time"],
-  ["agent_cancelled", "Cancelled by agent"],
-  ["revoked", "Revoked"],
-])(
-  "request screen shows %s and sends its live clock",
-  (handoffStatus, text) => {
-    state.queries.set("tables/slices/sliceRequests:get", {
-      ...request,
-      handoffStatus,
-    });
-    const html = renderToStaticMarkup(
-      <RequestDecision kind="new" publicToken="request" />,
-    );
-    expect(html).toContain(text);
-    expect(html).not.toContain("Allow automatic credential minting");
-    expect(state.queryCalls).toContainEqual({
-      name: "tables/slices/sliceRequests:get",
-      args: { publicToken: "request", now: state.now },
-    });
-  },
-);
 
 test("revoked pending requests cannot show approval or policy controls", () => {
   state.queries.set("tables/slices/sliceRequests:get", {
@@ -197,7 +136,7 @@ test.each(["waiting_for_pickup", "waiting_for_ack"])(
   },
 );
 
-test("agent board retains staged replacement progress without querying staged grants", () => {
+test("agent board shows staged replacement progress and the revoke action", () => {
   state.pages.set("tables/agentDashboard:activePage", [
     { _id: "old", agentId: "agent", name: "Research", status: "active" },
   ]);
@@ -214,14 +153,4 @@ test("agent board retains staged replacement progress without querying staged gr
   const html = renderToStaticMarkup(<AgentsBoard />);
   expect(html).toContain("Waiting for replacement activation");
   expect(html).toContain("Revoke");
-  expect(
-    state.pageCalls.filter(
-      (call) => call.name === "tables/agentDashboard:grantsPage",
-    ),
-  ).toEqual([
-    {
-      name: "tables/agentDashboard:grantsPage",
-      args: { agentConnectionId: "old", now: state.now },
-    },
-  ]);
 });

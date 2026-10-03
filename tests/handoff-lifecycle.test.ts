@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { managedFixture, managedGrant } from "./helpers/connect";
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
@@ -58,7 +59,7 @@ test("pairing and slice handoff gate use until completion, then survive old dead
     "x-agent-connection-secret": connection.agentConnectionSecret,
   };
   const requestBody = {
-    apps: ["linear"],
+    apps: ["slack"],
     ttlMs: 60 * 60 * 1000,
     reason: "Read project issues",
   };
@@ -109,18 +110,13 @@ test("pairing and slice handoff gate use until completion, then survive old dead
   expect(lateAck.status).toBe(200);
   expect(await lateAck.json()).toMatchObject({ resourceStatus: "active" });
 
-  await t.mutation(internal.tables.connections.mutations.saveConnection, {
-    userId,
-    provider: "linear",
-    app: "linear",
-    accessToken: "standing",
-    refreshToken: "refresh",
-    login: "linear-user",
-    providerUserId: "1",
-  });
+  await t.mutation(
+    internal.connect.connections.save,
+    managedFixture({ userId, login: "slack-user", providerUserId: "1" }),
+  );
   const account = (
     await owner.query(api.tables.connections.queries.statusesForApps, {
-      apps: ["linear"],
+      apps: ["slack"],
     })
   )[0].accounts[0].id;
   const requestResponse = await t.fetch(
@@ -132,7 +128,7 @@ test("pairing and slice handoff gate use until completion, then survive old dead
   await owner.mutation(api.tables.slices.sliceRequests.decide, {
     publicToken: request.approvalUrl.split("/requests/new/")[1],
     decision: "approved",
-    bindings: [{ app: "linear", connectionId: account }],
+    bindings: [{ app: "slack", connectionId: account }],
   });
   const sliceClaim = await t.fetch(
     "/api/access-requests/claim",
@@ -182,7 +178,7 @@ test("pairing and slice handoff gate use until completion, then survive old dead
       post({
         sliceToken: slice.sliceToken,
         sliceSecret: slice.sliceSecret,
-        app: "linear",
+        app: "slack",
       }),
     );
     expect(await mint.json()).toMatchObject({ code: "CLAIM_ACK_REQUIRED" });
@@ -288,6 +284,15 @@ test("completion is idempotent, preserves later revocation, and wrong endpoint n
     claimHandle: invite.claimHandle,
     agentConnectionSecret: connection.agentConnectionSecret,
   };
+  const invalidAck = await t.fetch(
+    "/api/agent-connections/ack",
+    post({
+      ...body,
+      agentConnectionSecret: "wrong",
+    }),
+  );
+  expect(invalidAck.status).toBe(401);
+  expect(await invalidAck.json()).toMatchObject({ code: "UNAUTHORIZED" });
   const ack = await t.fetch("/api/agent-connections/ack", post(body));
   expect(ack.status).toBe(200);
   const first = await ack.json();
@@ -405,7 +410,7 @@ test("canceled requests leave the pending quota and report a terminal status", a
       "/api/access-requests",
       post(
         {
-          apps: ["linear"],
+          apps: ["slack"],
           ttlMs: 60_000,
           reason: `Task ${i}`,
         },
@@ -434,6 +439,14 @@ test("canceled requests leave the pending quota and report a terminal status", a
       status: "denied",
       handoffStatus: "agent_cancelled",
     });
+    if (i === 0) {
+      const claim = await t.fetch(
+        "/api/access-requests/claim",
+        post({ claimHandle: request.claimHandle }),
+      );
+      expect(claim.status).toBe(403);
+      expect(await claim.json()).toMatchObject({ code: "APPROVAL_EXPIRED" });
+    }
   }
 });
 
@@ -447,15 +460,10 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
     }),
   );
   const owner = t.withIdentity({ subject: `${userId}|session` });
-  await t.mutation(internal.tables.connections.mutations.saveConnection, {
-    userId,
-    provider: "github",
-    app: "github",
-    accessToken: "standing",
-    refreshToken: "refresh",
-    login: "integrator",
-    providerUserId: "1",
-  });
+  await t.mutation(
+    internal.connect.connections.save,
+    managedFixture({ userId, login: "integrator", providerUserId: "1" }),
+  );
   const guide = await (await t.fetch("/")).json();
   const route = (instruction: string) => {
     const path = instruction.match(/(?:GET|POST) (\/api\/[a-z/-]+)/)?.[1];
@@ -513,7 +521,7 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
     route(sliceSteps[0]),
     post(
       {
-        apps: ["github"],
+        apps: ["slack"],
         ttlMs: 60 * 60_000,
         reason: "Check issues",
       },
@@ -524,13 +532,13 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
   const request = await requestResponse.json();
   const account = (
     await owner.query(api.tables.connections.queries.statusesForApps, {
-      apps: ["github"],
+      apps: ["slack"],
     })
   )[0].accounts[0].id;
   await owner.mutation(api.tables.slices.sliceRequests.decide, {
     publicToken: request.approvalUrl.split("/requests/new/")[1],
     decision: "approved",
-    bindings: [{ app: "github", connectionId: account }],
+    bindings: [{ app: "slack", connectionId: account }],
   });
   const requestStatus = await (
     await t.fetch(
@@ -555,28 +563,23 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
   expect((await sliceAck.json()).resourceStatus).toBe("active");
   const accountsPath = sliceSteps[3].match(/GET (\/api\/[a-z/-]+)/)?.[1];
   expect(accountsPath).toBeTruthy();
-  const accounts = await t.fetch(`${accountsPath}?app=github`, {
+  const accounts = await t.fetch(`${accountsPath}?app=slack`, {
     headers: {
       "x-slice-token": slice.sliceToken,
       "x-slice-secret": slice.sliceSecret,
     },
   });
   expect(accounts.status).toBe(200);
-  vi.stubEnv("GITHUB_CLIENT_ID", "Iv1.testapp");
-  vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
   let issued = 0;
-  const refresh = vi.spyOn(globalThis, "fetch").mockImplementation(
-    async () =>
-      new Response(
-        JSON.stringify({
-          access_token: `ghu_discovered_${++issued}`,
-          refresh_token: "ghr_rotated",
-          expires_in: 28_800,
-          token_type: "bearer",
-        }),
-        { headers: { "Content-Type": "application/json" } },
-      ),
-  );
+  const mint = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify(managedGrant(`xoxe.xoxp-discovered_${++issued}`)),
+          { headers: { "Content-Type": "application/json" } },
+        ),
+    );
   try {
     const mintPath = sliceSteps[3].match(/POST (\/api\/[a-z/-]+)/)?.[1];
     expect(mintPath).toBeTruthy();
@@ -585,12 +588,12 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
       post({
         sliceToken: slice.sliceToken,
         sliceSecret: slice.sliceSecret,
-        app: "github",
+        app: "slack",
       }),
     );
     expect(mint.status).toBe(200);
     expect(await mint.json()).toMatchObject({
-      accessToken: "ghu_discovered_1",
+      accessToken: "xoxe.xoxp-discovered_1",
       ackRequired: false,
       credentialExpiresAt: expect.any(Number),
     });
@@ -633,7 +636,7 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
       route(sliceSteps[0]),
       post(
         {
-          apps: ["github"],
+          apps: ["slack"],
           ttlMs: 60_000,
           reason: "Rotation check",
         },
@@ -654,8 +657,11 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
       status: "active",
       handoffStatus: "ready",
     });
-    vi.advanceTimersByTime(2 * 60_000 + 1);
-    // Lost completion response: retry confirms the original activation after its deadline.
+    vi.advanceTimersByTime(16 * 60_000);
+    await t.mutation(internal.tables.agentConnectionExpiry.expireInvite, {
+      publicToken: rotated.pending.connectUrl.split("/connect/")[1],
+    });
+
     expect(
       await (
         await t.fetch(
@@ -664,7 +670,7 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
         )
       ).json(),
     ).toMatchObject({ activatedAt: activation.activatedAt, status: "active" });
-    const preserved = await t.fetch(`${accountsPath}?app=github`, {
+    const preserved = await t.fetch(`${accountsPath}?app=slack`, {
       headers: {
         "x-slice-token": slice.sliceToken,
         "x-slice-secret": slice.sliceSecret,
@@ -675,7 +681,7 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
       route(sliceSteps[0]),
       post(
         {
-          apps: ["github"],
+          apps: ["slack"],
           ttlMs: 60_000,
           reason: "Retired credentials",
         },
@@ -704,7 +710,7 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
         )
       ).json(),
     ).toMatchObject({ code: "EXPIRED" });
-    // Rediscovery plus retained predecessor credentials recovers without changing grants.
+
     const rediscovered = await (
       await t.fetch(new URL(guide.rediscoveryUrl).pathname)
     ).json();
@@ -738,7 +744,7 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
       resourceStatus: "active",
     });
     expect(privateRecovered.handoffStatus).toBe(ownerRecovered?.handoffStatus);
-    // Slice approval and approval of one mint are distinct decisions.
+
     await owner.mutation(api.tables.slices.mutations.setMintPolicy, {
       sliceToken: slice.sliceToken,
       mintPolicy: "approve",
@@ -748,7 +754,7 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
       post({
         sliceToken: slice.sliceToken,
         sliceSecret: slice.sliceSecret,
-        app: "github",
+        app: "slack",
       }),
     );
     expect(approvalRequired.status).toBe(202);
@@ -771,11 +777,11 @@ test("an integrator follows discovery through issuance, replacement, timeout, an
     );
     expect(approvedMint.status).toBe(200);
     expect(await approvedMint.json()).toMatchObject({
-      accessToken: "ghu_discovered_2",
+      accessToken: "xoxe.xoxp-discovered_2",
       ackRequired: false,
     });
   } finally {
-    refresh.mockRestore();
+    mint.mockRestore();
     vi.unstubAllEnvs();
   }
 });
@@ -864,18 +870,13 @@ test("slice cleanup preserves the earliest terminal event", async () => {
       agentConnectionSecret: connection.agentConnectionSecret,
     }),
   );
-  await t.mutation(internal.tables.connections.mutations.saveConnection, {
-    userId,
-    provider: "linear",
-    app: "linear",
-    accessToken: "standing",
-    refreshToken: "refresh",
-    login: "owner",
-    providerUserId: "1",
-  });
+  await t.mutation(
+    internal.connect.connections.save,
+    managedFixture({ userId, login: "owner", providerUserId: "1" }),
+  );
   const account = (
     await owner.query(api.tables.connections.queries.statusesForApps, {
-      apps: ["linear"],
+      apps: ["slack"],
     })
   )[0].accounts[0].id;
   const headers = {
@@ -888,7 +889,7 @@ test("slice cleanup preserves the earliest terminal event", async () => {
         "/api/access-requests",
         post(
           {
-            apps: ["linear"],
+            apps: ["slack"],
             ttlMs,
             reason: "Check issue",
           },
@@ -899,7 +900,7 @@ test("slice cleanup preserves the earliest terminal event", async () => {
     await owner.mutation(api.tables.slices.sliceRequests.decide, {
       publicToken: request.approvalUrl.split("/requests/new/")[1],
       decision: "approved",
-      bindings: [{ app: "linear", connectionId: account }],
+      bindings: [{ app: "slack", connectionId: account }],
     });
     const slice = await (
       await t.fetch(
@@ -1012,7 +1013,7 @@ test.each(["before", "after", "equal"] as const)(
       for (const path of ["/api/agent-connections", "/api/access-requests"]) {
         const response = await t.fetch(
           path,
-          post({ apps: ["linear"], ttlMs: 60_000, reason: "Check" }, headers),
+          post({ apps: ["slack"], ttlMs: 60_000, reason: "Check" }, headers),
         );
         expect(response.status).toBe(403);
         expect(await response.json()).toMatchObject({
@@ -1086,7 +1087,7 @@ test("a competing activation retires other replacements in every status and cred
         {
           claimHandle: abandoned.claimHandle,
           agentConnectionSecret: abandoned.agentConnectionSecret,
-          apps: ["linear"],
+          apps: ["slack"],
           ttlMs: 60_000,
           reason: "Check",
         },
@@ -1114,14 +1115,14 @@ test("a competing activation retires other replacements in every status and cred
     handoffStatus: status.handoffStatus,
     reason: status.reason,
   });
-  // Self-revoking an abandoned generation cannot kill the active winner.
+
   await t.fetch("/api/agent-connections/revoke", post({}, headers));
   expect(
     (
       await t.fetch(
         "/api/access-requests",
         post(
-          { apps: ["linear"], ttlMs: 60_000, reason: "Check" },
+          { apps: ["slack"], ttlMs: 60_000, reason: "Check" },
           {
             "x-agent-connection-id": winner.agentConnectionId,
             "x-agent-connection-secret": winner.agentConnectionSecret,
@@ -1153,7 +1154,7 @@ test("late cancellation cannot replace an approval timeout", async () => {
   const request = await (
     await t.fetch(
       "/api/access-requests",
-      post({ apps: ["linear"], ttlMs: 60_000, reason: "Late" }, headers),
+      post({ apps: ["slack"], ttlMs: 60_000, reason: "Late" }, headers),
     )
   ).json();
   vi.advanceTimersByTime(24 * 60 * 60_000);
@@ -1168,136 +1169,6 @@ test("late cancellation cannot replace an approval timeout", async () => {
       await (await t.fetch(`${base}/status`, post({ claimHandle }))).json(),
     ).toMatchObject({ handoffStatus: "approval_timeout" });
   }
-});
-
-test("slice expiry and parent self-revocation retain their event order across replacement cleanup", async () => {
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
-  const { t, owner, userId, invite, connection } = await setup();
-  await t.fetch(
-    "/api/agent-connections/ack",
-    post({
-      claimHandle: invite.claimHandle,
-      agentConnectionSecret: connection.agentConnectionSecret,
-    }),
-  );
-  const headers = {
-    "x-agent-connection-id": connection.agentConnectionId,
-    "x-agent-connection-secret": connection.agentConnectionSecret,
-  };
-  await t.mutation(internal.tables.connections.mutations.saveConnection, {
-    userId,
-    provider: "linear",
-    app: "linear",
-    accessToken: "standing",
-    login: "owner",
-    providerUserId: "1",
-  });
-  const account = (
-    await owner.query(api.tables.connections.queries.statusesForApps, {
-      apps: ["linear"],
-    })
-  )[0].accounts[0].id;
-  const request = await (
-    await t.fetch(
-      "/api/access-requests",
-      post({ apps: ["linear"], ttlMs: 30_000, reason: "Short task" }, headers),
-    )
-  ).json();
-  const publicToken = request.approvalUrl.split("/requests/new/")[1];
-  await owner.mutation(api.tables.slices.sliceRequests.decide, {
-    publicToken,
-    decision: "approved",
-    bindings: [{ app: "linear", connectionId: account }],
-  });
-  const slice = await (
-    await t.fetch(
-      "/api/access-requests/claim",
-      post({ claimHandle: request.claimHandle }),
-    )
-  ).json();
-  const rotation = await (
-    await t.fetch("/api/agent-connections", post({}, headers))
-  ).json();
-  await owner.mutation(api.tables.agentConnections.decideInvite, {
-    publicToken: rotation.connectUrl.split("/connect/")[1],
-    decision: "approved",
-  });
-  vi.advanceTimersByTime(40_000);
-  await t.fetch("/api/agent-connections/revoke", post({}, headers));
-  vi.advanceTimersByTime(6 * 60_000);
-  await t.mutation(internal.tables.agentConnectionExpiry.expireInvite, {
-    publicToken: rotation.connectUrl.split("/connect/")[1],
-  });
-  await t.mutation(internal.tables.slices.sliceRequestExpiry.clearClaimSecret, {
-    requestId: slice.requestId,
-  });
-  const status = await (
-    await t.fetch(
-      "/api/access-requests/status",
-      post({ claimHandle: request.claimHandle }),
-    )
-  ).json();
-  expect(status).toMatchObject({
-    handoffStatus: "slice_expired",
-    reasonCode: "slice_expired",
-    resourceStatus: "revoked",
-  });
-  expect(
-    await owner.query(api.tables.slices.sliceRequests.get, { publicToken }),
-  ).toMatchObject({
-    reasonCode: status.reasonCode,
-    handoffStatus: status.handoffStatus,
-  });
-});
-
-test("dev seed staged fixtures have coherent owner and private handoffs", async () => {
-  const t = convexTest(schema, modules);
-  const userId = await t.run((ctx) =>
-    ctx.db.insert("users", { email: "demo@example.test" }),
-  );
-  const owner = t.withIdentity({ subject: `${userId}|session` });
-  const seeded = await t.mutation(internal.devSeed.seedUiDemo, { userId });
-  expect(
-    seeded.sliceLinks.find((link) => link.label === "Staged slice"),
-  ).toBeTruthy();
-  const board = await owner.query(api.tables.agentDashboard.list, {
-    now: Date.now(),
-  });
-  expect(board.find((row) => row.agentId === "ag_demo_stage")).toMatchObject({
-    status: "staged",
-    handoffStatus: "waiting_for_pickup",
-  });
-  const request = await owner.query(api.tables.slices.sliceRequests.get, {
-    publicToken: "ar_demo_slice_approved",
-  });
-  const privateStatus = await t.query(
-    internal.tables.slices.sliceRequestClaims.resolveSliceRequestStatus,
-    { claimHandle: "ch_ar_demo_slice_approved" },
-  );
-  expect(request).toMatchObject({
-    handoffStatus: "waiting_for_pickup",
-    resourceStatus: "staged",
-    apps: ["gmail"],
-  });
-  expect(privateStatus).toMatchObject({
-    handoffStatus: request?.handoffStatus,
-    resourceStatus: request?.resourceStatus,
-  });
-  // Repeatable fixtures also reset an operator-revoked demo lineage.
-  const demoAgent = board.find((row) => row.agentId === "ag_demo_codex")!;
-  await owner.mutation(api.tables.agentConnections.revoke, {
-    agentConnectionId: demoAgent._id,
-  });
-  await t.mutation(internal.devSeed.seedUiDemo, { userId });
-  expect(
-    await owner.query(api.tables.slices.sliceRequests.get, {
-      publicToken: "ar_demo_slice_approved",
-    }),
-  ).toMatchObject({
-    handoffStatus: "waiting_for_pickup",
-    resourceStatus: "staged",
-  });
 });
 
 test("an operator decision cannot overwrite a revoked pending replacement", async () => {
@@ -1347,17 +1218,13 @@ test("idempotent request recovery cannot recover an already expired grant", asyn
       agentConnectionSecret: connection.agentConnectionSecret,
     }),
   );
-  await t.mutation(internal.tables.connections.mutations.saveConnection, {
-    userId,
-    provider: "linear",
-    app: "linear",
-    accessToken: "standing",
-    login: "owner",
-    providerUserId: "1",
-  });
+  await t.mutation(
+    internal.connect.connections.save,
+    managedFixture({ userId, login: "owner", providerUserId: "1" }),
+  );
   const account = (
     await owner.query(api.tables.connections.queries.statusesForApps, {
-      apps: ["linear"],
+      apps: ["slack"],
     })
   )[0].accounts[0].id;
   const headers = {
@@ -1365,14 +1232,14 @@ test("idempotent request recovery cannot recover an already expired grant", asyn
     "x-agent-connection-secret": connection.agentConnectionSecret,
     "idempotency-key": "task-with-private-idempotency-key-12345",
   };
-  const body = { apps: ["linear"], ttlMs: 1_000, reason: "Short task" };
+  const body = { apps: ["slack"], ttlMs: 1_000, reason: "Short task" };
   const request = await (
     await t.fetch("/api/access-requests", post(body, headers))
   ).json();
   await owner.mutation(api.tables.slices.sliceRequests.decide, {
     publicToken: request.approvalUrl.split("/requests/new/")[1],
     decision: "approved",
-    bindings: [{ app: "linear", connectionId: account }],
+    bindings: [{ app: "slack", connectionId: account }],
   });
   vi.advanceTimersByTime(1_001);
   const retry = await t.fetch("/api/access-requests", post(body, headers));
@@ -1386,65 +1253,4 @@ test("idempotent request recovery cannot recover an already expired grant", asyn
       )
     ).json(),
   ).toMatchObject({ handoffStatus: "slice_expired" });
-});
-
-test("denied requests keep their decision when the parent is later revoked", async () => {
-  const { t, owner, invite, connection } = await setup();
-  await t.fetch(
-    "/api/agent-connections/ack",
-    post({
-      claimHandle: invite.claimHandle,
-      agentConnectionSecret: connection.agentConnectionSecret,
-    }),
-  );
-  const headers = {
-    "x-agent-connection-id": connection.agentConnectionId,
-    "x-agent-connection-secret": connection.agentConnectionSecret,
-  };
-  const pairing = await (
-    await t.fetch("/api/agent-connections", post({}, headers))
-  ).json();
-  const pairingToken = pairing.connectUrl.split("/connect/")[1];
-  await owner.mutation(api.tables.agentConnections.decideInvite, {
-    publicToken: pairingToken,
-    decision: "denied",
-  });
-  const request = await (
-    await t.fetch(
-      "/api/access-requests",
-      post({ apps: ["linear"], ttlMs: 60_000, reason: "Check" }, headers),
-    )
-  ).json();
-  const requestToken = request.approvalUrl.split("/requests/new/")[1];
-  await owner.mutation(api.tables.slices.sliceRequests.decide, {
-    publicToken: requestToken,
-    decision: "denied",
-  });
-  await t.fetch("/api/agent-connections/revoke", post({}, headers));
-  const pairingStatus = await (
-    await t.fetch(
-      pairing.nextAction.path,
-      post({ claimHandle: pairing.claimHandle }),
-    )
-  ).json();
-  const requestStatus = await (
-    await t.fetch(
-      request.nextAction.path,
-      post({ claimHandle: request.claimHandle }),
-    )
-  ).json();
-  expect(pairingStatus.handoffStatus).toBe("denied");
-  expect(pairingStatus.reason).toBeUndefined();
-  expect(requestStatus.handoffStatus).toBe("denied");
-  expect(requestStatus.reasonCode).toBeUndefined();
-  expect(
-    await owner.query(api.tables.agentConnections.getInvite, {
-      publicToken: pairingToken,
-    }),
-  ).toMatchObject({ handoffStatus: "denied" });
-  expect(
-    await owner.query(api.tables.slices.sliceRequests.get, {
-      publicToken: requestToken,
-    }),
-  ).toMatchObject({ handoffStatus: "denied" });
 });

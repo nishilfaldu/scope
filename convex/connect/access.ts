@@ -7,7 +7,11 @@ import {
   slackScopesAreBounded,
   slackExpiryIsBounded,
 } from "./contracts";
-import type { IssueShortLivedAccessResult } from "../oauth/access";
+import type { AgentErrorCode } from "../lib/errors";
+
+type IssueConnectAccessResult =
+  | { accessToken: string; expiresAt: number; connectionGrantVersion: number }
+  | { error: string; code: AgentErrorCode };
 
 export function verifiedGrant(raw: Record<string, unknown>) {
   if (
@@ -38,12 +42,13 @@ export async function issueConnectAccess(
   ctx: ActionCtx,
   userId: Id<"users">,
   connectionId: Id<"connections">,
-): Promise<IssueShortLivedAccessResult | null> {
+): Promise<IssueConnectAccessResult> {
   const connection = await ctx.runQuery(internal.connect.connections.get, {
     userId,
     connectionId,
   });
-  if (!connection) return null;
+  if (!connection)
+    return { error: "Slack is not connected", code: "APP_UNAVAILABLE" };
   try {
     const raw = await callBridge(ctx, {
       operation: "token",
@@ -69,7 +74,6 @@ export async function issueConnectAccess(
     return {
       accessToken: grant.accessToken,
       expiresAt: grant.expiresAt,
-      grantedScopes: grant.grantedScopes,
       connectionGrantVersion: current.grantVersion,
     };
   } catch {

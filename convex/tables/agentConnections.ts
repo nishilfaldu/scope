@@ -108,7 +108,7 @@ export async function agentAccessRevokedAt(
     )
     .unique();
   if (active) return currentLineage?.revokedAt;
-  // An abandoned staged generation never held authority over existing grants.
+
   for await (const row of ctx.db
     .query("agentConnections")
     .withIndex("by_agentId_status", (q) =>

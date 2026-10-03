@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { managedFixture } from "./helpers/connect";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
@@ -11,178 +12,25 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("app-bound OAuth state", () => {
-  test("a Gmail state cannot start the Calendar connect route", async () => {
-    vi.stubEnv("BOARD_ORIGIN", "http://localhost:3000");
-    vi.stubEnv("GOOGLE_CLIENT_ID", "shared-client");
-    vi.stubEnv("CONVEX_SITE_URL", "https://scope.convex.site");
-    const test = t();
-    const userId = await test.run(async (ctx) =>
-      ctx.db.insert("users", { name: "Owner", email: "owner@example.com" }),
-    );
-    const backend = test.withIdentity({ subject: `${userId}|session-1` });
-    const { state } = await backend.mutation(
-      api.tables.oauthStates.mutations.start,
-      {
-        app: "gmail",
-        returnTo: "http://localhost:3000/connections",
-      },
-    );
-    expect(
-      (await test.fetch(`/api/calendar/connect?state=${state}`)).status,
-    ).toBe(400);
-    const response = await test.fetch(`/api/gmail/connect?state=${state}`);
-    expect(response.status).toBe(302);
-    expect(
-      new URL(response.headers.get("location")!).searchParams.get(
-        "redirect_uri",
-      ),
-    ).toBe("https://scope.convex.site/api/gmail/callback");
-  });
-});
-
-describe("Google disconnect", () => {
-  test("disconnect is local even for the last Google connection", async () => {
-    const test = t();
-    const userId = await test.run(async (ctx) =>
-      ctx.db.insert("users", { name: "Owner", email: "owner@example.com" }),
-    );
-    await test.mutation(internal.tables.connections.mutations.saveConnection, {
-      userId,
-      provider: "google",
-      app: "gmail",
-      providerUserId: "sub-x",
-      login: "x@gmail.com",
-      accessToken: "access-x",
-      refreshToken: "refresh-x",
-    });
-    const backend = test.withIdentity({ subject: `${userId}|session-1` });
-    const status = (
-      await backend.query(api.tables.connections.queries.statusesForApps, {
-        apps: ["gmail"],
-      })
-    ).find((row) => row.app === "gmail")!;
-    const upstream = vi.spyOn(globalThis, "fetch");
-    await backend.action(api.tables.connections.actions.disconnect, {
-      app: "gmail",
-      connectionId: status.accounts[0].id,
-    });
-    const after = (
-      await backend.query(api.tables.connections.queries.statusesForApps, {
-        apps: ["gmail"],
-      })
-    ).find((row) => row.app === "gmail")!;
-    expect(upstream).not.toHaveBeenCalled();
-    expect(after).toEqual({
-      provider: "google",
-      app: "gmail",
-      connected: false,
-      accounts: [],
-    });
-  });
-
-  test("removing one app preserves other Google app connections", async () => {
-    const test = t();
-    const userId = await test.run(async (ctx) =>
-      ctx.db.insert("users", { name: "Owner", email: "owner@example.com" }),
-    );
-    for (const app of ["gmail", "calendar"] as const) {
-      await test.mutation(
-        internal.tables.connections.mutations.saveConnection,
-        {
-          userId,
-          provider: "google",
-          app,
-          providerUserId: `${app}:service-id`,
-          login: "x@gmail.com",
-          accessToken: `access-${app}`,
-          refreshToken: `refresh-${app}`,
-        },
-      );
-    }
-    const backend = test.withIdentity({ subject: `${userId}|session-1` });
-    const statuses = await backend.query(
-      api.tables.connections.queries.statusesForApps,
-      { apps: ["gmail", "calendar"] },
-    );
-    const gmailId = statuses.find((row) => row.app === "gmail")!.accounts[0].id;
-    const calendarId = statuses.find((row) => row.app === "calendar")!
-      .accounts[0].id;
-    const upstream = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(new Response("", { status: 200 }));
-    await backend.action(api.tables.connections.actions.disconnect, {
-      app: "gmail",
-      connectionId: gmailId,
-    });
-    expect(upstream).not.toHaveBeenCalled();
-    expect(
-      await backend.query(api.tables.connections.queries.statusesForApps, {
-        apps: ["gmail", "calendar"],
-      }),
-    ).toEqual([
-      { provider: "google", app: "gmail", connected: false, accounts: [] },
-      {
-        provider: "google",
-        app: "calendar",
-        connected: true,
-        accounts: [
-          expect.objectContaining({
-            id: calendarId,
-            login: "x@gmail.com",
-            providerUserId: "calendar:service-id",
-          }),
-        ],
-      },
-    ]);
-    await backend.action(api.tables.connections.actions.disconnect, {
-      app: "calendar",
-      connectionId: calendarId,
-    });
-    expect(upstream).not.toHaveBeenCalled();
-    expect(
-      await backend.query(api.tables.connections.queries.statusesForApps, {
-        apps: ["gmail", "calendar"],
-      }),
-    ).toEqual([
-      { provider: "google", app: "gmail", connected: false, accounts: [] },
-      {
-        provider: "google",
-        app: "calendar",
-        connected: false,
-        accounts: [],
-      },
-    ]);
-  });
-});
-
 describe("multi-account bindings", () => {
-  test("one slice allows two Gmail accounts and pins approval to the chosen binding", async () => {
+  test("one slice allows two Slack accounts and pins approval to the chosen binding", async () => {
     const test = t();
     const userId = await test.run(async (ctx) =>
       ctx.db.insert("users", { name: "Owner", email: "owner@example.com" }),
     );
     for (const [providerUserId, login] of [
-      ["sub-x", "x@gmail.com"],
-      ["sub-y", "y@gmail.com"],
+      ["sub-x", "Alice (Workspace)"],
+      ["sub-y", "Bob (Workspace)"],
     ] as const) {
       await test.mutation(
-        internal.tables.connections.mutations.saveConnection,
-        {
-          userId,
-          provider: "google",
-          app: "gmail",
-          providerUserId,
-          login,
-          accessToken: `access-${providerUserId}`,
-          refreshToken: `refresh-${providerUserId}`,
-        },
+        internal.connect.connections.save,
+        managedFixture({ userId, providerUserId, login }),
       );
     }
     const backend = test.withIdentity({ subject: `${userId}|session-1` });
     const accounts = (
       await backend.query(api.tables.connections.queries.statusesForApps, {
-        apps: ["gmail"],
+        apps: ["slack"],
       })
     )[0].accounts;
     const created = await backend.mutation(
@@ -190,10 +38,10 @@ describe("multi-account bindings", () => {
       {
         name: "Both accounts",
         ttlMs: 60_000,
-        apps: ["gmail"],
+        apps: ["slack"],
         mintPolicy: "approve",
         bindings: accounts.map((account) => ({
-          app: "gmail" as const,
+          app: "slack" as const,
           connectionId: account.id,
         })),
       },
@@ -203,21 +51,21 @@ describe("multi-account bindings", () => {
       {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
-        app: "gmail",
+        app: "slack",
         now: Date.now(),
       },
     );
     if (!discovered.ok) throw new Error("expected account discovery");
     expect(discovered.accounts.map((account) => account.login)).toEqual([
-      "x@gmail.com",
-      "y@gmail.com",
+      "Alice (Workspace)",
+      "Bob (Workspace)",
     ]);
     const ambiguous = await test.mutation(
       internal.tables.slices.credentials.authorizeCreate,
       {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
-        app: "gmail",
+        app: "slack",
       },
     );
     expect(ambiguous).toMatchObject({
@@ -230,7 +78,7 @@ describe("multi-account bindings", () => {
       {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
-        app: "gmail",
+        app: "slack",
         bindingId: selected.bindingId,
       },
     );
@@ -244,7 +92,7 @@ describe("multi-account bindings", () => {
       internal.tables.slices.tokenRequestClaims.createPending,
       {
         sliceId: authorized.sliceId,
-        app: "gmail",
+        app: "slack",
         bindingId: authorized.bindingId,
       },
     );
@@ -255,7 +103,7 @@ describe("multi-account bindings", () => {
         publicToken: pending.publicToken,
       },
     );
-    expect(boardRequest?.accountLogin).toBe("y@gmail.com");
+    expect(boardRequest?.accountLogin).toBe("Bob (Workspace)");
     await backend.mutation(api.tables.slices.tokenRequests.decide, {
       publicToken: pending.publicToken,
       decision: "approved",
@@ -275,7 +123,7 @@ describe("multi-account bindings", () => {
     });
     await backend.mutation(api.tables.slices.mutations.setBinding, {
       sliceToken: created.sliceToken,
-      app: "gmail",
+      app: "slack",
       connectionId: accounts[1].id,
       enabled: false,
     });
@@ -293,191 +141,12 @@ describe("multi-account bindings", () => {
       {
         sliceToken: created.sliceToken,
         sliceSecret: created.sliceSecret,
-        app: "gmail",
+        app: "slack",
       },
     );
     expect(stillAllowed).toMatchObject({
       ok: true,
       connectionId: accounts[0].id,
     });
-  });
-
-  test("rejects a connection without a stable provider account ID", async () => {
-    const test = t();
-    const userId = await test.run(async (ctx) =>
-      ctx.db.insert("users", { name: "Owner", email: "owner@example.com" }),
-    );
-    await expect(
-      test.mutation(internal.tables.connections.mutations.saveConnection, {
-        userId,
-        provider: "google",
-        app: "gmail",
-        providerUserId: "",
-        login: "x@gmail.com",
-        accessToken: "access-x",
-      }),
-    ).rejects.toThrow("Provider account ID is required");
-  });
-
-  test("keeps two accounts, requires a selection, and binds the selected account", async () => {
-    const test = t();
-    const userId = await test.run(async (ctx) => {
-      const id = await ctx.db.insert("users", {
-        name: "Owner",
-        email: "owner@example.com",
-      });
-      return id;
-    });
-    for (const [providerUserId, login] of [
-      ["sub-x", "x@gmail.com"],
-      ["sub-y", "y@gmail.com"],
-    ] as const) {
-      await test.mutation(
-        internal.tables.connections.mutations.saveConnection,
-        {
-          userId,
-          provider: "google",
-          app: "gmail",
-          providerUserId,
-          login,
-          accessToken: `access-${providerUserId}`,
-          refreshToken: `refresh-${providerUserId}`,
-        },
-      );
-    }
-    // Reconnecting the same stable subject updates that account instead of adding a third row.
-    await test.mutation(internal.tables.connections.mutations.saveConnection, {
-      userId,
-      provider: "google",
-      app: "gmail",
-      providerUserId: "sub-x",
-      login: "renamed@gmail.com",
-      accessToken: "access-new",
-      refreshToken: "refresh-new",
-    });
-    const backend = test.withIdentity({ subject: `${userId}|session-1` });
-    const status = (
-      await backend.query(api.tables.connections.queries.statusesForApps, {
-        apps: ["gmail"],
-      })
-    ).find((row) => row.app === "gmail")!;
-    expect(status.accounts.map((account) => account.login)).toEqual([
-      "renamed@gmail.com",
-      "y@gmail.com",
-    ]);
-    const page = await backend.query(
-      api.tables.connections.queries.statusesForApps,
-      { apps: ["gmail", "calendar"] },
-    );
-    expect(page.map((entry) => [entry.app, entry.accounts.length])).toEqual([
-      ["gmail", 2],
-      ["calendar", 0],
-    ]);
-    await expect(
-      backend.mutation(internal.tables.slices.mutations.createFixture, {
-        name: "Agent",
-        ttlMs: 60_000,
-        apps: ["gmail"],
-      }),
-    ).rejects.toThrow("Select at least one account");
-    const selected = status.accounts[1].id;
-    const created = await backend.mutation(
-      internal.tables.slices.mutations.createFixture,
-      {
-        name: "Agent",
-        ttlMs: 60_000,
-        apps: ["gmail"],
-        bindings: [{ app: "gmail", connectionId: selected }],
-      },
-    );
-    const grant = await test.run(async (ctx) => {
-      const slice = await ctx.db.get("slices", created.id);
-      return slice
-        ? await ctx.db
-            .query("sliceBindings")
-            .withIndex("by_slice_app_connectionId", (q) =>
-              q.eq("sliceId", slice._id),
-            )
-            .collect()
-        : null;
-    });
-    expect(grant).toMatchObject([{ app: "gmail", connectionId: selected }]);
-    const authorized = await test.mutation(
-      internal.tables.slices.credentials.authorizeCreate,
-      {
-        sliceToken: created.sliceToken,
-        sliceSecret: created.sliceSecret,
-        app: "gmail",
-      },
-    );
-    expect(authorized).toMatchObject({ ok: true, connectionId: selected });
-    await test.mutation(internal.tables.connections.mutations.saveConnection, {
-      userId,
-      provider: "google",
-      app: "calendar",
-      providerUserId: "sub-x",
-      login: "renamed@gmail.com",
-      accessToken: "calendar-token",
-      refreshToken: "calendar-refresh",
-    });
-    const before = await test.query(
-      internal.tables.slices.queries.discoverApps,
-      {
-        sliceToken: created.sliceToken,
-        sliceSecret: created.sliceSecret,
-        now: Date.now(),
-      },
-    );
-    expect(
-      before.ok && before.apps.find((app) => app.app === "calendar"),
-    ).toMatchObject({ allowed: false, connected: false });
-    await test.mutation(internal.tables.connections.mutations.clearConnection, {
-      userId,
-      app: "gmail",
-      connectionId: selected,
-    });
-    const denied = await test.mutation(
-      internal.tables.slices.credentials.authorizeCreate,
-      {
-        sliceToken: created.sliceToken,
-        sliceSecret: created.sliceSecret,
-        app: "gmail",
-      },
-    );
-    expect(denied).toMatchObject({ ok: false, code: "APP_UNAVAILABLE" });
-    const discovery = await test.query(
-      internal.tables.slices.queries.discoverApps,
-      {
-        sliceToken: created.sliceToken,
-        sliceSecret: created.sliceSecret,
-        now: Date.now(),
-      },
-    );
-    expect(
-      discovery.ok && discovery.apps.find((app) => app.app === "gmail"),
-    ).toMatchObject({ allowed: true, connected: false });
-    expect(
-      await test.mutation(
-        internal.tables.connections.mutations.refreshConnection,
-        {
-          userId,
-          app: "gmail",
-          connectionId: selected,
-          providerUserId: "sub-y",
-          accessToken: "late-token",
-          refreshToken: "late-refresh",
-          grantVersion: 0,
-          lease: "stale-lease",
-        },
-      ),
-    ).toBe(false);
-    const after = (
-      await backend.query(api.tables.connections.queries.statusesForApps, {
-        apps: ["gmail"],
-      })
-    ).find((row) => row.app === "gmail")!;
-    expect(after.accounts.map((account) => account.login)).toEqual([
-      "renamed@gmail.com",
-    ]);
   });
 });

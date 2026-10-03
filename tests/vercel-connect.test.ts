@@ -1,10 +1,13 @@
-// @vitest-environment node
 /// <reference types="vite/client" />
+// @vitest-environment node
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import { SLACK_SCOPES } from "../convex/connect/contracts";
+import {
+  CONNECT_SLACK_SCOPES as SLACK_SCOPES,
+  slackScopesAreBounded,
+} from "../convex/connect/contracts";
 import { POST } from "../app/api/connect/bridge/route";
 import type { ConnectTokenResponse, ConnectorMetadata } from "@vercel/connect";
 import * as sdk from "@vercel/connect";
@@ -108,6 +111,31 @@ async function owner() {
   );
   return { id, client: backend.withIdentity({ subject: `${id}|session` }) };
 }
+
+test("managed Slack accepts its implicit identity permission but rejects unsupported legacy scopes", () => {
+  expect(slackScopesAreBounded(["identify", ...SLACK_SCOPES])).toBe(true);
+  for (const scope of [
+    "search:read",
+    "bookmarks:read",
+    "bookmarks:write",
+    "admin",
+  ]) {
+    expect(slackScopesAreBounded([...SLACK_SCOPES, scope])).toBe(false);
+  }
+});
+
+test("preview protection credential goes only to the configured bridge", async () => {
+  vi.stubEnv("CONNECT_BRIDGE_PROTECTION_COOKIE", "preview-only-secret");
+  const user = await owner();
+  await connect(user.client);
+  const calls = vi.mocked(fetch).mock.calls;
+  expect(calls.some(([input]) => String(input) === bridge)).toBe(true);
+  for (const [input, init] of calls) {
+    expect(new Headers(init?.headers).get("Cookie")).toBe(
+      String(input) === bridge ? "preview-only-secret" : null,
+    );
+  }
+});
 async function connect(
   ownerClient: ReturnType<typeof backend.withIdentity>,
   team = "T1",
@@ -224,13 +252,6 @@ describe("Slack Connect end to end with mocked Vercel and Slack", () => {
         ctx.db.query("connectBridgeTickets").collect(),
       ),
     ).toEqual([]);
-    expect(
-      await backend.query(internal.tables.connections.queries.getConnection, {
-        userId: user.id,
-        app: "slack",
-        connectionId: account.id,
-      }),
-    ).toBeNull();
   });
 
   test("another Scope user cannot complete, bind, read, or disconnect the owner's account", async () => {
@@ -272,12 +293,22 @@ describe("Slack Connect end to end with mocked Vercel and Slack", () => {
     ).not.toBeNull();
   });
 
-  test("browser proof, app mismatch, expiry, and callback replay cannot authorize", async () => {
+  test("browser proof, expiry, and callback replay cannot authorize or redirect off site", async () => {
     const a = await owner();
     const pending = await a.client.mutation(
       api.tables.oauthStates.mutations.start,
-      { app: "slack", returnTo: `${board}/connections` },
+      { app: "slack", returnTo: "https://attacker.example/steal" },
     );
+    const callback = await backend.fetch(
+      `/api/slack/callback?state=${pending.state}&code=connect`,
+    );
+    expect(callback.status).toBe(302);
+    expect(callback.headers.get("location")).toContain(
+      `${board}/oauth/complete`,
+    );
+    expect(
+      await backend.run((ctx) => ctx.db.query("connections").collect()),
+    ).toEqual([]);
     await expect(
       a.client.action(api.tables.oauthStates.finish.complete, {
         ...pending,
@@ -288,12 +319,14 @@ describe("Slack Connect end to end with mocked Vercel and Slack", () => {
     ).rejects.toThrow("mismatch");
     expect(
       (await backend.fetch(`/api/gmail/connect?state=${pending.state}`)).status,
-    ).toBe(400);
-    await a.client.action(api.tables.oauthStates.finish.complete, {
-      ...pending,
-      app: "slack",
-      code: "connect",
-    });
+    ).toBe(404);
+    expect(
+      await a.client.action(api.tables.oauthStates.finish.complete, {
+        ...pending,
+        app: "slack",
+        code: "connect",
+      }),
+    ).toMatchObject({ connected: true, returnTo: `${board}/connections` });
     await expect(
       a.client.action(api.tables.oauthStates.finish.complete, {
         ...pending,
@@ -353,6 +386,11 @@ describe("Slack Connect end to end with mocked Vercel and Slack", () => {
     expect(pending.status).toBe(202);
     expect(sdk.getTokenResponse).not.toHaveBeenCalled();
     const request = await pending.json();
+    expect(request).toMatchObject({
+      code: "APPROVAL_REQUIRED",
+      status: "pending",
+    });
+    expect(request).not.toHaveProperty("accessToken");
     const poll = () =>
       backend.fetch("/api/credentials/claim", {
         method: "POST",
@@ -367,8 +405,15 @@ describe("Slack Connect end to end with mocked Vercel and Slack", () => {
       publicToken: new URL(request.approvalUrl).pathname.split("/").at(-1)!,
       decision: "approved",
     });
-    expect((await poll()).status).toBe(200);
-    expect((await poll()).status).toBe(403);
+    const issued = await poll();
+    expect(issued.status).toBe(200);
+    expect(await issued.json()).toMatchObject({
+      accessToken: "xoxe.xoxp-T1-U1",
+      requestId: request.requestId,
+    });
+    const replay = await poll();
+    expect(replay.status).toBe(403);
+    expect(await replay.json()).toMatchObject({ code: "APPROVAL_EXPIRED" });
   });
 
   test.each(["revoke", "expire", "binding", "disconnect", "reconnect"])(
@@ -405,6 +450,13 @@ describe("Slack Connect end to end with mocked Vercel and Slack", () => {
       const response = await credential(created);
       expect(response.status).toBe(403);
       expect(await response.text()).not.toContain("xoxe");
+      if (reason !== "reconnect") {
+        sdk.getTokenResponse.mockClear();
+        const retry = await credential(created);
+        expect(retry.status).toBe(403);
+        expect(await retry.text()).not.toContain("xoxe");
+        expect(sdk.getTokenResponse).not.toHaveBeenCalled();
+      }
     },
   );
 
@@ -429,78 +481,15 @@ describe("Slack Connect end to end with mocked Vercel and Slack", () => {
     expect(
       await backend.run((ctx) => ctx.db.get("connections", account.id)),
     ).toBeNull();
+    expect(
+      await user.client.query(api.tables.slices.queries.get, {
+        sliceId: created.id,
+      }),
+    ).toMatchObject({ status: "active", name: "Slack agent" });
   });
 });
 
-describe("migration cleanup and isolation", () => {
-  test("replaces a verified matching legacy row, removes secrets/leases, and rejects late refresh", async () => {
-    const user = await owner();
-    await backend.mutation(
-      internal.tables.connections.mutations.saveConnection,
-      {
-        userId: user.id,
-        app: "slack",
-        provider: "slack",
-        providerUserId: "T1:U1",
-        login: "legacy",
-        accessToken: "old-access",
-        refreshToken: "old-refresh",
-        tokenExpiresAt: Date.now() + 3600_000,
-      },
-    );
-    const old = await backend.run((ctx) =>
-      ctx.db.query("connections").unique(),
-    );
-    expect(
-      await backend.mutation(
-        internal.tables.connections.mutations.beginRefresh,
-        {
-          userId: user.id,
-          app: "slack",
-          connectionId: old!._id,
-          grantVersion: old!.grantVersion,
-          lease: "old-lease",
-        },
-      ),
-    ).toBe(true);
-    const account = await connect(user.client);
-    expect(account.id).toBe(old!._id);
-    const row = await backend.run((ctx) =>
-      ctx.db.get("connections", account.id),
-    );
-    for (const field of [
-      "accessToken",
-      "refreshToken",
-      "tokenExpiresAt",
-      "refreshLease",
-      "refreshLeaseExpiresAt",
-    ])
-      expect(row).not.toHaveProperty(field);
-    expect(
-      await backend.mutation(
-        internal.tables.connections.mutations.refreshConnection,
-        {
-          userId: user.id,
-          app: "slack",
-          connectionId: account.id,
-          providerUserId: "T1:U1",
-          grantVersion: old!.grantVersion,
-          lease: "old-lease",
-          accessToken: "late-access",
-        },
-      ),
-    ).toBe(false);
-    await expect(
-      backend.mutation(internal.tables.connections.mutations.saveConnection, {
-        userId: user.id,
-        app: "slack",
-        provider: "slack",
-        providerUserId: "T1:U1",
-        login: "late callback",
-        accessToken: "old-access",
-      }),
-    ).rejects.toThrow("Vercel Connect");
-  });
+describe("managed account isolation", () => {
   test("two Scope owners authorizing the same Slack user receive distinct subjects", async () => {
     const a = await owner(),
       b = await owner();
@@ -539,6 +528,9 @@ describe("migration cleanup and isolation", () => {
     );
     const reconnected = await connect(user.client);
     expect(reconnected.id).toBe(account.id);
+    expect(
+      await backend.run((ctx) => ctx.db.query("connections").collect()),
+    ).toHaveLength(1);
     expect(sdk.revokeToken).not.toHaveBeenCalled();
     const denied = await backend.mutation(
       internal.tables.slices.credentials.finalize,
@@ -553,6 +545,24 @@ describe("migration cleanup and isolation", () => {
     expect(denied).toMatchObject({ ok: false, code: "APP_UNAVAILABLE" });
     expect((await credential(created)).status).toBe(200);
   });
+});
+
+test("Slack authorization is unavailable when its managed bridge is unconfigured", async () => {
+  vi.stubEnv("CONNECT_BRIDGE_URL", "");
+  const user = await owner();
+  const pending = await user.client.mutation(
+    api.tables.oauthStates.mutations.start,
+    {
+      app: "slack",
+      returnTo: `${board}/connections`,
+    },
+  );
+  const response = await backend.fetch(
+    `/api/slack/connect?state=${pending.state}`,
+  );
+  expect(response.status).toBe(503);
+  expect(await response.text()).toBe("Slack Connect is unavailable");
+  expect(sdk.startAuthorization).not.toHaveBeenCalled();
 });
 
 describe("authenticated, one-use bridge commands", () => {

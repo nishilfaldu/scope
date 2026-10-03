@@ -1,13 +1,3 @@
-/* eslint-disable */
-/**
- * Generated `api` utility.
- *
- * THIS CODE IS AUTOMATICALLY GENERATED.
- *
- * To regenerate, run `npx convex dev`.
- * @module
- */
-
 import type * as auth from "../auth.js";
 import type * as connect_access from "../connect/access.js";
 import type * as connect_bridge from "../connect/bridge.js";
@@ -23,7 +13,6 @@ import type * as domain_slices from "../domain/slices.js";
 import type * as functions from "../functions.js";
 import type * as http from "../http.js";
 import type * as http_contracts from "../http/contracts.js";
-import type * as http_googleBroker from "../http/googleBroker.js";
 import type * as http_helpers from "../http/helpers.js";
 import type * as http_httpAccessRequestHandlers from "../http/httpAccessRequestHandlers.js";
 import type * as http_httpAccountsHandler from "../http/httpAccountsHandler.js";
@@ -40,19 +29,6 @@ import type * as lib_requests from "../lib/requests.js";
 import type * as lib_responses from "../lib/responses.js";
 import type * as lib_secrets from "../lib/secrets.js";
 import type * as lib_tokenEncryption from "../lib/tokenEncryption.js";
-import type * as oauth_access from "../oauth/access.js";
-import type * as oauth_index from "../oauth/index.js";
-import type * as oauth_providers_airtable from "../oauth/providers/airtable.js";
-import type * as oauth_providers_github from "../oauth/providers/github.js";
-import type * as oauth_providers_google from "../oauth/providers/google.js";
-import type * as oauth_providers_index from "../oauth/providers/index.js";
-import type * as oauth_providers_linear from "../oauth/providers/linear.js";
-import type * as oauth_providers_notion from "../oauth/providers/notion.js";
-import type * as oauth_providers_slack from "../oauth/providers/slack.js";
-import type * as oauth_providers_vercel from "../oauth/providers/vercel.js";
-import type * as oauth_providers_zoom from "../oauth/providers/zoom.js";
-import type * as oauth_shared from "../oauth/shared.js";
-import type * as oauth_types from "../oauth/types.js";
 import type * as tables_agentConnectionExpiry from "../tables/agentConnectionExpiry.js";
 import type * as tables_agentConnections from "../tables/agentConnections.js";
 import type * as tables_agentDashboard from "../tables/agentDashboard.js";
@@ -64,7 +40,6 @@ import type * as tables_oauthStates_finish from "../tables/oauthStates/finish.js
 import type * as tables_oauthStates_mutations from "../tables/oauthStates/mutations.js";
 import type * as tables_oauthStates_queries from "../tables/oauthStates/queries.js";
 import type * as tables_slices_credentials from "../tables/slices/credentials.js";
-import type * as tables_slices_googleBroker from "../tables/slices/googleBroker.js";
 import type * as tables_slices_helpers from "../tables/slices/helpers.js";
 import type * as tables_slices_mutations from "../tables/slices/mutations.js";
 import type * as tables_slices_queries from "../tables/slices/queries.js";
@@ -97,7 +72,6 @@ declare const fullApi: ApiFromModules<{
   functions: typeof functions;
   http: typeof http;
   "http/contracts": typeof http_contracts;
-  "http/googleBroker": typeof http_googleBroker;
   "http/helpers": typeof http_helpers;
   "http/httpAccessRequestHandlers": typeof http_httpAccessRequestHandlers;
   "http/httpAccountsHandler": typeof http_httpAccountsHandler;
@@ -114,19 +88,6 @@ declare const fullApi: ApiFromModules<{
   "lib/responses": typeof lib_responses;
   "lib/secrets": typeof lib_secrets;
   "lib/tokenEncryption": typeof lib_tokenEncryption;
-  "oauth/access": typeof oauth_access;
-  "oauth/index": typeof oauth_index;
-  "oauth/providers/airtable": typeof oauth_providers_airtable;
-  "oauth/providers/github": typeof oauth_providers_github;
-  "oauth/providers/google": typeof oauth_providers_google;
-  "oauth/providers/index": typeof oauth_providers_index;
-  "oauth/providers/linear": typeof oauth_providers_linear;
-  "oauth/providers/notion": typeof oauth_providers_notion;
-  "oauth/providers/slack": typeof oauth_providers_slack;
-  "oauth/providers/vercel": typeof oauth_providers_vercel;
-  "oauth/providers/zoom": typeof oauth_providers_zoom;
-  "oauth/shared": typeof oauth_shared;
-  "oauth/types": typeof oauth_types;
   "tables/agentConnectionExpiry": typeof tables_agentConnectionExpiry;
   "tables/agentConnections": typeof tables_agentConnections;
   "tables/agentDashboard": typeof tables_agentDashboard;
@@ -138,7 +99,6 @@ declare const fullApi: ApiFromModules<{
   "tables/oauthStates/mutations": typeof tables_oauthStates_mutations;
   "tables/oauthStates/queries": typeof tables_oauthStates_queries;
   "tables/slices/credentials": typeof tables_slices_credentials;
-  "tables/slices/googleBroker": typeof tables_slices_googleBroker;
   "tables/slices/helpers": typeof tables_slices_helpers;
   "tables/slices/mutations": typeof tables_slices_mutations;
   "tables/slices/queries": typeof tables_slices_queries;
@@ -150,27 +110,11 @@ declare const fullApi: ApiFromModules<{
   users: typeof users;
 }>;
 
-/**
- * A utility for referencing Convex functions in your app's public API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = api.myModule.myFunction;
- * ```
- */
 export declare const api: FilterApi<
   typeof fullApi,
   FunctionReference<any, "public">
 >;
 
-/**
- * A utility for referencing Convex functions in your app's internal API.
- *
- * Usage:
- * ```js
- * const myFunctionReference = internal.myModule.myFunction;
- * ```
- */
 export declare const internal: FilterApi<
   typeof fullApi,
   FunctionReference<any, "internal">

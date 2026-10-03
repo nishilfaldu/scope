@@ -5,7 +5,6 @@ import { httpAppsHandler } from "./http/httpAppsHandler";
 import { httpAccountsHandler } from "./http/httpAccountsHandler";
 import { httpClaimHandler } from "./http/httpClaimHandler";
 import { httpCredentialsHandler } from "./http/httpCredentialsHandler";
-import { httpGoogleBrokerHandler } from "./http/googleBroker";
 import {
   httpAccessRequestClaimHandler,
   httpAccessRequestAckHandler,
@@ -17,7 +16,7 @@ import { discoverySpec } from "./http/contracts";
 import { httpOAuthCallback, httpOAuthConnect } from "./http/oauth";
 import { corsNoContent, jsonResponse } from "./lib/responses";
 import { ALL_APPS } from "./domain/apps";
-import { oauthConfigured } from "./oauth";
+import { connectConfigured } from "./connect/bridge";
 import { auth } from "./auth";
 import {
   httpAgentConnectionClaimHandler,
@@ -41,10 +40,8 @@ http.route({
 });
 const optionsOk = httpAction(async () => corsNoContent());
 
-// Auth routes
 auth.addHttpRoutes(http);
 
-// API discovery
 http.route({
   path: "/",
   method: "GET",
@@ -55,7 +52,7 @@ http.route({
     }),
   ),
 });
-// Agent-initiated onboarding (approval link)
+
 for (const [path, handler] of [
   ["/api/agent-connections", httpCreateAgentConnectionHandler],
   ["/api/agent-connections/status", httpAgentConnectionStatusHandler],
@@ -128,7 +125,6 @@ http.route({
   handler: httpAccessRequestClaimHandler,
 });
 
-// Credential issuance
 http.route({
   path: "/api/credentials",
   method: "OPTIONS",
@@ -139,18 +135,7 @@ http.route({
   method: "POST",
   handler: httpCredentialsHandler,
 });
-http.route({
-  path: "/api/google/operations",
-  method: "OPTIONS",
-  handler: optionsOk,
-});
-http.route({
-  path: "/api/google/operations",
-  method: "POST",
-  handler: httpGoogleBrokerHandler,
-});
 
-// Poll / claim after operator approval (mint path)
 http.route({
   path: "/api/credentials/claim",
   method: "OPTIONS",
@@ -162,7 +147,6 @@ http.route({
   handler: httpClaimHandler,
 });
 
-// Scope app discovery
 http.route({
   path: "/api/apps",
   method: "OPTIONS",
@@ -180,16 +164,14 @@ http.route({
   handler: httpAccountsHandler,
 });
 
-// Health check
 http.route({
   path: "/api/health",
   method: "GET",
   handler: httpAction(async () =>
-    jsonResponse(200, { ok: true, oauth: oauthConfigured() }),
+    jsonResponse(200, { ok: true, oauth: { slack: connectConfigured() } }),
   ),
 });
 
-// OAuth provider connection
 for (const app of ALL_APPS) {
   http.route({
     path: `/api/${app}/connect`,

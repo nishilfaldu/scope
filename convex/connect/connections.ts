@@ -20,7 +20,7 @@ export const get = internalQuery({
       "slack",
       args.connectionId,
     );
-    return row && "connect" in row
+    return row
       ? {
           connect: row.connect,
           providerUserId: row.providerUserId,
@@ -55,9 +55,7 @@ export const save = internalMutation({
       app: "slack" as const,
       backend: "vercel-connect" as const,
       grantVersion: (existing?.grantVersion ?? 0) + 1,
-      connectionGeneration: (existing?.connectionGeneration ?? 0) + 1,
     };
-    // replace also removes obsolete local access/refresh secrets and refresh leases.
     if (existing) await ctx.db.replace("connections", existing._id, doc);
     else await ctx.db.insert("connections", doc);
     return null;

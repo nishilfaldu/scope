@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { managedRow } from "./helpers/connect";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
@@ -18,24 +19,15 @@ async function signedIn(test: ReturnType<typeof t>) {
     });
   });
   await test.run(async (ctx) => {
-    await ctx.db.insert("connections", {
-      userId,
-      app: "github",
-      accessToken: "github-token",
-      login: "nishil",
-      providerUserId: "github-1",
-      grantVersion: 1,
-    });
-  });
-  await test.run(async (ctx) => {
-    await ctx.db.insert("connections", {
-      userId,
-      app: "gmail",
-      accessToken: "google-token",
-      login: "nishil@example.com",
-      providerUserId: "google-1",
-      grantVersion: 1,
-    });
+    await ctx.db.insert(
+      "connections",
+      managedRow({
+        userId,
+        login: "nishil",
+        providerUserId: "slack-1",
+        grantVersion: 1,
+      }),
+    );
   });
   return {
     backend: test.withIdentity({ subject: `${userId}|session-1` }),
@@ -49,7 +41,7 @@ describe("slice ownership", () => {
     const { backend } = await signedIn(test);
     const created = await backend.mutation(
       internal.tables.slices.mutations.createFixture,
-      { name: "Self revoke", ttlMs: 60_000, apps: ["github"] },
+      { name: "Self revoke", ttlMs: 60_000, apps: ["slack"] },
     );
     const response = await test.fetch("/api/slices/revoke", {
       method: "POST",
@@ -74,7 +66,7 @@ describe("slice ownership", () => {
       {
         name: "Owner agent",
         ttlMs: 60_000,
-        apps: ["github"],
+        apps: ["slack"],
       },
     );
     const { backend: otherUser } = await signedIn(test);
@@ -92,13 +84,13 @@ describe("slice ownership", () => {
     expect(
       await owner.query(api.tables.slices.queries.bindingsForApps, {
         sliceId: created.id,
-        apps: ["github"],
+        apps: ["slack"],
       }),
-    ).toMatchObject([{ app: "github", sliceId: created.id }]);
+    ).toMatchObject([{ app: "slack", sliceId: created.id }]);
     await expect(
       otherUser.query(api.tables.slices.queries.bindingsForApps, {
         sliceId: created.id,
-        apps: ["github"],
+        apps: ["slack"],
       }),
     ).rejects.toThrow("Slice not found");
   });
@@ -111,7 +103,7 @@ describe("slice ownership", () => {
       {
         name: "Owner agent",
         ttlMs: 60_000,
-        apps: ["github", "gmail"],
+        apps: ["slack"],
       },
     );
     const { backend: otherUser } = await signedIn(test);
@@ -119,10 +111,10 @@ describe("slice ownership", () => {
     await expect(
       otherUser.mutation(api.tables.slices.mutations.setBinding, {
         sliceToken: created.sliceToken,
-        app: "gmail",
+        app: "slack",
         connectionId: (
           await owner.query(api.tables.connections.queries.statusesForApps, {
-            apps: ["gmail"],
+            apps: ["slack"],
           })
         )[0].accounts[0].id,
         enabled: false,
@@ -150,7 +142,7 @@ describe("slice ownership", () => {
       {
         name: "Owner agent",
         ttlMs: 60_000,
-        apps: ["github"],
+        apps: ["slack"],
       },
     );
 
@@ -162,10 +154,10 @@ describe("slice ownership", () => {
     await expect(
       test.mutation(api.tables.slices.mutations.setBinding, {
         sliceToken: created.sliceToken,
-        app: "github",
+        app: "slack",
         connectionId: (
           await owner.query(api.tables.connections.queries.statusesForApps, {
-            apps: ["github"],
+            apps: ["slack"],
           })
         )[0].accounts[0].id,
         enabled: false,

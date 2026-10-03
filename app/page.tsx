@@ -97,9 +97,9 @@ export default function HomePage() {
                 </p>
                 <div className="mt-3 flex items-center justify-between rounded-xl bg-[#f3f6f1] px-4 py-4 dark:bg-muted">
                   <div>
-                    <p className="font-medium">Google Drive</p>
+                    <p className="font-medium">Slack</p>
                     <p className="mt-0.5 text-sm text-[#68746a] dark:text-muted-foreground">
-                      you@company.com
+                      You (Workspace)
                     </p>
                   </div>
                   <HugeiconsIcon
@@ -112,11 +112,11 @@ export default function HomePage() {
                   <span className="text-[#68746a] dark:text-muted-foreground">
                     Can do
                   </span>
-                  <span>Read and manage selected Drive files</span>
+                  <span>Read conversations and manage pins</span>
                   <span className="text-[#68746a] dark:text-muted-foreground">
                     Reason
                   </span>
-                  <span>Summarize the project research folder</span>
+                  <span>Summarize the project channel</span>
                   <span className="text-[#68746a] dark:text-muted-foreground">
                     Ends
                   </span>

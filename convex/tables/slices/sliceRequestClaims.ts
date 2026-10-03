@@ -384,7 +384,7 @@ export const resolveSliceRequestClaim = internalMutation({
         "CLAIM_ALREADY_ACKNOWLEDGED",
       );
     }
-    // Approved claims remain retryable until the fixed acknowledgment deadline.
+
     if (!request.issuedSliceSecretCipher || !request.createdSliceId) {
       return denyCreate(
         403,

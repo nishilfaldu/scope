@@ -23,18 +23,15 @@ const sections: PolicySection[] = [
           security records needed to operate the service. When you connect a
           provider account, Scope stores the provider account identifier,
           display name or email returned by the provider, the app you connected,
-          granted authorization metadata, and encrypted OAuth access and refresh
-          credentials.
+          granted authorization metadata, and a Vercel Connect account
+          reference. Scope does not store Slack access or refresh tokens.
         </p>
         <p>
-          Scope supports connections to GitHub, Gmail, Google Calendar, Google
-          Drive, Google Docs, Google Sheets, Slack, Airtable, Notion, Linear,
-          Vercel, and Zoom. Depending on the service and permissions you choose,
-          a connection may permit access to repositories, messages, email,
-          calendars, files, documents, spreadsheets, databases, projects,
-          deployments, meetings, and related account metadata. The provider
-          shows the permissions before you connect. Provider OAuth is not used
-          to sign in to Scope.
+          Scope connects Slack accounts through Vercel Connect. The approved
+          permissions can allow access to conversations, messages, files, pins,
+          reactions, and related workspace metadata. Slack shows the permissions
+          before you connect. Slack authorization is separate from Scope
+          sign-in.
         </p>
       </>
     ),
@@ -54,9 +51,7 @@ const sections: PolicySection[] = [
         </p>
         <p>
           Scope does not use connected-service data for advertising, credit
-          decisions, or sale to data brokers. Scope does not use Google
-          Workspace API data to develop, improve, or train generalized or
-          non-personalized AI or machine-learning models.
+          decisions, or sale to data brokers.
         </p>
       </>
     ),
@@ -89,11 +84,12 @@ const sections: PolicySection[] = [
     title: "Storage and security",
     content: (
       <p>
-        Provider access and refresh credentials are encrypted before storage.
-        Scope keeps provider secrets and slice secrets out of browser approval
-        pages and applies ownership checks before issuing credentials. Data is
-        encrypted in transit using HTTPS. No security measure is perfect, but we
-        limit access to the systems and data required to operate Scope.
+        Vercel Connect manages Slack authorization and credentials. Scope
+        encrypts recoverable agent and slice claim secrets and keeps them out of
+        browser approval pages and applies ownership checks before issuing
+        credentials. Data is encrypted in transit using HTTPS. No security
+        measure is perfect, but we limit access to the systems and data required
+        to operate Scope.
       </p>
     ),
   },
@@ -119,17 +115,6 @@ const sections: PolicySection[] = [
           <a href="mailto:nishilfaldu@gmail.com">nishilfaldu@gmail.com</a>.
         </p>
       </>
-    ),
-  },
-  {
-    id: "limited-use",
-    title: "Google API Services User Data Policy",
-    content: (
-      <p>
-        Scope&apos;s use and transfer to any other app of information received
-        from Google APIs adheres to the Google API Services User Data Policy,
-        including the Limited Use requirements.
-      </p>
     ),
   },
   {
@@ -161,7 +146,7 @@ export default function PrivacyPage() {
           <aside className="lg:sticky lg:top-10 lg:self-start">
             <p className="text-sm font-semibold">Scope</p>
             <p className="mt-1 text-sm text-[#68746a] dark:text-muted-foreground">
-              Effective September 20, 2026
+              Effective October 3, 2026
             </p>
             <nav
               className="mt-7 hidden border-l border-[#d8e1d4] pl-4 text-sm lg:block dark:border-border"

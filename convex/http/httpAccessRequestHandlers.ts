@@ -112,9 +112,9 @@ export const httpCreateAccessRequestHandler = httpAction(
       apps: created.apps,
       ttlMs: created.ttlMs,
       reason: created.reason,
-      // Chat-safe: share only this board URL with the user.
+
       approvalUrl,
-      // Runtime-only: never paste claimHandle into chat.
+
       claimHandle: created.claimHandle,
       reused: created.reused,
       nextAction: {

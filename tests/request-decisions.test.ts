@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { managedFixture } from "./helpers/connect";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
@@ -44,18 +45,17 @@ describe("request link decisions", () => {
     );
     const ownerSession = t.withIdentity({ subject: `${owner}|session` });
     const otherSession = t.withIdentity({ subject: `${other}|session` });
-    await t.mutation(internal.tables.connections.mutations.saveConnection, {
-      userId: owner,
-      provider: "google",
-      app: "gmail",
-      providerUserId: "provider-sub",
-      login: "different-provider@gmail.com",
-      accessToken: "standing",
-      refreshToken: "refresh",
-    });
+    await t.mutation(
+      internal.connect.connections.save,
+      managedFixture({
+        userId: owner,
+        providerUserId: "provider-sub",
+        login: "different-provider@gmail.com",
+      }),
+    );
     const connection = (
       await ownerSession.query(api.tables.connections.queries.statusesForApps, {
-        apps: ["gmail"],
+        apps: ["slack"],
       })
     )[0].accounts[0].id;
     const agent = await connectAgent(t, owner);
@@ -64,7 +64,7 @@ describe("request link decisions", () => {
       {
         agentConnectionId: agent.id,
         agentConnectionSecret: agent.secret,
-        apps: ["gmail"],
+        apps: ["slack"],
         ttlMs: 60_000,
         reason: "Read the inbox",
       },
@@ -77,7 +77,7 @@ describe("request link decisions", () => {
       await ownerSession.query(api.tables.slices.sliceRequests.get, {
         publicToken: created.publicToken,
       }),
-    ).toMatchObject({ agentName: "Agent", apps: ["gmail"] });
+    ).toMatchObject({ agentName: "Agent", apps: ["slack"] });
     await expect(
       t.mutation(api.tables.slices.sliceRequests.decide, {
         publicToken: created.publicToken,
@@ -88,13 +88,13 @@ describe("request link decisions", () => {
       otherSession.mutation(api.tables.slices.sliceRequests.decide, {
         publicToken: created.publicToken,
         decision: "approved",
-        bindings: [{ app: "gmail", connectionId: connection }],
+        bindings: [{ app: "slack", connectionId: connection }],
       }),
     ).rejects.toThrow();
     await ownerSession.mutation(api.tables.slices.sliceRequests.decide, {
       publicToken: created.publicToken,
       decision: "approved",
-      bindings: [{ app: "gmail", connectionId: connection }],
+      bindings: [{ app: "slack", connectionId: connection }],
     });
     const approved = await t.run(async (ctx) => {
       const request = await ctx.db.get("sliceRequests", created.requestId);
@@ -114,7 +114,7 @@ describe("request link decisions", () => {
       ownerSession.mutation(api.tables.slices.sliceRequests.decide, {
         publicToken: created.publicToken,
         decision: "approved",
-        bindings: [{ app: "gmail", connectionId: connection }],
+        bindings: [{ app: "slack", connectionId: connection }],
       }),
     ).rejects.toThrow(/no longer pending/);
   });
@@ -135,28 +135,27 @@ describe("request link decisions", () => {
     );
     const ownerSession = t.withIdentity({ subject: `${owner}|session` });
     const otherSession = t.withIdentity({ subject: `${other}|session` });
-    await t.mutation(internal.tables.connections.mutations.saveConnection, {
-      userId: owner,
-      provider: "google",
-      app: "gmail",
-      providerUserId: "provider-sub",
-      login: "connected@gmail.com",
-      accessToken: "standing",
-      refreshToken: "refresh",
-    });
+    await t.mutation(
+      internal.connect.connections.save,
+      managedFixture({
+        userId: owner,
+        providerUserId: "provider-sub",
+        login: "connected@gmail.com",
+      }),
+    );
     const connection = (
       await ownerSession.query(api.tables.connections.queries.statusesForApps, {
-        apps: ["gmail"],
+        apps: ["slack"],
       })
     )[0].accounts[0].id;
     const slice = await ownerSession.mutation(
       internal.tables.slices.mutations.createFixture,
       {
         name: "Agent",
-        apps: ["gmail"],
+        apps: ["slack"],
         ttlMs: 60_000,
         mintPolicy: "approve",
-        bindings: [{ app: "gmail", connectionId: connection }],
+        bindings: [{ app: "slack", connectionId: connection }],
       },
     );
     const binding = await t.run(
@@ -164,7 +163,7 @@ describe("request link decisions", () => {
         (await ctx.db
           .query("sliceBindings")
           .withIndex("by_slice_app_connectionId", (q) =>
-            q.eq("sliceId", slice.id).eq("app", "gmail"),
+            q.eq("sliceId", slice.id).eq("app", "slack"),
           )
           .unique())!,
     );
@@ -172,7 +171,7 @@ describe("request link decisions", () => {
       internal.tables.slices.tokenRequestClaims.createPending,
       {
         sliceId: slice.id,
-        app: "gmail",
+        app: "slack",
         bindingId: binding._id,
       },
     );
@@ -221,7 +220,7 @@ describe("request link decisions", () => {
       {
         agentConnectionId: agent.id,
         agentConnectionSecret: agent.secret,
-        apps: ["github"],
+        apps: ["slack"],
         ttlMs: 60_000,
         reason: "Test denial",
       },
@@ -251,7 +250,7 @@ describe("request link decisions", () => {
       {
         agentConnectionId: agent.id,
         agentConnectionSecret: agent.secret,
-        apps: ["github"],
+        apps: ["slack"],
         ttlMs: 60_000,
         reason: "Test expiry",
       },

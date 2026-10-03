@@ -40,7 +40,6 @@ export default defineSchema({
     revokedAt: v.optional(v.number()),
     revocationReason: v.optional(v.string()),
   })
-    // Keep creation-time ordering for owner history queries.
     // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_user", ["userId"])
     .index("by_user_status", ["userId", "status"])
@@ -81,7 +80,6 @@ export default defineSchema({
     .index("by_claim_secret_hash", ["claimSecretHash"])
     .index("by_agent_connection_id", ["agentConnectionId"]),
 
-  // A slice owns its lifecycle; individual app permissions are indexed below.
   slices: defineTable({
     userId: v.id("users"),
     agentId: v.string(),
@@ -93,8 +91,6 @@ export default defineSchema({
     revokedAt: v.optional(v.number()),
     expiresAt: v.number(),
     mintPolicy: mintPolicyValidator,
-    brokerWindowStart: v.optional(v.number()),
-    brokerWindowCount: v.optional(v.number()),
   })
     .index("by_token", ["token"])
     .index("by_agentId", ["agentId"]),
@@ -103,9 +99,7 @@ export default defineSchema({
     sliceId: v.id("slices"),
     app: appValidator,
     connectionId: v.id("connections"),
-  })
-    .index("by_slice_app_connectionId", ["sliceId", "app", "connectionId"])
-    .index("by_connectionId", ["connectionId"]),
+  }).index("by_slice_app_connectionId", ["sliceId", "app", "connectionId"]),
 
   sliceRequests: defineTable({
     publicToken: v.string(),
@@ -148,63 +142,29 @@ export default defineSchema({
     .index("by_public_token", ["publicToken"])
     .index("by_slice_status_expiresAt", ["sliceId", "status", "expiresAt"]),
 
-  googleBrokerCredentials: defineTable({
-    secretHash: v.string(),
-    sliceId: v.id("slices"),
-    bindingId: v.id("sliceBindings"),
-    connectionId: v.id("connections"),
-    app: v.literal("files"),
-    connectionGeneration: v.number(),
-    expiresAt: v.number(),
-  }).index("by_secretHash", ["secretHash"]),
-
   connectBridgeTickets: defineTable({
     secretHash: v.string(),
     expiresAt: v.number(),
     command: bridgeCommandValidator,
   }).index("by_secretHash", ["secretHash"]),
 
-  // One row per (Scope user, app, service account). Google keys are service-local:
-  // Gmail mailbox email, primary Calendar ID, or Drive permission ID, not OIDC sub.
-  // Connect Slack accounts use workspace ID + user ID. Legacy rows stay valid.
-  connections: defineTable(
-    v.union(
-      v.object({
-        userId: v.id("users"),
-        app: appValidator,
-        accessToken: v.string(),
-        login: v.string(),
-        providerUserId: v.string(),
-        refreshToken: v.optional(v.string()),
-        tokenExpiresAt: v.optional(v.number()),
-        grantVersion: v.number(),
-        connectionGeneration: v.optional(v.number()),
-        refreshLease: v.optional(v.string()),
-        refreshLeaseExpiresAt: v.optional(v.number()),
-        grantedScopes: v.optional(v.array(v.string())),
-      }),
-      v.object({
-        backend: v.literal("vercel-connect"),
-        userId: v.id("users"),
-        app: v.literal("slack"),
-        login: v.string(),
-        providerUserId: v.string(),
-        connect: connectReferenceValidator,
-        grantedScopes: v.array(v.string()),
-        grantVersion: v.number(),
-        connectionGeneration: v.optional(v.number()),
-      }),
-    ),
-  ).index("by_user_app_providerUserId", ["userId", "app", "providerUserId"]),
+  connections: defineTable({
+    backend: v.literal("vercel-connect"),
+    userId: v.id("users"),
+    app: appValidator,
+    login: v.string(),
+    providerUserId: v.string(),
+    connect: connectReferenceValidator,
+    grantedScopes: v.array(v.string()),
+    grantVersion: v.number(),
+  }).index("by_user_app_providerUserId", ["userId", "app", "providerUserId"]),
 
   oauthStates: defineTable({
     userId: v.id("users"),
     app: appValidator,
     state: v.string(),
-    connectSubjectId: v.optional(v.string()),
-    browserProofHash: v.optional(v.string()),
-    pkceVerifier: v.optional(v.string()),
-    pkceChallenge: v.optional(v.string()),
+    connectSubjectId: v.string(),
+    browserProofHash: v.string(),
     returnTo: v.string(),
     expiresAt: v.number(),
   }).index("by_state", ["state"]),

@@ -1,12 +1,10 @@
 import { env } from "../_generated/server";
 
-/** Versioned ciphertext prefix so encrypted values are detectable. */
 export const TOKEN_CIPHER_PREFIX = "enc:v1:";
 
 const IV_BYTES = 12;
 const KEY_BYTES = 32;
 
-/** Missing/empty env must never throw on .trim(). */
 function envTrimmed(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -69,10 +67,6 @@ export function isEncryptedToken(value: string): boolean {
   return value.startsWith(TOKEN_CIPHER_PREFIX);
 }
 
-/**
- * Encrypt a secret with AES-256-GCM.
- * Returns `enc:v1:` + base64(iv || ciphertext+tag).
- */
 export async function encryptToken(plaintext: string): Promise<string> {
   const key = await importAesKey();
   const iv = new Uint8Array(IV_BYTES);
@@ -90,14 +84,10 @@ export async function encryptToken(plaintext: string): Promise<string> {
   return `${TOKEN_CIPHER_PREFIX}${bytesToBase64(packed)}`;
 }
 
-/**
- * Decrypt a stored token. Values without a valid `enc:v1:` ciphertext
- * prefix are rejected — plaintext is never returned as-is.
- */
 export async function decryptToken(stored: string): Promise<string> {
   if (!isEncryptedToken(stored)) {
     throw new Error(
-      "Stored connection token is not encrypted (expected enc:v1: ciphertext). Reconnect the provider so tokens are stored encrypted.",
+      "Stored handoff secret is not encrypted (expected enc:v1: ciphertext).",
     );
   }
   const packed = base64ToBytes(stored.slice(TOKEN_CIPHER_PREFIX.length));
@@ -109,7 +99,6 @@ export async function decryptToken(stored: string): Promise<string> {
   const key = await importAesKey();
   try {
     const plain = await crypto.subtle.decrypt(
-      // subarray() yields Uint8Array<ArrayBufferLike>; WebCrypto wants ArrayBuffer views.
       { name: "AES-GCM", iv: iv as BufferSource },
       key,
       ciphertext as BufferSource,
@@ -117,7 +106,7 @@ export async function decryptToken(stored: string): Promise<string> {
     return new TextDecoder().decode(plain);
   } catch {
     throw new Error(
-      "Failed to decrypt connection token. Check TOKEN_ENCRYPTION_KEY matches the key used to encrypt.",
+      "Failed to decrypt handoff secret. Check TOKEN_ENCRYPTION_KEY matches the key used to encrypt.",
     );
   }
 }

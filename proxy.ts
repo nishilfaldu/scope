@@ -6,10 +6,10 @@ import {
 
 const isSignInPage = createRouteMatcher(["/signin"]);
 const isAuthApiRoute = createRouteMatcher(["/api/auth(.*)"]);
-// Bridge requests authenticate with a server secret and one-use Convex ticket.
+
 const isConnectBridge = createRouteMatcher(["/api/connect/bridge"]);
 const isPublicPage = createRouteMatcher(["/", "/privacy", "/terms"]);
-/** Request links show the email verification form at the request URL. */
+
 const isRequestLink = createRouteMatcher([
   "/connect/(.*)",
   "/requests/new/(.*)",
@@ -25,7 +25,6 @@ function safeRedirectPath(value: string | null): string {
 
 export default convexAuthNextjsMiddleware(
   async (request, { convexAuth }) => {
-    // Let the auth endpoints through so sign-in and sign-out work.
     if (isAuthApiRoute(request) || isConnectBridge(request)) {
       return;
     }
@@ -61,7 +60,5 @@ export default convexAuthNextjsMiddleware(
 );
 
 export const config = {
-  // The following matcher runs proxy on all routes
-  // except static assets.
   matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
 };

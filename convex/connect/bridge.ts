@@ -31,6 +31,9 @@ export async function callBridge(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.CONNECT_BRIDGE_SECRET}`,
+      ...(env.CONNECT_BRIDGE_PROTECTION_COOKIE
+        ? { Cookie: env.CONNECT_BRIDGE_PROTECTION_COOKIE }
+        : {}),
     },
     body: JSON.stringify({ ticket }),
   });
@@ -40,7 +43,6 @@ export async function callBridge(
   return raw;
 }
 
-// Only the authenticated Vercel bridge can resolve a one-use command. No CORS.
 export const consumeTicket = httpAction(async (ctx, request) => {
   const secret = env.CONNECT_BRIDGE_SECRET;
   if (

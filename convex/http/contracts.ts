@@ -1,8 +1,6 @@
 import { ALL_APPS } from "../domain/apps";
 import { AGENT_ERROR_CODES, AGENT_ERROR_GUIDANCE } from "../lib/errors";
 
-// Human-readable route discovery. Response contracts belong to the handlers and
-// their HTTP tests, not a second handwritten schema.
 const routes = [
   { method: "GET", path: "/", summary: "API route index." },
   {
@@ -79,13 +77,7 @@ const routes = [
     method: "POST",
     path: "/api/credentials",
     summary:
-      "Mint an allowed app credential. The files app covers Drive, Docs, and Sheets through one opaque Scope broker credential; other apps return provider-native tokens.",
-  },
-  {
-    method: "POST",
-    path: "/api/google/operations",
-    summary:
-      "Run a vetted Drive, Docs, or Sheets operation with an opaque broker credential.",
+      "Mint a rotating Slack user token through Vercel Connect for an allowed account.",
   },
   {
     method: "POST",

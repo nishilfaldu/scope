@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { managedFixture } from "./helpers/connect";
 import { convexTest } from "convex-test";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -131,7 +132,7 @@ describe("agent connections", () => {
           "x-agent-connection-secret": replacement.agentConnectionSecret,
         },
         body: JSON.stringify({
-          apps: ["github"],
+          apps: ["slack"],
           ttlMs: 60_000,
           reason: "Denied",
         }),
@@ -197,7 +198,7 @@ describe("agent connections", () => {
         publicToken: "ar_existing_request",
         claimSecretHash: "claim-secret-hash",
         agentId: first.agentId,
-        apps: ["github"],
+        apps: ["slack"],
         ttlMs: 60_000,
         reason: "Existing request",
         status: "pending",
@@ -575,17 +576,13 @@ describe("agent connections", () => {
     });
     expect(ack.status).toBe(200);
 
-    await t.mutation(internal.tables.connections.mutations.saveConnection, {
-      userId: owner,
-      provider: "github",
-      app: "github",
-      accessToken: "standing",
-      login: "octocat",
-      providerUserId: "1",
-    });
+    await t.mutation(
+      internal.connect.connections.save,
+      managedFixture({ userId: owner, login: "octocat", providerUserId: "1" }),
+    );
     const account = (
       await ownerSession.query(api.tables.connections.queries.statusesForApps, {
-        apps: ["github"],
+        apps: ["slack"],
       })
     )[0].accounts[0].id;
     const createdResponse = await t.fetch("/api/access-requests", {
@@ -596,7 +593,7 @@ describe("agent connections", () => {
         "x-agent-connection-secret": claimed.agentConnectionSecret,
       },
       body: JSON.stringify({
-        apps: ["github"],
+        apps: ["slack"],
         ttlMs: 60_000,
         reason: "Test owner binding",
       }),
@@ -613,7 +610,7 @@ describe("agent connections", () => {
     await ownerSession.mutation(api.tables.slices.sliceRequests.decide, {
       publicToken: requestToken,
       decision: "approved",
-      bindings: [{ app: "github", connectionId: account }],
+      bindings: [{ app: "slack", connectionId: account }],
     });
     const sliceResponse = await t.fetch("/api/access-requests/claim", {
       method: "POST",
@@ -663,14 +660,14 @@ describe("agent connections", () => {
         "x-agent-connection-secret": claimed.agentConnectionSecret,
       },
       body: JSON.stringify({
-        apps: ["github"],
+        apps: ["slack"],
         ttlMs: 60_000,
         reason: "Test revocation",
       }),
     });
     expect(afterRevoke.status).toBe(403);
 
-    const useRevokedSlice = await t.fetch("/api/accounts?app=github", {
+    const useRevokedSlice = await t.fetch("/api/accounts?app=slack", {
       method: "GET",
       headers: {
         "x-slice-token": slice.sliceToken,

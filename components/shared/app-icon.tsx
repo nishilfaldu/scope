@@ -1,36 +1,9 @@
-import {
-  Chart01Icon,
-  CloudIcon,
-  DatabaseIcon,
-  GithubIcon,
-  GoogleIcon,
-  Notion01Icon,
-  SlackIcon,
-} from "@hugeicons/core-free-icons";
+import { SlackIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import type { AppId } from "@/lib/capabilities";
 import { cn } from "@/lib/utils";
 
-export function AppIcon({
-  app,
-  className,
-}: {
-  app: AppId;
-  className?: string;
-}) {
-  const icon = ["gmail", "calendar", "files"].includes(app)
-    ? GoogleIcon
-    : app === "github"
-      ? GithubIcon
-      : app === "slack"
-        ? SlackIcon
-        : app === "notion"
-          ? Notion01Icon
-          : app === "linear"
-            ? Chart01Icon
-            : app === "vercel"
-              ? CloudIcon
-              : DatabaseIcon;
+export function AppIcon({ className }: { app: AppId; className?: string }) {
   return (
     <span
       className={cn(
@@ -38,7 +11,7 @@ export function AppIcon({
         className,
       )}
     >
-      <HugeiconsIcon icon={icon} className="size-4" strokeWidth={2} />
+      <HugeiconsIcon icon={SlackIcon} className="size-4" strokeWidth={2} />
     </span>
   );
 }

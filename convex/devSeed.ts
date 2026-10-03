@@ -115,18 +115,8 @@ export const seedUiDemo = internalMutation({
 
     const demoAccounts = [
       {
-        app: "github" as const,
-        providerUserId: "demo-github",
-        login: "demo-octocat",
-      },
-      {
-        app: "gmail" as const,
-        providerUserId: "demo-gmail",
-        login: "demo.inbox@example.test",
-      },
-      {
         app: "slack" as const,
-        providerUserId: "demo-slack",
+        providerUserId: "T_DEMO:U_DEMO",
         login: "Demo Workspace",
       },
     ];
@@ -147,9 +137,14 @@ export const seedUiDemo = internalMutation({
         app: account.app,
         providerUserId: account.providerUserId,
         login: account.login,
-        accessToken: "demo-token-not-valid",
-        refreshToken: "demo-refresh-not-valid",
-        tokenExpiresAt: Date.now() + 60 * 60 * 1000,
+        backend: "vercel-connect",
+        connect: {
+          subjectId: `scope:${userId}:demo`,
+          issuer: "https://demo.invalid",
+          connectorId: "demo-not-valid",
+          installationId: "T_DEMO",
+        },
+        grantedScopes: ["chat:write"],
         grantVersion: 1,
       });
       accounts.set(account.app, id);
@@ -196,7 +191,7 @@ export const seedUiDemo = internalMutation({
       status: "staged" | "active" | "revoked";
       expiresAt: number;
       mintPolicy: "auto" | "approve";
-      apps: ("github" | "gmail" | "slack")[];
+      apps: "slack"[];
     }) {
       const id = await ctx.db.insert("slices", {
         userId,
@@ -229,7 +224,7 @@ export const seedUiDemo = internalMutation({
       status: "active",
       expiresAt: now + 7 * 24 * 60 * 60 * 1000,
       mintPolicy: "auto",
-      apps: ["github", "gmail"],
+      apps: ["slack"],
     });
     const activeApprove = await insertSlice({
       token: "st_demo_active_approve",
@@ -247,7 +242,7 @@ export const seedUiDemo = internalMutation({
       status: "revoked",
       expiresAt: now + 24 * 60 * 60 * 1000,
       mintPolicy: "auto",
-      apps: ["github"],
+      apps: ["slack"],
     });
     const expired = await insertSlice({
       token: "st_demo_expired",
@@ -256,7 +251,7 @@ export const seedUiDemo = internalMutation({
       status: "active",
       expiresAt: now - 60 * 60 * 1000,
       mintPolicy: "approve",
-      apps: ["gmail"],
+      apps: ["slack"],
     });
     const research = await insertSlice({
       token: "st_demo_research",
@@ -274,7 +269,7 @@ export const seedUiDemo = internalMutation({
       status: "staged",
       expiresAt: now + 3 * 24 * 60 * 60 * 1000,
       mintPolicy: "auto",
-      apps: ["gmail"],
+      apps: ["slack"],
     });
 
     const invites = [
@@ -366,7 +361,7 @@ export const seedUiDemo = internalMutation({
         publicToken: request.token,
         claimSecretHash: await sha256Hex(`ch_${request.token}`),
         agentId: "ag_demo_codex",
-        apps: request.status === "approved" ? ["gmail"] : ["github", "gmail"],
+        apps: ["slack"],
         ttlMs: 3 * 24 * 60 * 60 * 1000,
         reason: request.reason,
         status: request.status,

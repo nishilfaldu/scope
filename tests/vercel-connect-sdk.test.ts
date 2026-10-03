@@ -1,10 +1,8 @@
 // @vitest-environment node
 import { afterEach, expect, test, vi } from "vitest";
 import { POST } from "../app/api/connect/bridge/route";
-import { SLACK_SCOPES } from "../convex/connect/contracts";
+import { CONNECT_SLACK_SCOPES as SLACK_SCOPES } from "../convex/connect/contracts";
 
-// Exercise the installed SDK + OIDC implementation, with HTTP transport mocked.
-// This catches request shapes that SDK-level mocks cannot verify.
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();

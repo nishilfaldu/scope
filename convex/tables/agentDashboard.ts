@@ -121,7 +121,6 @@ export const list = authenticatedQuery({
   },
 });
 
-// The owner UI pages active identities directly from an indexed status range.
 export const activePage = authenticatedQuery({
   args: { paginationOpts: paginationOptsValidator },
   returns: paginationResultValidator(boardConnection),

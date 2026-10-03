@@ -7,8 +7,7 @@ export const get = internalQuery({
   returns: v.union(
     v.object({
       app: appValidator,
-      pkceChallenge: v.optional(v.string()),
-      connectSubjectId: v.optional(v.string()),
+      connectSubjectId: v.string(),
     }),
     v.null(),
   ),
@@ -20,7 +19,6 @@ export const get = internalQuery({
     if (!row || row.expiresAt <= Date.now()) return null;
     return {
       app: row.app,
-      pkceChallenge: row.pkceChallenge,
       connectSubjectId: row.connectSubjectId,
     };
   },
