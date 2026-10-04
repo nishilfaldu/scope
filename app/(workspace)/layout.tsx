@@ -1,6 +1,9 @@
 "use client";
 import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { usePathname } from "next/navigation";
 import { BoardShell } from "@/components/layout/board-shell";
 import {
@@ -25,10 +28,20 @@ export default function WorkspaceLayout({ children }: { children: ReactNode }) {
         <WorkspaceSkeleton title={title} kind={kind} />
       </AuthLoading>
       <Unauthenticated>
-        <p role="alert">
-          Your session could not be verified. Sign in again to continue.
-        </p>
+        <SessionRecovery />
       </Unauthenticated>
     </BoardShell>
   );
+}
+
+function SessionRecovery() {
+  useEffect(() => {
+    toast.add({
+      id: "session-verification",
+      title: "Your session could not be verified. Sign in again to continue.",
+      type: "error",
+      priority: "high",
+    });
+  }, []);
+  return <Button render={<Link href="/signin" />}>Sign in</Button>;
 }

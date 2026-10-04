@@ -5,6 +5,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowDown01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import {
   Dialog,
   DialogContent,
@@ -43,7 +44,6 @@ export function RequestRow({
     "approve" | "deny" | "stop" | null
   >(null);
   const busy = busyAction !== null;
-  const [error, setError] = useState("");
   const [open, setOpen] = useState(focused),
     [confirm, setConfirm] = useState(false);
   const row = useRef<HTMLElement>(null);
@@ -63,15 +63,17 @@ export function RequestRow({
   async function act(action: "approve" | "deny" | "stop") {
     onDecision?.();
     setBusyAction(action);
-    setError("");
     try {
       if (action === "stop") await cancel({ id: request._id });
       else await decide({ id: request._id, approve: action === "approve" });
       setConfirm(false);
     } catch {
-      setError(
-        "This request changed or expired. Check its status and try again.",
-      );
+      toast.add({
+        title:
+          "This request changed or expired. Check its status and try again.",
+        type: "error",
+        priority: "high",
+      });
     } finally {
       setBusyAction(null);
     }
@@ -183,11 +185,6 @@ export function RequestRow({
             </code>
           </p>
         )}
-        {error && (
-          <p role="alert" className={styles.error}>
-            {error}
-          </p>
-        )}
       </div>
       {open && !pending && (
         <div id={`detail-${request._id}`} className={styles.requestDetail}>
@@ -237,11 +234,6 @@ export function RequestRow({
               Stop new access deliveries for this request.
             </DialogDescription>
           </DialogHeader>
-          {error && (
-            <p role="alert" className={styles.error}>
-              {error}
-            </p>
-          )}
           <DialogFooter>
             <Button
               variant="outline"

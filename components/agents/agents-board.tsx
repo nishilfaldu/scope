@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { BoardSkeleton } from "@/components/layout/workspace-skeleton";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,13 +26,10 @@ export function AgentsBoard() {
   } | null>(null);
   const [name, setName] = useState(""),
     [stopping, setStopping] = useState(false),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+    [busy, setBusy] = useState(false);
   async function save() {
     if (!editing) return;
     setBusy(true);
-    setError("");
     try {
       await update({
         id: editing._id,
@@ -39,13 +37,16 @@ export function AgentsBoard() {
         stop: stopping,
       });
       setEditing(null);
-      setNotice(
-        stopping
-          ? "Further sharing stopped for this authorization."
-          : "Name updated. Requests now use this name.",
-      );
+      toast.add({
+        title: stopping ? "Sharing stopped." : "Name updated.",
+        type: "success",
+      });
     } catch {
-      setError("Could not update this connection. Try again.");
+      toast.add({
+        title: "Could not update this connection. Try again.",
+        type: "error",
+        priority: "high",
+      });
     } finally {
       setBusy(false);
     }
@@ -57,11 +58,13 @@ export function AgentsBoard() {
       await navigator.clipboard.writeText(
         `Use the Scope CLI from your coding host: scope login --origin ${origin}, then scope accounts. Ask for my approval with scope run --account ID --reason "Your purpose" --env SLACK_TOKEN -- COMMAND. Each approval gives the command the connection's full permissions. Keep the same invocation ID only when retrying a pending request. Never retry a command whose execution is uncertain.`,
       );
-      setNotice(
-        "Connection instructions copied. Send them to the agent you want to use.",
-      );
+      toast.add({ title: "Connection instructions copied.", type: "success" });
     } catch {
-      setNotice("Could not copy instructions. Try again in this browser.");
+      toast.add({
+        title: "Could not copy instructions. Try again in this browser.",
+        type: "error",
+        priority: "high",
+      });
     }
   }
   return (
@@ -70,11 +73,6 @@ export function AgentsBoard() {
         <h1>Agents</h1>
         <p>Recognize who’s asking before you approve.</p>
       </header>
-      {notice && (
-        <p role="status" className={styles.notice}>
-          {notice}
-        </p>
-      )}
       <div className={styles.agentList}>
         {!connections ? (
           <BoardSkeleton kind="agents" />
@@ -105,7 +103,6 @@ export function AgentsBoard() {
                   setEditing(c);
                   setName(c.name);
                   setStopping(false);
-                  setError("");
                 }}
               >
                 Edit name
@@ -147,11 +144,6 @@ export function AgentsBoard() {
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
-          )}
-          {error && (
-            <p role="alert" className={styles.error}>
-              {error}
-            </p>
           )}
           <DialogFooter>
             <Button

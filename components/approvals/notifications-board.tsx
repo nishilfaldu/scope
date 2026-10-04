@@ -5,6 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { BrandMark } from "@/components/shared/brand-mark";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import {
   notificationSupport,
   enableBrowserNotifications,
@@ -20,9 +21,7 @@ export function NotificationsBoard() {
     api.notifications.pushStatus,
     endpoint ? { endpoint } : "skip",
   );
-  const [busy, setBusy] = useState<string | null>(null),
-    [message, setMessage] = useState(""),
-    [error, setError] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
     async function refresh() {
@@ -58,21 +57,22 @@ export function NotificationsBoard() {
   }, []);
   async function enable() {
     setBusy("enable");
-    setError("");
-    setMessage("");
     try {
       const data = await enableBrowserNotifications(
         process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
       );
       await subscribe(data);
       setEndpoint(data.endpoint);
-      setMessage("Notifications enabled.");
+      toast.add({ title: "Notifications enabled.", type: "success" });
     } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Could not save notification setup. Check your sign-in and try again.",
-      );
+      toast.add({
+        title:
+          e instanceof Error
+            ? e.message
+            : "Could not save notification setup. Check your sign-in and try again.",
+        type: "error",
+        priority: "high",
+      });
     } finally {
       setSupport(notificationSupport());
       setBusy(null);
@@ -80,19 +80,23 @@ export function NotificationsBoard() {
   }
   async function test() {
     setBusy("test");
-    setError("");
-    setMessage("");
     try {
       const result = await sendTest({ endpoint });
-      setMessage(
-        !result.configured
+      toast.add({
+        title: !result.configured
           ? "Notifications are not configured for this Scope environment."
           : result.sent
             ? "Test sent. Check your device."
             : "No test was sent. Enable notifications on a device and try again.",
-      );
+        type: result.sent ? "success" : "error",
+        priority: result.sent ? "low" : "high",
+      });
     } catch {
-      setError("Could not send a test. Check your sign-in and try again.");
+      toast.add({
+        title: "Could not send a test. Check your sign-in and try again.",
+        type: "error",
+        priority: "high",
+      });
     } finally {
       setBusy(null);
     }
@@ -174,16 +178,6 @@ export function NotificationsBoard() {
             </Button>
           )}
         </div>
-        {message && (
-          <p role="status" className={styles.notice}>
-            {message}
-          </p>
-        )}
-        {error && (
-          <p role="alert" className={styles.error}>
-            {error}
-          </p>
-        )}
       </section>
     </>
   );

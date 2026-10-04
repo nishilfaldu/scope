@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { BoardSkeleton } from "@/components/layout/workspace-skeleton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import { RequestRow } from "./request-row";
 import { useNow } from "@/hooks/use-now";
 import { approvalStatus, type ApprovalRequest } from "@/lib/approval-display";
@@ -29,6 +30,16 @@ export function ApprovalsBoard({ requestId }: { requestId?: string }) {
     api.approvals.requestForOwner,
     requestId ? { reference: requestId } : "skip",
   );
+  useEffect(() => {
+    if (requestId && focused === null) {
+      toast.add({
+        id: `unavailable-request-${requestId}`,
+        title: "That request is unavailable. Your other requests are shown.",
+        type: "error",
+        priority: "high",
+      });
+    }
+  }, [requestId, focused]);
   const rows = [
     ...(pendingRows ?? []),
     ...page.results,
@@ -63,11 +74,6 @@ export function ApprovalsBoard({ requestId }: { requestId?: string }) {
           </p>
         )}
       </header>
-      {requestId && focused === null && (
-        <p role="status" className={styles.notice}>
-          That request is unavailable. Your requests are shown below.
-        </p>
-      )}
       <div className={styles.requestList} aria-label="Access requests">
         {loading || (requestId && focused === undefined) ? (
           <BoardSkeleton kind="requests" />

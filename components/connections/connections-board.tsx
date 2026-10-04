@@ -5,6 +5,7 @@ import { api } from "@/convex/_generated/api";
 import { BoardSkeleton } from "@/components/layout/workspace-skeleton";
 import { AppMark } from "@/components/scope/app-mark";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/toast";
 import {
   Dialog,
   DialogContent,
@@ -28,51 +29,72 @@ export function ConnectionsBoard() {
   const accounts = useQuery(api.accounts.forOwner, {});
   const [provider, setProvider] = useState<ProviderView>();
   const [connectingId, setConnectingId] = useState<string>();
-  const [busy, setBusy] = useState(false),
-    [notice, setNotice] = useState(""),
-    [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [providerFailed, setProviderFailed] = useState(false);
   const [manage, setManage] = useState<ApprovalAccount | null>(null);
   useEffect(() => {
     let active = true;
-    void fetch("/api/accounts/provider", { cache: "no-store" })
-      .then(async (r) => {
-        if (!r.ok) throw new Error("Unavailable");
-        const data = await r.json();
+    async function loadProvider() {
+      try {
+        const response = await fetch("/api/accounts/provider", {
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Unavailable");
+        const data = await response.json();
         if (active) setProvider(data);
-      })
-      .catch(() => {
-        if (active)
-          setError("Could not load available connections. Try again.");
-      });
+      } catch {
+        if (!active) return;
+        setProviderFailed(true);
+        toast.add({
+          id: "provider-load",
+          timeout: 0,
+          title: "Could not load available connections.",
+          type: "error",
+          priority: "high",
+          actionProps: {
+            children: "Retry",
+            onClick: () => {
+              setProviderFailed(false);
+              void loadProvider();
+            },
+          },
+        });
+      }
+    }
+    void loadProvider();
     const url = new URL(window.location.href),
       result = url.searchParams.get("connection");
     if (result) {
-      queueMicrotask(() =>
-        result === "connected"
-          ? setNotice("Account connected.")
-          : setError(
-              result === "revocation-unavailable"
-                ? "This Slack app cannot confirm full revocation. Connect an app with token rotation disabled."
-                : "Sign-in did not complete. Try connecting again.",
-            ),
-      );
+      toast.add({
+        id: "connection-result",
+        title:
+          result === "connected"
+            ? "Account connected."
+            : result === "revocation-unavailable"
+              ? "This Slack app cannot confirm full revocation. Connect an app with token rotation disabled."
+              : "Sign-in did not complete. Try connecting again.",
+        type: result === "connected" ? "success" : "error",
+        priority: result === "connected" ? "low" : "high",
+      });
       url.searchParams.delete("connection");
       window.history.replaceState({}, "", url.pathname + url.search + url.hash);
     }
     return () => {
       active = false;
+      toast.close("provider-load");
     };
   }, []);
   async function run(action: () => Promise<void>) {
     setBusy(true);
-    setError("");
-    setNotice("");
     try {
       await action();
     } catch {
-      setError(
-        "Could not complete this connection. Check your sign-in and try again.",
-      );
+      toast.add({
+        title:
+          "Could not complete this connection. Check your sign-in and try again.",
+        type: "error",
+        priority: "high",
+      });
     } finally {
       setBusy(false);
     }
@@ -100,18 +122,8 @@ export function ConnectionsBoard() {
         <h1>Connections</h1>
         <p>Choose the accounts your agents can ask to use.</p>
       </header>
-      {notice && (
-        <p role="status" className={styles.notice}>
-          {notice}
-        </p>
-      )}
-      {error && !manage && (
-        <p role="alert" className={styles.error}>
-          {error}
-        </p>
-      )}
       <div className={styles.connectionList}>
-        {!provider && error ? null : !provider || !accounts ? (
+        {!provider && providerFailed ? null : !provider || !accounts ? (
           <BoardSkeleton kind="connections" />
         ) : (
           [provider].map((integration) => {
@@ -159,7 +171,6 @@ export function ConnectionsBoard() {
                         className={styles.actionButton}
                         onClick={() => {
                           setManage(a);
-                          setError("");
                         }}
                       >
                         {a.state === "blocked" ? "Retry disconnect" : "Manage"}
@@ -204,11 +215,6 @@ export function ConnectionsBoard() {
               Disconnect {accountName(manage?.label)} and stop its requests.
             </DialogDescription>
           </DialogHeader>
-          {error && (
-            <p role="alert" className={styles.error}>
-              {error}
-            </p>
-          )}
           <DialogFooter>
             <Button
               variant="outline"
@@ -227,11 +233,14 @@ export function ConnectionsBoard() {
                     "/api/accounts/disconnect",
                     { id: manage._id },
                   );
-                  setNotice(
-                    result.outcome === "succeeded"
-                      ? "Slack authorization revoked. Account disconnected."
-                      : "Sharing stopped. Slack revocation could not be confirmed; retry disconnect.",
-                  );
+                  toast.add({
+                    title:
+                      result.outcome === "succeeded"
+                        ? "Account disconnected."
+                        : "Sharing stopped. Retry disconnect to confirm Slack revocation.",
+                    type: result.outcome === "succeeded" ? "success" : "error",
+                    priority: result.outcome === "succeeded" ? "low" : "high",
+                  });
                   setManage(null);
                 })
               }
