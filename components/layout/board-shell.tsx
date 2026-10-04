@@ -2,7 +2,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useConvexAuth, useQuery } from "convex/react";
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
@@ -12,7 +11,6 @@ import {
   ShieldKeyIcon,
   ArrowDown01Icon,
 } from "@hugeicons/core-free-icons";
-import { api } from "@/convex/_generated/api";
 import { BrandMark } from "@/components/shared/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,7 +34,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useNow } from "@/hooks/use-now";
+import { usePendingRequests } from "@/components/approvals/pending-requests-provider";
+import { approvalStatus } from "@/lib/approval-display";
 import styles from "@/components/scope/scope.module.css";
 const navigation = [
   { label: "Requests", path: "/approvals", icon: ShieldKeyIcon },
@@ -47,15 +46,10 @@ const navigation = [
 export function BoardShell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const { user, signOut } = useAuth();
-  const { isAuthenticated } = useConvexAuth();
-  const now = useNow();
-  const pending = useQuery(
-    api.approvals.pendingForOwner,
-    isAuthenticated ? { now } : "skip",
-  );
+  const { now, rows: pending } = usePendingRequests();
   const count =
-    pending?.filter((r) => r.accountAvailable && !r.requesterStopped).length ??
-    0;
+    pending?.filter((r) => approvalStatus(r, now) === "Needs approval")
+      .length ?? 0;
   return (
     <div className={styles.review}>
       <SidebarProvider

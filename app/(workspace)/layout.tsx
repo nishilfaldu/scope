@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { usePathname } from "next/navigation";
 import { BoardShell } from "@/components/layout/board-shell";
+import { PendingRequestsProvider } from "@/components/approvals/pending-requests-provider";
 import {
   WorkspaceSkeleton,
   type BoardKind,
@@ -22,15 +23,17 @@ export default function WorkspaceLayout({ children }: { children: ReactNode }) {
           : "requests";
   const title = kind[0].toUpperCase() + kind.slice(1);
   return (
-    <BoardShell>
-      <Authenticated>{children}</Authenticated>
-      <AuthLoading>
-        <WorkspaceSkeleton title={title} kind={kind} />
-      </AuthLoading>
-      <Unauthenticated>
-        <SessionRecovery />
-      </Unauthenticated>
-    </BoardShell>
+    <PendingRequestsProvider>
+      <BoardShell>
+        <Authenticated>{children}</Authenticated>
+        <AuthLoading>
+          <WorkspaceSkeleton title={title} kind={kind} />
+        </AuthLoading>
+        <Unauthenticated>
+          <SessionRecovery />
+        </Unauthenticated>
+      </BoardShell>
+    </PendingRequestsProvider>
   );
 }
 

@@ -7,11 +7,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { RequestRow } from "./request-row";
-import { useNow } from "@/hooks/use-now";
+import { usePendingRequests } from "./pending-requests-provider";
 import { approvalStatus, type ApprovalRequest } from "@/lib/approval-display";
 import styles from "@/components/scope/scope.module.css";
 export function ApprovalsBoard({ requestId }: { requestId?: string }) {
-  const now = useNow();
+  const { now, rows: pendingRows } = usePendingRequests();
   const [decided, setDecided] = useState<Record<string, ApprovalRequest>>({});
   const [order, setOrder] = useState<string[]>([]);
   const retained = useQuery(
@@ -20,7 +20,6 @@ export function ApprovalsBoard({ requestId }: { requestId?: string }) {
       ? { ids: Object.values(decided).map((r) => r._id) }
       : "skip",
   );
-  const pendingRows = useQuery(api.approvals.pendingForOwner, { now });
   const page = usePaginatedQuery(
     api.approvals.forOwner,
     {},

@@ -113,6 +113,9 @@ importers:
       eslint-config-next:
         specifier: 16.3.4
         version: 16.3.4(@typescript-eslint/parser@8.70.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+      happy-dom:
+        specifier: ^20.14.5
+        version: 20.14.5
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -130,7 +133,7 @@ importers:
         version: 8.2.2(@types/node@20.19.43)(esbuild@0.27.0)(jiti@2.7.0)
       vitest:
         specifier: ^5.0.0
-        version: 5.0.0(@edge-runtime/vm@5.0.0)(@types/node@20.19.43)(vite@8.2.2(@types/node@20.19.43)(esbuild@0.27.0)(jiti@2.7.0))
+        version: 5.0.0(@edge-runtime/vm@5.0.0)(@types/node@20.19.43)(happy-dom@20.14.5)(vite@8.2.2(@types/node@20.19.43)(esbuild@0.27.0)(jiti@2.7.0))
 
 packages:
   "@alloc/quick-lru@5.3.0":
@@ -1956,6 +1959,18 @@ packages:
         integrity: sha512-GnJmSr40H3RAnj0s34FNTcJi1hmWFV5KXugE0mYWnYhgTAHLJ/dJKAwDmvPJYMke0RplY2XE9LnM4hqSqKIjhQ==,
       }
 
+  "@types/whatwg-mimetype@3.0.2":
+    resolution:
+      {
+        integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==,
+      }
+
+  "@types/ws@8.18.2":
+    resolution:
+      {
+        integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==,
+      }
+
   "@typescript-eslint/eslint-plugin@8.70.0":
     resolution:
       {
@@ -2687,6 +2702,13 @@ packages:
         integrity: sha512-zRpUiDwd/xk6ADqPMATG8vc9VPrkck7T07OIx0gnjmJAnHnTVXNQG3vfvWNuiZIkwu9KrKdA1iJKfsfTVxE6NA==,
       }
 
+  buffer-image-size@0.6.4:
+    resolution:
+      {
+        integrity: sha512-nEh+kZOPY1w+gcCMobZ6ETUp9WfibndnosbpwB1iJk/8Gt5ZF2bhS6+B6bPYz424KtwsR6Rflc3tCz1/ghX2dQ==,
+      }
+    engines: { node: ">=4.0" }
+
   bundle-name@4.1.0:
     resolution:
       {
@@ -3241,6 +3263,13 @@ packages:
         integrity: sha512-rRqJg/6gd538VHvR3PSrdRBb/1Vy2YfzHqzvbhGIQpDRKIa4FgV/54b5Q1xYSxOOwKvjXweS26E0Q+nAMwp2pQ==,
       }
     engines: { node: ">=8.6" }
+
+  entities@7.0.1:
+    resolution:
+      {
+        integrity: sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==,
+      }
+    engines: { node: ">=0.12" }
 
   env-paths@2.2.1:
     resolution:
@@ -3907,6 +3936,13 @@ packages:
       {
         integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==,
       }
+
+  happy-dom@20.14.5:
+    resolution:
+      {
+        integrity: sha512-x/RzkpWO40bTjIoT30iQtt64FLLmH/iRcUCN2X//bLx7H3ifkdfPXyqsro/OYtqzIAhiLMMA7mmiOR9C3NOKjQ==,
+      }
+    engines: { node: ">=20.0.0" }
 
   has-bigints@1.1.0:
     resolution:
@@ -6386,6 +6422,13 @@ packages:
     engines: { node: ">= 16" }
     hasBin: true
 
+  whatwg-mimetype@3.0.0:
+    resolution:
+      {
+        integrity: sha512-nt+N2dzIutVRxARx1nghPKGv1xHikU7HKdfafKkLNLindmPU/ch3U31NOCGGA/dmPcmb1VlofO0vnKAcsm0o/Q==,
+      }
+    engines: { node: ">=12" }
+
   which-boxed-primitive@1.1.1:
     resolution:
       {
@@ -7637,6 +7680,12 @@ snapshots:
     dependencies:
       "@types/node": 20.19.43
 
+  "@types/whatwg-mimetype@3.0.2": {}
+
+  "@types/ws@8.18.2":
+    dependencies:
+      "@types/node": 20.19.43
+
   "@typescript-eslint/eslint-plugin@8.70.0(@typescript-eslint/parser@8.70.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)":
     dependencies:
       "@eslint-community/regexpp": 4.12.2
@@ -8094,6 +8143,10 @@ snapshots:
 
   buffer-equal-constant-time@1.0.1: {}
 
+  buffer-image-size@0.6.4:
+    dependencies:
+      "@types/node": 20.19.43
+
   bundle-name@4.1.0:
     dependencies:
       run-applescript: 7.1.0
@@ -8365,6 +8418,8 @@ snapshots:
     dependencies:
       ansi-colors: 4.1.3
       strip-ansi: 6.0.1
+
+  entities@7.0.1: {}
 
   env-paths@2.2.1: {}
 
@@ -8986,6 +9041,19 @@ snapshots:
   gopd@1.2.0: {}
 
   graceful-fs@4.2.11: {}
+
+  happy-dom@20.14.5:
+    dependencies:
+      "@types/node": 20.19.43
+      "@types/whatwg-mimetype": 3.0.2
+      "@types/ws": 8.18.2
+      buffer-image-size: 0.6.4
+      entities: 7.0.1
+      whatwg-mimetype: 3.0.0
+      ws: 8.21.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   has-bigints@1.1.0: {}
 
@@ -10410,7 +10478,7 @@ snapshots:
       fsevents: 2.3.3
       jiti: 2.7.0
 
-  vitest@5.0.0(@edge-runtime/vm@5.0.0)(@types/node@20.19.43)(vite@8.2.2(@types/node@20.19.43)(esbuild@0.27.0)(jiti@2.7.0)):
+  vitest@5.0.0(@edge-runtime/vm@5.0.0)(@types/node@20.19.43)(happy-dom@20.14.5)(vite@8.2.2(@types/node@20.19.43)(esbuild@0.27.0)(jiti@2.7.0)):
     dependencies:
       "@types/chai": 5.2.3
       "@vitest/mocker": 5.0.0(vite@8.2.2(@types/node@20.19.43)(esbuild@0.27.0)(jiti@2.7.0))
@@ -10429,6 +10497,7 @@ snapshots:
     optionalDependencies:
       "@edge-runtime/vm": 5.0.0
       "@types/node": 20.19.43
+      happy-dom: 20.14.5
     transitivePeerDependencies:
       - msw
 
@@ -10441,6 +10510,8 @@ snapshots:
       minimist: 1.2.8
     transitivePeerDependencies:
       - supports-color
+
+  whatwg-mimetype@3.0.0: {}
 
   which-boxed-primitive@1.1.1:
     dependencies:
