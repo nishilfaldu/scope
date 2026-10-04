@@ -1,11 +1,18 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { api } from "@/convex/_generated/api";
 import { BoardSkeleton } from "@/components/layout/workspace-skeleton";
 import { AppMark } from "@/components/scope/app-mark";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -195,6 +202,37 @@ export function ConnectionsBoard() {
                           Reconnect
                         </Button>
                       )}
+                    <Collapsible className={styles.accountPermissions}>
+                      <CollapsibleTrigger
+                        className={styles.permissionsTrigger}
+                        aria-label={`${a.state === "active" ? "Granted permissions" : "Last granted permissions"} for ${accountName(a.label)} (${a.grantedScopes.length})`}
+                      >
+                        <HugeiconsIcon
+                          icon={ArrowDown01Icon}
+                          size={14}
+                          aria-hidden
+                        />
+                        {a.state === "active"
+                          ? "Granted permissions"
+                          : "Last granted permissions"}
+                        <span className={styles.permissionsCount}>
+                          {a.grantedScopes.length}
+                        </span>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        {a.grantedScopes.length ? (
+                          <ul className={styles.scopeList}>
+                            {a.grantedScopes.map((scope) => (
+                              <li key={scope}>
+                                <code>{scope}</code>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No permissions recorded.</p>
+                        )}
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 ))}
                 {!rows.length && (

@@ -409,10 +409,11 @@
   border-radius: 9px;
 }
 .account {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  column-gap: 20px;
+  row-gap: 8px;
   margin: 0 26px 0 65px;
   padding: 17px 0 23px;
 }
@@ -422,6 +423,53 @@
 .account h3 {
   font-size: 14px;
   font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.accountPermissions {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.permissionsTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 8px;
+  margin-left: -8px;
+  border-radius: 7px;
+  color: var(--green);
+  font-size: 12px;
+  cursor: pointer;
+}
+.permissionsTrigger:hover {
+  background: #edf2ec;
+}
+.permissionsTrigger:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.permissionsTrigger[data-state="open"] > svg {
+  transform: rotate(180deg);
+}
+.permissionsCount {
+  color: var(--quiet);
+  font-variant-numeric: tabular-nums;
+}
+.scopeList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 8px;
+}
+.scopeList li {
+  max-width: 100%;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f7f9f7;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 .account p {
   font-size: 12px;
@@ -777,7 +825,7 @@
   .account {
     margin: 0 18px 0 54px;
     padding: 17px 0 23px;
-    gap: 10px;
+    column-gap: 10px;
   }
   .connectionNote {
     padding: 20px 18px;
