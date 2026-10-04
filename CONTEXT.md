@@ -1,29 +1,29 @@
 # Scope
 
-Scope lets a person approve access requests from authorized MCP connections to connected provider accounts.
+Scope lets a person allow a verified CLI session to collect tokens for a connected provider account for a limited time.
 
 ## Language
 
-**MCP connection**:
-An agent's authorization to request access on behalf of a Scope owner. A chosen name identifies the saved connection, without proving which chat is using it.
-_Avoid_: Agent lineage, direct agent connection
+**CLI session**:
+An existing WorkOS login, bound to its verified owner, issuer, client and session claims. Agent names are display labels. Two chats using the same login share its active approval.
 
 **Connected account**:
-A provider identity verified after successful sign-in, or a verified read-only account binding available to its owner.
-_Avoid_: Manually labeled account
+A saved provider identity and grant. Vercel Connect holds its credentials. A provisional account retains setup references until activation or confirmed cleanup.
 
 **Access request**:
-An MCP connection's immutable request to use one connected account, awaiting the owner's decision.
-_Avoid_: Slice, slice request
+A CLI session's request to collect tokens for one account and grant. It waits up to 30 minutes for the owner's decision. A reason describes the intended use, but does not restrict the token.
 
-**Sharing window**:
-The period in which an approved request can receive access from Scope. Ending it does not establish that access already received has expired at the provider.
-_Avoid_: Provider token lifetime
+**Approval window**:
+The 15-, 30- or 60-minute period that starts when the owner approves. The same session may collect tokens without another prompt. Collection does not extend it. It does not set the provider token lifetime.
 
 **Receipt**:
-The helper's confirmation that it received the approved access. It does not establish that the agent completed its work.
-_Avoid_: Task completion
+The CLI's confirmation that a credential arrived. It does not prove successful work, extend the window or end approval.
 
-**Stop sharing**:
-The owner's withdrawal of future access delivery through Scope. Previously received access may remain active at the provider.
-_Avoid_: Provider revocation
+**End approval**:
+The owner's withdrawal of future token collection under that approval. It does not revoke existing tokens or stop running programs. A later attempt can request a new approval.
+
+**Disconnect**:
+Block collection for the account immediately, then ask Vercel Connect to revoke its exact subject and installation. Provider revocation depends on support. Confirmed completion hides the account, while approval history remains.
+
+**Invocation**:
+A local command execution recorded by the CLI. Multiple invocations may use one approval. A command that started cannot automatically rerun under the same invocation ID.
