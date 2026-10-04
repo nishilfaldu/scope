@@ -19,6 +19,7 @@ import type * as lib_secrets from "../lib/secrets.js";
 import type * as notificationDelivery from "../notificationDelivery.js";
 import type * as notifications from "../notifications.js";
 import type * as scope from "../scope.js";
+import type * as uiReview from "../uiReview.js";
 
 import type {
   ApiFromModules,
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   notificationDelivery: typeof notificationDelivery;
   notifications: typeof notifications;
   scope: typeof scope;
+  uiReview: typeof uiReview;
 }>;
 
 /**
