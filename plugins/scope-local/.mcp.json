@@ -1,5 +1,0 @@
-{
-  "mcpServers": {
-    "scope-local": { "command": "node", "args": ["server.mjs"], "cwd": "." }
-  }
-}
