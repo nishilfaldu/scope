@@ -31,15 +31,17 @@ const sections: TermsSection[] = [
     content: (
       <>
         <p>
-          Scope connects Airtable and Slack accounts through Vercel Connect.
-          Your use of a connected service remains subject to that
-          provider&apos;s terms and policies. Scope is not operated by or
-          endorsed by those providers.
+          Scope connects Slack accounts through Vercel Connect. Your use of a
+          connected service remains subject to that provider&apos;s terms and
+          policies. Scope is not operated by or endorsed by those providers.
         </p>
         <p>
           You may connect only accounts you are authorized to use. You control
           which account and app are connected and may disconnect them from Scope
-          or revoke Scope in the provider&apos;s account settings.
+          or revoke Scope in the provider&apos;s account settings. Disconnect
+          blocks sharing immediately. Scope reports completion only after
+          upstream revocation is confirmed. Changing permissions requires
+          disconnecting and reconnecting.
         </p>
       </>
     ),
@@ -56,10 +58,12 @@ const sections: TermsSection[] = [
           window before approving access.
         </p>
         <p>
-          An approval allows the identified MCP connection to receive access
-          within its sharing window. Previously received access may remain
-          active at the provider after Scope stops sharing. You are responsible
-          for approvals you grant and for the agents you authorize.
+          An approval allows the identified CLI to receive access within its
+          sharing window. It gives the program the connection&apos;s full
+          permissions. The purpose does not restrict what the received
+          credential can do. Previously received access may remain active at the
+          provider after Scope stops sharing. You are responsible for approvals
+          you grant and for the agents you authorize.
         </p>
       </>
     ),
@@ -116,7 +120,7 @@ const sections: TermsSection[] = [
     content: (
       <p>
         You may stop using Scope at any time, disconnect provider accounts, and
-        stop further sharing through authorized MCP connections and requests. To
+        stop further sharing through authorized CLI connections and requests. To
         request deletion of your Scope account, email{" "}
         <a href="mailto:nishilfaldu@gmail.com">nishilfaldu@gmail.com</a>. We may
         suspend or terminate access for a material breach of these terms or when

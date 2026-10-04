@@ -56,8 +56,7 @@ export function RequestRow({
     request.status === "approved" &&
     deliveryDeadline(request) > now &&
     request.accountAvailable &&
-    !request.requesterStopped &&
-    !request.collectorStopped;
+    !request.requesterStopped;
   const time = requestTime(request, now),
     name = request.snapshot.requesterName;
   async function act(action: "approve" | "deny" | "stop") {
@@ -100,7 +99,7 @@ export function RequestRow({
           </span>
           <span className={styles.who}>
             <strong>{name}</strong>
-            <span>{"Authorized MCP connection"}</span>
+            <span>{"Authorized CLI connection"}</span>
           </span>
           <span className={styles.summaryEnd}>
             <time dateTime={time ? new Date(time).toISOString() : undefined}>
@@ -129,7 +128,14 @@ export function RequestRow({
                 {accountName(request.snapshot.accountLabel)}
               </span>
               {pending && (
-                <p className={styles.permission}>{accessBoundary(request)}</p>
+                <>
+                  <p className={styles.permission}>
+                    Full connection permissions: {accessBoundary(request)}
+                  </p>
+                  <p className={styles.permission}>
+                    The purpose does not limit these permissions.
+                  </p>
+                </>
               )}
             </div>
           </div>
@@ -170,6 +176,15 @@ export function RequestRow({
             </button>
           ) : null}
         </div>
+        {pending && (
+          <p className={styles.detailNote}>
+            <strong>Command</strong>
+            <br />
+            <code className="break-all text-xs">
+              {request.command.argv.join(" ")}
+            </code>
+          </p>
+        )}
         {error && (
           <p role="alert" className={styles.error}>
             {error}
@@ -206,11 +221,8 @@ export function RequestRow({
             </ol>
           )}
           {!pending && (
-            <p className={styles.detailNote}>{accessBoundary(request)}</p>
-          )}
-          {request.collectorConnectionId !== request.requesterConnectionId && (
             <p className={styles.detailNote}>
-              Delivered privately to {request.snapshot.collectorName}.
+              Full connection permissions: {accessBoundary(request)}
             </p>
           )}
           {canStop && (

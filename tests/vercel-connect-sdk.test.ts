@@ -26,13 +26,13 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
     issuer: "https://scope.convex.site",
     connectorId: "scl_slack",
     installationId: "inst_T1",
-    integrationId: "slack-read",
-    profileId: "channels.read",
-    profileVersion: 1,
+    providerId: "slack",
+    grantedScopes: ["channels:read"],
     providerUserId: "U1",
     providerTenantId: "T1",
   };
-  let tokens = 0;
+  let tokens = 0,
+    revoked = false;
   const transport = vi
     .spyOn(globalThis, "fetch")
     .mockImplementation(async (input, init) => {
@@ -50,7 +50,7 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
             type: "slack",
             service: "slack",
             name: "Scope",
-            data: {},
+            data: { userScopes: ["channels:read"], botScopes: [] },
           });
         expect(body.subject).toEqual({
           type: "user",
@@ -75,7 +75,7 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
           expect(body.installationId).toBe("inst_T1");
           tokens++;
           return Response.json({
-            token: `xoxe.xoxp-${tokens}`,
+            token: `xoxp-${tokens}`,
             expiresAt: Date.now() + 3600_000,
             installationId: "inst_T1",
             connector: { id: "scl_slack", type: "slack", uid: "slack/scope" },
@@ -87,6 +87,12 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
           return new Response(null, { status: 204 });
         }
       }
+      if (url === "https://slack.com/api/auth.revoke") {
+        revoked = true;
+        return Response.json({ ok: true, revoked: true });
+      }
+      if (url === "https://slack.com/api/auth.test" && revoked)
+        return Response.json({ ok: false, error: "token_revoked" });
       if (url === "https://slack.com/api/auth.test")
         return Response.json(
           { ok: true, team_id: "T1", user_id: "U1" },
@@ -99,11 +105,11 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
     "https://scope.example.com/api/accounts/complete?attempt=attempt",
   );
   expect(await acquireVerifiedCredential(ref)).toMatchObject({
-    accessToken: "xoxe.xoxp-1",
+    accessToken: "xoxp-1",
     providerUserId: "U1",
   });
   expect(await acquireVerifiedCredential(ref)).toMatchObject({
-    accessToken: "xoxe.xoxp-2",
+    accessToken: "xoxp-2",
   });
   expect(tokens).toBe(2);
   expect(await disconnect(ref)).toEqual({ outcome: "succeeded" });

@@ -1,9 +1,9 @@
 "use client";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useQuery } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
+import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   AiChat02Icon,
@@ -30,15 +30,12 @@ export function BoardShell({
   children: ReactNode;
 }) {
   const path = usePathname();
-  const router = useRouter();
-  const { signOut } = useAuthActions();
-  const user = useQuery(api.users.viewer);
+  const { user, signOut } = useAuth();
   const now = useNow();
   const pending = useQuery(api.approvals.pendingForOwner, { now });
   const count =
-    pending?.filter(
-      (r) => r.accountAvailable && !r.requesterStopped && !r.collectorStopped,
-    ).length ?? 0;
+    pending?.filter((r) => r.accountAvailable && !r.requesterStopped).length ??
+    0;
   return (
     <div className={styles.review}>
       <div className={styles.workspace}>
@@ -67,7 +64,9 @@ export function BoardShell({
             <p>{user?.email ?? "Loading account…"}</p>
             <button
               className={styles.textAction}
-              onClick={() => void signOut().then(() => router.push("/signin"))}
+              onClick={() =>
+                void signOut({ returnTo: window.location.origin + "/" })
+              }
             >
               Sign out
             </button>

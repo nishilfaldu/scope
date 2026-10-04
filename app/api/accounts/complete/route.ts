@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { createHash } from "node:crypto";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { acquireVerifiedCredential, disconnect } from "@/lib/providers";
+import { acquireVerifiedCredential, ProviderFailure } from "@/lib/providers";
 import { config, ownerDb, scopeOrigin } from "@/lib/scope-server";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
@@ -28,49 +28,35 @@ export async function GET(request: Request) {
       proofHash,
     });
     if (attempt.expiresAt <= Date.now()) throw new Error("Connection expired");
-    let superseded = attempt.superseded;
     if (!attempt.accountId) {
       const grant = await acquireVerifiedCredential(
         {
           ...attempt.connect,
-          integrationId: attempt.integrationId,
-          profileId: attempt.profileId,
-          profileVersion: attempt.profileVersion,
+          providerId: attempt.providerId,
+          grantedScopes: attempt.requestedScopes,
         },
         true,
       );
-      const completed = await client.mutation(api.accounts.completeConnection, {
+      await client.mutation(api.accounts.completeConnection, {
         secret,
         id: attempt.id,
         proofHash,
         providerUserId: grant.providerUserId,
         providerTenantId: grant.providerTenantId,
         label: grant.label,
-        providerEmail: grant.providerEmail,
         installationId: grant.installationId,
         grantedScopes: grant.grantedScopes,
       });
-      superseded = completed.superseded;
-    }
-    if (superseded) {
-      const cleanup = await disconnect({
-        ...superseded.connect,
-        integrationId: superseded.integrationId,
-        profileId: superseded.profileId,
-        profileVersion: superseded.profileVersion,
-      });
-      if (cleanup.outcome === "succeeded")
-        await client.mutation(api.accounts.acknowledgeSupersededCleanup, {
-          secret,
-          id: attempt.id,
-          proofHash,
-          subjectId: superseded.connect.subjectId,
-          outcome: "succeeded",
-        });
     }
     redirect.searchParams.set("connection", "connected");
-  } catch {
-    redirect.searchParams.set("connection", "failed");
+  } catch (error) {
+    redirect.searchParams.set(
+      "connection",
+      error instanceof ProviderFailure &&
+        error.kind === "revocation-unavailable"
+        ? "revocation-unavailable"
+        : "failed",
+    );
   }
   return new Response(null, {
     status: 303,

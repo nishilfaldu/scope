@@ -4,9 +4,9 @@ Current work lives on `codex/scope-approval-prototypes` in the single shared che
 
 ## Current implementation — October 3, 2026
 
-The generic OAuth rewrite uses six product tables, one approval engine, SDK hosted/stdio MCP, and fresh provider resolution after each permitted delivery. Encrypted replay, token inventory, PAT routes and the separate Slack bridge were removed. Development product data was reset without touching Scope authentication users.
+Scope now uses Slack permissions from provider consent and a local CLI. Each approval gives the program the connection's full permissions. Product MCP transports, fixed provider actions and Airtable paths were removed. The six product tables and fresh provider verification retain ownership, request deadlines and private receipts.
 
-Both provider fixtures remain disabled until live acceptance is complete. Current UI preserves sidebar navigation, the notification phone illustration and concise timelines. Actual setup, tests and known limits: [README](../README.md), [credential flows](../docs/credential-flows.md).
+Current UI preserves sidebar navigation, the notification phone illustration and concise timelines. Setup and verification: [README](../README.md), [credential flows](../docs/credential-flows.md), [live acceptance](../docs/slack-acceptance.md).
 
 ## Historical evidence
 

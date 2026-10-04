@@ -1,4 +1,3 @@
-import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
@@ -7,25 +6,22 @@ import {
   disconnectOutcome,
   principal,
   snapshot,
-  supersededGrant,
+  command,
 } from "./scope";
 
 export default defineSchema({
-  ...authTables,
   connectedAccounts: defineTable({
-    ownerId: v.id("users"),
-    integrationId: v.string(),
+    ownerId: v.string(),
+    providerId: v.string(),
     label: v.string(),
     providerName: v.string(),
     accessDescription: v.string(),
     providerUserId: v.string(),
     providerTenantId: v.optional(v.string()),
     providerEmail: v.optional(v.string()),
-    baseName: v.optional(v.string()),
     connect: connectReference,
     grantedScopes: v.array(v.string()),
-    profileId: v.string(),
-    profileVersion: v.number(),
+    authorizationKey: v.string(),
     grantVersion: v.number(),
     state: v.union(v.literal("active"), v.literal("blocked")),
     blockedAt: v.optional(v.number()),
@@ -34,55 +30,47 @@ export default defineSchema({
     // Owner history and active-account lookup have distinct ordering.
     // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_ownerId", ["ownerId"])
-    .index("by_ownerId_and_state", ["ownerId", "state"]),
+    .index("by_ownerId_and_state", ["ownerId", "state"])
+    .index("by_authorizationKey_and_disconnectOutcome", [
+      "authorizationKey",
+      "disconnectOutcome",
+    ]),
   connectionAttempts: defineTable({
-    ownerId: v.id("users"),
-    integrationId: v.string(),
+    ownerId: v.string(),
+    providerId: v.string(),
     providerName: v.string(),
     accessDescription: v.string(),
     connect: connectReference,
-    profileId: v.string(),
-    profileVersion: v.number(),
+    requestedScopes: v.array(v.string()),
     proofHash: v.string(),
     targetAccountId: v.optional(v.id("connectedAccounts")),
     targetGrantVersion: v.optional(v.number()),
     accountId: v.optional(v.id("connectedAccounts")),
-    superseded: v.optional(supersededGrant),
     expiresAt: v.number(),
   }).index("by_expiresAt", ["expiresAt"]),
   clientConnections: defineTable({
-    ownerId: v.id("users"),
+    ownerId: v.string(),
     ...principal.fields,
     name: v.string(),
     stoppedAt: v.optional(v.number()),
   })
-    // Owner history also includes stopped clients.
-    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_ownerId", ["ownerId"])
-    .index("by_ownerId_and_clientId_and_stoppedAt", [
-      "ownerId",
-      "clientId",
-      "stoppedAt",
-    ])
-    .index("by_issuer_and_subject_and_clientId_and_consentId", [
+    .index("by_issuer_and_subject_and_clientId_and_sessionId", [
       "issuer",
       "subject",
       "clientId",
-      "consentId",
+      "sessionId",
     ]),
   approvalRequests: defineTable({
-    ownerId: v.id("users"),
+    ownerId: v.string(),
     requesterConnectionId: v.id("clientConnections"),
-    collectorConnectionId: v.id("clientConnections"),
     accountId: v.id("connectedAccounts"),
     key: v.string(),
-    integrationId: v.string(),
+    providerId: v.string(),
     grantVersion: v.number(),
-    profileId: v.string(),
-    profileVersion: v.number(),
     snapshot,
     reason: v.string(),
-    intent: v.optional(v.string()),
+    command,
     status: decision,
     approvalExpiresAt: v.number(),
     decidedAt: v.optional(v.number()),
@@ -105,22 +93,9 @@ export default defineSchema({
       "approvalExpiresAt",
     ]),
   pushSubscriptions: defineTable({
-    ownerId: v.id("users"),
+    ownerId: v.string(),
     endpoint: v.string(),
     p256dh: v.string(),
     auth: v.string(),
   }).index("by_ownerId", ["ownerId"]),
-  notificationJobs: defineTable({
-    requestId: v.id("approvalRequests"),
-    subscriptionId: v.id("pushSubscriptions"),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("sent"),
-      v.literal("failed"),
-      v.literal("cancelled"),
-    ),
-    attempts: v.number(),
-    lease: v.optional(v.string()),
-    leaseUntil: v.optional(v.number()),
-  }).index("by_requestId", ["requestId"]),
 });

@@ -19,10 +19,12 @@ vi.mock("../lib/scope-server", () => ({
   ownerDb: async () => ({ query: mocks.query, mutation: mocks.mutation }),
   scopeOrigin: () => "https://scope.example",
 }));
-vi.mock("../lib/providers", () => ({
+vi.mock("../lib/providers", async (original) => ({
+  ...(await original<typeof import("../lib/providers")>()),
   acquireVerifiedCredential: mocks.grant,
   disconnect: mocks.disconnect,
 }));
+import { ProviderFailure } from "../lib/providers";
 import { GET } from "../app/api/accounts/complete/route";
 const invoke = (extra = "") =>
   GET(
@@ -35,9 +37,8 @@ beforeEach(() => {
   mocks.proof = "private-browser-proof";
   mocks.query.mockResolvedValue({
     id: "abc123",
-    integrationId: "airtable-rest-read",
-    profileId: "bases.read",
-    profileVersion: 1,
+    providerId: "slack",
+    requestedScopes: ["channels:read"],
     connect: {
       connectorId: "connector",
       subjectId: "unique-subject",
@@ -110,33 +111,13 @@ test("completed retries check the bound account without another provider call or
   );
 });
 
-test("retried completion performs pending superseded cleanup and only acknowledges success", async () => {
-  mocks.query.mockResolvedValue({
-    id: "abc123",
-    accountId: "account",
-    expiresAt: Date.now() + 600_000,
-    superseded: {
-      integrationId: "airtable-rest-read",
-      profileId: "bases.read",
-      profileVersion: 1,
-      connect: {
-        connectorId: "connector",
-        subjectId: "old-subject",
-        issuer: "https://scope.convex.site",
-      },
-    },
-  });
-  mocks.disconnect.mockResolvedValueOnce({ outcome: "failed" });
-  expect((await invoke()).headers.get("location")).toContain(
-    "connection=connected",
+test("unsupported rotating Slack grants explain why the connection cannot complete", async () => {
+  mocks.grant.mockRejectedValueOnce(
+    new ProviderFailure("revocation-unavailable"),
+  );
+  const response = await invoke();
+  expect(response.headers.get("Location")).toContain(
+    "connection=revocation-unavailable",
   );
   expect(mocks.mutation).not.toHaveBeenCalled();
-  mocks.disconnect.mockResolvedValueOnce({ outcome: "succeeded" });
-  await invoke();
-  expect(mocks.grant).not.toHaveBeenCalled();
-  expect(mocks.mutation.mock.calls[0][1]).toMatchObject({
-    id: "abc123",
-    subjectId: "old-subject",
-    outcome: "succeeded",
-  });
 });

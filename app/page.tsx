@@ -34,7 +34,7 @@ const controls = [
   {
     icon: Key01Icon,
     title: "Credentials stay out of the browser",
-    body: "Your local helper uses access privately.",
+    body: "The CLI gives credentials to your program privately.",
   },
 ];
 
@@ -94,9 +94,9 @@ export default function HomePage() {
                 </p>
                 <div className="mt-3 flex items-center justify-between rounded-xl bg-[#f3f6f1] px-4 py-4 dark:bg-muted">
                   <div>
-                    <p className="font-medium">Airtable</p>
+                    <p className="font-medium">Slack</p>
                     <p className="mt-0.5 text-sm text-[#68746a] dark:text-muted-foreground">
-                      Research base
+                      Research workspace
                     </p>
                   </div>
                   <HugeiconsIcon
@@ -107,13 +107,13 @@ export default function HomePage() {
                 </div>
                 <div className="mt-6 grid grid-cols-[7rem_1fr] gap-x-4 gap-y-3 text-sm">
                   <span className="text-[#68746a] dark:text-muted-foreground">
-                    Can do
+                    Full permissions
                   </span>
-                  <span>Read-only base access</span>
+                  <span>View public channels</span>
                   <span className="text-[#68746a] dark:text-muted-foreground">
-                    Task
+                    Purpose
                   </span>
-                  <span>List available Airtable bases</span>
+                  <span>Summarize workspace channels</span>
                   <span className="text-[#68746a] dark:text-muted-foreground">
                     Decide within
                   </span>

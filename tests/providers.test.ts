@@ -15,50 +15,61 @@ vi.mock("@vercel/connect", async (original) => ({
 import {
   acquireVerifiedCredential,
   beginAuthorization,
+  configuredSlack,
   disconnect,
-  ProviderFailure,
   type GrantReference,
 } from "../lib/providers";
-const airtable: GrantReference = {
-  integrationId: "airtable-rest-read",
+const slack: GrantReference = {
+  providerId: "slack",
   connectorId: "connector-a",
   subjectId: "grant-a",
   issuer: "https://scope.convex.site",
-  profileId: "bases.read",
-  profileVersion: 1,
+  installationId: "install-a",
+  grantedScopes: ["channels:read"],
   providerUserId: "user-a",
+  providerTenantId: "team-a",
 };
 const fetcher = vi.fn();
+const identity = {
+  ok: true,
+  user_id: "user-a",
+  team_id: "team-a",
+  user: "User",
+  team: "Team",
+};
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.stubEnv("SCOPE_AIRTABLE_REST_CONNECTOR", "airtable-rest");
   vi.stubEnv("SCOPE_SLACK_CONNECTOR", "slack");
   vi.stubGlobal("fetch", fetcher);
   sdk.metadata.mockResolvedValue({
     id: "connector-a",
-    type: "oauth",
-    service: "airtable",
-    vendor: { clientSecret: "never-export-this" },
+    type: "slack",
+    service: "slack",
+    vendor: {
+      userScopes: ["channels:read", "chat:write"],
+      botScopes: [],
+      clientSecret: "never-export-this",
+    },
   });
   sdk.token.mockResolvedValue({
-    token: "private-token-one",
-    expiresAt: Date.now() + 600_000,
-    connector: { id: "connector-a", type: "oauth" },
+    token: "xoxp-private",
+    installationId: "install-a",
+    connector: { id: "connector-a", type: "slack" },
   });
   fetcher.mockImplementation(async () =>
-    Response.json({ id: "user-a", scopes: ["schema.bases:read"] }),
+    Response.json(identity, { headers: { "x-oauth-scopes": "channels:read" } }),
   );
 });
-test("custom OAuth needs no installation, requests a fixed profile, and bypasses process cache on every attempt", async () => {
-  const first = await acquireVerifiedCredential(airtable);
+
+test("every acquisition uses full frozen permissions, exact subject and selected installation with fresh Connect resolution", async () => {
+  const first = await acquireVerifiedCredential(slack);
   sdk.token.mockResolvedValueOnce({
-    token: "private-token-two",
-    expiresAt: Date.now() + 600_000,
-    connector: { id: "connector-a", type: "oauth" },
+    token: "xoxp-private-two",
+    installationId: "install-a",
+    connector: { id: "connector-a", type: "slack" },
   });
-  const second = await acquireVerifiedCredential(airtable);
+  const second = await acquireVerifiedCredential(slack);
   expect(first.accessToken).not.toBe(second.accessToken);
-  expect(first.providerUserId).toBe(second.providerUserId);
   for (const call of sdk.token.mock.calls)
     expect(call).toEqual([
       "connector-a",
@@ -68,152 +79,131 @@ test("custom OAuth needs no installation, requests a fixed profile, and bypasses
           id: "grant-a",
           issuer: "https://scope.convex.site",
         },
-        scopes: ["schema.bases:read"],
+        scopes: ["channels:read"],
+        installationId: "install-a",
       },
       { forceRefresh: true },
     ]);
   expect(JSON.stringify(first)).not.toContain("never-export-this");
+  expect(first).not.toHaveProperty("providerExpiresAt");
 });
-test("same provider identity under distinct selected grants keeps separate Connect subjects", async () => {
-  await acquireVerifiedCredential(airtable);
-  await acquireVerifiedCredential({ ...airtable, subjectId: "grant-b" });
-  expect(sdk.token.mock.calls.map((call) => call[1].subject.id)).toEqual([
-    "grant-a",
-    "grant-b",
-  ]);
-});
-test("MCP-targeted connectors are rejected before REST credential acquisition", async () => {
-  sdk.metadata.mockResolvedValue({
-    id: "connector-a",
-    type: "oauth",
-    service: "airtable",
-    vendor: {
-      serverUrl: "https://mcp.airtable.com/mcp",
-      clientSecret: "private-config",
-    },
-  });
-  await expect(acquireVerifiedCredential(airtable)).rejects.toMatchObject({
-    kind: "configuration-invalid",
-  });
-  expect(sdk.token).not.toHaveBeenCalled();
-});
-test("wrong identity, omitted scope evidence and broader permissions reject the grant", async () => {
-  for (const body of [
-    { id: "user-b", scopes: ["schema.bases:read"] },
-    { id: "user-a" },
-    { id: "user-a", scopes: ["schema.bases:read", "data.records:write"] },
-  ]) {
-    fetcher.mockResolvedValueOnce(Response.json(body));
-    await expect(acquireVerifiedCredential(airtable)).rejects.toMatchObject({
+test("wrong identity, workspace, missing or broader effective scopes reject before release", async () => {
+  for (const [body, scopes] of [
+    [{ ...identity, user_id: "other" }, "channels:read"],
+    [{ ...identity, team_id: "other" }, "channels:read"],
+    [identity, ""],
+    [identity, "channels:read,chat:write"],
+    [{ ...identity, bot_id: "bot" }, "channels:read"],
+  ] as const) {
+    fetcher.mockResolvedValueOnce(
+      Response.json(body, { headers: { "x-oauth-scopes": scopes } }),
+    );
+    await expect(acquireVerifiedCredential(slack)).rejects.toMatchObject({
       kind: "grant-rejected",
     });
   }
 });
-test("changed profile, selected installation or expired credential never passes verification", async () => {
+test("wrong installation and rotating tokens cannot silently pass the supported user-grant flow", async () => {
   await expect(
-    acquireVerifiedCredential({ ...airtable, profileVersion: 2 }),
+    acquireVerifiedCredential({ ...slack, installationId: "*" }),
   ).rejects.toMatchObject({ kind: "grant-rejected" });
-  await expect(
-    acquireVerifiedCredential({ ...airtable, installationId: "*" }),
-  ).rejects.toMatchObject({ kind: "grant-rejected" });
-  sdk.token.mockResolvedValueOnce({
-    token: "expired",
-    expiresAt: Date.now(),
-    connector: { id: "connector-a", type: "oauth" },
-  });
-  await expect(acquireVerifiedCredential(airtable)).rejects.toMatchObject({
-    kind: "grant-rejected",
-  });
+  for (const change of [
+    { installationId: "install-b" },
+    { token: "xoxe.xoxp-rotating" },
+    { token: "xoxb-bot" },
+  ]) {
+    sdk.token.mockResolvedValueOnce({
+      token: "xoxp-private",
+      installationId: "install-a",
+      connector: { id: "connector-a", type: "slack" },
+      ...change,
+    });
+    await expect(acquireVerifiedCredential(slack)).rejects.toMatchObject({
+      kind: change.token?.startsWith("xoxe.")
+        ? "revocation-unavailable"
+        : "grant-rejected",
+    });
+  }
 });
-test("Slack requires its selected installation, verified user/tenant and bounded rotated token", async () => {
-  const slack = {
-    ...airtable,
-    integrationId: "slack-read",
-    profileId: "channels.read",
-    installationId: "install-a",
-    providerUserId: "user-a",
-    providerTenantId: "team-a",
-  };
-  sdk.metadata.mockResolvedValue({
-    id: "connector-a",
-    type: "slack",
-    service: "slack",
-    vendor: {},
-  });
-  sdk.token.mockResolvedValue({
-    token: "xoxe.xoxp-private",
-    expiresAt: Date.now() + 600_000,
-    installationId: "install-a",
-    connector: { id: "connector-a", type: "slack" },
-  });
-  fetcher.mockImplementation(async () =>
-    Response.json(
-      {
-        ok: true,
-        user_id: "user-a",
-        team_id: "team-a",
-        user: "User",
-        team: "Team",
-      },
-      { headers: { "x-oauth-scopes": "channels:read" } },
-    ),
-  );
-  expect(await acquireVerifiedCredential(slack)).toMatchObject({
-    providerUserId: "user-a",
-    providerTenantId: "team-a",
-    installationId: "install-a",
-  });
-  await expect(
-    acquireVerifiedCredential({ ...slack, installationId: undefined }),
-  ).rejects.toMatchObject({ kind: "grant-rejected" });
-  sdk.token.mockResolvedValueOnce({
-    token: "xoxe.xoxp-private",
-    expiresAt: Date.now() + 600_000,
-    installationId: "install-b",
-    connector: { id: "connector-a", type: "slack" },
-  });
-  await expect(acquireVerifiedCredential(slack)).rejects.toMatchObject({
-    kind: "grant-rejected",
-  });
-  await expect(
-    acquireVerifiedCredential({ ...slack, providerTenantId: "team-b" }),
-  ).rejects.toMatchObject({ kind: "grant-rejected" });
-});
-test("Connect revocation success records only Connect success and never bearer recall", async () => {
-  sdk.revoke.mockResolvedValue(undefined);
-  expect(await disconnect(airtable)).toEqual({ outcome: "succeeded" });
+test("disconnect requires actual Slack revocation and invalidation before deleting only the selected Connect grant", async () => {
+  fetcher
+    .mockResolvedValueOnce(Response.json(identity))
+    .mockResolvedValueOnce(Response.json({ ok: true, revoked: true }))
+    .mockResolvedValueOnce(
+      Response.json({ ok: false, error: "token_revoked" }),
+    );
+  expect(await disconnect(slack)).toEqual({ outcome: "succeeded" });
+  expect(fetcher.mock.calls.map((call) => call[0])).toEqual([
+    "https://slack.com/api/auth.test",
+    "https://slack.com/api/auth.revoke",
+    "https://slack.com/api/auth.test",
+  ]);
   expect(sdk.revoke).toHaveBeenCalledWith("connector-a", {
     subject: {
       type: "user",
       id: "grant-a",
       issuer: "https://scope.convex.site",
     },
+    installationId: "install-a",
   });
-  sdk.revoke.mockRejectedValue(new Error("private-vendor-error"));
-  expect(await disconnect(airtable)).toEqual({ outcome: "failed" });
 });
-test("provider failures expose a normalized reason without vendor details", async () => {
-  fetcher.mockResolvedValueOnce(
-    new Response("private-provider-error", { status: 401 }),
-  );
-  const error = await acquireVerifiedCredential(airtable).catch(
-    (error: unknown) => error,
-  );
-  expect(error).toBeInstanceOf(ProviderFailure);
-  expect(error).toMatchObject({ kind: "reauthorization-required" });
-  expect(String(error)).not.toContain("private-provider-error");
+test("SDK success alone is not proof of upstream disconnect; an active bearer or provider outage retains retry state", async () => {
+  fetcher
+    .mockResolvedValueOnce(Response.json(identity))
+    .mockResolvedValueOnce(Response.json({ ok: true, revoked: true }))
+    .mockResolvedValueOnce(Response.json(identity));
+  expect(await disconnect(slack)).toEqual({ outcome: "failed" });
+  expect(sdk.revoke).not.toHaveBeenCalled();
+  fetcher.mockRejectedValueOnce(new Error("private-provider-error"));
+  expect(await disconnect(slack)).toEqual({ outcome: "failed" });
 });
-test("authorization never invents an installation and pins its returned destination to HTTPS", async () => {
+test("disconnect retries can finish after provider revoke succeeded and Connect deletion failed", async () => {
+  fetcher.mockImplementation(async () =>
+    Response.json({ ok: false, error: "token_revoked" }),
+  );
+  expect(await disconnect(slack)).toEqual({ outcome: "succeeded" });
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});
+test("authorization uses selected connection permissions and obtains its first installation through consent", async () => {
   sdk.authorize.mockResolvedValue({ url: "https://provider.example/consent" });
   expect(
     await beginAuthorization(
-      airtable,
+      { ...slack, installationId: undefined },
       "http://localhost:3000/api/accounts/complete",
     ),
   ).toEqual({ url: "https://provider.example/consent" });
-  expect(sdk.authorize.mock.calls[0][1]).not.toHaveProperty("installationId");
+  expect(sdk.authorize.mock.calls[0][1]).toEqual({
+    subject: {
+      type: "user",
+      id: "grant-a",
+      issuer: "https://scope.convex.site",
+    },
+    scopes: ["channels:read"],
+  });
   sdk.authorize.mockResolvedValue({ url: "http://provider.example/consent" });
   await expect(
-    beginAuthorization(airtable, "http://localhost:3000/api/accounts/complete"),
+    beginAuthorization(slack, "http://localhost:3000/api/accounts/complete"),
   ).rejects.toMatchObject({ kind: "configuration-invalid" });
+});
+
+test("setup displays Slack's baseline identity scope without requesting it from Connect", async () => {
+  expect(await configuredSlack()).toEqual({
+    connectorId: "connector-a",
+    scopes: ["channels:read", "chat:write", "identify"],
+  });
+  fetcher.mockResolvedValueOnce(
+    Response.json(identity, {
+      headers: { "x-oauth-scopes": "identify,channels:read" },
+    }),
+  );
+  expect(
+    (
+      await acquireVerifiedCredential({
+        ...slack,
+        grantedScopes: ["channels:read", "identify"],
+      })
+    ).grantedScopes,
+  ).toEqual(["channels:read", "identify"]);
+  expect(sdk.token.mock.calls[0][1].scopes).toEqual(["channels:read"]);
+  expect(sdk.metadata).toHaveBeenCalledTimes(1);
 });

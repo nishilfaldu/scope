@@ -1,71 +1,55 @@
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { query, mutation, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import {
   connectReference,
   disconnectOutcome,
   owner,
   service,
-  supersededGrant,
+  canonicalScopes,
+  sameScopes,
+  authorizationKey,
 } from "./scope";
-import { internal } from "./_generated/api";
 import { randomSecret, hashesEqual } from "./lib/secrets";
 
-const accountView = v.object({
+const view = v.object({
   _id: v.id("connectedAccounts"),
-  integrationId: v.string(),
-  label: v.string(),
+  providerId: v.string(),
   providerName: v.string(),
+  label: v.string(),
   accessDescription: v.string(),
   providerUserId: v.string(),
   providerTenantId: v.optional(v.string()),
   providerEmail: v.optional(v.string()),
-  baseName: v.optional(v.string()),
+  grantedScopes: v.array(v.string()),
   state: v.union(v.literal("active"), v.literal("blocked")),
   blockedAt: v.optional(v.number()),
   grantVersion: v.number(),
-  profileId: v.string(),
-  profileVersion: v.number(),
   disconnectOutcome: v.optional(disconnectOutcome),
-});
-export const identity = query({
-  args: {},
-  returns: v.union(
-    v.null(),
-    v.object({ id: v.id("users"), email: v.string() }),
-  ),
-  handler: async (ctx) => {
-    const id = await getAuthUserId(ctx);
-    if (!id) return null;
-    const r = await ctx.db.get("users", id);
-    return r?.email ? { id, email: r.email } : null;
-  },
 });
 export const forOwner = query({
   args: {},
-  returns: v.array(accountView),
+  returns: v.array(view),
   handler: async (ctx) => {
-    const ownerId = await owner(ctx);
-    const rows = await ctx.db
-      .query("connectedAccounts")
-      .withIndex("by_ownerId", (q) => q.eq("ownerId", ownerId))
-      .order("desc")
-      .take(100);
+    const ownerId = await owner(ctx),
+      rows = await ctx.db
+        .query("connectedAccounts")
+        .withIndex("by_ownerId", (q) => q.eq("ownerId", ownerId))
+        .order("desc")
+        .take(100);
     return rows.map((r) => ({
       _id: r._id,
-      integrationId: r.integrationId,
-      label: r.label,
+      providerId: r.providerId,
       providerName: r.providerName,
+      label: r.label,
       accessDescription: r.accessDescription,
       providerUserId: r.providerUserId,
       providerTenantId: r.providerTenantId,
       providerEmail: r.providerEmail,
-      baseName: r.baseName,
+      grantedScopes: r.grantedScopes,
       state: r.state,
       blockedAt: r.blockedAt,
       grantVersion: r.grantVersion,
-      profileId: r.profileId,
-      profileVersion: r.profileVersion,
       disconnectOutcome: r.disconnectOutcome,
     }));
   },
@@ -73,13 +57,12 @@ export const forOwner = query({
 export const beginConnection = mutation({
   args: {
     secret: v.string(),
-    integrationId: v.string(),
+    providerId: v.string(),
     providerName: v.string(),
     accessDescription: v.string(),
     connectorId: v.string(),
     issuer: v.string(),
-    profileId: v.string(),
-    profileVersion: v.number(),
+    requestedScopes: v.array(v.string()),
     proofHash: v.string(),
     targetAccountId: v.optional(v.id("connectedAccounts")),
   },
@@ -91,18 +74,16 @@ export const beginConnection = mutation({
   }),
   handler: async (ctx, args) => {
     service(args.secret);
-    const ownerId = await owner(ctx);
+    const ownerId = await owner(ctx),
+      requestedScopes = canonicalScopes(args.requestedScopes);
     if (
       ![
-        args.integrationId,
+        args.providerId,
         args.providerName,
         args.accessDescription,
         args.connectorId,
         args.issuer,
-        args.profileId,
       ].every((s) => s.trim()) ||
-      !Number.isInteger(args.profileVersion) ||
-      args.profileVersion < 1 ||
       !/^[a-f0-9]{64}$/.test(args.proofHash)
     )
       throw new Error("Invalid connection");
@@ -113,14 +94,16 @@ export const beginConnection = mutation({
       args.targetAccountId &&
       (!target ||
         target.ownerId !== ownerId ||
-        target.integrationId !== args.integrationId)
+        target.providerId !== args.providerId ||
+        target.state !== "blocked" ||
+        target.disconnectOutcome !== "succeeded")
     )
-      throw new Error("Account unavailable");
+      throw new Error("Revoke the previous authorization first");
     const subjectId = randomSecret("scope_grant_"),
       expiresAt = Date.now() + 10 * 60_000;
     const id = await ctx.db.insert("connectionAttempts", {
       ownerId,
-      integrationId: args.integrationId,
+      providerId: args.providerId,
       providerName: args.providerName,
       accessDescription: args.accessDescription,
       connect: {
@@ -128,8 +111,7 @@ export const beginConnection = mutation({
         subjectId,
         issuer: args.issuer,
       },
-      profileId: args.profileId,
-      profileVersion: args.profileVersion,
+      requestedScopes,
       proofHash: args.proofHash,
       targetAccountId: args.targetAccountId,
       targetGrantVersion: target?.grantVersion,
@@ -149,50 +131,44 @@ export const connectionAttempt = query({
   },
   returns: v.object({
     id: v.id("connectionAttempts"),
-    integrationId: v.string(),
+    providerId: v.string(),
     connect: connectReference,
-    profileId: v.string(),
-    profileVersion: v.number(),
+    requestedScopes: v.array(v.string()),
     expiresAt: v.number(),
     accountId: v.optional(v.id("connectedAccounts")),
-    superseded: v.optional(supersededGrant),
   }),
   handler: async (ctx, args) => {
     service(args.secret);
     const ownerId = await owner(ctx),
-      r = await ctx.db.get("connectionAttempts", args.id);
+      row = await ctx.db.get("connectionAttempts", args.id);
     if (
-      !r ||
-      r.ownerId !== ownerId ||
-      !hashesEqual(r.proofHash, args.proofHash)
+      !row ||
+      row.ownerId !== ownerId ||
+      !hashesEqual(row.proofHash, args.proofHash)
     )
       throw new Error("Connection unavailable");
-    if (r.accountId) {
-      const account = await ctx.db.get("connectedAccounts", r.accountId);
+    if (row.accountId) {
+      const account = await ctx.db.get("connectedAccounts", row.accountId);
       if (
         !account ||
         account.ownerId !== ownerId ||
         account.state !== "active" ||
-        account.integrationId !== r.integrationId ||
-        account.profileId !== r.profileId ||
-        account.profileVersion !== r.profileVersion ||
-        account.connect.subjectId !== r.connect.subjectId ||
-        account.connect.connectorId !== r.connect.connectorId ||
-        account.connect.issuer !== r.connect.issuer ||
-        account.connect.installationId !== r.connect.installationId
+        account.providerId !== row.providerId ||
+        !sameScopes(account.grantedScopes, row.requestedScopes) ||
+        account.connect.subjectId !== row.connect.subjectId ||
+        account.connect.connectorId !== row.connect.connectorId ||
+        account.connect.issuer !== row.connect.issuer ||
+        account.connect.installationId !== row.connect.installationId
       )
         throw new Error("Account identity changed");
     }
-    // Completion mutation checks time; queries do not read the wall clock.
     return {
-      id: r._id,
-      integrationId: r.integrationId,
-      connect: r.connect,
-      profileId: r.profileId,
-      profileVersion: r.profileVersion,
-      expiresAt: r.expiresAt,
-      accountId: r.accountId,
-      superseded: r.superseded,
+      id: row._id,
+      providerId: row.providerId,
+      connect: row.connect,
+      requestedScopes: row.requestedScopes,
+      expiresAt: row.expiresAt,
+      accountId: row.accountId,
     };
   },
 });
@@ -205,25 +181,24 @@ export const completeConnection = mutation({
     providerTenantId: v.optional(v.string()),
     label: v.string(),
     providerEmail: v.optional(v.string()),
-    baseName: v.optional(v.string()),
     installationId: v.optional(v.string()),
     grantedScopes: v.array(v.string()),
   },
-  returns: v.object({
-    accountId: v.id("connectedAccounts"),
-    superseded: v.optional(supersededGrant),
-  }),
+  returns: v.object({ accountId: v.id("connectedAccounts") }),
   handler: async (ctx, args) => {
     service(args.secret);
     const ownerId = await owner(ctx),
-      r = await ctx.db.get("connectionAttempts", args.id);
+      row = await ctx.db.get("connectionAttempts", args.id);
     if (
-      !r ||
-      r.ownerId !== ownerId ||
-      !hashesEqual(r.proofHash, args.proofHash) ||
-      r.expiresAt <= Date.now()
+      !row ||
+      row.ownerId !== ownerId ||
+      !hashesEqual(row.proofHash, args.proofHash) ||
+      row.expiresAt <= Date.now()
     )
       throw new Error("Connection unavailable");
+    const grantedScopes = canonicalScopes(args.grantedScopes);
+    if (!sameScopes(grantedScopes, row.requestedScopes))
+      throw new Error("Provider permissions differ from connector permissions");
     if (
       !args.providerUserId.trim() ||
       !args.label.trim() ||
@@ -232,57 +207,72 @@ export const completeConnection = mutation({
         (!args.installationId.trim() || args.installationId === "*"))
     )
       throw new Error("Invalid provider grant");
-    const connect = { ...r.connect, installationId: args.installationId };
-    if (r.accountId) {
-      const old = await ctx.db.get("connectedAccounts", r.accountId);
+    const connect = { ...row.connect, installationId: args.installationId };
+    if (row.accountId) {
+      const old = await ctx.db.get("connectedAccounts", row.accountId);
       if (
         !old ||
         old.ownerId !== ownerId ||
         old.state !== "active" ||
-        old.connect.subjectId !== r.connect.subjectId ||
+        old.connect.subjectId !== row.connect.subjectId ||
+        old.connect.connectorId !== row.connect.connectorId ||
+        old.connect.issuer !== row.connect.issuer ||
+        old.providerId !== row.providerId ||
+        !sameScopes(old.grantedScopes, grantedScopes) ||
         old.providerUserId !== args.providerUserId ||
         old.providerTenantId !== args.providerTenantId ||
         old.connect.installationId !== args.installationId
       )
         throw new Error("Account identity changed");
-      return { accountId: old._id, superseded: r.superseded };
+      return { accountId: old._id };
+    }
+    // An index key keeps user/workspace/connector isolation bounded without
+    // exposing a provider-specific identity model to the approval engine.
+    const key = authorizationKey(
+      row.providerId,
+      args.providerUserId,
+      args.providerTenantId,
+      row.connect.connectorId,
+    );
+    for (const outcome of [undefined, "pending", "failed"] as const) {
+      const surviving = await ctx.db
+        .query("connectedAccounts")
+        .withIndex("by_authorizationKey_and_disconnectOutcome", (q) =>
+          q.eq("authorizationKey", key).eq("disconnectOutcome", outcome),
+        )
+        .first();
+      if (surviving && surviving._id !== row.targetAccountId)
+        throw new Error("Revoke the previous authorization first");
     }
     const values = {
       ownerId,
-      integrationId: r.integrationId,
-      providerName: r.providerName,
-      accessDescription: r.accessDescription,
+      authorizationKey: key,
+      providerId: row.providerId,
+      providerName: row.providerName,
+      accessDescription: row.accessDescription,
       connect,
-      profileId: r.profileId,
-      profileVersion: r.profileVersion,
       providerUserId: args.providerUserId,
       providerTenantId: args.providerTenantId,
       label: args.label.trim(),
       providerEmail: args.providerEmail,
-      baseName: args.baseName,
-      grantedScopes: args.grantedScopes,
+      grantedScopes,
       state: "active" as const,
     };
     let accountId;
-    let superseded;
-    if (r.targetAccountId) {
-      const target = await ctx.db.get("connectedAccounts", r.targetAccountId);
+    if (row.targetAccountId) {
+      const target = await ctx.db.get("connectedAccounts", row.targetAccountId);
       if (
         !target ||
         target.ownerId !== ownerId ||
-        target.integrationId !== r.integrationId ||
-        target.grantVersion !== r.targetGrantVersion ||
+        target.providerId !== row.providerId ||
+        target.grantVersion !== row.targetGrantVersion ||
+        target.state !== "blocked" ||
+        target.disconnectOutcome !== "succeeded" ||
         target.providerUserId !== args.providerUserId ||
         target.providerTenantId !== args.providerTenantId
       )
         throw new Error("Account identity changed");
       accountId = target._id;
-      superseded = {
-        integrationId: target.integrationId,
-        connect: target.connect,
-        profileId: target.profileId,
-        profileVersion: target.profileVersion,
-      };
       await ctx.db.replace("connectedAccounts", accountId, {
         ...values,
         grantVersion: target.grantVersion + 1,
@@ -292,15 +282,8 @@ export const completeConnection = mutation({
         ...values,
         grantVersion: 1,
       });
-    // Keep cleanup retryable after a lost callback response. This reference is
-    // nonsecret and survives only for the attempt's original ten-minute window;
-    // expiry does not guarantee Connect/provider revocation completed.
-    await ctx.db.patch("connectionAttempts", r._id, {
-      accountId,
-      connect,
-      superseded,
-    });
-    return { accountId, superseded };
+    await ctx.db.patch("connectionAttempts", row._id, { accountId, connect });
+    return { accountId };
   },
 });
 export const block = mutation({
@@ -308,22 +291,30 @@ export const block = mutation({
   returns: v.object({
     accountId: v.id("connectedAccounts"),
     connect: connectReference,
-    integrationId: v.string(),
+    providerId: v.string(),
     grantVersion: v.number(),
+    grantedScopes: v.array(v.string()),
+    providerUserId: v.string(),
+    providerTenantId: v.optional(v.string()),
   }),
   handler: async (ctx, { id }) => {
     const ownerId = await owner(ctx),
-      r = await ctx.db.get("connectedAccounts", id);
-    if (!r || r.ownerId !== ownerId) throw new Error("Account unavailable");
+      row = await ctx.db.get("connectedAccounts", id);
+    if (!row || row.ownerId !== ownerId) throw new Error("Account unavailable");
     await ctx.db.patch("connectedAccounts", id, {
       state: "blocked",
-      blockedAt: r.blockedAt ?? Date.now(),
+      blockedAt: row.blockedAt ?? Date.now(),
+      disconnectOutcome:
+        row.disconnectOutcome === "succeeded" ? "succeeded" : "pending",
     });
     return {
       accountId: id,
-      connect: r.connect,
-      integrationId: r.integrationId,
-      grantVersion: r.grantVersion,
+      connect: row.connect,
+      providerId: row.providerId,
+      grantVersion: row.grantVersion,
+      grantedScopes: row.grantedScopes,
+      providerUserId: row.providerUserId,
+      providerTenantId: row.providerTenantId,
     };
   },
 });
@@ -332,27 +323,27 @@ export const recordDisconnect = mutation({
     secret: v.string(),
     id: v.id("connectedAccounts"),
     grantVersion: v.number(),
-    outcome: disconnectOutcome,
+    outcome: v.union(v.literal("succeeded"), v.literal("failed")),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     service(args.secret);
     const ownerId = await owner(ctx),
-      r = await ctx.db.get("connectedAccounts", args.id);
+      row = await ctx.db.get("connectedAccounts", args.id);
     if (
-      !r ||
-      r.ownerId !== ownerId ||
-      r.state !== "blocked" ||
-      r.grantVersion !== args.grantVersion
+      !row ||
+      row.ownerId !== ownerId ||
+      row.state !== "blocked" ||
+      row.grantVersion !== args.grantVersion
     )
       throw new Error("Account unavailable");
-    await ctx.db.patch("connectedAccounts", r._id, {
-      disconnectOutcome: args.outcome,
-    });
+    if (row.disconnectOutcome !== "succeeded")
+      await ctx.db.patch("connectedAccounts", row._id, {
+        disconnectOutcome: args.outcome,
+      });
     return null;
   },
 });
-
 export const expireAttempt = internalMutation({
   args: { id: v.id("connectionAttempts") },
   returns: v.null(),
@@ -360,36 +351,6 @@ export const expireAttempt = internalMutation({
     const row = await ctx.db.get("connectionAttempts", id);
     if (row && row.expiresAt <= Date.now())
       await ctx.db.delete("connectionAttempts", id);
-    return null;
-  },
-});
-
-export const acknowledgeSupersededCleanup = mutation({
-  args: {
-    secret: v.string(),
-    id: v.id("connectionAttempts"),
-    proofHash: v.string(),
-    subjectId: v.string(),
-    outcome: v.literal("succeeded"),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    service(args.secret);
-    const ownerId = await owner(ctx),
-      row = await ctx.db.get("connectionAttempts", args.id);
-    if (
-      !row ||
-      row.ownerId !== ownerId ||
-      row.expiresAt <= Date.now() ||
-      !hashesEqual(row.proofHash, args.proofHash)
-    )
-      throw new Error("Connection unavailable");
-    if (!row.superseded) return null;
-    if (row.superseded.connect.subjectId !== args.subjectId)
-      throw new Error("Superseded grant unavailable");
-    await ctx.db.patch("connectionAttempts", row._id, {
-      superseded: undefined,
-    });
     return null;
   },
 });

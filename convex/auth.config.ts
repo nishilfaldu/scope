@@ -1,12 +1,15 @@
 import { env } from "./_generated/server";
+import type { AuthConfig } from "convex/server";
 
-const authConfig = {
+// All first-party applications in this WorkOS environment share the default
+// application's issuer. owner() also requires the signed web client_id and sid.
+export default {
   providers: [
     {
-      domain: env.CONVEX_SITE_URL,
-      applicationID: "convex",
+      type: "customJwt",
+      issuer: `https://api.workos.com/user_management/${env.WORKOS_CLIENT_ID}`,
+      algorithm: "RS256",
+      jwks: `https://api.workos.com/sso/jwks/${env.WORKOS_CLIENT_ID}`,
     },
   ],
-};
-
-export default authConfig;
+} satisfies AuthConfig;

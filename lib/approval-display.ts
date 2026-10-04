@@ -26,12 +26,7 @@ export function approvalStatus(
 ) {
   if (r.status === "denied") return "Denied";
   if (r.status === "cancelled") return "Delivery stopped";
-  if (
-    blocked ||
-    !r.accountAvailable ||
-    r.requesterStopped ||
-    r.collectorStopped
-  )
+  if (blocked || !r.accountAvailable || r.requesterStopped)
     return "Sharing blocked";
   if (r.receivedAt) return "Received";
   if (deliveryDeadline(r) <= now)
@@ -113,9 +108,7 @@ export function requestTimeline(
     (r.accountAvailable ||
       (!!r.accountBlockedAt && deadline < r.accountBlockedAt)) &&
     (!r.requesterStopped ||
-      (!!r.requesterStoppedAt && deadline < r.requesterStoppedAt)) &&
-    (!r.collectorStopped ||
-      (!!r.collectorStoppedAt && deadline < r.collectorStoppedAt))
+      (!!r.requesterStoppedAt && deadline < r.requesterStoppedAt))
   )
     events.push({
       label:
@@ -148,10 +141,10 @@ export function requestTimeline(
         ? "Previously received access is unaffected."
         : undefined,
     });
-  else if ((r.requesterStopped || r.collectorStopped) && r.status !== "denied")
+  else if (r.requesterStopped && r.status !== "denied")
     events.push({
       label: "Connection sharing stopped",
-      at: r.requesterStoppedAt ?? r.collectorStoppedAt,
+      at: r.requesterStoppedAt,
       tone: "stopped",
     });
   else if (deadline > now && r.status !== "denied" && !r.receivedAt)
@@ -189,7 +182,7 @@ export async function approvalPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 export function requestAccess(r: ApprovalRequest) {
-  return r.intent || `Access to this ${r.snapshot.providerName} account`;
+  return r.reason;
 }
 export function accessBoundary(r: ApprovalRequest) {
   return r.snapshot.accessDescription;

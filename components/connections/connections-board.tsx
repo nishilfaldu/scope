@@ -19,27 +19,27 @@ import {
   type ApprovalAccount,
 } from "@/lib/approval-display";
 import styles from "@/components/scope/scope.module.css";
-type IntegrationView = {
-  id: string;
+type ProviderView = {
+  providerId: string;
   provider: string;
-  enabled: boolean;
-  accessDescription: string;
+  permissions: string[];
 };
 export function ConnectionsBoard() {
   const accounts = useQuery(api.accounts.forOwner, {});
-  const [integrations, setIntegrations] = useState<IntegrationView[]>();
+  const [provider, setProvider] = useState<ProviderView>();
+  const [targetAccountId, setTargetAccountId] = useState<string>();
   const [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(""),
     [error, setError] = useState("");
-  const [connect, setConnect] = useState<IntegrationView | null>(null),
+  const [connect, setConnect] = useState<ProviderView | null>(null),
     [manage, setManage] = useState<ApprovalAccount | null>(null);
   useEffect(() => {
     let active = true;
-    void fetch("/api/accounts/integrations", { cache: "no-store" })
+    void fetch("/api/accounts/provider", { cache: "no-store" })
       .then(async (r) => {
         if (!r.ok) throw new Error("Unavailable");
         const data = await r.json();
-        if (active) setIntegrations(data.integrations);
+        if (active) setProvider(data);
       })
       .catch(() => {
         if (active)
@@ -51,7 +51,11 @@ export function ConnectionsBoard() {
       queueMicrotask(() =>
         result === "connected"
           ? setNotice("Account connected.")
-          : setError("Sign-in did not complete. Try connecting again."),
+          : setError(
+              result === "revocation-unavailable"
+                ? "This Slack app cannot confirm full revocation. Connect an app with token rotation disabled."
+                : "Sign-in did not complete. Try connecting again.",
+            ),
       );
       url.searchParams.delete("connection");
       window.history.replaceState({}, "", url.pathname + url.search + url.hash);
@@ -91,43 +95,50 @@ export function ConnectionsBoard() {
         </p>
       )}
       <div className={styles.connectionList}>
-        {!integrations || !accounts ? (
+        {!provider || !accounts ? (
           <p className={styles.loading}>Loading accounts…</p>
         ) : (
-          integrations.map((integration) => {
+          [provider].map((integration) => {
             const rows = accounts.filter(
-              (a) => a.integrationId === integration.id,
+              (a) => a.providerId === integration.providerId,
             );
             return (
-              <section className={styles.appGroup} key={integration.id}>
+              <section className={styles.appGroup} key={integration.providerId}>
                 <header>
                   <AppMark app={integration.provider} />
                   <h2>{integration.provider}</h2>
-                  {integration.enabled && (
+                  {
                     <Button
                       variant="ghost"
                       className={styles.addAccount}
                       disabled={busy}
                       onClick={() => {
                         setConnect(integration);
+                        setTargetAccountId(undefined);
                         setError("");
                       }}
                     >
                       Connect account
                     </Button>
-                  )}
+                  }
                 </header>
                 {rows.map((a) => (
                   <div className={styles.account} key={a._id}>
                     <div>
-                      <h3>{accountName(a.baseName || a.label)}</h3>
+                      <h3>{accountName(a.label)}</h3>
                       {a.providerEmail && <p>{a.providerEmail}</p>}
                       {a.state === "blocked" && (
-                        <p className={styles.attention}>Sharing stopped</p>
+                        <p className={styles.attention}>
+                          {a.disconnectOutcome === "succeeded"
+                            ? "Disconnected"
+                            : a.disconnectOutcome === "failed"
+                              ? "Sharing stopped · disconnect needs retry"
+                              : "Sharing stopped · disconnect pending"}
+                        </p>
                       )}
                     </div>
                     {(a.state === "active" ||
-                      a.disconnectOutcome === "failed") && (
+                      a.disconnectOutcome !== "succeeded") && (
                       <button
                         className={styles.textAction}
                         onClick={() => {
@@ -138,14 +149,23 @@ export function ConnectionsBoard() {
                         {a.state === "blocked" ? "Retry disconnect" : "Manage"}
                       </button>
                     )}
+                    {a.state === "blocked" &&
+                      a.disconnectOutcome === "succeeded" && (
+                        <button
+                          className={styles.textAction}
+                          onClick={() => {
+                            setConnect(integration);
+                            setTargetAccountId(a._id);
+                            setError("");
+                          }}
+                        >
+                          Reconnect
+                        </button>
+                      )}
                   </div>
                 ))}
                 {!rows.length && (
-                  <p className={styles.empty}>
-                    {integration.enabled
-                      ? `No ${integration.provider} accounts connected.`
-                      : "Connection setup is being verified."}
-                  </p>
+                  <p className={styles.empty}>No Slack accounts connected.</p>
                 )}
               </section>
             );
@@ -161,8 +181,19 @@ export function ConnectionsBoard() {
         <DialogContent className={styles.dialog}>
           <DialogHeader>
             <DialogTitle>Connect {connect?.provider}</DialogTitle>
-            <DialogDescription>{connect?.accessDescription}</DialogDescription>
+            <DialogDescription>
+              Review the requested access in Slack. Each approved program gets
+              this connection&apos;s full permissions.
+            </DialogDescription>
           </DialogHeader>
+          <div className="max-h-[50vh] overflow-y-auto">
+            <p className={styles.detailNote}>Requested Slack permissions</p>
+            <ul className="space-y-2 text-sm">
+              {connect?.permissions.map((scope) => (
+                <li key={scope}>{scope}</li>
+              ))}
+            </ul>
+          </div>
           {error && (
             <p role="alert" className={styles.error}>
               {error}
@@ -184,7 +215,10 @@ export function ConnectionsBoard() {
                   if (!connect) return;
                   const result = await approvalPost<{ url: string }>(
                     "/api/accounts/authorize",
-                    { integrationId: connect.id },
+                    {
+                      providerId: connect.providerId,
+                      ...(targetAccountId ? { targetAccountId } : {}),
+                    },
                   );
                   window.location.assign(result.url);
                 })
@@ -203,14 +237,15 @@ export function ConnectionsBoard() {
       >
         <DialogContent className={styles.dialog}>
           <DialogHeader>
-            <DialogTitle>
-              {accountName(manage?.baseName || manage?.label)}
-            </DialogTitle>
+            <DialogTitle>{accountName(manage?.label)}</DialogTitle>
             <DialogDescription>
-              Previously received access may remain active at the provider.
+              Disconnect stops new sharing and revokes this Slack authorization.
+              Requests for this connection will no longer work.
             </DialogDescription>
           </DialogHeader>
-          <p className={styles.detailNote}>{manage?.accessDescription}</p>
+          <p className={styles.detailNote}>
+            Full connection permissions: {manage?.accessDescription}
+          </p>
           {error && (
             <p role="alert" className={styles.error}>
               {error}
@@ -236,8 +271,8 @@ export function ConnectionsBoard() {
                   );
                   setNotice(
                     result.outcome === "succeeded"
-                      ? "Sharing stopped and account disconnected."
-                      : "Sharing stopped. Disconnection failed; try again.",
+                      ? "Slack authorization revoked. Account disconnected."
+                      : "Sharing stopped. Slack revocation could not be confirmed; retry disconnect.",
                   );
                   setManage(null);
                 })
@@ -247,7 +282,7 @@ export function ConnectionsBoard() {
                 ? "Stopping…"
                 : manage?.state === "blocked"
                   ? "Retry disconnect"
-                  : "Stop sharing"}
+                  : "Disconnect"}
             </Button>
           </DialogFooter>
         </DialogContent>

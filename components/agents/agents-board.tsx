@@ -55,7 +55,7 @@ export function AgentsBoard() {
       const origin =
         process.env.NEXT_PUBLIC_SCOPE_ORIGIN || window.location.origin;
       await navigator.clipboard.writeText(
-        `Connect to Scope through its MCP server at ${origin}/api/mcp. Sign in with my Scope account when prompted. Ask only for the account needed for my task and share the approval link with me. Reuse the same request key on retries. Choose my authorized local helper as the collector. Keep sign-in and provider credentials private; never return them in chat.`,
+        `Use the Scope CLI from your coding host: scope login --origin ${origin}, then scope accounts. Ask for my approval with scope run --account ID --reason "Your purpose" --env SLACK_TOKEN -- COMMAND. Each approval gives the command the connection's full permissions. Keep the same invocation ID only when retrying a pending request. Never retry a command whose execution is uncertain.`,
       );
       setNotice(
         "Connection instructions copied. Send them to the agent you want to use.",
@@ -96,7 +96,7 @@ export function AgentsBoard() {
               </span>
               <div>
                 <h2>{c.name}</h2>
-                <p>Authorized MCP connection</p>
+                <p>Authorized CLI connection</p>
                 {c.stoppedAt !== undefined && <span>Sharing stopped</span>}
               </div>
               <button

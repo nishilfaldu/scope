@@ -5,10 +5,8 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
   beginAuthorization,
-  configuredIntegration,
+  configuredSlack,
   disconnect,
-  integrations,
-  integrationFor,
 } from "@/lib/providers";
 import {
   config,
@@ -25,16 +23,13 @@ export async function GET(
 ) {
   try {
     await ownerDb();
-    if ((await params).operation !== "integrations")
+    if ((await params).operation !== "provider")
       return new Response(null, { status: 404 });
+    const { scopes } = await configuredSlack();
     return json({
-      integrations: integrations.map((item) => ({
-        id: item.id,
-        provider: item.provider,
-        enabled: item.enabled,
-        accessDescription: item.accessDescription,
-        revocationNote: item.revocationNote,
-      })),
+      providerId: "slack",
+      provider: "Slack",
+      permissions: scopes,
     });
   } catch {
     return safeError(401);
@@ -55,25 +50,22 @@ export async function POST(
     if (operation === "authorize") {
       const args = z
         .object({
-          integrationId: z.string(),
+          providerId: z.literal("slack"),
           targetAccountId: z.string().optional(),
         })
         .strict()
         .parse(body);
-      const { integration, connectorId } = await configuredIntegration(
-          args.integrationId,
-        ),
+      const { connectorId, scopes: requestedScopes } = await configuredSlack(),
         issuer = config("NEXT_PUBLIC_CONVEX_SITE_URL"),
         proof = randomBytes(32).toString("hex");
       const attempt = await client.mutation(api.accounts.beginConnection, {
         secret,
-        integrationId: integration.id,
+        providerId: "slack",
         connectorId,
         issuer,
-        profileId: integration.profileId,
-        profileVersion: integration.profileVersion,
-        providerName: integration.provider,
-        accessDescription: integration.accessDescription,
+        requestedScopes,
+        providerName: "Slack",
+        accessDescription: requestedScopes.join(", "),
         proofHash: createHash("sha256").update(proof).digest("hex"),
         targetAccountId: args.targetAccountId as
           Id<"connectedAccounts"> | undefined,
@@ -82,12 +74,11 @@ export async function POST(
       callback.searchParams.set("attempt", attempt.id);
       const authorization = await beginAuthorization(
         {
-          integrationId: integration.id,
+          providerId: "slack",
           connectorId,
           subjectId: attempt.subjectId,
           issuer,
-          profileId: integration.profileId,
-          profileVersion: integration.profileVersion,
+          grantedScopes: requestedScopes,
         },
         callback.toString(),
       );
@@ -104,14 +95,14 @@ export async function POST(
       const { id } = z.object({ id: z.string() }).strict().parse(body),
         accountId = id as Id<"connectedAccounts">;
       const blocked = await client.mutation(api.accounts.block, {
-          id: accountId,
-        }),
-        integration = integrationFor(blocked.integrationId);
+        id: accountId,
+      });
       const result = await disconnect({
         ...blocked.connect,
-        integrationId: integration.id,
-        profileId: integration.profileId,
-        profileVersion: integration.profileVersion,
+        providerId: blocked.providerId,
+        grantedScopes: blocked.grantedScopes,
+        providerUserId: blocked.providerUserId,
+        providerTenantId: blocked.providerTenantId,
       });
       await client.mutation(api.accounts.recordDisconnect, {
         secret,

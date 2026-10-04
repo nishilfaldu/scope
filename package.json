@@ -11,17 +11,18 @@
     "format": "prettier --write .",
     "lint": "eslint",
     "test": "vitest run",
-    "prepare": "husky"
+    "prepare": "husky",
+    "scope": "node cli/index.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
-    "@convex-dev/auth": "^0.0.95",
-    "@convex-dev/resend": "^0.2.8",
+    "@convex-dev/action-retrier": "^0.3.1",
     "@hugeicons/core-free-icons": "^4.3.2",
     "@hugeicons/react": "^1.1.10",
-    "@modelcontextprotocol/sdk": "^1.31.0",
     "@radix-ui/react-collapsible": "^1.1.20",
     "@vercel/connect": "2.3.5",
+    "@workos-inc/authkit-nextjs": "^4.4.0",
+    "@workos-inc/node": "^10.14.0",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
     "convex": "^1.45.0",
@@ -29,6 +30,7 @@
     "jose": "^6.2.12",
     "next": "16.3.4",
     "next-themes": "^0.4.6",
+    "proper-lockfile": "4.1.2",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "shadcn": "^4.21.0",
@@ -52,7 +54,6 @@
     "eslint-config-next": "16.3.4",
     "husky": "^9.1.7",
     "prettier": "^3.9.7",
-    "proper-lockfile": "4.1.2",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^8.2.2",
@@ -61,5 +62,8 @@
   "packageManager": "pnpm@11.3.0",
   "engines": {
     "node": ">=22.13.0"
+  },
+  "bin": {
+    "scope": "cli/index.mjs"
   }
 }

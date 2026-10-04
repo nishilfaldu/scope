@@ -1,38 +1,41 @@
-# Access delivery in Scope
+# Credential delivery
 
-Scope uses existing owner login, WorkOS Standalone client OAuth, and Vercel Connect provider authorization. An incoming client token must have a valid RS256 signature, issuer, exact `/api/mcp` audience, expiry and nonempty `sub`, `client_id`, `sid`. Signed `sub=scope:<ownerId>` must map to an existing Scope user. The issuer/subject/client/consent tuple identifies a client connection, not an individual chat.
+An owner chooses Connect Slack. The server reads requested permissions from the configured Vercel Connect connector. Slack presents its OAuth consent screen. Scope has no custom permission picker or editor. A temporary connection attempt binds the owner, private browser proof, configured scopes, opaque Connect subject and ten-minute deadline. Slack `auth.test` identifies the user/workspace and returns effective scopes in `x-oauth-scopes`. Completion requires the exact configured permissions, with no missing or extra access.
 
-## Request and approve
+The provider-independent account record stores identity, label, immutable effective permissions, Connect reference and grant generation. It stores no bearer or refresh token. Only Slack is implemented. Standard user tokens are supported because their revocation resets authorization. Rotated grants are rejected: revoking a rotated access token alone leaves the underlying authorization active. [Slack rotation behavior](https://docs.slack.dev/authentication/using-token-rotation/), [OAuth scope accumulation](https://docs.slack.dev/authentication/installing-with-oauth/#appending-scopes).
 
-Hosted MCP exposes four control-plane tools and no credential delivery tool. The requester chooses an owned active helper collector. Collector eligibility comes from server configuration, never caller policy. A local eligible helper defaults to collecting its own request.
+## CLI identity and approval
 
-An approval binds one account authorization and grant/profile version, requester, collector, intent, immutable display snapshot, retry key and a thirty-minute deadline. Approval does not extend this deadline. Reusing a key with changed account, collector, reason or intent fails. The owner independently approves or denies in Scope.
+The browser and first-party CLI use WorkOS AuthKit in one environment, with hosted Magic Auth email codes. The browser uses the managed Next.js SDK and `/callback`. The public CLI uses native device authorization and rotating refresh at `api.workos.com/user_management`; no API key, client secret or loopback server exists in the CLI. [AuthKit CLI flow](https://workos.com/docs/authkit/cli-auth).
 
-## Fresh acquisition and private receipt
+Verification requires RS256 signature, the exact modern issuer `https://api.workos.com/user_management/<default Web client ID>`, expiry, immutable `user_` subject, signed intended application `client_id` and `session_` session. Public keys come from the default application's `/sso/jwks/<client ID>`. Modern first-party AuthKit tokens have no Scope API resource audience; we enforce the signed application and environment instead. Browser owner APIs require the Web application; CLI service APIs require the CLI application. Ownership uses the verified subject directly, with no local user table, email mapping or external-auth bridge. The issuer/subject/client/session tuple identifies each separate CLI connection. Refresh cannot switch its user or session.
 
-The designated helper authenticates at `/api/agent/deliver`. A preflight rejects unavailable requests before provider IO. Every permitted attempt calls Connect with the frozen opaque grant subject, optional selected installation, fixed scopes and `forceRefresh: true`. Provider verification checks expected identity, tenant where applicable, expiry, and exact granted scope evidence.
+Each invocation freezes an account/generation, authenticated requester, stable key, purpose, command argv, working directory, credential environment variable. It receives the account's full permissions. No caller-supplied request scopes or operation profile exists. Reusing a key with changed context fails. The owner approves or denies in Scope. The deadline stays thirty minutes from request creation.
 
-After IO, the final Convex transaction rechecks the current time, owner, exact collector, both connections, active account, integration and grant/profile versions. Only then may Next release the credential to that helper. No tokens, encrypted replay, credential fingerprints or acquisition leases are stored in Convex. A lost response obtains fresh credential bytes under the same approval; retries never move authority to another account or extend the deadline.
+## Release and execution
 
-A stable private receipt proof survives delivery retries. It is excluded from owner and hosted results. The exact collector may acknowledge historical receipt even after local sharing stops; acknowledgement never renews authority and does not assert completed provider work.
+The CLI calls `/api/cli/deliver`. Preflight rejects pending, denied, cancelled, expired or unavailable requests. Connect resolves the exact frozen subject/installation/full scopes with `forceRefresh: true`. Slack identity and effective scopes must match the connection. After provider IO, a Convex transaction rechecks time, owner, requester liveness, active account, scopes and generation. Only then does the server release the bearer privately to the same requester.
 
-## Stop, reconnect and cleanup
+No provider tokens, encrypted replay or delivery leases enter the database. A private stable receipt proof survives credential-delivery retries and stays out of browser queries. A receipt records arrival, not successful work. Concurrent collection cannot change authority or extend the deadline. A lost credential response can be collected again before execution; an arbitrary command is never retried automatically.
 
-| Action                 | Effect                                                                                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Deny or expire         | Blocks new release; continuing requires another request.                                                      |
-| Stop request           | Blocks future release under that request.                                                                     |
-| Stop client connection | Blocks release for its existing approvals; WorkOS consent is unchanged.                                       |
-| Stop account           | Blocks Scope sharing immediately; Connect disconnect outcome is reported separately.                          |
-| Explicit reconnect     | Replaces the authorization with a new opaque subject and increments grantVersion; old requests cannot use it. |
-| Receipt                | Records received access without asserting completed work or token revocation.                                 |
+The CLI confirms receipt, records `running` in a private metadata journal, then directly spawns argv. It injects the bearer into one environment variable and excludes broker credentials. The journal blocks repeated execution once a command started, including crashes with an uncertain result. There is no shell unless explicitly requested and no separate execution server.
 
-Previously released bearer access may remain active until provider expiry/revocation. JWT validation alone does not instantly observe external WorkOS consent revocation; Scope's local stop is immediate, while external revocation detection is bounded by token expiry.
+Known-secret output masking covers literal and common encoded forms across chunks. Output and execution time are bounded. Native coding-host restrictions apply. A bearer-bearing child can deliberately write or transmit its credential; masking is not isolation. Tests use fake secrets to show both masking and file/network disclosure limits.
 
-Account connection attempts are owner/browser-proof-bound and expire after ten minutes. Completed callback retries validate the still-active exact account binding. Superseded Connect references remain on the attempt until successful cleanup acknowledgement, so lost responses and failed cleanup can retry. Expiry may discard an unforgotten reference; this is not a perpetual cleanup or provider-revocation guarantee.
+## Disconnect and reconnect
 
-## Provider readiness and notifications
+Blocking an account immediately prevents decisions, requests and release for its generation. The server retains the reference while revocation is pending or failed. It gets the exact user's standard token, checks identity, calls Slack `auth.revoke`, verifies that `auth.test` rejects the token, then removes that exact subject/installation from Connect. Success requires provider evidence, not just an SDK response. [Slack revoke](https://docs.slack.dev/reference/methods/auth.revoke/), [Connect revocation limits](https://vercel.com/docs/connect/concepts/tokens#revocation).
 
-Airtable REST and Slack read operations share the same approval engine. Fixed profiles are `schema.bases:read` and `channels:read`. The old MCP-targeted Airtable connector is rejected for REST. Both integrations are disabled until their own live OAuth acceptance evidence is recorded; PAT fallbacks are removed.
+Reconnect requires confirmed prior disconnect and creates a new opaque subject and generation. Old approvals cannot use it. Slack OAuth permissions accumulate on surviving grants, so reducing scopes without revocation is rejected. A connector/user/workspace authorization is unique across owners while active or awaiting revocation. This avoids one connection revoking another live record's upstream authorization. The application/connector itself is never uninstalled across other users.
 
-Push subscription endpoints use an explicit service allowlist. Durable notification jobs use fenced retries with cancellation and crash recovery. The owner-only test action returns counts, never subscription secrets. Push-service acceptance does not prove device receipt. Notification clicks open the authenticated exact request when available.
+Stopping a request or CLI connection prevents future release but does not revoke Slack. Account disconnect performs upstream revocation. WorkOS session changes are observed through access-token expiry; a local connection stop is immediate.
+
+## Notifications
+
+Push endpoints use a service allowlist. Action Retrier handles bounded retries and crash recovery. Each send checks current cancellation, expiry, account generation and requester authority. Notification tags make at-least-once delivery replace the same request notification. The owner-only test returns counts, not subscription secrets. Provider acceptance does not prove physical device receipt. Notification clicks open the exact authenticated request.
+
+## Removed architecture
+
+Hosted AuthKit replaced Convex Auth, Resend, the private `store._handler` patch, auth tables, and the WorkOS Connect Standalone bridge. The obsolete Connect helper application's tokens are no longer accepted. Disposable development data was reset rather than migrated. Magic Auth uses WorkOS email delivery and its documented sending/rate limits; no unlimited email claim is made.
+
+Action Retrier replaced the custom notification-job table, leases, completion fencing and watchdog. Workpool's queue/concurrency policy would add machinery this application does not need. Script hashing was removed: approvals retain argv, working directory, environment variable, account and purpose without claiming code attestation.

@@ -5,10 +5,15 @@ import {
   internalMutation,
   internalQuery,
 } from "./_generated/server";
-import { internal } from "./_generated/api";
-import { owner, collectorEligible } from "./scope";
+import { components } from "./_generated/api";
+import { ActionRetrier } from "@convex-dev/action-retrier";
+import { owner, sameScopes } from "./scope";
 import { validatePushEndpoint } from "./lib/push";
-import { randomSecret } from "./lib/secrets";
+export const retrier = new ActionRetrier(components.actionRetrier, {
+  initialBackoffMs: 5000,
+  maxFailures: 4,
+  logLevel: "ERROR",
+});
 const subscription = v.object({
   endpoint: v.string(),
   p256dh: v.string(),
@@ -68,120 +73,56 @@ export const pushStatus = query({
     return { subscribed: rows.some((r) => r.endpoint === endpoint) };
   },
 });
-export const beginDelivery = internalMutation({
-  args: { id: v.id("notificationJobs") },
-  returns: v.union(
-    v.null(),
-    v.object({
-      lease: v.string(),
-      subscription,
-      requestId: v.id("approvalRequests"),
-    }),
-  ),
-  handler: async (ctx, { id }) => {
-    const job = await ctx.db.get("notificationJobs", id);
-    if (!job || job.status !== "pending" || (job.leaseUntil ?? 0) > Date.now())
-      return null;
+// Reload authority and subscription keys immediately before every send or retry.
+// The retry component persists only the two IDs, never destination keys.
+export const deliverySubscription = internalQuery({
+  args: {
+    requestId: v.id("approvalRequests"),
+    subscriptionId: v.id("pushSubscriptions"),
+    now: v.number(),
+  },
+  returns: v.union(v.null(), subscription.extend({ ownerId: v.string() })),
+  handler: async (ctx, { requestId, subscriptionId, now }) => {
     const [request, sub] = await Promise.all([
-      ctx.db.get("approvalRequests", job.requestId),
-      ctx.db.get("pushSubscriptions", job.subscriptionId),
+      ctx.db.get("approvalRequests", requestId),
+      ctx.db.get("pushSubscriptions", subscriptionId),
     ]);
-    const account = request
-      ? await ctx.db.get("connectedAccounts", request.accountId)
-      : null;
-    const requester = request
-      ? await ctx.db.get("clientConnections", request.requesterConnectionId)
-      : null;
-    const collector = request
-      ? await ctx.db.get("clientConnections", request.collectorConnectionId)
-      : null;
     if (
       !request ||
       request.status !== "pending" ||
-      request.approvalExpiresAt <= Date.now() ||
+      request.approvalExpiresAt <= now ||
       !sub ||
-      sub.ownerId !== request.ownerId ||
+      sub.ownerId !== request.ownerId
+    )
+      return null;
+    const [account, requester] = await Promise.all([
+      ctx.db.get("connectedAccounts", request.accountId),
+      ctx.db.get("clientConnections", request.requesterConnectionId),
+    ]);
+    if (
       !account ||
       account.ownerId !== request.ownerId ||
       account.state !== "active" ||
+      account.providerId !== request.providerId ||
       account.grantVersion !== request.grantVersion ||
-      account.profileId !== request.profileId ||
-      account.profileVersion !== request.profileVersion ||
+      !sameScopes(account.grantedScopes, request.snapshot.grantedScopes) ||
       !requester ||
       requester.ownerId !== request.ownerId ||
-      requester.stoppedAt !== undefined ||
-      !collector ||
-      collector.ownerId !== request.ownerId ||
-      collector.stoppedAt !== undefined ||
-      !collectorEligible(collector.clientId)
-    ) {
-      await ctx.db.patch("notificationJobs", id, { status: "cancelled" });
-      return null;
-    }
-    if (job.attempts >= 5) {
-      await ctx.db.patch("notificationJobs", id, { status: "failed" });
-      return null;
-    }
-    const lease = randomSecret("push_");
-    await ctx.db.patch("notificationJobs", id, {
-      lease,
-      leaseUntil: Date.now() + 30_000,
-      attempts: job.attempts + 1,
-    });
-    await ctx.scheduler.runAfter(
-      31_000,
-      internal.notificationDelivery.deliver,
-      { id },
-    );
-    return {
-      lease,
-      subscription: {
-        endpoint: sub.endpoint,
-        p256dh: sub.p256dh,
-        auth: sub.auth,
-      },
-      requestId: request._id,
-    };
-  },
-});
-export const finishDelivery = internalMutation({
-  args: {
-    id: v.id("notificationJobs"),
-    lease: v.string(),
-    outcome: v.union(v.literal("sent"), v.literal("retry"), v.literal("gone")),
-  },
-  returns: v.null(),
-  handler: async (ctx, { id, lease, outcome }) => {
-    const job = await ctx.db.get("notificationJobs", id);
-    if (!job || job.status !== "pending" || job.lease !== lease) return null;
-    if (
-      outcome === "gone" &&
-      (await ctx.db.get("pushSubscriptions", job.subscriptionId))
+      requester.stoppedAt !== undefined
     )
-      await ctx.db.delete("pushSubscriptions", job.subscriptionId);
-    const terminal =
-      outcome === "sent"
-        ? "sent"
-        : outcome === "gone" || job.attempts >= 5
-          ? "failed"
-          : "pending";
-    const nextAt = Date.now() + Math.min(120_000, 5000 * 2 ** job.attempts);
-    await ctx.db.patch("notificationJobs", id, {
-      status: terminal,
-      lease: undefined,
-      leaseUntil: terminal === "pending" ? nextAt : undefined,
-    });
-    if (terminal === "pending")
-      await ctx.scheduler.runAt(nextAt, internal.notificationDelivery.deliver, {
-        id,
-      });
-    return null;
+      return null;
+    return {
+      ownerId: sub.ownerId,
+      endpoint: sub.endpoint,
+      p256dh: sub.p256dh,
+      auth: sub.auth,
+    };
   },
 });
 
 // Subscription keys stay within the backend action boundary.
 export const testSubscription = internalQuery({
-  args: { ownerId: v.id("users"), endpoint: v.string() },
+  args: { ownerId: v.string(), endpoint: v.string() },
   returns: v.union(v.null(), subscription),
   handler: async (ctx, args) => {
     const rows = await ctx.db
@@ -195,7 +136,7 @@ export const testSubscription = internalQuery({
   },
 });
 export const removeGoneSubscription = internalMutation({
-  args: { ownerId: v.id("users"), endpoint: v.string() },
+  args: { ownerId: v.string(), endpoint: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
     const rows = await ctx.db

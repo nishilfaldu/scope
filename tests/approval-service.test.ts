@@ -12,12 +12,6 @@ vi.mock("../lib/scope-server", () => ({
   scopeOrigin: () => "http://localhost:3000",
 }));
 vi.mock("../lib/providers", () => ({
-  requireEnabledIntegration: () => ({}),
-  integrationFor: () => ({
-    enabled: true,
-    profileId: "bases.read",
-    profileVersion: 1,
-  }),
   acquireVerifiedCredential: mocks.credential,
 }));
 import {
@@ -27,22 +21,18 @@ import {
 } from "../lib/approval-service";
 const actor = {
   secret: "service",
-  userId: "owner",
-  subject: "scope:owner",
+  subject: "user_owner",
   issuer: "https://issuer.example",
   clientId: "helper",
-  consentId: "consent",
+  sessionId: "session_one",
 } as Parameters<typeof deliverCredential>[0];
 const id = "request" as Parameters<typeof deliverCredential>[1];
 const context = {
   status: "acquire",
   accountId: "account",
-  integrationId: "airtable-rest-read",
+  providerId: "slack",
   grantVersion: 1,
-  profileId: "bases.read",
-  profileVersion: 1,
   requesterConnectionId: "native",
-  collectorConnectionId: "helper",
   approvalExpiresAt: Date.now() + 100_000,
   account: {
     connectorId: "connector",
@@ -61,6 +51,7 @@ beforeEach(() => {
     accessToken: "private-provider",
     providerExpiresAt: Date.now() + 60_000,
     providerUserId: "provider",
+    grantedScopes: ["channels:read"],
     tokenId: "token-id",
   });
 });
@@ -113,16 +104,26 @@ test("receipt records historical evidence without re-registering a stopped clien
     "approvals:acknowledge",
   );
 });
-test("an unavailable owner account cannot create a new request", async () => {
-  mocks.query.mockResolvedValue([]);
+test("request creation delegates account ownership to the authoritative mutation", async () => {
+  mocks.mutation.mockImplementation(async (ref) => {
+    if (getFunctionName(ref) === "approvals:request")
+      throw new Error("Account unavailable");
+  });
   await expect(
     requestAccess(actor, {
       key: "key-with-sixteen-chars",
       accountId: "other" as never,
       reason: "Read",
+      command: {
+        argv: ["node", "script.js"],
+        cwd: "/tmp",
+        envVar: "SLACK_TOKEN",
+      },
     }),
   ).rejects.toThrow("Account unavailable");
+  expect(mocks.query).not.toHaveBeenCalled();
   expect(mocks.mutation.mock.calls.map((c) => getFunctionName(c[0]))).toEqual([
     "clientConnections:ensure",
+    "approvals:request",
   ]);
 });

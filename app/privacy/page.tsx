@@ -24,13 +24,14 @@ const sections: PolicySection[] = [
           provider account, Scope stores the provider account identifier,
           display name or email returned by the provider, the app you connected,
           granted authorization metadata, and a Vercel Connect account
-          reference. Scope does not store Slack access or refresh tokens.
+          reference. Scope does not store provider access or refresh tokens.
         </p>
         <p>
-          Scope connects Airtable and Slack accounts through Vercel Connect.
-          Provider sign-in shows the requested permissions and is separate from
-          Scope sign-in. Access through MCP is currently available for Airtable;
-          Slack account connection does not enable Slack MCP access.
+          Scope connects Slack accounts through Vercel Connect. Provider sign-in
+          shows the requested permissions and is separate from Scope sign-in.
+          Slack shows the permissions requested by the configured Connect
+          connector. The CLI requests approval and receives credentials
+          privately for a local program.
         </p>
       </>
     ),
@@ -62,14 +63,15 @@ const sections: PolicySection[] = [
       <>
         <p>
           When you approve an access request, Scope provides a credential to the
-          agent identified in the request so it can access the specific app and
-          account you approved. The agent may then process data from that
-          connected service to perform the task described in the request. You
-          should approve only agents and requests you trust.
+          CLI identified in the request so it can access the app and account
+          authorization you approved. Every approval gives the program the
+          connection&apos;s full permissions. The purpose explains the
+          agent&apos;s task; it does not restrict what a received credential can
+          do. You should approve only agents and requests you trust.
         </p>
         <p>
           Scope uses infrastructure service providers to host the application,
-          store encrypted credentials and application records, and deliver
+          manage provider credentials and store application records, and deliver
           transactional sign-in email. They process data only to provide those
           services. Scope may also disclose information when required by law or
           to protect the service and its users. Scope does not sell
@@ -83,12 +85,16 @@ const sections: PolicySection[] = [
     title: "Storage and security",
     content: (
       <p>
-        Vercel Connect manages Slack authorization and credentials. Scope
-        encrypts temporary credential replay data and applies ownership and
-        recipient checks before sharing credentials through WorkOS-authorized
-        MCP. Browser approval pages never receive provider credentials. Data is
-        encrypted in transit using HTTPS. No security measure is perfect, but we
-        limit access to the systems and data required to operate Scope.
+        Vercel Connect manages provider authorization and credentials. Scope
+        stores approval records and applies ownership, account, permission,
+        deadline, and recipient checks before private credential delivery. The
+        CLI stores its own Scope login session privately on your device. It
+        injects provider credentials into a child program&apos;s environment.
+        Approval pages and CLI metadata never receive provider credentials. The
+        CLI masks known credentials in output. It is not a sandbox; a program
+        holding a credential can write or transmit it. Data is encrypted in
+        transit using HTTPS. No security measure is perfect, but we limit access
+        to the systems and data required to operate Scope.
       </p>
     ),
   },
@@ -99,18 +105,19 @@ const sections: PolicySection[] = [
       <>
         <p>
           Scope retains your account information while your account is active.
-          Scope removes temporary encrypted replay material after its sharing
-          window and retains connection metadata and request history. A longer
+          Scope retains connection metadata and request history. A longer
           retention period may be required for security, fraud prevention, or
           law. Request, approval, and audit records may be retained for a
           limited period to protect users and investigate service abuse.
         </p>
         <p>
           You can stop further sharing through an account, request, or
-          authorized MCP connection in Scope. Previously received credentials
-          may remain active at the provider. You can also revoke Scope in the
-          connected provider&apos;s account settings. To request deletion of
-          your Scope account and associated data, email{" "}
+          authorized CLI connection in Scope. Previously received credentials
+          may remain active after a request or CLI connection stops. Account
+          disconnect blocks sharing immediately and is complete only after Slack
+          revocation is confirmed. A failed disconnect can be retried. You can
+          also revoke Scope in the connected provider&apos;s account settings.
+          To request deletion of your Scope account and associated data, email{" "}
           <a href="mailto:nishilfaldu@gmail.com">nishilfaldu@gmail.com</a>.
         </p>
       </>

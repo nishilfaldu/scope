@@ -2,33 +2,33 @@ import {
   paginationOptsValidator,
   paginationResultValidator,
 } from "convex/server";
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { query, mutation, type QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import {
   actor,
   clientActor,
-  collectorEligible,
   connectReference,
   decision,
   owner,
   snapshot,
+  command,
+  sameScopes,
   type Ctx,
 } from "./scope";
 import { hashesEqual, randomSecret } from "./lib/secrets";
+import { validCommand } from "../shared/contracts.mjs";
+import { retrier } from "./notifications";
 
 const context = v.object({
   id: v.id("approvalRequests"),
   accountId: v.id("connectedAccounts"),
-  integrationId: v.string(),
+  providerId: v.string(),
   grantVersion: v.number(),
-  profileId: v.string(),
-  profileVersion: v.number(),
   requesterConnectionId: v.id("clientConnections"),
-  collectorConnectionId: v.id("clientConnections"),
   reason: v.string(),
-  intent: v.optional(v.string()),
+  command,
   snapshot,
 });
 const ownerView = context.omit("id").extend({
@@ -46,18 +46,15 @@ const ownerView = context.omit("id").extend({
   accountBlockedAt: v.optional(v.number()),
   requesterStopped: v.boolean(),
   requesterStoppedAt: v.optional(v.number()),
-  collectorStopped: v.boolean(),
-  collectorStoppedAt: v.optional(v.number()),
 });
 const acquiredAccount = connectReference.extend({
   accountId: v.id("connectedAccounts"),
-  integrationId: v.string(),
+  providerId: v.string(),
   label: v.string(),
   providerUserId: v.string(),
   providerTenantId: v.optional(v.string()),
-  profileId: v.string(),
-  profileVersion: v.number(),
   grantVersion: v.number(),
+  grantedScopes: v.array(v.string()),
 });
 const state = v.union(
   v.literal("pending"),
@@ -70,48 +67,39 @@ function requestContext(r: Doc<"approvalRequests">) {
   return {
     id: r._id,
     accountId: r.accountId,
-    integrationId: r.integrationId,
+    providerId: r.providerId,
     grantVersion: r.grantVersion,
-    profileId: r.profileId,
-    profileVersion: r.profileVersion,
     requesterConnectionId: r.requesterConnectionId,
-    collectorConnectionId: r.collectorConnectionId,
     reason: r.reason,
-    intent: r.intent,
+    command: r.command,
     snapshot: r.snapshot,
   };
 }
+function sameCommand(a: Infer<typeof command>, b: Infer<typeof command>) {
+  return (
+    a.cwd === b.cwd &&
+    a.envVar === b.envVar &&
+    a.argv.length === b.argv.length &&
+    a.argv.every((arg, i) => arg === b.argv[i])
+  );
+}
 async function authority(ctx: Ctx, r: Doc<"approvalRequests">) {
-  const [account, requester, collector] = await Promise.all([
+  const [account, requester] = await Promise.all([
     ctx.db.get("connectedAccounts", r.accountId),
     ctx.db.get("clientConnections", r.requesterConnectionId),
-    ctx.db.get("clientConnections", r.collectorConnectionId),
   ]);
   const accountAvailable =
     !!account &&
     account.ownerId === r.ownerId &&
     account.state === "active" &&
     account.grantVersion === r.grantVersion &&
-    account.integrationId === r.integrationId &&
-    account.profileId === r.profileId &&
-    account.profileVersion === r.profileVersion;
+    account.providerId === r.providerId &&
+    sameScopes(account.grantedScopes, r.snapshot.grantedScopes);
   const requesterLive =
     !!requester &&
     requester.ownerId === r.ownerId &&
     requester.stoppedAt === undefined;
-  const collectorLive =
-    !!collector &&
-    collector.ownerId === r.ownerId &&
-    collector.stoppedAt === undefined &&
-    collectorEligible(collector.clientId);
-  return {
-    account,
-    requester,
-    collector,
-    accountAvailable,
-    requesterLive,
-    collectorLive,
-  };
+  return { account, requester, accountAvailable, requesterLive };
 }
 async function presentation(ctx: QueryCtx, r: Doc<"approvalRequests">) {
   const a = await authority(ctx, r),
@@ -132,8 +120,6 @@ async function presentation(ctx: QueryCtx, r: Doc<"approvalRequests">) {
     accountBlockedAt: a.account?.blockedAt,
     requesterStopped: !a.requesterLive,
     requesterStoppedAt: a.requester?.stoppedAt,
-    collectorStopped: !a.collectorLive,
-    collectorStoppedAt: a.collector?.stoppedAt,
   };
 }
 export const listAccounts = query({
@@ -141,10 +127,10 @@ export const listAccounts = query({
   returns: v.array(
     v.object({
       id: v.id("connectedAccounts"),
-      integrationId: v.string(),
+      providerId: v.string(),
       label: v.string(),
-      profileId: v.string(),
-      profileVersion: v.number(),
+      grantVersion: v.number(),
+      grantedScopes: v.array(v.string()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -152,15 +138,15 @@ export const listAccounts = query({
     const rows = await ctx.db
       .query("connectedAccounts")
       .withIndex("by_ownerId_and_state", (q) =>
-        q.eq("ownerId", args.userId).eq("state", "active"),
+        q.eq("ownerId", args.subject).eq("state", "active"),
       )
       .take(100);
     return rows.map((r) => ({
       id: r._id,
-      integrationId: r.integrationId,
+      providerId: r.providerId,
       label: r.label,
-      profileId: r.profileId,
-      profileVersion: r.profileVersion,
+      grantVersion: r.grantVersion,
+      grantedScopes: r.grantedScopes,
     }));
   },
 });
@@ -170,8 +156,7 @@ export const request = mutation({
     key: v.string(),
     accountId: v.id("connectedAccounts"),
     reason: v.string(),
-    intent: v.optional(v.string()),
-    collectorConnectionId: v.optional(v.id("clientConnections")),
+    command,
   },
   returns: v.object({
     id: v.id("approvalRequests"),
@@ -185,19 +170,9 @@ export const request = mutation({
       !/^[\w-]{16,128}$/.test(args.key) ||
       !args.reason.trim() ||
       args.reason.length > 1000 ||
-      (args.intent !== undefined &&
-        (!args.intent.trim() || args.intent.length > 240))
+      !validCommand(args.command)
     )
       throw new Error("Invalid request");
-    const collectorId = args.collectorConnectionId ?? requester._id;
-    const collector = await ctx.db.get("clientConnections", collectorId);
-    if (
-      !collector ||
-      collector.ownerId !== args.userId ||
-      collector.stoppedAt !== undefined ||
-      !collectorEligible(collector.clientId)
-    )
-      throw new Error("Collector unavailable");
     const old = await ctx.db
       .query("approvalRequests")
       .withIndex("by_requesterConnectionId_and_key", (q) =>
@@ -206,11 +181,10 @@ export const request = mutation({
       .unique();
     if (old) {
       if (
-        old.ownerId !== args.userId ||
+        old.ownerId !== args.subject ||
         old.accountId !== args.accountId ||
-        old.collectorConnectionId !== collectorId ||
         old.reason !== args.reason.trim() ||
-        old.intent !== args.intent?.trim()
+        !sameCommand(old.command, args.command)
       )
         throw new Error("Idempotency conflict");
       return {
@@ -223,7 +197,7 @@ export const request = mutation({
     const account = await ctx.db.get("connectedAccounts", args.accountId);
     if (
       !account ||
-      account.ownerId !== args.userId ||
+      account.ownerId !== args.subject ||
       account.state !== "active"
     )
       throw new Error("Account unavailable");
@@ -231,7 +205,7 @@ export const request = mutation({
       .query("approvalRequests")
       .withIndex("by_ownerId_and_status_and_approvalExpiresAt", (q) =>
         q
-          .eq("ownerId", args.userId)
+          .eq("ownerId", args.subject)
           .eq("status", "pending")
           .gt("approvalExpiresAt", Date.now()),
       )
@@ -239,44 +213,33 @@ export const request = mutation({
     if (pending.length >= 50) throw new Error("Pending request limit");
     const approvalExpiresAt = Date.now() + 30 * 60_000;
     const id = await ctx.db.insert("approvalRequests", {
-      ownerId: args.userId,
-      accountId: account._id,
+      ownerId: args.subject,
       requesterConnectionId: requester._id,
-      collectorConnectionId: collectorId,
+      accountId: account._id,
       key: args.key,
-      integrationId: account.integrationId,
+      providerId: account.providerId,
       grantVersion: account.grantVersion,
-      profileId: account.profileId,
-      profileVersion: account.profileVersion,
       snapshot: {
         accountLabel: account.label,
         providerName: account.providerName,
         accessDescription: account.accessDescription,
-        providerEmail: account.providerEmail,
-        baseName: account.baseName,
         requesterName: requester.name,
-        collectorName: collector.name,
+        grantedScopes: account.grantedScopes,
       },
       reason: args.reason.trim(),
-      intent: args.intent?.trim(),
+      command: args.command,
       status: "pending",
       approvalExpiresAt,
     });
     const subscriptions = await ctx.db
       .query("pushSubscriptions")
-      .withIndex("by_ownerId", (q) => q.eq("ownerId", args.userId))
+      .withIndex("by_ownerId", (q) => q.eq("ownerId", args.subject))
       .take(10);
-    for (const subscription of subscriptions) {
-      const jobId = await ctx.db.insert("notificationJobs", {
+    for (const subscription of subscriptions)
+      await retrier.run(ctx, internal.notificationDelivery.deliver, {
         requestId: id,
         subscriptionId: subscription._id,
-        status: "pending",
-        attempts: 0,
       });
-      await ctx.scheduler.runAfter(0, internal.notificationDelivery.deliver, {
-        id: jobId,
-      });
-    }
     return { id, status: "pending" as const, approvalExpiresAt, created: true };
   },
 });
@@ -287,7 +250,6 @@ export const status = query({
     approvalExpiresAt: v.number(),
     accountAvailable: v.boolean(),
     requesterStopped: v.boolean(),
-    collectorStopped: v.boolean(),
     receivedAt: v.optional(v.number()),
   }),
   handler: async (ctx, args) => {
@@ -295,9 +257,8 @@ export const status = query({
       r = await ctx.db.get("approvalRequests", args.id);
     if (
       !r ||
-      r.ownerId !== args.userId ||
-      (r.requesterConnectionId !== caller._id &&
-        r.collectorConnectionId !== caller._id)
+      r.ownerId !== args.subject ||
+      r.requesterConnectionId !== caller._id
     )
       throw new Error("Request unavailable");
     const a = await authority(ctx, r);
@@ -307,7 +268,6 @@ export const status = query({
       approvalExpiresAt: r.approvalExpiresAt,
       accountAvailable: a.accountAvailable,
       requesterStopped: !a.requesterLive,
-      collectorStopped: !a.collectorLive,
       receivedAt: r.receivedAt,
     };
   },
@@ -327,18 +287,12 @@ export const preflight = query({
       r = await ctx.db.get("approvalRequests", args.id);
     if (
       !r ||
-      r.ownerId !== args.userId ||
-      r.collectorConnectionId !== caller._id ||
-      !collectorEligible(caller.clientId)
+      r.ownerId !== args.subject ||
+      r.requesterConnectionId !== caller._id
     )
       throw new Error("Request unavailable");
     const a = await authority(ctx, r);
-    if (
-      !a.accountAvailable ||
-      !a.requesterLive ||
-      !a.collectorLive ||
-      !a.account
-    )
+    if (!a.accountAvailable || !a.requesterLive || !a.account)
       return { status: "unavailable" as const };
     if (!Number.isFinite(args.now) || r.approvalExpiresAt <= args.now)
       return { status: "expired" as const };
@@ -350,12 +304,11 @@ export const preflight = query({
         ...a.account.connect,
         accountId: a.account._id,
         label: r.snapshot.accountLabel,
-        integrationId: r.integrationId,
+        providerId: r.providerId,
         providerUserId: a.account.providerUserId,
         providerTenantId: a.account.providerTenantId,
-        profileId: r.profileId,
-        profileVersion: r.profileVersion,
         grantVersion: r.grantVersion,
+        grantedScopes: r.snapshot.grantedScopes,
       },
       approvalExpiresAt: r.approvalExpiresAt,
     };
@@ -366,8 +319,7 @@ export const authorizeDelivery = mutation({
     ...actor.fields,
     id: v.id("approvalRequests"),
     grantVersion: v.number(),
-    profileId: v.string(),
-    profileVersion: v.number(),
+    grantedScopes: v.array(v.string()),
     providerExpiresAt: v.optional(v.number()),
     tokenId: v.optional(v.string()),
   },
@@ -380,9 +332,8 @@ export const authorizeDelivery = mutation({
       r = await ctx.db.get("approvalRequests", args.id);
     if (
       !r ||
-      r.ownerId !== args.userId ||
-      r.collectorConnectionId !== caller._id ||
-      !collectorEligible(caller.clientId)
+      r.ownerId !== args.subject ||
+      r.requesterConnectionId !== caller._id
     )
       throw new Error("Request unavailable");
     const a = await authority(ctx, r);
@@ -391,10 +342,8 @@ export const authorizeDelivery = mutation({
       r.approvalExpiresAt <= Date.now() ||
       !a.accountAvailable ||
       !a.requesterLive ||
-      !a.collectorLive ||
       args.grantVersion !== r.grantVersion ||
-      args.profileId !== r.profileId ||
-      args.profileVersion !== r.profileVersion ||
+      !sameScopes(args.grantedScopes, r.snapshot.grantedScopes) ||
       (args.providerExpiresAt !== undefined &&
         (!Number.isFinite(args.providerExpiresAt) ||
           args.providerExpiresAt <= Date.now()))
@@ -425,14 +374,13 @@ export const acknowledge = mutation({
       r = await ctx.db.get("approvalRequests", args.id);
     if (
       !r ||
-      r.ownerId !== args.userId ||
-      r.collectorConnectionId !== caller._id ||
-      !r.firstDeliveryAt ||
+      r.ownerId !== args.subject ||
+      r.requesterConnectionId !== caller._id ||
+      r.firstDeliveryAt === undefined ||
       !r.receiptProof ||
       !hashesEqual(r.receiptProof, args.receiptProof)
     )
       throw new Error("Receipt unavailable");
-    // A receipt records a past response; it never renews authority or claims provider work completed.
     if (r.receivedAt === undefined)
       await ctx.db.patch("approvalRequests", r._id, { receivedAt: Date.now() });
     return null;
@@ -451,10 +399,7 @@ export const decide = mutation({
       throw new Error("Already decided");
     }
     const a = await authority(ctx, r);
-    if (
-      args.approve &&
-      (!a.accountAvailable || !a.requesterLive || !a.collectorLive)
-    )
+    if (args.approve && (!a.accountAvailable || !a.requesterLive))
       throw new Error("Request unavailable");
     await ctx.db.patch("approvalRequests", r._id, {
       status: args.approve ? "approved" : "denied",
@@ -539,5 +484,26 @@ export const requestForOwner = query({
     if (!id) return null;
     const r = await ctx.db.get("approvalRequests", id);
     return r?.ownerId === ownerId ? presentation(ctx, r) : null;
+  },
+});
+
+export const cancelForClient = mutation({
+  args: { ...actor.fields, id: v.id("approvalRequests") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const caller = await clientActor(ctx, args),
+      row = await ctx.db.get("approvalRequests", args.id);
+    if (
+      !row ||
+      row.ownerId !== args.subject ||
+      row.requesterConnectionId !== caller._id
+    )
+      throw new Error("Request unavailable");
+    if (row.status !== "denied" && row.status !== "cancelled")
+      await ctx.db.patch("approvalRequests", row._id, {
+        status: "cancelled",
+        stoppedAt: Date.now(),
+      });
+    return null;
   },
 });

@@ -10,7 +10,6 @@
 
 import type * as accounts from "../accounts.js";
 import type * as approvals from "../approvals.js";
-import type * as auth from "../auth.js";
 import type * as clientConnections from "../clientConnections.js";
 import type * as domain_apps from "../domain/apps.js";
 import type * as http from "../http.js";
@@ -20,7 +19,6 @@ import type * as lib_secrets from "../lib/secrets.js";
 import type * as notificationDelivery from "../notificationDelivery.js";
 import type * as notifications from "../notifications.js";
 import type * as scope from "../scope.js";
-import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -31,7 +29,6 @@ import type {
 declare const fullApi: ApiFromModules<{
   accounts: typeof accounts;
   approvals: typeof approvals;
-  auth: typeof auth;
   clientConnections: typeof clientConnections;
   "domain/apps": typeof domain_apps;
   http: typeof http;
@@ -41,7 +38,6 @@ declare const fullApi: ApiFromModules<{
   notificationDelivery: typeof notificationDelivery;
   notifications: typeof notifications;
   scope: typeof scope;
-  users: typeof users;
 }>;
 
 /**
@@ -71,5 +67,5 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
-  resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
+  actionRetrier: import("@convex-dev/action-retrier/_generated/component.js").ComponentApi<"actionRetrier">;
 };

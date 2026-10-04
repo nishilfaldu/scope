@@ -8,7 +8,6 @@ import {
   approvalStatus,
   type ApprovalRequest,
 } from "../lib/approval-display";
-import LegacyLabPage from "../app/lab/page";
 vi.mock("convex/react", () => ({ useMutation: () => vi.fn() }));
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -19,19 +18,18 @@ const request = {
   _id: "request",
   accountId: "account",
   requesterConnectionId: "requester",
-  collectorConnectionId: "requester",
-  reason: "Read this base",
+  reason: "Summarize channel names",
   approvalExpiresAt: 2000,
   status: "pending",
   accountAvailable: true,
   requesterStopped: false,
-  collectorStopped: false,
+  command: { argv: ["node", "script.mjs"], cwd: "/tmp", envVar: "SLACK_TOKEN" },
   snapshot: {
-    accountLabel: "Work base",
-    providerName: "Airtable",
-    accessDescription: "Read-only access to Work base",
+    grantedScopes: ["channels:read"],
+    accountLabel: "Work workspace",
+    providerName: "Slack",
+    accessDescription: "View public channels",
     requesterName: "Research assistant",
-    collectorName: "Research assistant",
   },
 } as ApprovalRequest;
 
@@ -59,37 +57,26 @@ test("an expired approved request never says it is waiting for collection", () =
     "confirmed receipt",
   );
 });
-test("legacy links preserve the exact request and WorkOS transaction when redirecting", async () => {
-  await expect(
-    LegacyLabPage({ searchParams: Promise.resolve({ request: "request-id" }) }),
-  ).rejects.toThrow("redirect:/approvals?request=request-id");
-  await expect(
-    LegacyLabPage({
-      searchParams: Promise.resolve({ external_auth_id: "external+id" }),
-    }),
-  ).rejects.toThrow("redirect:/authorize-agent?external_auth_id=external%2Bid");
-  await expect(
-    LegacyLabPage({ searchParams: Promise.resolve({ account: "account-id" }) }),
-  ).rejects.toThrow("redirect:/connections?account=account-id#airtable");
-});
 
-test("a request is one compact row without technical metadata or its diagnostic reason", () => {
+test("a request is one compact row with purpose and full permissions", () => {
   const r = {
     ...request,
     createdAt: 900,
-    reason: "private diagnostic PAT reason",
+    reason: "Read workspace channel names",
   };
   const html = renderToStaticMarkup(
     <RequestRow request={r} now={1000} focused />,
   );
   expect(html.match(/<article/g)).toHaveLength(1);
   expect(html).toContain("Research assistant");
-  expect(html).toContain("Read-only access to Work base");
+  expect(html).toContain("View public channels");
   expect(html).not.toContain("Request timeline");
   expect(html).not.toContain("PAT");
   expect(html).not.toContain("scope:owner:client:consent");
   expect(html).not.toContain("usr-work");
-  expect(html).not.toContain("private diagnostic");
+  expect(html).toContain("Read workspace channel names");
+  expect(html).toContain("Full connection permissions");
+  expect(html).toContain("purpose does not limit");
 });
 test("approval, attempted delivery and receipt remain distinct even after expiry", () => {
   const approved = {
@@ -152,7 +139,7 @@ test("provider expiry never shortens the fixed approval deadline", () => {
   });
 });
 
-test("stopped MCP timelines never wait and use only recorded stop times", () => {
+test("stopped CLI timelines never wait and use only recorded stop times", () => {
   const stopped = {
     ...request,
     status: "approved",

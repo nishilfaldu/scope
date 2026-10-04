@@ -10,27 +10,27 @@ importers:
       "@base-ui/react":
         specifier: ^1.8.0
         version: 1.8.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      "@convex-dev/auth":
-        specifier: ^0.0.95
-        version: 0.0.95(@auth/core@0.41.3)(convex@1.45.0(react@19.2.8))(react@19.2.8)
-      "@convex-dev/resend":
-        specifier: ^0.2.8
-        version: 0.2.8(convex-helpers@0.1.124(convex@1.45.0(react@19.2.8))(hono@4.13.7)(react@19.2.8)(typescript@5.9.3)(zod@4.6.5))(convex@1.45.0(react@19.2.8))(react@19.2.8)
+      "@convex-dev/action-retrier":
+        specifier: ^0.3.1
+        version: 0.3.1(convex@1.45.0(react@19.2.8))
       "@hugeicons/core-free-icons":
         specifier: ^4.3.2
         version: 4.3.2
       "@hugeicons/react":
         specifier: ^1.1.10
         version: 1.1.10(react@19.2.8)
-      "@modelcontextprotocol/sdk":
-        specifier: ^1.31.0
-        version: 1.31.0(zod@4.6.5)
       "@radix-ui/react-collapsible":
         specifier: ^1.1.20
         version: 1.1.20(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       "@vercel/connect":
         specifier: 2.3.5
-        version: 2.3.5(@auth/core@0.41.3)(@modelcontextprotocol/sdk@1.31.0(zod@4.6.5))
+        version: 2.3.5(@modelcontextprotocol/sdk@1.30.0(zod@4.6.5))
+      "@workos-inc/authkit-nextjs":
+        specifier: ^4.4.0
+        version: 4.4.0(@workos-inc/node@10.14.0)(next@16.3.4(@babel/core@7.29.7)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)
+      "@workos-inc/node":
+        specifier: ^10.14.0
+        version: 10.14.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -52,6 +52,9 @@ importers:
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      proper-lockfile:
+        specifier: 4.1.2
+        version: 4.1.2
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -116,9 +119,6 @@ importers:
       prettier:
         specifier: ^3.9.7
         version: 3.9.7
-      proper-lockfile:
-        specifier: 4.1.2
-        version: 4.1.2
       tailwindcss:
         specifier: ^4
         version: 4.3.3
@@ -139,23 +139,6 @@ packages:
         integrity: sha512-U4+70Pc5ZS9osnCBCE5Jha/ciHM+Yp+CNMNC/7HvYbNRk1Ldd+f7qO65W5qfhu/TCv+/ozljlXXe9Nj8419DMA==,
       }
     engines: { node: ">=10" }
-
-  "@auth/core@0.41.3":
-    resolution:
-      {
-        integrity: sha512-sJ3JMHHkXMD3aOjopv7mOBTO1Ocw4b0fAEXJBz6k7YHLpYQI6C40jCUPc5fNvUKxXRXNE1/sRISA15UrwWJBTw==,
-      }
-    peerDependencies:
-      "@simplewebauthn/browser": ^9.0.1
-      "@simplewebauthn/server": ^9.0.2
-      nodemailer: ^7.0.7 || ^8.0.5
-    peerDependenciesMeta:
-      "@simplewebauthn/browser":
-        optional: true
-      "@simplewebauthn/server":
-        optional: true
-      nodemailer:
-        optional: true
 
   "@babel/code-frame@7.29.7":
     resolution:
@@ -552,28 +535,13 @@ packages:
       }
     engines: { node: ">=22" }
 
-  "@convex-dev/auth@0.0.95":
+  "@convex-dev/action-retrier@0.3.1":
     resolution:
       {
-        integrity: sha512-LgUujfXRm7FcdYpTozjn0MHdVFxaxvZdWVFOQEkrL4AkY+k/8E8B4EFjJOG9S8Pq6QWfLJ8MCObeMJg0hAfKzA==,
-      }
-    hasBin: true
-    peerDependencies:
-      "@auth/core": ^0.41.1
-      convex: ^1.17.0
-      react: ^18.2.0 || ^19.0.0-0
-    peerDependenciesMeta:
-      react:
-        optional: true
-
-  "@convex-dev/batch-worker@0.2.2":
-    resolution:
-      {
-        integrity: sha512-3knigElzTVhWw1sN28EYkGBTdrJZ03vMj2PJPuFq3V0Tg41i7tcv/EWDBFQWcUaKzBWWVw693hcJtxCF3CRtEw==,
+        integrity: sha512-uji7ZV4GYN24fgnV9FrXABbq2mWCpcMohkEa2ie1zmD5S7ioSxNNBE0lNPB1jlMzICqWCTrbSTr68bgJPag6Ww==,
       }
     peerDependencies:
-      convex: ^1.36.1
-      react: ^18.3.1 || ^19.0.0
+      convex: ^1.24.8
 
   "@convex-dev/eslint-plugin@5.0.0":
     resolution:
@@ -582,36 +550,6 @@ packages:
       }
     peerDependencies:
       convex: ^1.43.0
-
-  "@convex-dev/rate-limiter@0.3.2":
-    resolution:
-      {
-        integrity: sha512-+oBPsBfFbzdxiF/9XaaTQmVnvDlvEfg/c69/v8LxTbw4VLuiflIKlfnPQL8OS0azXQQ11hcPWHmU8ytFmHKDXA==,
-      }
-    peerDependencies:
-      convex: ^1.24.8
-      react: ^18.2.0 || ^19.0.0
-    peerDependenciesMeta:
-      react:
-        optional: true
-
-  "@convex-dev/resend@0.2.8":
-    resolution:
-      {
-        integrity: sha512-N7S7+cZEjP0wi1EEfTg4lhrmq4+SskDnx7AM6jPh2tqaIpjK5b7YJqXYe2avds8ojBMNq1MGmW7oSf0bvjISrA==,
-      }
-    peerDependencies:
-      convex: ^1.43.0
-      convex-helpers: ^0.1.106
-
-  "@convex-dev/workpool@0.4.12":
-    resolution:
-      {
-        integrity: sha512-mJOtVds/vWWVdFUNhveXlQcfPFUmugZbJYjdjblgA2PpfaedtcwqYBVnLXEBI2QlspTR7HfAT3cTxJtdhVPUsg==,
-      }
-    peerDependencies:
-      convex: ^1.36.1
-      convex-helpers: ^0.1.94
 
   "@dotenvx/dotenvx@1.75.1":
     resolution:
@@ -1344,19 +1282,6 @@ packages:
       "@cfworker/json-schema":
         optional: true
 
-  "@modelcontextprotocol/sdk@1.31.0":
-    resolution:
-      {
-        integrity: sha512-UvTMgnNlnIBO/22ob2RcVGDlcvOslQs8T59+FTGdA0L27a39fdGF/EDETNtDVK4DZGpwomlsYpRdA8UXcVL/pw==,
-      }
-    engines: { node: ">=18" }
-    peerDependencies:
-      "@cfworker/json-schema": ^4.1.1
-      zod: ^3.25 || ^4.0
-    peerDependenciesMeta:
-      "@cfworker/json-schema":
-        optional: true
-
   "@napi-rs/wasm-runtime@1.2.3":
     resolution:
       {
@@ -1483,43 +1408,10 @@ packages:
       }
     engines: { node: ">=12.4.0" }
 
-  "@oslojs/asn1@1.0.0":
-    resolution:
-      {
-        integrity: sha512-zw/wn0sj0j0QKbIXfIlnEcTviaCzYOY3V5rAyjR6YtOByFtJiT574+8p9Wlach0lZH9fddD4yb9laEAIl4vXQA==,
-      }
-    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
-
-  "@oslojs/binary@1.0.0":
-    resolution:
-      {
-        integrity: sha512-9RCU6OwXU6p67H4NODbuxv2S3eenuQ4/WFLrsq+K/k682xrznH5EVWA7N4VFk9VYVcbFtKqur5YQQZc0ySGhsQ==,
-      }
-    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
-
-  "@oslojs/crypto@1.0.1":
-    resolution:
-      {
-        integrity: sha512-7n08G8nWjAr/Yu3vu9zzrd0L9XnrJfpMioQcvCMxBIiF5orECHe5/3J0jmXRVvgfqMm/+4oxlQ+Sq39COYLcNQ==,
-      }
-    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
-
-  "@oslojs/encoding@1.1.0":
-    resolution:
-      {
-        integrity: sha512-70wQhgYmndg4GCPxPPxPGevRKqTIJ2Nh4OkiMWmDAVYsTQ+Ta7Sq+rPevXyXGdzr30/qZBnyOalCszoMxlyldQ==,
-      }
-
   "@oxc-project/types@0.149.0":
     resolution:
       {
         integrity: sha512-Efcc+iF0j3Bf67YjEqIqWXbX5XddXoK/Mw4K1/JuXwRCZ8N16VR7iT23nlCc9XrveFVh/E5Rqs2StT0V8v9LdA==,
-      }
-
-  "@panva/hkdf@1.2.1":
-    resolution:
-      {
-        integrity: sha512-6oclG6Y3PiDFcoyk8srjLfVKyMfVCKJ27JwNPViuXziFpmdz+MZnZN/aKY0JGXgYuO/VghU0jcOAZgWXZ1Dmrw==,
       }
 
   "@radix-ui/primitive@1.1.7":
@@ -1833,18 +1725,19 @@ packages:
       }
     engines: { node: ">=22" }
 
+  "@sindresorhus/fnv1a@3.1.0":
+    resolution:
+      {
+        integrity: sha512-KV321z5m/0nuAg83W1dPLy85HpHDk7Sdi4fJbwvacWsEhAh+rZUW4ZfGcXmUIvjZg4ss2bcwNlRhJ7GBEUG08w==,
+      }
+    engines: { node: ^12.20.0 || ^14.13.1 || >=16.0.0 }
+
   "@sindresorhus/merge-streams@4.0.0":
     resolution:
       {
         integrity: sha512-tlqY9xq5ukxTUZBmoOp+m61cqwQD5pHJtFY3Mn8CA8ps6yghLH/Hw8UPdqg4OLmFW3IFlcXnQNmo/dh8HzXYIQ==,
       }
     engines: { node: ">=18" }
-
-  "@stablelib/base64@1.0.1":
-    resolution:
-      {
-        integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==,
-      }
 
   "@swc/helpers@0.5.23":
     resolution:
@@ -2465,6 +2358,25 @@ packages:
         integrity: sha512-uy+luWBAPw9XfthoHi5AkfHUnuPYEESjl0p/r+meoBnU8bxg5GDQ3Ey8MjcJ6sqahkL4PFyrvfMJJBw7LbU06g==,
       }
 
+  "@workos-inc/authkit-nextjs@4.4.0":
+    resolution:
+      {
+        integrity: sha512-0Ee9bioHuiY95TXkGM8LlWhYchgOynCkZ5J7I3mxeduz3R3HwJCEclDnZzCA3AuxOyOPo7Dw239SYl0SqrpHvw==,
+      }
+    engines: { node: ">=22.11.0" }
+    peerDependencies:
+      "@workos-inc/node": ^9.0.0 || ^10.0.0
+      next: ^13.5.9 || ^14.2.26 || ^15.2.3 || ^16
+      react: ^18.0 || ^19.0.0
+      react-dom: ^18.0 || ^19.0.0
+
+  "@workos-inc/node@10.14.0":
+    resolution:
+      {
+        integrity: sha512-SnY9OHTzTyOmgJQj9+/6x116m+d+zJoQw5e8teNWKUuGe8FOKngVdBXRvZgdFxaL+3UfQbMlp95V67t43VYOWQ==,
+      }
+    engines: { node: ">=22.11.0" }
+
   accepts@2.0.0:
     resolution:
       {
@@ -3055,13 +2967,6 @@ packages:
         integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==,
       }
     engines: { node: ">= 0.6" }
-
-  cookie@1.1.1:
-    resolution:
-      {
-        integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==,
-      }
-    engines: { node: ">=18" }
 
   cors@2.8.6:
     resolution:
@@ -3732,12 +3637,6 @@ packages:
         integrity: sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw==,
       }
 
-  fast-sha256@1.3.0:
-    resolution:
-      {
-        integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==,
-      }
-
   fast-uri@3.1.7:
     resolution:
       {
@@ -4188,6 +4087,18 @@ packages:
       }
     engines: { node: ">= 0.10" }
 
+  iron-session@8.0.4:
+    resolution:
+      {
+        integrity: sha512-9ivNnaKOd08osD0lJ3i6If23GFS2LsxyMU8Gf/uBUEgm8/8CC1hrrCHFDpMo3IFbpBgwoo/eairRsaD3c5itxA==,
+      }
+
+  iron-webcrypto@1.2.1:
+    resolution:
+      {
+        integrity: sha512-feOM6FaSr6rEABp/eDfVseKyTMDt+KGpeB35SkVn9Tyn0CqvVsY3EwI0v5i8nMHyJnzCIQf7nsy3p41TPkJZhg==,
+      }
+
   is-array-buffer@3.0.5:
     resolution:
       {
@@ -4342,13 +4253,6 @@ packages:
         integrity: sha512-5KoIu2Ngpyek75jXodFvnafB6DJgr3u8uuK0LEZJjrU19DrMD3EVERaR8sjz8CCGgpZvxPl9SuE1GMVPFHx1mw==,
       }
     engines: { node: ">= 0.4" }
-
-  is-network-error@1.3.2:
-    resolution:
-      {
-        integrity: sha512-PhBY86zaxNZUuWP6h13Vu5oFe0XY6/UlKzQnYFELzGVHygP3MxmvTfYSG7GN3aIab/iWudSMgjSnG9Dq+nHrgA==,
-      }
-    engines: { node: ">=16" }
 
   is-number-object@1.1.1:
     resolution:
@@ -4658,13 +4562,6 @@ packages:
         integrity: sha512-EKI/M/yqPncGUUh44xz0PxSidXFr/+r0pA70+gIYhjv+et7yxM+s29Y+VGDkovRofQem0fs7Uvf4+YmAdyRduA==,
       }
 
-  jwt-decode@4.0.0:
-    resolution:
-      {
-        integrity: sha512-+KJGIyHgkGuIq3IEBNftfhW/LfWhXUIY6OmyVWjliu5KH1y0fw7VQ8YndE2O4qZdMSd9SqbnC8GOcZEy0Om7sA==,
-      }
-    engines: { node: ">=18" }
-
   keyv@4.5.4:
     resolution:
       {
@@ -4971,13 +4868,6 @@ packages:
         integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==,
       }
 
-  lucia@3.2.2:
-    resolution:
-      {
-        integrity: sha512-P1FlFBGCMPMXu+EGdVD9W4Mjm0DqsusmKgO7Xc33mI5X1bklmsQb0hfzPhXomQr9waWIBDsiOjvr1e6BTaUqpA==,
-      }
-    deprecated: This package has been deprecated. Please see https://lucia-auth.com/lucia-v3/migrate.
-
   magic-string@0.30.21:
     resolution:
       {
@@ -5186,12 +5076,6 @@ packages:
         integrity: sha512-9qny7Z9DsQU8Ou39ERsPU4OZQlSTP47ShQzuKZ6PRXpYLtIFgl/DEBYEXKlvcEa+9tHVcK8CF81Y2V72qaZhWA==,
       }
     engines: { node: ">=18" }
-
-  oauth4webapi@3.8.8:
-    resolution:
-      {
-        integrity: sha512-8N28E+a/oxfXWBgOMt+ZP/JUf/XR+IFbvkAEPP3gznXOMv9BpAAwiIj0TFNz3tGTPc0ZQ8zmWBNgN1nAys0gng==,
-      }
 
   object-assign@4.1.1:
     resolution:
@@ -5488,12 +5372,6 @@ packages:
       }
     engines: { node: ">= 0.4" }
 
-  postal-mime@2.7.6:
-    resolution:
-      {
-        integrity: sha512-UUlyE2KlxmvwMGq060onF/VWU3zD6dVW31FwokQ5v26jWd35fbs2MoTFzh+jXnPwAyV2MULMKXcBInGOl5TO6Q==,
-      }
-
   postcss-selector-parser@7.1.6:
     resolution:
       {
@@ -5528,20 +5406,6 @@ packages:
         integrity: sha512-C+y9x90UElAddDZmV4qOx9W53B61PO7cIqWz2dQsWlwswuq4mr8NEwytdGKboYbQlGZ3awrkTeNvcZiZNHnQ8A==,
       }
     engines: { node: ">=20" }
-
-  preact-render-to-string@6.5.11:
-    resolution:
-      {
-        integrity: sha512-ubnauqoGczeGISiOh6RjX0/cdaF8v/oDXIjO85XALCQjwQP+SB4RDXXtvZ6yTYSjG+PC1QRP2AhPgCEsM2EvUw==,
-      }
-    peerDependencies:
-      preact: ">=10"
-
-  preact@10.24.3:
-    resolution:
-      {
-        integrity: sha512-Z2dPnBnMUfyQfSQ+GBdsGa16hz35YmLmtTLhM169uW944hYL6xzTYkJjC07j+Wosz733pMWx0fgON3JNw1jJQA==,
-      }
 
   prelude-ls@1.2.1:
     resolution:
@@ -5675,13 +5539,6 @@ packages:
       }
     engines: { node: ">= 0.4" }
 
-  remeda@2.50.0:
-    resolution:
-      {
-        integrity: sha512-pzljnP7Gnl/lLz5WcOSkxEGCjcK4dteQihQjRrtKCGqn8J6jD0BHwfU6pRrXjvQV2EWe+HdgtfZW7rDdmKn8uQ==,
-      }
-    engines: { node: ">=18.0.0" }
-
   require-from-string@2.0.2:
     resolution:
       {
@@ -5694,18 +5551,6 @@ packages:
       {
         integrity: sha512-XGoLeRAVzUTcJ1qkxPQhDJyIZ5d6zzZD9nT7AEZOaaU9UbWclhycElmhO+VD5bFeLuzhPBaOV2oXC8uG35ZSpg==,
       }
-
-  resend@6.28.1:
-    resolution:
-      {
-        integrity: sha512-5VWOcDiWKBt0NWYKXwzY9WJ+LbpQLYw9M6j1DDJYPk7TloHfWOJyaY4EFKoR/KPL0N4m5yO3o96iDoYOX7v+GA==,
-      }
-    engines: { node: ">=20" }
-    peerDependencies:
-      "@react-email/render": "*"
-    peerDependenciesMeta:
-      "@react-email/render":
-        optional: true
 
   resolve-from@4.0.0:
     resolution:
@@ -6012,18 +5857,6 @@ packages:
         integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==,
       }
 
-  standardwebhooks@1.0.0:
-    resolution:
-      {
-        integrity: sha512-BbHGOQK9olHPMvQNHWul6MYlrRTAOKn03rOe4A8O3CLWhNf4YHBqq2HJKKC+sfqpxiBY52pNeesD6jIiLDz8jg==,
-      }
-
-  standardwebhooks@1.1.1:
-    resolution:
-      {
-        integrity: sha512-bCbX9ZEyFkWPsRz7Bl3NuQUJohmwGSev/yhr7vhaGPlc4AfIrspIRa6cPTBuI1ItmrTDJ4d/S2hCsfe4+vQGnQ==,
-      }
-
   statuses@2.0.2:
     resolution:
       {
@@ -6184,12 +6017,6 @@ packages:
         integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==,
       }
     engines: { node: ">= 0.4" }
-
-  svix@1.99.1:
-    resolution:
-      {
-        integrity: sha512-JfpvbAg5iT5NagDAfOq3e6Ci6NbOMbMm6C3DnfDBB60m2JDK+Z2hXPE9XNAmutb53DCdPoih1V70IbklZnX09A==,
-      }
 
   systeminformation@5.33.10:
     resolution:
@@ -6361,6 +6188,12 @@ packages:
       }
     engines: { node: ">= 0.4" }
 
+  uncrypto@0.1.3:
+    resolution:
+      {
+        integrity: sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q==,
+      }
+
   undici-types@6.21.0:
     resolution:
       {
@@ -6429,6 +6262,17 @@ packages:
       {
         integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==,
       }
+
+  valibot@1.5.0:
+    resolution:
+      {
+        integrity: sha512-nil6AkP2TChWL43Z5uJ6GTxX01CUA+g8LWUM+N/rB9NBbkUMaUsi9PUNzlUPgoKASgmx9f7eGOYpJ04/fSa6FQ==,
+      }
+    peerDependencies:
+      typescript: ">=5"
+    peerDependenciesMeta:
+      typescript:
+        optional: true
 
   validate-npm-package-name@7.0.2:
     resolution:
@@ -6741,14 +6585,6 @@ packages:
 
 snapshots:
   "@alloc/quick-lru@5.3.0": {}
-
-  "@auth/core@0.41.3":
-    dependencies:
-      "@panva/hkdf": 1.2.1
-      jose: 6.2.12
-      oauth4webapi: 3.8.8
-      preact: 10.24.3
-      preact-render-to-string: 6.5.11(preact@10.24.3)
 
   "@babel/code-frame@7.29.7":
     dependencies:
@@ -7080,27 +6916,9 @@ snapshots:
 
   "@conventional-changelog/template@1.4.0": {}
 
-  "@convex-dev/auth@0.0.95(@auth/core@0.41.3)(convex@1.45.0(react@19.2.8))(react@19.2.8)":
-    dependencies:
-      "@auth/core": 0.41.3
-      "@oslojs/crypto": 1.0.1
-      "@oslojs/encoding": 1.1.0
-      convex: 1.45.0(react@19.2.8)
-      cookie: 1.1.1
-      is-network-error: 1.3.2
-      jose: 5.10.0
-      jwt-decode: 4.0.0
-      lucia: 3.2.2
-      oauth4webapi: 3.8.8
-      path-to-regexp: 6.3.0
-      server-only: 0.0.1
-    optionalDependencies:
-      react: 19.2.8
-
-  "@convex-dev/batch-worker@0.2.2(convex@1.45.0(react@19.2.8))(react@19.2.8)":
+  "@convex-dev/action-retrier@0.3.1(convex@1.45.0(react@19.2.8))":
     dependencies:
       convex: 1.45.0(react@19.2.8)
-      react: 19.2.8
 
   "@convex-dev/eslint-plugin@5.0.0(convex@1.45.0(react@19.2.8))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)":
     dependencies:
@@ -7111,33 +6929,6 @@ snapshots:
       - eslint
       - supports-color
       - typescript
-
-  "@convex-dev/rate-limiter@0.3.2(convex@1.45.0(react@19.2.8))(react@19.2.8)":
-    dependencies:
-      convex: 1.45.0(react@19.2.8)
-    optionalDependencies:
-      react: 19.2.8
-
-  "@convex-dev/resend@0.2.8(convex-helpers@0.1.124(convex@1.45.0(react@19.2.8))(hono@4.13.7)(react@19.2.8)(typescript@5.9.3)(zod@4.6.5))(convex@1.45.0(react@19.2.8))(react@19.2.8)":
-    dependencies:
-      "@convex-dev/rate-limiter": 0.3.2(convex@1.45.0(react@19.2.8))(react@19.2.8)
-      "@convex-dev/workpool": 0.4.12(convex-helpers@0.1.124(convex@1.45.0(react@19.2.8))(hono@4.13.7)(react@19.2.8)(typescript@5.9.3)(zod@4.6.5))(convex@1.45.0(react@19.2.8))(react@19.2.8)
-      convex: 1.45.0(react@19.2.8)
-      convex-helpers: 0.1.124(convex@1.45.0(react@19.2.8))(hono@4.13.7)(react@19.2.8)(typescript@5.9.3)(zod@4.6.5)
-      remeda: 2.50.0
-      resend: 6.28.1
-      svix: 1.99.1
-    transitivePeerDependencies:
-      - "@react-email/render"
-      - react
-
-  "@convex-dev/workpool@0.4.12(convex-helpers@0.1.124(convex@1.45.0(react@19.2.8))(hono@4.13.7)(react@19.2.8)(typescript@5.9.3)(zod@4.6.5))(convex@1.45.0(react@19.2.8))(react@19.2.8)":
-    dependencies:
-      "@convex-dev/batch-worker": 0.2.2(convex@1.45.0(react@19.2.8))(react@19.2.8)
-      convex: 1.45.0(react@19.2.8)
-      convex-helpers: 0.1.124(convex@1.45.0(react@19.2.8))(hono@4.13.7)(react@19.2.8)(typescript@5.9.3)(zod@4.6.5)
-    transitivePeerDependencies:
-      - react
 
   "@dotenvx/dotenvx@1.75.1":
     dependencies:
@@ -7507,7 +7298,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  "@modelcontextprotocol/sdk@1.31.0(zod@4.6.5)":
+  "@modelcontextprotocol/sdk@1.30.0(zod@4.6.5)":
     dependencies:
       "@hono/node-server": 2.1.1(hono@4.13.7)
       ajv: 8.20.0
@@ -7528,6 +7319,7 @@ snapshots:
       zod-to-json-schema: 3.25.2(zod@4.6.5)
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   "@napi-rs/wasm-runtime@1.2.3(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)":
     dependencies:
@@ -7583,22 +7375,7 @@ snapshots:
 
   "@nolyfill/is-core-module@1.0.39": {}
 
-  "@oslojs/asn1@1.0.0":
-    dependencies:
-      "@oslojs/binary": 1.0.0
-
-  "@oslojs/binary@1.0.0": {}
-
-  "@oslojs/crypto@1.0.1":
-    dependencies:
-      "@oslojs/asn1": 1.0.0
-      "@oslojs/binary": 1.0.0
-
-  "@oslojs/encoding@1.1.0": {}
-
   "@oxc-project/types@0.149.0": {}
-
-  "@panva/hkdf@1.2.1": {}
 
   "@radix-ui/primitive@1.1.7": {}
 
@@ -7741,9 +7518,9 @@ snapshots:
 
   "@simple-libs/stream-utils@2.0.0": {}
 
-  "@sindresorhus/merge-streams@4.0.0": {}
+  "@sindresorhus/fnv1a@3.1.0": {}
 
-  "@stablelib/base64@1.0.1": {}
+  "@sindresorhus/merge-streams@4.0.0": {}
 
   "@swc/helpers@0.5.23":
     dependencies:
@@ -8081,12 +7858,11 @@ snapshots:
     dependencies:
       execa: 5.1.1
 
-  "@vercel/connect@2.3.5(@auth/core@0.41.3)(@modelcontextprotocol/sdk@1.31.0(zod@4.6.5))":
+  "@vercel/connect@2.3.5(@modelcontextprotocol/sdk@1.30.0(zod@4.6.5))":
     dependencies:
       "@vercel/oidc": 3.8.9
     optionalDependencies:
-      "@auth/core": 0.41.3
-      "@modelcontextprotocol/sdk": 1.31.0(zod@4.6.5)
+      "@modelcontextprotocol/sdk": 1.30.0(zod@4.6.5)
 
   "@vercel/oidc@3.8.9":
     dependencies:
@@ -8104,6 +7880,23 @@ snapshots:
       vite: 8.2.2(@types/node@20.19.43)(esbuild@0.27.0)(jiti@2.7.0)
 
   "@vitest/spy@5.0.0": {}
+
+  "@workos-inc/authkit-nextjs@4.4.0(@workos-inc/node@10.14.0)(next@16.3.4(@babel/core@7.29.7)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@5.9.3)":
+    dependencies:
+      "@sindresorhus/fnv1a": 3.1.0
+      "@workos-inc/node": 10.14.0
+      iron-session: 8.0.4
+      jose: 5.10.0
+      next: 16.3.4(@babel/core@7.29.7)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      path-to-regexp: 6.3.0
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+      server-only: 0.0.1
+      valibot: 1.5.0(typescript@5.9.3)
+    transitivePeerDependencies:
+      - typescript
+
+  "@workos-inc/node@10.14.0": {}
 
   accepts@2.0.0:
     dependencies:
@@ -8434,8 +8227,6 @@ snapshots:
   cookie-signature@1.2.2: {}
 
   cookie@0.7.2: {}
-
-  cookie@1.1.1: {}
 
   cors@2.8.6:
     dependencies:
@@ -9042,8 +8833,6 @@ snapshots:
 
   fast-levenshtein@2.0.6: {}
 
-  fast-sha256@1.3.0: {}
-
   fast-uri@3.1.7: {}
 
   fastq@1.20.3:
@@ -9280,6 +9069,14 @@ snapshots:
 
   ipaddr.js@1.9.1: {}
 
+  iron-session@8.0.4:
+    dependencies:
+      cookie: 0.7.2
+      iron-webcrypto: 1.2.1
+      uncrypto: 0.1.3
+
+  iron-webcrypto@1.2.1: {}
+
   is-array-buffer@3.0.5:
     dependencies:
       call-bind: 1.0.9
@@ -9363,8 +9160,6 @@ snapshots:
   is-map@2.0.3: {}
 
   is-negative-zero@2.0.3: {}
-
-  is-network-error@1.3.2: {}
 
   is-number-object@1.1.1:
     dependencies:
@@ -9513,8 +9308,6 @@ snapshots:
       jwa: 2.0.1
       safe-buffer: 5.2.1
 
-  jwt-decode@4.0.0: {}
-
   keyv@4.5.4:
     dependencies:
       json-buffer: 3.0.1
@@ -9658,11 +9451,6 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
-  lucia@3.2.2:
-    dependencies:
-      "@oslojs/crypto": 1.0.1
-      "@oslojs/encoding": 1.1.0
-
   magic-string@0.30.21:
     dependencies:
       "@jridgewell/sourcemap-codec": 1.6.0
@@ -9770,8 +9558,6 @@ snapshots:
     dependencies:
       path-key: 4.0.0
       unicorn-magic: 0.3.0
-
-  oauth4webapi@3.8.8: {}
 
   object-assign@4.1.1: {}
 
@@ -9943,8 +9729,6 @@ snapshots:
 
   possible-typed-array-names@1.1.0: {}
 
-  postal-mime@2.7.6: {}
-
   postcss-selector-parser@7.1.6:
     dependencies:
       cssesc: 3.0.0
@@ -9965,12 +9749,6 @@ snapshots:
   powershell-utils@0.1.0: {}
 
   powershell-utils@0.2.1: {}
-
-  preact-render-to-string@6.5.11(preact@10.24.3):
-    dependencies:
-      preact: 10.24.3
-
-  preact@10.24.3: {}
 
   prelude-ls@1.2.1: {}
 
@@ -10059,16 +9837,9 @@ snapshots:
       gopd: 1.2.0
       set-function-name: 2.0.2
 
-  remeda@2.50.0: {}
-
   require-from-string@2.0.2: {}
 
   reselect@5.3.0: {}
-
-  resend@6.28.1:
-    dependencies:
-      postal-mime: 2.7.6
-      standardwebhooks: 1.1.1
 
   resolve-from@4.0.0: {}
 
@@ -10343,16 +10114,6 @@ snapshots:
 
   stackback@0.0.2: {}
 
-  standardwebhooks@1.0.0:
-    dependencies:
-      "@stablelib/base64": 1.0.1
-      fast-sha256: 1.3.0
-
-  standardwebhooks@1.1.1:
-    dependencies:
-      "@stablelib/base64": 1.0.1
-      fast-sha256: 1.3.0
-
   statuses@2.0.2: {}
 
   std-env@4.2.0: {}
@@ -10460,10 +10221,6 @@ snapshots:
       has-flag: 4.0.0
 
   supports-preserve-symlinks-flag@1.0.0: {}
-
-  svix@1.99.1:
-    dependencies:
-      standardwebhooks: 1.0.0
 
   systeminformation@5.33.10: {}
 
@@ -10577,6 +10334,8 @@ snapshots:
       has-symbols: 1.1.0
       which-boxed-primitive: 1.1.1
 
+  uncrypto@0.1.3: {}
+
   undici-types@6.21.0: {}
 
   undici@7.29.1: {}
@@ -10629,6 +10388,10 @@ snapshots:
       react: 19.2.8
 
   util-deprecate@1.0.2: {}
+
+  valibot@1.5.0(typescript@5.9.3):
+    optionalDependencies:
+      typescript: 5.9.3
 
   validate-npm-package-name@7.0.2: {}
 
@@ -10789,6 +10552,7 @@ snapshots:
   zod-to-json-schema@3.25.2(zod@4.6.5):
     dependencies:
       zod: 4.6.5
+    optional: true
 
   zod-validation-error@4.0.2(zod@4.5.4):
     dependencies:

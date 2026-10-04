@@ -1,13 +1,15 @@
 import { z } from "zod";
+import { validCommand } from "@/shared/contracts.mjs";
+import type { CommandContext } from "@/lib/approval-service";
 import type { Id } from "@/convex/_generated/dataModel";
 import { clientActor, json, safeError } from "@/lib/scope-server";
 import {
   deliverCredential,
   listAccounts,
-  listCollectors,
   recordReceipt,
   requestAccess,
   requestStatus,
+  cancelRequest,
 } from "@/lib/approval-service";
 export const runtime = "nodejs";
 export async function POST(
@@ -23,20 +25,17 @@ export async function POST(
   try {
     const { operation } = await params,
       raw = await request.text();
-    if (Buffer.byteLength(raw) > 8192) return safeError(413);
+    if (Buffer.byteLength(raw) > 32768) return safeError(413);
     const body: unknown = JSON.parse(raw);
     if (operation === "accounts")
       return json({ accounts: await listAccounts(actor) });
-    if (operation === "collectors")
-      return json({ collectors: await listCollectors(actor) });
     if (operation === "request") {
       const args = z
         .object({
           accountId: z.string(),
           key: z.string().min(16).max(128),
           reason: z.string().trim().min(1).max(1000),
-          intent: z.string().trim().min(1).max(240).optional(),
-          collectorConnectionId: z.string().optional(),
+          command: z.custom<CommandContext>(validCommand),
         })
         .strict()
         .parse(body);
@@ -44,8 +43,6 @@ export async function POST(
         await requestAccess(actor, {
           ...args,
           accountId: args.accountId as Id<"connectedAccounts">,
-          collectorConnectionId: args.collectorConnectionId as
-            Id<"clientConnections"> | undefined,
         }),
       );
     }
@@ -54,6 +51,10 @@ export async function POST(
         .strict()
         .parse(body),
       id = args.id as Id<"approvalRequests">;
+    if (operation === "cancel") {
+      await cancelRequest(actor, id);
+      return json({ cancelled: true });
+    }
     if (operation === "status") return json(await requestStatus(actor, id));
     if (operation === "deliver")
       return json(await deliverCredential(actor, id));

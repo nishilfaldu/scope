@@ -1,5 +1,5 @@
 import { ConvexHttpClient } from "convex/browser";
-import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { withAuth } from "@workos-inc/authkit-nextjs";
 import { verifyClient } from "./client-auth";
 
 export function config(name: string): string {
@@ -28,7 +28,7 @@ export function db() {
 }
 export async function ownerDb() {
   const client = db(),
-    token = await convexAuthNextjsToken();
+    { accessToken: token } = await withAuth();
   if (!token) throw new Error("Sign in required");
   client.setAuth(token);
   return client;
@@ -57,8 +57,8 @@ export async function clientActor(request: Request) {
   return {
     secret: config("SCOPE_SERVICE_SECRET"),
     ...(await verifyClient(token, {
-      issuer: config("WORKOS_ISSUER"),
-      resource: scopeOrigin() + "/api/mcp",
+      webClientId: config("WORKOS_CLIENT_ID"),
+      clientId: config("SCOPE_CLI_CLIENT_ID"),
     })),
   };
 }
