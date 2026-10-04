@@ -281,83 +281,11 @@
   font-size: 11px;
   color: #7d8880;
 }
-.outcome {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 5px;
-  text-align: right;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--quiet);
-  flex-shrink: 0;
-  max-width: 170px;
-  border-radius: 4px;
-}
-.outcome:hover {
-  text-decoration: underline;
-  text-underline-offset: 4px;
-}
-.attention {
-  color: #90652c !important;
-}
-.outcome > span {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 13px;
-  height: 13px;
-  border: 1px solid #c7b596;
-  border-radius: 50%;
-  font-size: 9px;
-}
-.requestDetail {
-  padding: 0 26px 24px 72px;
-}
 .explanation {
   font-size: 14px;
   line-height: 1.7;
   max-width: 570px;
   margin: 1px 0 20px;
-}
-.evidence {
-  display: flex;
-  gap: 16px;
-  margin: 0 0 20px;
-  max-width: 420px;
-  color: var(--quiet);
-}
-.evidence li {
-  position: relative;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 7px;
-  text-align: center;
-  font-size: 11px;
-  line-height: 1.5;
-}
-.evidence li > span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #b8c8b8;
-}
-.evidence li:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  top: 3px;
-  left: calc(50% + 10px);
-  width: calc(100% - 4px);
-  height: 1px;
-  background: #dbe2d9;
-}
-.evidence .latest {
-  color: var(--green);
-}
-.evidence .latest > span {
-  background: currentColor;
 }
 .nextStep,
 .detailNote {
@@ -373,9 +301,6 @@
   text-underline-offset: 4px;
   line-height: 1.7;
   border-radius: 3px;
-}
-.requestDetail .textAction {
-  margin-top: 2px;
 }
 .endNote {
   color: #849087;
@@ -623,11 +548,6 @@
   .requestBody {
     flex-wrap: wrap;
   }
-  .outcome {
-    max-width: none;
-    text-align: left;
-    justify-content: flex-start;
-  }
 }
 @media (max-width: 700px) {
   .reviewBar {
@@ -790,28 +710,11 @@
   .permission span {
     font-size: 10px;
   }
-  .outcome {
-    font-size: 11px;
-    justify-content: flex-start;
-    text-align: left;
-  }
-  .requestDetail {
-    padding: 0 18px 22px;
-  }
   .explanation {
     font-size: 13px;
     line-height: 1.8;
     padding-top: 6px;
     margin-bottom: 17px;
-  }
-  .evidence {
-    gap: 12px;
-  }
-  .evidence li {
-    font-size: 10px;
-  }
-  .evidence li:not(:last-child)::after {
-    width: calc(100% - 8px);
   }
   .textAction {
     min-height: 32px;
@@ -931,18 +834,6 @@
 }
 .account > div {
   min-width: 0;
-}
-.evidence time {
-  display: block;
-  font-size: 10px;
-}
-.evidence {
-  max-width: 100%;
-  flex-wrap: wrap;
-  row-gap: 20px;
-}
-.evidence li {
-  min-width: 60px;
 }
 @media (max-width: 700px) {
   .accountMenu {
@@ -1090,16 +981,81 @@
   justify-content: flex-start;
   margin: 0;
 }
-.requestBody .outcome {
-  justify-content: flex-start;
-  text-align: left;
-  align-self: flex-start;
-  max-width: none;
-  color: var(--green);
-  gap: 7px;
+.requestOutcomes {
+  display: grid;
+  grid-template-columns: 56px 16px max-content max-content;
+  gap: 9px 10px;
+  margin: 0;
 }
-.requestBody .outcome > svg {
-  flex-shrink: 0;
+.requestOutcomes > div {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 3px;
+}
+.requestOutcomes dt {
+  color: var(--quiet);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.requestOutcomes dd {
+  display: contents;
+  color: var(--green);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.requestOutcomes time {
+  color: var(--quiet);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.requestActivity {
+  min-width: 0;
+}
+.requestActivity[data-state="open"] {
+  width: 100%;
+}
+.activityTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 8px;
+  margin-left: -8px;
+  color: var(--green);
+  font-size: 12px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.activityTrigger:hover {
+  background: #edf2ec;
+}
+.activityTrigger:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+.activityTrigger[data-state="open"] > svg {
+  transform: rotate(180deg);
+}
+.activityList {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+  color: var(--quiet);
+  font-size: 12px;
+}
+.activityList li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.activityList time {
+  font-size: 11px;
 }
 .enabledStatus {
   color: var(--green);
@@ -1138,6 +1094,12 @@
   .navigation a > span {
     overflow: visible;
   }
+  .requestOutcomes {
+    grid-template-columns: 56px 16px minmax(0, 1fr);
+  }
+  .requestOutcomes time {
+    grid-column: 3;
+  }
   .requestBody {
     margin: 18px 0 0 40px;
     gap: 14px;
@@ -1149,9 +1111,6 @@
   }
   .requestBody .decision {
     margin: 0;
-  }
-  .requestDetail {
-    padding-left: 58px;
   }
   .dialog [data-slot="button"] {
     height: 40px;

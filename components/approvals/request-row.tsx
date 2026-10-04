@@ -5,7 +5,6 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowDown01Icon,
   Tick02Icon,
-  Clock01Icon,
   HourglassIcon,
   MailReceive01Icon,
   Cancel01Icon,
@@ -13,28 +12,26 @@ import {
   PackageRemoveIcon,
   HelpCircleIcon,
   PauseIcon,
-  UnavailableIcon,
+  Clock01Icon,
+  CheckmarkCircle02Icon,
 } from "@hugeicons/core-free-icons";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/toast";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
+import { toast } from "@/components/ui/toast";
 import { AppMark } from "@/components/scope/app-mark";
 import styles from "@/components/scope/scope.module.css";
 import {
   accountName,
   approvalStatus,
-  deliveryDeadline,
   formatRequestTime,
-  requestTime,
-  requestTimeline,
+  requestDecision,
+  requestDelivery,
+  requestActivity,
   requestAccess,
   type ApprovalRequest,
 } from "@/lib/approval-display";
@@ -50,46 +47,37 @@ export function RequestRow({
   focused?: boolean;
   onDecision?: () => void;
 }) {
-  const decide = useMutation(api.approvals.decide),
-    cancel = useMutation(api.approvals.cancel);
-  const [busyAction, setBusyAction] = useState<
-    "approve" | "deny" | "stop" | null
-  >(null);
+  const decide = useMutation(api.approvals.decide);
+  const [busyAction, setBusyAction] = useState<"approve" | "deny" | null>(null);
   const busy = busyAction !== null;
-  const [open, setOpen] = useState(focused),
-    [confirm, setConfirm] = useState(false);
   const row = useRef<HTMLElement>(null);
   useEffect(() => {
     if (focused) row.current?.scrollIntoView({ block: "nearest" });
   }, [focused]);
   const status = approvalStatus(request, now),
     pending = status === "Needs approval";
-  const statusIcon = {
-    "Needs approval": Clock01Icon,
+  const decision = requestDecision(request, now),
+    delivery = requestDelivery(request, now);
+  const outcomeIcons = {
+    Approved: CheckmarkCircle02Icon,
+    Denied: Cancel01Icon,
+    Expired: Timer02Icon,
+    "Not decided": Clock01Icon,
+    Cancelled: PauseIcon,
     "Waiting for pickup": HourglassIcon,
     "Waiting for receipt": MailReceive01Icon,
     Received: Tick02Icon,
-    Denied: Cancel01Icon,
-    Expired: Timer02Icon,
     "Not collected": PackageRemoveIcon,
     "Receipt unconfirmed": HelpCircleIcon,
     "Delivery stopped": PauseIcon,
-    "Sharing blocked": UnavailableIcon,
-  }[status];
-  const canStop =
-    request.status === "approved" &&
-    deliveryDeadline(request) > now &&
-    request.accountAvailable &&
-    !request.requesterStopped;
-  const time = requestTime(request, now),
+  };
+  const time = request.createdAt,
     name = request.snapshot.requesterName;
-  async function act(action: "approve" | "deny" | "stop") {
+  async function act(action: "approve" | "deny") {
     onDecision?.();
     setBusyAction(action);
     try {
-      if (action === "stop") await cancel({ id: request._id });
-      else await decide({ id: request._id, approve: action === "approve" });
-      setConfirm(false);
+      await decide({ id: request._id, approve: action === "approve" });
     } catch {
       toast.add({
         title:
@@ -108,13 +96,7 @@ export function RequestRow({
       className={`${styles.request} ${pending ? styles.pending : ""}`}
     >
       <div className={styles.requestHead}>
-        <button
-          className={styles.requestSummary}
-          disabled={pending}
-          aria-expanded={pending ? undefined : open}
-          aria-controls={pending ? undefined : `detail-${request._id}`}
-          onClick={() => setOpen(!open)}
-        >
+        <div className={styles.requestSummary}>
           <span className={styles.avatar}>
             {name
               .split(/\s+/)
@@ -128,22 +110,23 @@ export function RequestRow({
             <span>{"Authorized CLI connection"}</span>
           </span>
           <span className={styles.summaryEnd}>
-            <time dateTime={time ? new Date(time).toISOString() : undefined}>
+            <time
+              dateTime={
+                pending
+                  ? new Date(request.approvalExpiresAt).toISOString()
+                  : time !== undefined
+                    ? new Date(time).toISOString()
+                    : undefined
+              }
+            >
               {pending
                 ? `${Math.max(1, Math.ceil((request.approvalExpiresAt - now) / 60_000))} min to decide`
-                : time
+                : time !== undefined
                   ? formatRequestTime(time)
                   : ""}
             </time>
-            {!pending && (
-              <HugeiconsIcon
-                icon={ArrowDown01Icon}
-                size={16}
-                className={open ? styles.rotated : ""}
-              />
-            )}
           </span>
-        </button>
+        </div>
         <div className={styles.requestBody}>
           <div className={styles.access}>
             <AppMark app={request.snapshot.providerName} />
@@ -184,86 +167,60 @@ export function RequestRow({
                 Deny
               </Button>
             </div>
-          ) : !open ? (
-            <button
-              className={styles.outcome}
-              aria-expanded={open}
-              aria-controls={`detail-${request._id}`}
-              onClick={() => setOpen(!open)}
-            >
-              <HugeiconsIcon icon={statusIcon} size={16} aria-hidden />
-              {status === "Waiting for pickup"
-                ? "Approved · waiting for agent"
-                : status === "Waiting for receipt"
-                  ? "Waiting for receipt"
-                  : status}
-            </button>
-          ) : null}
+          ) : (
+            <>
+              <dl
+                className={styles.requestOutcomes}
+                aria-label="Request outcome"
+              >
+                {[
+                  { category: "Decision", outcome: decision },
+                  ...(delivery
+                    ? [{ category: "Delivery", outcome: delivery }]
+                    : []),
+                ].map(({ category, outcome }) => (
+                  <div key={category}>
+                    <dt>{category}</dt>
+                    <dd>
+                      <HugeiconsIcon
+                        icon={outcomeIcons[outcome.label]}
+                        size={16}
+                        aria-hidden
+                      />
+                      <span>{outcome.label}</span>
+                      {outcome.at !== undefined && (
+                        <time dateTime={new Date(outcome.at).toISOString()}>
+                          {formatRequestTime(outcome.at)}
+                        </time>
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </>
+          )}
+          <Collapsible className={styles.requestActivity}>
+            <CollapsibleTrigger className={styles.activityTrigger}>
+              <HugeiconsIcon icon={ArrowDown01Icon} size={14} aria-hidden />
+              Activity
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <ol aria-label="Request activity" className={styles.activityList}>
+                {requestActivity(request, now).map((event, i) => (
+                  <li key={`${event.label}-${i}`}>
+                    <span>{event.label}</span>
+                    {event.at !== undefined && (
+                      <time dateTime={new Date(event.at).toISOString()}>
+                        {formatRequestTime(event.at)}
+                      </time>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </CollapsibleContent>
+          </Collapsible>
         </div>
       </div>
-      {open && !pending && (
-        <div id={`detail-${request._id}`} className={styles.requestDetail}>
-          {!pending && (
-            <ol aria-label="Request timeline" className={styles.evidence}>
-              {requestTimeline(request, now).map((event, i, all) => (
-                <li
-                  key={`${event.label}-${i}`}
-                  className={i === all.length - 1 ? styles.latest : ""}
-                >
-                  <span aria-hidden />
-                  {event.label}
-                  {event.at && (
-                    <time dateTime={new Date(event.at).toISOString()}>
-                      {formatRequestTime(event.at)}
-                    </time>
-                  )}
-                </li>
-              ))}
-            </ol>
-          )}
-          {canStop && (
-            <button
-              className={styles.textAction}
-              disabled={busy}
-              onClick={() => setConfirm(true)}
-            >
-              Stop further sharing
-            </button>
-          )}
-        </div>
-      )}
-      <Dialog
-        open={confirm}
-        onOpenChange={(next) => {
-          if (!busy) setConfirm(next);
-        }}
-      >
-        <DialogContent className={styles.dialog}>
-          <DialogHeader>
-            <DialogTitle>Stop further sharing?</DialogTitle>
-            <DialogDescription>
-              Stop new access deliveries for this request.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setConfirm(false)}
-            >
-              Keep sharing
-            </Button>
-            <Button
-              className={styles.approve}
-              disabled={busy}
-              onClick={() => void act("stop")}
-            >
-              {busy && <span className={styles.spinner} aria-hidden />}
-              Stop sharing
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </article>
   );
 }

@@ -3,8 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test, vi } from "vitest";
 import { RequestRow } from "../components/approvals/request-row";
 import {
-  requestOutcome,
-  requestTimeline,
+  requestDecision,
+  requestDelivery,
+  requestActivity,
   approvalStatus,
   type ApprovalRequest,
 } from "../lib/approval-display";
@@ -45,7 +46,7 @@ test("only a live unblocked pending request exposes the approval action", () => 
   ] as [ApprovalRequest, number][]) {
     const html = renderToStaticMarkup(<RequestRow request={r} now={now} />);
     expect(html).not.toContain(">Approve<");
-    expect(html).not.toContain("Stop further delivery");
+    expect(html).not.toContain("Stop further sharing");
   }
 });
 test("an expired approved request never says it is waiting for collection", () => {
@@ -53,8 +54,8 @@ test("an expired approved request never says it is waiting for collection", () =
   const html = renderToStaticMarkup(<RequestRow request={r} now={2001} />);
   expect(html).toContain("Not collected");
   expect(html).not.toContain("Waiting for the helper to collect");
-  expect(requestOutcome({ ...r, receivedAt: 1500 }, 2001)).toContain(
-    "confirmed receipt",
+  expect(requestDelivery({ ...r, receivedAt: 1500 }, 2001)?.label).toBe(
+    "Received",
   );
 });
 
@@ -96,90 +97,153 @@ test("a request separates its reason from app identity and omits permissions", (
   expect(history).not.toContain("channels:read");
   expect(history).not.toContain("Previously received access may remain active");
 });
-test("approval, attempted delivery and receipt remain distinct even after expiry", () => {
+test("approval and receipt are separate, persistent facts", () => {
   const approved = {
     ...request,
     status: "approved",
     createdAt: 100,
     decidedAt: 200,
   } as ApprovalRequest;
-  expect(approvalStatus(approved, 1000)).toBe("Waiting for pickup");
-  expect(requestTimeline(approved, 1000).map((e) => e.label)).not.toContain(
-    "Receipt confirmed",
-  );
-  const attempted = { ...approved, deliveredAt: 300 };
-  expect(approvalStatus(attempted, 1000)).toBe("Waiting for receipt");
-  expect(approvalStatus(attempted, 3000)).toBe("Receipt unconfirmed");
-  const received = { ...attempted, receivedAt: 400 };
-  expect(approvalStatus(received, 3000)).toBe("Received");
-  expect(requestTimeline(received, 3000).map((e) => [e.label, e.at])).toEqual([
-    ["Requested", 100],
-    ["Approved", 200],
-    ["Delivery attempted", 300],
-    ["Receipt confirmed", 400],
-    ["Delivery window ended", 2000],
-  ]);
-});
-test("legacy stops have no invented timestamp and do not imply access was revoked", () => {
-  const stopped = {
-    ...request,
-    status: "cancelled",
-    decidedAt: 200,
-    deliveredAt: 300,
-    receivedAt: 400,
-  } as ApprovalRequest;
-  const events = requestTimeline(stopped, 3000);
-  expect(events.at(-1)).toMatchObject({
-    label: "Delivery stopped",
-    at: undefined,
-    detail: "Previously received access is unaffected.",
+  expect(requestDecision(approved, 1000)).toEqual({
+    label: "Approved",
+    at: 200,
   });
-  expect(events.map((e) => e.label)).not.toContain("Delivery window ended");
-  expect(requestTimeline({ ...stopped, stoppedAt: 500 }, 3000).at(-1)?.at).toBe(
-    500,
-  );
-  expect(
-    requestTimeline({ ...request, status: "denied", decidedAt: 200 }, 3000).map(
-      (e) => e.label,
-    ),
-  ).toEqual(["Requested", "Denied"]);
+  expect(requestDelivery(approved, 1000)).toEqual({
+    label: "Waiting for pickup",
+  });
+  expect(requestDelivery({ ...approved, deliveredAt: 300 }, 1000)).toEqual({
+    label: "Waiting for receipt",
+    at: 300,
+  });
+  const received = { ...approved, deliveredAt: 300, receivedAt: 400 };
+  for (const change of [
+    {},
+    { status: "cancelled", stoppedAt: 500 },
+    { accountAvailable: false, accountBlockedAt: 600 },
+    { requesterStopped: true, requesterStoppedAt: 700 },
+  ]) {
+    const r = { ...received, ...change } as ApprovalRequest;
+    for (const now of [1000, 3000]) {
+      expect(requestDecision(r, now)).toEqual({ label: "Approved", at: 200 });
+      expect(requestDelivery(r, now)).toEqual({ label: "Received", at: 400 });
+      const html = renderToStaticMarkup(
+        <RequestRow request={r} now={now} focused />,
+      );
+      expect(html).toContain(">Decision<");
+      expect(html).toContain(">Approved<");
+      expect(html).toContain(">Delivery<");
+      expect(html).toContain(">Received<");
+      expect(html).not.toContain("Sharing blocked");
+      expect(html).not.toContain("Account sharing blocked");
+      expect(html).not.toContain("Connection sharing stopped");
+      expect(html).toContain('aria-expanded="false"');
+      expect(html).not.toContain('aria-label="Request activity"');
+    }
+  }
 });
-test("provider expiry never shortens the fixed approval deadline", () => {
+test("uncollected approvals stay approved and use the fixed deadline", () => {
   const r = {
     ...request,
     status: "approved",
+    decidedAt: 200,
     providerExpiresAt: 1200,
   } as ApprovalRequest;
-  expect(approvalStatus(r, 1500)).toBe("Waiting for pickup");
-  expect(requestTimeline(r, 2100).at(-1)).toMatchObject({
-    label: "Delivery window ended",
+  expect(requestDecision(r, 3000).label).toBe("Approved");
+  expect(requestDelivery(r, 1500)?.label).toBe("Waiting for pickup");
+  expect(requestDelivery(r, 3000)).toEqual({
+    label: "Not collected",
     at: 2000,
   });
+  expect(requestDelivery({ ...r, deliveredAt: 300 }, 3000)).toEqual({
+    label: "Receipt unconfirmed",
+    at: 2000,
+  });
+  expect(
+    requestActivity({ ...r, deliveredAt: 300, receivedAt: 400 }, 3000),
+  ).toEqual([
+    { label: "Requested", at: undefined },
+    { label: "Approved", at: 200 },
+    { label: "Delivery attempted", at: 300 },
+    { label: "Received", at: 400 },
+  ]);
 });
-
-test("stopped CLI timelines never wait and use only recorded stop times", () => {
-  const stopped = {
-    ...request,
-    status: "approved",
-    decidedAt: 200,
-    requesterStopped: true,
-    requesterStoppedAt: 500,
-  } as ApprovalRequest;
-  for (const now of [1000, 3000]) {
-    const events = requestTimeline(stopped, now);
-    expect(events.at(-1)).toMatchObject({
-      label: "Connection sharing stopped",
-      at: 500,
-    });
-    expect(events.some((e) => /Waiting|window ended/.test(e.label))).toBe(
-      false,
-    );
+test("account and agent lifecycle metadata does not change request facts or activity", () => {
+  for (const base of [
+    { ...request, status: "approved", decidedAt: 200 },
+    { ...request, status: "approved", decidedAt: 200, deliveredAt: 300 },
+    {
+      ...request,
+      status: "approved",
+      decidedAt: 200,
+      deliveredAt: 300,
+      receivedAt: 400,
+    },
+  ] as ApprovalRequest[]) {
+    for (const now of [1000, 3000])
+      for (const change of [
+        { accountAvailable: false, accountBlockedAt: 500 },
+        { requesterStopped: true, requesterStoppedAt: 600 },
+        { accountAvailable: false, requesterStopped: true },
+      ]) {
+        const r = { ...base, ...change };
+        expect(requestDecision(r, now)).toEqual(requestDecision(base, now));
+        expect(requestDelivery(r, now)).toEqual(requestDelivery(base, now));
+        expect(requestActivity(r, now)).toEqual(requestActivity(base, now));
+        const html = renderToStaticMarkup(<RequestRow request={r} now={now} />);
+        expect(html).not.toMatch(
+          /Account disconnected|Agent disconnected|Account sharing|Connection sharing|Stop further sharing/,
+        );
+      }
   }
-  const unknown = { ...stopped, requesterStoppedAt: undefined };
-  expect(requestTimeline(unknown, 3000).at(-1)).toMatchObject({
-    label: "Connection sharing stopped",
+});
+test("missing legacy times are never replaced with unrelated dates", () => {
+  const approved = { ...request, status: "approved" } as ApprovalRequest;
+  expect(
+    requestDelivery({ ...approved, status: "cancelled", decidedAt: 200 }, 3000),
+  ).toEqual({
+    label: "Delivery stopped",
     at: undefined,
   });
+  expect(
+    requestDelivery({ ...approved, accountAvailable: false }, 3000),
+  ).toEqual({
+    label: "Not collected",
+    at: 2000,
+  });
+  expect(requestDecision({ ...approved, receivedAt: 400 }, 3000)).toEqual({
+    label: "Approved",
+    at: undefined,
+  });
+});
+test("denial and undecided requests do not imply a delivery or approval", () => {
+  const denied = {
+    ...request,
+    status: "denied",
+    decidedAt: 200,
+    accountAvailable: false,
+  } as ApprovalRequest;
+  expect(requestDecision(denied, 3000)).toEqual({ label: "Denied", at: 200 });
+  expect(requestDelivery(denied, 3000)).toBeUndefined();
+  expect(requestActivity(denied, 3000).map((e) => e.label)).toEqual([
+    "Requested",
+    "Denied",
+  ]);
+  const blocked = {
+    ...request,
+    accountAvailable: false,
+    accountBlockedAt: 500,
+  };
+  expect(requestDecision(blocked, 1000)).toEqual({ label: "Not decided" });
+  expect(approvalStatus(blocked, 1000)).not.toBe("Needs approval");
+  expect(requestDelivery(blocked, 1000)).toBeUndefined();
+  expect(requestDecision(blocked, 3000)).toEqual({
+    label: "Expired",
+    at: 2000,
+  });
+  expect(requestActivity(blocked, 3000).map((e) => e.label)).toEqual([
+    "Requested",
+    "Request expired",
+  ]);
 });
 
 test("command is visible for every outcome, whether history is expanded or collapsed", () => {

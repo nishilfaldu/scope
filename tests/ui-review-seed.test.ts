@@ -5,7 +5,7 @@ import { api, internal } from "../convex/_generated/api";
 import { reviewRequests } from "../scripts/seed-ui-review.mjs";
 import {
   approvalStatus,
-  requestTimeline,
+  requestActivity,
   type ApprovalRequest,
 } from "../lib/approval-display";
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -152,7 +152,7 @@ test("fixtures cover decisions, delivery, expiry, stops and pagination with chro
         row.requesterConnectionId === "stopped" ? now - 5 * 60_000 : undefined,
     } as unknown as ApprovalRequest;
     statuses.add(approvalStatus(r, now));
-    const times = requestTimeline(r, now).flatMap((e) =>
+    const times = requestActivity(r, now).flatMap((e) =>
       e.at === undefined ? [] : [e.at],
     );
     expect(times).toEqual([...times].sort((a, b) => a - b));
@@ -169,7 +169,7 @@ test("fixtures cover decisions, delivery, expiry, stops and pagination with chro
       "Not collected",
       "Receipt unconfirmed",
       "Delivery stopped",
-      "Sharing blocked",
+      "Not decided",
     ]),
   );
   expect(

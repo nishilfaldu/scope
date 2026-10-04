@@ -43,13 +43,13 @@ export function reviewRequests(ownerId, bindings, now = Date.now()) {
     },
     {
       key: "pickup",
-      reason: "Approved: collect channel names for a project index.",
+      reason: "Create an index of public project channels.",
       age: 8,
       status: "approved",
     },
     {
       key: "receipt",
-      reason: "Delivery started: prepare the release channel list.",
+      reason: "Prepare the release channel list.",
       age: 11,
       status: "approved",
       delivered: true,
@@ -57,7 +57,7 @@ export function reviewRequests(ownerId, bindings, now = Date.now()) {
     },
     {
       key: "received",
-      reason: "Access received: prepare the weekly design digest.",
+      reason: "Prepare the weekly design digest.",
       age: 15,
       status: "approved",
       delivered: true,
@@ -65,32 +65,31 @@ export function reviewRequests(ownerId, bindings, now = Date.now()) {
     },
     {
       key: "denied",
-      reason: "Do not include private project discussions in this report.",
+      reason: "Summarize project discussions for the report.",
       age: 35,
       status: "denied",
     },
     {
       key: "expired",
-      reason: "No decision: gather notes for an earlier planning meeting.",
+      reason: "Gather notes for the planning meeting.",
       age: 70,
     },
     {
       key: "not-collected",
-      reason: "Approved access was not collected before the deadline.",
+      reason: "Collect public channels for the project handbook.",
       age: 80,
       status: "approved",
     },
     {
       key: "unconfirmed",
-      reason: "Delivery was attempted, but the agent did not confirm receipt.",
+      reason: "Prepare the channel list for the team review.",
       age: 90,
       status: "approved",
       delivered: true,
     },
     {
       key: "received-expired",
-      reason:
-        "Received access for yesterday’s team digest; the delivery window has ended.",
+      reason: "Prepare yesterday’s team digest.",
       age: 100,
       status: "approved",
       delivered: true,
@@ -100,13 +99,13 @@ export function reviewRequests(ownerId, bindings, now = Date.now()) {
     },
     {
       key: "stopped",
-      reason: "Sharing stopped before the agent collected access.",
+      reason: "Prepare the planning meeting handoff.",
       age: 50,
       status: "cancelled",
     },
     {
       key: "stopped-received",
-      reason: "Sharing stopped after the agent confirmed receipt.",
+      reason: "Summarize the last design review.",
       age: 60,
       status: "cancelled",
       delivered: true,
@@ -114,7 +113,7 @@ export function reviewRequests(ownerId, bindings, now = Date.now()) {
     },
     {
       key: "account-blocked",
-      reason: "The selected workspace was disconnected after this approval.",
+      reason: "Compile the design workspace channel index.",
       age: 20,
       status: "approved",
       account: "disconnected",
@@ -123,7 +122,7 @@ export function reviewRequests(ownerId, bindings, now = Date.now()) {
     },
     {
       key: "agent-stopped",
-      reason: "The assistant connection was stopped after receiving access.",
+      reason: "Prepare the assistant’s weekly digest.",
       age: 18,
       status: "approved",
       agent: "stopped",
@@ -132,14 +131,13 @@ export function reviewRequests(ownerId, bindings, now = Date.now()) {
     },
     {
       key: "pending-blocked",
-      reason:
-        "This pending request cannot proceed because its workspace is disconnected.",
+      reason: "Find workspace channels for the research report.",
       age: 12,
       account: "disconnected",
     },
     {
       key: "pending-stopped",
-      reason: "This pending request belongs to an assistant that was stopped.",
+      reason: "Summarize the public project updates.",
       age: 11,
       agent: "stopped",
     },
