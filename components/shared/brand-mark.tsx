@@ -11,7 +11,7 @@ export function BrandMark({
 }) {
   return (
     <Image
-      src="/brand/scope-mark.svg"
+      src="/brand/scope-mark.svg?v=dark-green"
       alt=""
       width={32}
       height={32}

@@ -12,7 +12,7 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#f7f9f5",
     icons: [
       {
-        src: "/brand/scope-mark-512.png",
+        src: "/brand/scope-mark-512.png?v=dark-green",
         sizes: "512x512",
         type: "image/png",
         purpose: "any",
