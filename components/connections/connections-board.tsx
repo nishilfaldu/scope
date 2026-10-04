@@ -41,7 +41,10 @@ export function ConnectionsBoard() {
         });
         if (!response.ok) throw new Error("Unavailable");
         const data = await response.json();
-        if (active) setProvider(data);
+        if (active) {
+          setProvider(data);
+          toast.close("provider-load");
+        }
       } catch {
         if (!active) return;
         setProviderFailed(true);
