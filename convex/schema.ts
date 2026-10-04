@@ -48,7 +48,7 @@ export default defineSchema({
     targetGrantVersion: v.optional(v.number()),
     accountId: v.optional(v.id("connectedAccounts")),
     expiresAt: v.number(),
-  }).index("by_expiresAt", ["expiresAt"]),
+  }),
   clientConnections: defineTable({
     ownerId: v.string(),
     ...principal.fields,
