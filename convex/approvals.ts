@@ -203,10 +203,10 @@ export const request = mutation({
       throw new Error("Account unavailable");
     const pending = await ctx.db
       .query("approvalRequests")
-      .withIndex("by_ownerId_and_status_and_approvalExpiresAt", (q) =>
+      .withIndex("by_status_and_ownerId_and_approvalExpiresAt", (q) =>
         q
-          .eq("ownerId", args.subject)
           .eq("status", "pending")
+          .eq("ownerId", args.subject)
           .gt("approvalExpiresAt", Date.now()),
       )
       .take(50);
@@ -446,10 +446,10 @@ export const pendingForOwner = query({
     const ownerId = await owner(ctx),
       rows = await ctx.db
         .query("approvalRequests")
-        .withIndex("by_ownerId_and_status_and_approvalExpiresAt", (q) =>
+        .withIndex("by_status_and_ownerId_and_approvalExpiresAt", (q) =>
           q
-            .eq("ownerId", ownerId)
             .eq("status", "pending")
+            .eq("ownerId", ownerId)
             .gt("approvalExpiresAt", now),
         )
         .take(50);

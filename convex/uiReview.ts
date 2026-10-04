@@ -20,7 +20,9 @@ export const prepare = internalMutation({
     const [accountRows, agentRows, requestRows] = await Promise.all([
       ctx.db
         .query("connectedAccounts")
-        .withIndex("by_ownerId", (q) => q.eq("ownerId", ownerId))
+        .withIndex("by_ownerId_and_state_and_disconnectOutcome", (q) =>
+          q.eq("ownerId", ownerId),
+        )
         .take(201),
       ctx.db
         .query("clientConnections")

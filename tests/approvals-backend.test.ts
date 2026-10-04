@@ -674,8 +674,19 @@ test("account/client renames keep original command, permission and display snaps
 test("older pending requests remain discoverable behind completed history pagination", async () => {
   const f = await fixture(),
     first = await f.t.mutation(api.approvals.request, f.requestArgs);
-  for (let i = 0; i < 25; i++)
-    await f.request(false, { key: `completed-request-key-${i}` });
+  const completed: Id<"approvalRequests">[] = [];
+  for (let i = 0; i < 25; i++) {
+    const request = await f.request(i % 2 === 0, {
+      key: `completed-request-key-${i}`,
+    });
+    completed.push(request.id);
+    // Deadlines run opposite to creation order, across both decision states.
+    await f.t.run((ctx) =>
+      ctx.db.patch("approvalRequests", request.id, {
+        approvalExpiresAt: Date.now() + (30 - i) * 60_000,
+      }),
+    );
+  }
   const page = await f.owner.query(api.approvals.forOwner, {
     paginationOpts: { numItems: 20, cursor: null },
   });
@@ -685,6 +696,10 @@ test("older pending requests remain discoverable behind completed history pagina
     paginationOpts: { numItems: 20, cursor: page.continueCursor },
   });
   expect(next.page.some((r) => r._id === first.id)).toBe(true);
+  expect([...page.page, ...next.page].map((r) => r._id)).toEqual([
+    ...completed.reverse(),
+    first.id,
+  ]);
   expect(
     (
       await f.owner.query(api.approvals.pendingForOwner, { now: Date.now() })

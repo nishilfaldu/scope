@@ -240,7 +240,7 @@ if (
         "--inline-query",
         `
       const ownerId = ${JSON.stringify(ownerId)};
-      const accounts = await ctx.db.query("connectedAccounts").withIndex("by_ownerId", q => q.eq("ownerId", ownerId)).take(201);
+      const accounts = await ctx.db.query("connectedAccounts").withIndex("by_ownerId_and_state_and_disconnectOutcome", q => q.eq("ownerId", ownerId)).take(201);
       const agents = await ctx.db.query("clientConnections").withIndex("by_ownerId", q => q.eq("ownerId", ownerId)).take(201);
       const requests = await ctx.db.query("approvalRequests").withIndex("by_ownerId", q => q.eq("ownerId", ownerId)).take(201);
       return {

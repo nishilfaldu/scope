@@ -27,9 +27,6 @@ export default defineSchema({
     blockedAt: v.optional(v.number()),
     disconnectOutcome: v.optional(disconnectOutcome),
   })
-    // Owner history and active-account lookup have distinct ordering.
-    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
-    .index("by_ownerId", ["ownerId"])
     .index("by_ownerId_and_state_and_disconnectOutcome", [
       "ownerId",
       "state",
@@ -89,11 +86,10 @@ export default defineSchema({
   })
     .index("by_requesterConnectionId_and_key", ["requesterConnectionId", "key"])
     // Chronological history must not be ordered by decision/deadline.
-    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_ownerId", ["ownerId"])
-    .index("by_ownerId_and_status_and_approvalExpiresAt", [
-      "ownerId",
+    .index("by_status_and_ownerId_and_approvalExpiresAt", [
       "status",
+      "ownerId",
       "approvalExpiresAt",
     ]),
   pushSubscriptions: defineTable({
