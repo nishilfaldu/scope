@@ -11,31 +11,26 @@ import {
 import type { ApprovalRequest } from "../lib/approval-display";
 
 const data = vi.hoisted(() => ({
-  replies: new Map<number, unknown>(),
+  pending: undefined as unknown,
   history: [] as unknown[],
-  ownerId: "user_owner",
   authenticated: true,
+  pendingQuery: vi.fn(),
 }));
 vi.mock("convex/react", () => ({
   useMutation: () => vi.fn(),
   useConvexAuth: () => ({ isAuthenticated: data.authenticated }),
-  useQuery: (
-    query: FunctionReference<"query">,
-    args: { now?: number } | "skip",
-  ) => {
-    if (args === "skip") return undefined;
-    return getFunctionName(query) === "approvals:pendingForOwner"
-      ? data.replies.get(args.now!)
-      : [];
+  useQuery: (query: FunctionReference<"query">, args: object | "skip") => {
+    if (getFunctionName(query) === "approvals:pendingForOwner") {
+      data.pendingQuery(args);
+      return args === "skip" ? undefined : data.pending;
+    }
+    return args === "skip" ? undefined : [];
   },
   usePaginatedQuery: () => ({
     results: data.history,
     status: "Exhausted",
     loadMore: vi.fn(),
   }),
-}));
-vi.mock("@workos-inc/authkit-nextjs/components", () => ({
-  useAuth: () => ({ user: { id: data.ownerId } }),
 }));
 vi.mock("@/components/ui/toast", () => ({ toast: { add: vi.fn() } }));
 const start = 1_700_000_000_000;
@@ -59,10 +54,9 @@ let container: HTMLDivElement;
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(start);
-  data.ownerId = "user_owner";
   data.authenticated = true;
-  data.replies.clear();
-  data.replies.set(start, [pending]);
+  data.pending = [pending];
+  data.pendingQuery.mockClear();
   data.history = [
     {
       ...pending,
@@ -79,93 +73,92 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.restoreAllMocks();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
-
-test("clock refresh keeps loaded requests and expanded activity mounted while pending data is fetched", async () => {
-  await act(async () =>
-    root.render(
-      <PendingRequestsProvider>
-        <ApprovalsBoard />
-      </PendingRequestsProvider>,
-    ),
+function board() {
+  root.render(
+    <PendingRequestsProvider>
+      <ApprovalsBoard />
+    </PendingRequestsProvider>,
   );
+}
+function PendingProbe() {
+  const { rows } = usePendingRequests();
+  return (
+    <output>
+      {rows === undefined ? "Loading" : rows.map((r) => r._id).join(",")}
+    </output>
+  );
+}
+function probe() {
+  root.render(
+    <PendingRequestsProvider>
+      <PendingProbe />
+    </PendingRequestsProvider>,
+  );
+}
+
+test("countdown ticks only update its text, leaving queries and expanded activity alone", async () => {
+  await act(async () => board());
   const row = container.querySelector('article[aria-label*="older pending"]')!;
   const trigger = row.querySelector<HTMLButtonElement>(
     "button[aria-expanded]",
   )!;
   await act(async () => trigger.click());
-  expect(trigger.getAttribute("aria-expanded")).toBe("true");
-
+  const calls = data.pendingQuery.mock.calls.length;
+  expect(row.textContent).toContain("2 min to decide");
   await act(async () => vi.advanceTimersByTime(30_000));
+  expect(row.textContent).toContain("1 min to decide");
+  expect(data.pendingQuery).toHaveBeenCalledTimes(calls);
+  expect(
+    data.pendingQuery.mock.calls.every(
+      ([args]) => JSON.stringify(args) === "{}",
+    ),
+  ).toBe(true);
   expect(container.querySelector('[aria-label="Loading requests"]')).toBeNull();
-  expect(container.textContent).toContain("Historical request");
   expect(container.contains(row)).toBe(true);
   expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  expect(container.textContent).toContain("Historical request");
 });
-
-function PendingProbe() {
-  const { now, rows } = usePendingRequests();
-  return (
-    <output>
-      {now}:{rows === undefined ? "Loading" : rows.map((r) => r._id).join(",")}
-    </output>
-  );
-}
-
-test("fresh query results replace retained pending data, including an empty result", async () => {
-  const render = () =>
-    root.render(
-      <PendingRequestsProvider>
-        <PendingProbe />
-      </PendingRequestsProvider>,
-    );
-  await act(async () => render());
-  expect(container.textContent).toContain("pending");
-  await act(async () => vi.advanceTimersByTime(30_000));
-  expect(container.textContent).toContain("pending");
-  data.replies.set(start + 30_000, []);
-  await act(async () => render());
-  expect(container.textContent).toBe(`${start + 30_000}:`);
-});
-
-test("retained rows never cross owners or survive logout", async () => {
-  const render = () =>
-    root.render(
-      <PendingRequestsProvider>
-        <PendingProbe />
-      </PendingRequestsProvider>,
-    );
-  await act(async () => render());
-  expect(container.textContent).toContain("pending");
-  data.ownerId = "user_other";
-  data.replies.clear();
-  await act(async () => render());
-  expect(container.textContent).toContain("Loading");
-  expect(container.textContent).not.toContain("pending");
-  data.replies.set(start, [{ ...pending, _id: "other-request" }]);
-  await act(async () => render());
-  expect(container.textContent).toContain("other-request");
-  data.authenticated = false;
-  await act(async () => render());
-  expect(container.textContent).toContain("Loading");
-  expect(container.textContent).not.toContain("other-request");
-});
-
-test("the local clock expires approval actions even while fresh data is unavailable", async () => {
-  await act(async () =>
-    root.render(
-      <PendingRequestsProvider>
-        <ApprovalsBoard />
-      </PendingRequestsProvider>,
-    ),
-  );
+test("reactive expiry removes actions and updates an open row without a clock refresh", async () => {
+  await act(async () => board());
   const row = container.querySelector('article[aria-label*="older pending"]')!;
-  expect(row.textContent).toContain("Approve");
-  await act(async () => vi.advanceTimersByTime(90_000));
+  const trigger = row.querySelector<HTMLButtonElement>(
+    "button[aria-expanded]",
+  )!;
+  await act(async () => trigger.click());
+  data.pending = [];
+  data.history = [
+    { ...pending, expiredAt: pending.approvalExpiresAt },
+    ...data.history,
+  ];
+  await act(async () => board());
   expect(container.contains(row)).toBe(true);
   expect(row.textContent).toContain("Expired");
   expect(row.textContent).not.toContain("Approve");
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
   expect(container.textContent).toContain("No requests need your approval.");
+});
+test("fresh empty results clear pending rows and logout skips the query", async () => {
+  await act(async () => probe());
+  expect(container.textContent).toBe("pending");
+  data.pending = [];
+  await act(async () => probe());
+  expect(container.textContent).toBe("");
+  data.pending = [pending];
+  data.authenticated = false;
+  await act(async () => probe());
+  expect(container.textContent).toBe("Loading");
+  expect(data.pendingQuery).toHaveBeenLastCalledWith("skip");
+});
+test("completed requests do not mount a local timer", async () => {
+  data.pending = [];
+  const interval = vi.spyOn(window, "setInterval");
+  await act(async () => board());
+  expect(interval).not.toHaveBeenCalled();
+  const calls = data.pendingQuery.mock.calls.length;
+  await act(async () => vi.advanceTimersByTime(60_000));
+  expect(data.pendingQuery).toHaveBeenCalledTimes(calls);
 });

@@ -11,7 +11,7 @@ import { usePendingRequests } from "./pending-requests-provider";
 import { approvalStatus, type ApprovalRequest } from "@/lib/approval-display";
 import styles from "@/components/scope/scope.module.css";
 export function ApprovalsBoard({ requestId }: { requestId?: string }) {
-  const { now, rows: pendingRows } = usePendingRequests();
+  const { rows: pendingRows } = usePendingRequests();
   const [decided, setDecided] = useState<Record<string, ApprovalRequest>>({});
   const [order, setOrder] = useState<string[]>([]);
   const retained = useQuery(
@@ -56,7 +56,7 @@ export function ApprovalsBoard({ requestId }: { requestId?: string }) {
       return rank(a) - rank(b);
     });
   const pending = unique.filter(
-    (r) => approvalStatus(r, now) === "Needs approval",
+    (r) => approvalStatus(r) === "Needs approval",
   ).length;
   const loading = !pendingRows || page.status === "LoadingFirstPage";
   return (
@@ -85,7 +85,6 @@ export function ApprovalsBoard({ requestId }: { requestId?: string }) {
             <RequestRow
               key={r._id}
               request={r}
-              now={now}
               focused={focused?._id === r._id}
               onDecision={() => {
                 setOrder(unique.map((row) => row._id));

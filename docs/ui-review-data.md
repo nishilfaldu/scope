@@ -26,6 +26,6 @@ With the existing Convex development login and the current owner's WorkOS user I
 node scripts/seed-ui-review.mjs USER_ID
 ```
 
-The script targets `bright-dinosaur-692` explicitly. The internal preparation mutation rejects every other deployment. It preserves existing records, resets only requests with the `scope-ui-review-v1:` key prefix, and reuses demo account and agent IDs. It appends imported request rows with their original creation times so request activity and pagination are chronological. It verifies the fixture counts after import.
+The script targets `bright-dinosaur-692` explicitly. The internal preparation mutation rejects every other deployment. It preserves existing records, resets only requests with the `scope-ui-review-v1:` key prefix, and reuses demo account and agent IDs. It appends imported request rows with their original creation times so request activity and pagination are chronological. It initializes expiry with the idempotent migration after import and verifies the fixture counts.
 
 Local validation includes fixture isolation, rerun behavior, target restrictions, normal owner queries/decisions, activity order and coverage of all ten request statuses.

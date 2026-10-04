@@ -17,6 +17,7 @@
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@convex-dev/action-retrier": "^0.3.1",
+    "@convex-dev/migrations": "^0.3.6",
     "@hugeicons/core-free-icons": "^4.3.2",
     "@hugeicons/react": "^1.1.10",
     "@radix-ui/react-collapsible": "^1.1.20",

@@ -28,10 +28,7 @@ export function accountName(label?: string) {
 export function deliveryDeadline(r: ApprovalRequest) {
   return r.approvalExpiresAt;
 }
-export function requestDecision(
-  r: ApprovalRequest,
-  now: number,
-): RequestDecision {
+export function requestDecision(r: ApprovalRequest): RequestDecision {
   if (r.status === "denied") return { label: "Denied", at: r.decidedAt };
   if (
     r.status === "approved" ||
@@ -41,15 +38,14 @@ export function requestDecision(
   )
     return { label: "Approved", at: r.decidedAt };
   if (r.status === "cancelled") return { label: "Cancelled", at: r.stoppedAt };
-  if (deliveryDeadline(r) <= now)
+  if (r.expiredAt !== undefined)
     return { label: "Expired", at: deliveryDeadline(r) };
   return { label: "Not decided" };
 }
 export function requestDelivery(
   r: ApprovalRequest,
-  now: number,
 ): RequestDelivery | undefined {
-  if (requestDecision(r, now).label !== "Approved") return undefined;
+  if (requestDecision(r).label !== "Approved") return undefined;
   if (r.receivedAt !== undefined)
     return { label: "Received", at: r.receivedAt };
   const deadline = deliveryDeadline(r);
@@ -58,7 +54,7 @@ export function requestDelivery(
     (r.stoppedAt === undefined || r.stoppedAt < deadline)
   )
     return { label: "Delivery stopped", at: r.stoppedAt };
-  if (deadline <= now)
+  if (r.expiredAt !== undefined)
     return {
       label:
         r.deliveredAt !== undefined ? "Receipt unconfirmed" : "Not collected",
@@ -68,24 +64,21 @@ export function requestDelivery(
     ? { label: "Waiting for receipt", at: r.deliveredAt }
     : { label: "Waiting for pickup" };
 }
-export function approvalStatus(r: ApprovalRequest, now: number) {
+export function approvalStatus(r: ApprovalRequest) {
   // Current connection authority gates actions, never historical request facts.
   if (
     r.status === "pending" &&
-    deliveryDeadline(r) > now &&
+    r.expiredAt === undefined &&
     r.accountAvailable &&
     !r.requesterStopped
   )
     return "Needs approval";
-  return requestDelivery(r, now)?.label ?? requestDecision(r, now).label;
+  return requestDelivery(r)?.label ?? requestDecision(r).label;
 }
-export function requestActivity(
-  r: ApprovalRequest,
-  now: number,
-): RequestEvent[] {
+export function requestActivity(r: ApprovalRequest): RequestEvent[] {
   const events: RequestEvent[] = [{ label: "Requested", at: r.createdAt }];
-  const decision = requestDecision(r, now),
-    delivery = requestDelivery(r, now);
+  const decision = requestDecision(r),
+    delivery = requestDelivery(r);
   if (decision.label === "Approved" || decision.label === "Denied")
     events.push(decision);
   if (r.deliveredAt !== undefined)

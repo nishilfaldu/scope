@@ -190,6 +190,9 @@ export function reviewRequests(ownerId, bindings, now = Date.now()) {
       },
       status,
       approvalExpiresAt: created + 30 * minutes,
+      ...((status === "pending" || status === "approved") &&
+        !s.received &&
+        created + 30 * minutes <= now && { expiredAt: created + 30 * minutes }),
       ...(status !== "pending" && { decidedAt: created + minutes }),
       ...(s.delivered && {
         firstDeliveryAt: created + 2 * minutes,
@@ -234,6 +237,7 @@ if (
     const path = join(dir, "requests.json");
     writeFileSync(path, JSON.stringify(rows));
     convex(["import", "--table", "approvalRequests", "--append", path]);
+    convex(["run", "migrations:run", JSON.stringify({ reset: true })]);
     const counts = convex(
       [
         "run",

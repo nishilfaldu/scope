@@ -1,3 +1,4 @@
+import migrations from "@convex-dev/migrations/convex.config";
 import actionRetrier from "@convex-dev/action-retrier/convex.config";
 import { defineApp } from "convex/server";
 import { v } from "convex/values";
@@ -13,5 +14,6 @@ const app = defineApp({
   },
 });
 app.use(actionRetrier);
+app.use(migrations);
 
 export default app;

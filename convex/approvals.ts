@@ -3,7 +3,12 @@ import {
   paginationResultValidator,
 } from "convex/server";
 import { v, type Infer } from "convex/values";
-import { query, mutation, type QueryCtx } from "./_generated/server";
+import {
+  query,
+  mutation,
+  internalMutation,
+  type QueryCtx,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc } from "./_generated/dataModel";
 import {
@@ -19,6 +24,7 @@ import {
 } from "./scope";
 import { hashesEqual, randomSecret } from "./lib/secrets";
 import { validCommand } from "../shared/contracts.mjs";
+import { initializeRequestExpiry } from "./lib/requestExpiry";
 import { retrier } from "./notifications";
 
 const context = v.object({
@@ -36,6 +42,7 @@ const ownerView = context.omit("id").extend({
   createdAt: v.number(),
   status: decision,
   approvalExpiresAt: v.number(),
+  expiredAt: v.optional(v.number()),
   decidedAt: v.optional(v.number()),
   stoppedAt: v.optional(v.number()),
   deliveredAt: v.optional(v.number()),
@@ -110,6 +117,7 @@ async function presentation(ctx: QueryCtx, r: Doc<"approvalRequests">) {
     createdAt: r._creationTime,
     status: r.status,
     approvalExpiresAt: r.approvalExpiresAt,
+    expiredAt: r.expiredAt,
     decidedAt: r.decidedAt,
     stoppedAt: r.stoppedAt,
     deliveredAt: r.firstDeliveryAt,
@@ -203,11 +211,14 @@ export const request = mutation({
       throw new Error("Account unavailable");
     const pending = await ctx.db
       .query("approvalRequests")
-      .withIndex("by_status_and_ownerId_and_approvalExpiresAt", (q) =>
-        q
-          .eq("status", "pending")
-          .eq("ownerId", args.subject)
-          .gt("approvalExpiresAt", Date.now()),
+      .withIndex(
+        "by_status_and_ownerId_and_expiredAt_and_approvalExpiresAt",
+        (q) =>
+          q
+            .eq("status", "pending")
+            .eq("ownerId", args.subject)
+            .eq("expiredAt", undefined)
+            .gt("approvalExpiresAt", Date.now()),
       )
       .take(50);
     if (pending.length >= 50) throw new Error("Pending request limit");
@@ -231,6 +242,10 @@ export const request = mutation({
       status: "pending",
       approvalExpiresAt,
     });
+    await initializeRequestExpiry(
+      ctx,
+      (await ctx.db.get("approvalRequests", id))!,
+    );
     const subscriptions = await ctx.db
       .query("pushSubscriptions")
       .withIndex("by_ownerId", (q) => q.eq("ownerId", args.subject))
@@ -440,17 +455,19 @@ export const forOwner = query({
   },
 });
 export const pendingForOwner = query({
-  args: { now: v.number() },
+  args: {},
   returns: v.array(ownerView),
-  handler: async (ctx, { now }) => {
+  handler: async (ctx) => {
     const ownerId = await owner(ctx),
       rows = await ctx.db
         .query("approvalRequests")
-        .withIndex("by_status_and_ownerId_and_approvalExpiresAt", (q) =>
-          q
-            .eq("status", "pending")
-            .eq("ownerId", ownerId)
-            .gt("approvalExpiresAt", now),
+        .withIndex(
+          "by_status_and_ownerId_and_expiredAt_and_approvalExpiresAt",
+          (q) =>
+            q
+              .eq("status", "pending")
+              .eq("ownerId", ownerId)
+              .eq("expiredAt", undefined),
         )
         .take(50);
     return Promise.all(rows.map((r) => presentation(ctx, r)));
@@ -504,6 +521,25 @@ export const cancelForClient = mutation({
         status: "cancelled",
         stoppedAt: Date.now(),
       });
+    return null;
+  },
+});
+
+// A scheduled mutation changes query dependencies when the request window closes.
+export const expire = internalMutation({
+  args: { id: v.id("approvalRequests"), deadline: v.number() },
+  returns: v.null(),
+  handler: async (ctx, { id, deadline }) => {
+    const row = await ctx.db.get("approvalRequests", id);
+    if (
+      row &&
+      row.approvalExpiresAt === deadline &&
+      deadline <= Date.now() &&
+      row.expiredAt === undefined &&
+      row.receivedAt === undefined &&
+      (row.status === "pending" || row.status === "approved")
+    )
+      await ctx.db.patch("approvalRequests", id, { expiredAt: deadline });
     return null;
   },
 });

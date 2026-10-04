@@ -41,3 +41,9 @@ Push endpoints use a service allowlist. Action Retrier handles bounded retries a
 Hosted AuthKit replaced Convex Auth, Resend, the private `store._handler` patch, auth tables, and the WorkOS Connect Standalone bridge. The obsolete Connect helper application's tokens are no longer accepted. Disposable development data was reset rather than migrated. Magic Auth uses WorkOS email delivery and its documented sending/rate limits; no unlimited email claim is made.
 
 Action Retrier replaced the custom notification-job table, leases, completion fencing and watchdog. Workpool's queue/concurrency policy would add machinery this application does not need. Script hashing was removed: approvals retain argv, working directory, environment variable, account and purpose without claiming code attestation.
+
+## Request expiry
+
+Request creation schedules an internal Convex mutation at the fixed 30-minute deadline in the same transaction. It records `expiredAt` for unresolved pending/approved requests, preserving the decision and any confirmed receipt. Repeated, early or stale callbacks are harmless. Actual server deadline checks still protect approval and credential release if scheduling is delayed. A valid late receipt remains a receipt.
+
+Owner queries subscribe to stored expiry state with stable arguments. Only the actionable request’s countdown runs a local timer; it does not refresh queries or rerender the board/navigation. The pending index includes `expiredAt` before the deadline, so expired requests leave that subscription when the mutation runs. Existing requests are initialized by `migrations:requestExpiry`; rerunning with `cursor: null` or the group runner’s `reset: true` safely processes new imported fixtures without duplicating jobs.

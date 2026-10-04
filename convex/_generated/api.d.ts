@@ -14,8 +14,10 @@ import type * as clientConnections from "../clientConnections.js";
 import type * as domain_apps from "../domain/apps.js";
 import type * as http from "../http.js";
 import type * as lib_push from "../lib/push.js";
+import type * as lib_requestExpiry from "../lib/requestExpiry.js";
 import type * as lib_responses from "../lib/responses.js";
 import type * as lib_secrets from "../lib/secrets.js";
+import type * as migrations from "../migrations.js";
 import type * as notificationDelivery from "../notificationDelivery.js";
 import type * as notifications from "../notifications.js";
 import type * as scope from "../scope.js";
@@ -34,8 +36,10 @@ declare const fullApi: ApiFromModules<{
   "domain/apps": typeof domain_apps;
   http: typeof http;
   "lib/push": typeof lib_push;
+  "lib/requestExpiry": typeof lib_requestExpiry;
   "lib/responses": typeof lib_responses;
   "lib/secrets": typeof lib_secrets;
+  migrations: typeof migrations;
   notificationDelivery: typeof notificationDelivery;
   notifications: typeof notifications;
   scope: typeof scope;
@@ -70,4 +74,5 @@ export declare const internal: FilterApi<
 
 export declare const components: {
   actionRetrier: import("@convex-dev/action-retrier/_generated/component.js").ComponentApi<"actionRetrier">;
+  migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
 };

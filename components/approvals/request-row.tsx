@@ -23,6 +23,7 @@ import {
   CollapsibleContent,
 } from "@/components/ui/collapsible";
 import { toast } from "@/components/ui/toast";
+import { useNow } from "@/hooks/use-now";
 import { AppMark } from "@/components/scope/app-mark";
 import styles from "@/components/scope/scope.module.css";
 import {
@@ -38,12 +39,10 @@ import {
 
 export function RequestRow({
   request,
-  now,
   focused = false,
   onDecision,
 }: {
   request: ApprovalRequest;
-  now: number;
   focused?: boolean;
   onDecision?: () => void;
 }) {
@@ -54,10 +53,10 @@ export function RequestRow({
   useEffect(() => {
     if (focused) row.current?.scrollIntoView({ block: "nearest" });
   }, [focused]);
-  const status = approvalStatus(request, now),
+  const status = approvalStatus(request),
     pending = status === "Needs approval";
-  const decision = requestDecision(request, now),
-    delivery = requestDelivery(request, now);
+  const decision = requestDecision(request),
+    delivery = requestDelivery(request);
   const outcomeIcons = {
     Approved: CheckmarkCircle02Icon,
     Denied: Cancel01Icon,
@@ -110,21 +109,17 @@ export function RequestRow({
             <span>{"Authorized CLI connection"}</span>
           </span>
           <span className={styles.summaryEnd}>
-            <time
-              dateTime={
-                pending
-                  ? new Date(request.approvalExpiresAt).toISOString()
-                  : time !== undefined
-                    ? new Date(time).toISOString()
-                    : undefined
-              }
-            >
-              {pending
-                ? `${Math.max(1, Math.ceil((request.approvalExpiresAt - now) / 60_000))} min to decide`
-                : time !== undefined
-                  ? formatRequestTime(time)
-                  : ""}
-            </time>
+            {pending ? (
+              <RequestCountdown deadline={request.approvalExpiresAt} />
+            ) : (
+              <time
+                dateTime={
+                  time !== undefined ? new Date(time).toISOString() : undefined
+                }
+              >
+                {time !== undefined ? formatRequestTime(time) : ""}
+              </time>
+            )}
           </span>
         </div>
         <div className={styles.requestBody}>
@@ -206,7 +201,7 @@ export function RequestRow({
             </CollapsibleTrigger>
             <CollapsibleContent>
               <ol aria-label="Request activity" className={styles.activityList}>
-                {requestActivity(request, now).map((event, i) => (
+                {requestActivity(request).map((event, i) => (
                   <li key={`${event.label}-${i}`}>
                     <span>{event.label}</span>
                     {event.at !== undefined && (
@@ -222,5 +217,15 @@ export function RequestRow({
         </div>
       </div>
     </article>
+  );
+}
+
+function RequestCountdown({ deadline }: { deadline: number }) {
+  const now = useNow();
+  const minutes = Math.ceil((deadline - now) / 60_000);
+  return (
+    <time dateTime={new Date(deadline).toISOString()}>
+      {minutes > 0 ? `${minutes} min to decide` : "Closing…"}
+    </time>
   );
 }

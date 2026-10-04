@@ -151,8 +151,8 @@ test("fixtures cover decisions, delivery, expiry, stops and pagination with chro
       requesterStoppedAt:
         row.requesterConnectionId === "stopped" ? now - 5 * 60_000 : undefined,
     } as unknown as ApprovalRequest;
-    statuses.add(approvalStatus(r, now));
-    const times = requestActivity(r, now).flatMap((e) =>
+    statuses.add(approvalStatus(r));
+    const times = requestActivity(r).flatMap((e) =>
       e.at === undefined ? [] : [e.at],
     );
     expect(times).toEqual([...times].sort((a, b) => a - b));
@@ -198,9 +198,7 @@ test("seeded pending decisions appear through the normal owner query", async () 
     client_id: "web-client",
     sid: "session_browser",
   });
-  const pending = await owner.query(api.approvals.pendingForOwner, {
-    now: Date.now(),
-  });
+  const pending = await owner.query(api.approvals.pendingForOwner, {});
   expect(
     pending.filter((r) => r.accountAvailable && !r.requesterStopped),
   ).toHaveLength(3);

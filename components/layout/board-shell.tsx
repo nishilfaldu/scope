@@ -46,10 +46,9 @@ const navigation = [
 export function BoardShell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const { user, signOut } = useAuth();
-  const { now, rows: pending } = usePendingRequests();
+  const { rows: pending } = usePendingRequests();
   const count =
-    pending?.filter((r) => approvalStatus(r, now) === "Needs approval")
-      .length ?? 0;
+    pending?.filter((r) => approvalStatus(r) === "Needs approval").length ?? 0;
   return (
     <div className={styles.review}>
       <SidebarProvider

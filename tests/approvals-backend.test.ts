@@ -2,6 +2,8 @@ import { convexTest } from "convex-test";
 import { beforeEach, expect, test, vi } from "vitest";
 import schema from "../convex/schema";
 import { api, internal, components } from "../convex/_generated/api";
+import migrationsTest from "@convex-dev/migrations/test";
+import { runToCompletion } from "@convex-dev/migrations";
 import actionRetrierTest from "@convex-dev/action-retrier/test";
 import { internalActionGeneric } from "convex/server";
 import { v } from "convex/values";
@@ -23,6 +25,7 @@ beforeEach(() => {
 });
 async function fixture(crashFirstPush = false) {
   const t = convexTest(schema, modules);
+  migrationsTest.register(t);
   let crash = crashFirstPush;
   t.registerComponent("actionRetrier", actionRetrierTest.schema, {
     ...actionRetrierTest.modules,
@@ -169,6 +172,13 @@ async function fixture(crashFirstPush = false) {
     revoke,
     initial,
   };
+}
+// Finish notification recovery/retries without jumping to the 30-minute expiry job.
+async function finishPushJobs(t: Awaited<ReturnType<typeof fixture>>["t"]) {
+  for (let elapsed = 0; elapsed < 180_000; elapsed += 1000) {
+    vi.advanceTimersByTime(1000);
+    await t.finishInProgressScheduledFunctions();
+  }
 }
 test("browser ownership uses verified WorkOS subject across sessions, never email or an intended CLI token", async () => {
   const f = await fixture();
@@ -701,13 +711,9 @@ test("older pending requests remain discoverable behind completed history pagina
     first.id,
   ]);
   expect(
-    (
-      await f.owner.query(api.approvals.pendingForOwner, { now: Date.now() })
-    ).map((r) => r._id),
+    (await f.owner.query(api.approvals.pendingForOwner, {})).map((r) => r._id),
   ).toEqual([first.id]);
-  expect(
-    await f.stranger.query(api.approvals.pendingForOwner, { now: Date.now() }),
-  ).toEqual([]);
+  expect(await f.stranger.query(api.approvals.pendingForOwner, {})).toEqual([]);
 });
 test("pending requests tied to blocked account or stopped requester cannot be approved or released", async () => {
   for (const stop of ["account", "client"] as const) {
@@ -1014,7 +1020,7 @@ test("durable push retries enqueue once, retain the stable request tag and remov
       subscriptionId: expect.any(String),
     });
     const runId = await enqueue.mock.results[0].value;
-    await f.t.finishAllScheduledFunctions(vi.runAllTimers);
+    await finishPushJobs(f.t);
     expect(sendPush).toHaveBeenCalledTimes(2);
     expect(sendPush.mock.calls.map((call) => call[1])).toEqual(
       Array(2).fill(JSON.stringify({ requestId: r.id })),
@@ -1091,7 +1097,7 @@ for (const stop of [
         );
       if (stop === "unsubscribe")
         await f.owner.mutation(api.notifications.unsubscribe, { endpoint });
-      await f.t.finishAllScheduledFunctions(vi.runAllTimers);
+      await finishPushJobs(f.t);
       expect(sendPush).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
@@ -1110,7 +1116,7 @@ test("component heartbeat recovers a crashed push worker", async () => {
     });
     await f.t.mutation(api.approvals.request, f.requestArgs);
     const runId = await enqueue.mock.results[0].value;
-    await f.t.finishAllScheduledFunctions(vi.runAllTimers);
+    await finishPushJobs(f.t);
     expect(sendPush).toHaveBeenCalledTimes(1);
     expect(
       await f.t.query(components.actionRetrier.public.status, { runId }),
@@ -1141,7 +1147,7 @@ test("push retries stop after five attempts and persist only sanitized errors", 
     });
     await f.t.mutation(api.approvals.request, f.requestArgs);
     const runId = await enqueue.mock.results[0].value;
-    await f.t.finishAllScheduledFunctions(vi.runAllTimers);
+    await finishPushJobs(f.t);
     expect(sendPush).toHaveBeenCalledTimes(5);
     expect(
       await f.t.query(components.actionRetrier.public.status, { runId }),
@@ -1249,4 +1255,218 @@ test("connection list keeps active and failed disconnections but preserves hidde
   expect((await f.owner.query(api.accounts.forOwner, {}))[0].state).toBe(
     "active",
   );
+});
+
+test("scheduled expiry closes pending requests exactly at their deadline and deduplicates creation", async () => {
+  vi.useFakeTimers();
+  try {
+    const f = await fixture();
+    const request = await f.t.mutation(api.approvals.request, f.requestArgs);
+    const original = (await f.t.run((ctx) =>
+      ctx.db.get("approvalRequests", request.id),
+    ))!;
+    expect(original.expiryJobId).toBeDefined();
+    await f.t.mutation(api.approvals.request, f.requestArgs);
+    expect(
+      (await f.t.run((ctx) => ctx.db.get("approvalRequests", request.id)))!
+        .expiryJobId,
+    ).toBe(original.expiryJobId);
+    vi.advanceTimersByTime(30 * 60_000 - 1);
+    await f.t.finishInProgressScheduledFunctions();
+    expect(await f.owner.query(api.approvals.pendingForOwner, {})).toHaveLength(
+      1,
+    );
+    vi.advanceTimersByTime(1);
+    await f.t.finishInProgressScheduledFunctions();
+    expect(await f.owner.query(api.approvals.pendingForOwner, {})).toEqual([]);
+    const expired = (await f.t.run((ctx) =>
+      ctx.db.get("approvalRequests", request.id),
+    ))!;
+    expect(expired.status).toBe("pending");
+    expect(expired.expiredAt).toBe(request.approvalExpiresAt);
+    await expect(
+      f.owner.mutation(api.approvals.decide, { id: request.id, approve: true }),
+    ).rejects.toThrow();
+    await f.t.mutation(internal.approvals.expire, {
+      id: request.id,
+      deadline: request.approvalExpiresAt,
+    });
+    expect(
+      await f.t.run((ctx) => ctx.db.get("approvalRequests", request.id)),
+    ).toEqual(expired);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("expiry preserves approval, denial, cancellation and confirmed receipt facts", async () => {
+  vi.useFakeTimers();
+  try {
+    const f = await fixture();
+    const rows = [];
+    for (const outcome of [
+      "uncollected",
+      "unconfirmed",
+      "received",
+      "denied",
+      "cancelled",
+    ] as const) {
+      const r = await f.request(outcome !== "denied", {
+        key: `expiry-test-${outcome}-123456`,
+      });
+      if (outcome === "unconfirmed" || outcome === "received")
+        await f.t.run((ctx) =>
+          ctx.db.patch("approvalRequests", r.id, {
+            firstDeliveryAt: Date.now(),
+            ...(outcome === "received" && { receivedAt: Date.now() }),
+          }),
+        );
+      if (outcome === "cancelled")
+        await f.owner.mutation(api.approvals.cancel, { id: r.id });
+      rows.push({
+        outcome,
+        r,
+        before: (await f.t.run((ctx) => ctx.db.get("approvalRequests", r.id)))!,
+      });
+    }
+    vi.advanceTimersByTime(30 * 60_000);
+    await f.t.finishInProgressScheduledFunctions();
+    for (const { outcome, r, before } of rows) {
+      const after = (await f.t.run((ctx) =>
+        ctx.db.get("approvalRequests", r.id),
+      ))!;
+      expect(after).toEqual(
+        outcome === "uncollected" || outcome === "unconfirmed"
+          ? { ...before, expiredAt: r.approvalExpiresAt }
+          : before,
+      );
+    }
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("early and stale expiry callbacks are harmless; actual deadline guards work before the callback", async () => {
+  vi.useFakeTimers();
+  try {
+    const f = await fixture();
+    const r = await f.request();
+    await f.t.mutation(internal.approvals.expire, {
+      id: r.id,
+      deadline: r.approvalExpiresAt,
+    });
+    expect(
+      (await f.t.run((ctx) => ctx.db.get("approvalRequests", r.id)))!.expiredAt,
+    ).toBeUndefined();
+    vi.setSystemTime(r.approvalExpiresAt + 1);
+    expect((await f.preflight(r.id)).status).toBe("expired");
+    await expect(
+      f.t.mutation(api.approvals.authorizeDelivery, f.delivery(r.id)),
+    ).rejects.toThrow();
+    await f.t.mutation(internal.approvals.expire, {
+      id: r.id,
+      deadline: r.approvalExpiresAt - 1,
+    });
+    expect(
+      (await f.t.run((ctx) => ctx.db.get("approvalRequests", r.id)))!.expiredAt,
+    ).toBeUndefined();
+    await f.t.run((ctx) => ctx.db.delete("approvalRequests", r.id));
+    await expect(
+      f.t.mutation(internal.approvals.expire, {
+        id: r.id,
+        deadline: r.approvalExpiresAt,
+      }),
+    ).resolves.toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("migration initializes legacy windows without changing counts or duplicating jobs", async () => {
+  vi.useFakeTimers();
+  try {
+    const f = await fixture();
+    const template = await f.request();
+    const ids = await f.t.run(async (ctx) => {
+      const original = (await ctx.db.get("approvalRequests", template.id))!;
+      const fields = { ...original };
+      Reflect.deleteProperty(fields, "_id");
+      Reflect.deleteProperty(fields, "_creationTime");
+      Reflect.deleteProperty(fields, "expiryJobId");
+      const ids = [];
+      for (const age of ["past", "future"] as const)
+        ids.push(
+          await ctx.db.insert("approvalRequests", {
+            ...fields,
+            status: "pending",
+            decidedAt: undefined,
+            key: `legacy-${age}-123456789`,
+            approvalExpiresAt: Date.now() + (age === "past" ? -1000 : 1000),
+          }),
+        );
+      return ids;
+    });
+    await f.t.run((ctx) =>
+      runToCompletion(
+        ctx,
+        components.migrations,
+        internal.migrations.requestExpiry,
+      ),
+    );
+    const first = await f.t.run((ctx) =>
+      ctx.db.query("approvalRequests").collect(),
+    );
+    expect(first).toHaveLength(3);
+    expect(first.find((r) => r._id === ids[0])!.expiredAt).toBe(
+      Date.now() - 1000,
+    );
+    expect(first.find((r) => r._id === ids[1])!.expiryJobId).toBeDefined();
+    await f.t.run((ctx) =>
+      runToCompletion(
+        ctx,
+        components.migrations,
+        internal.migrations.requestExpiry,
+        { cursor: null },
+      ),
+    );
+    expect(
+      await f.t.run((ctx) => ctx.db.query("approvalRequests").collect()),
+    ).toEqual(first);
+    vi.advanceTimersByTime(1000);
+    await f.t.finishInProgressScheduledFunctions();
+    expect(
+      (await f.t.run((ctx) => ctx.db.get("approvalRequests", ids[1])))!
+        .expiredAt,
+    ).toBe(Date.now());
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("a valid late receipt remains Received after the scheduled window closure", async () => {
+  vi.useFakeTimers();
+  try {
+    const f = await fixture();
+    const r = await f.request();
+    const delivered = await f.t.mutation(
+      api.approvals.authorizeDelivery,
+      f.delivery(r.id),
+    );
+    vi.advanceTimersByTime(30 * 60_000);
+    await f.t.finishInProgressScheduledFunctions();
+    await f.t.mutation(api.approvals.acknowledge, {
+      ...f.actor,
+      id: r.id,
+      receiptProof: delivered.receiptProof,
+    });
+    const row = await f.owner.query(api.approvals.requestForOwner, {
+      reference: r.id,
+    });
+    expect(row?.status).toBe("approved");
+    expect(row?.expiredAt).toBe(r.approvalExpiresAt);
+    expect(row?.receivedAt).toBe(Date.now());
+    expect(await f.preflight(r.id)).toEqual({ status: "expired" });
+  } finally {
+    vi.useRealTimers();
+  }
 });

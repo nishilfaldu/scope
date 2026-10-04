@@ -74,6 +74,8 @@ export default defineSchema({
     command,
     status: decision,
     approvalExpiresAt: v.number(),
+    expiredAt: v.optional(v.number()),
+    expiryJobId: v.optional(v.id("_scheduled_functions")),
     decidedAt: v.optional(v.number()),
     stoppedAt: v.optional(v.number()),
     firstDeliveryAt: v.optional(v.number()),
@@ -87,9 +89,10 @@ export default defineSchema({
     .index("by_requesterConnectionId_and_key", ["requesterConnectionId", "key"])
     // Chronological history must not be ordered by decision/deadline.
     .index("by_ownerId", ["ownerId"])
-    .index("by_status_and_ownerId_and_approvalExpiresAt", [
+    .index("by_status_and_ownerId_and_expiredAt_and_approvalExpiresAt", [
       "status",
       "ownerId",
+      "expiredAt",
       "approvalExpiresAt",
     ]),
   pushSubscriptions: defineTable({
