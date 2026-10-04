@@ -32,8 +32,7 @@ export class ProviderFailure extends Error {
       | "reauthorization-required"
       | "configuration-invalid"
       | "retryable-unavailable"
-      | "grant-rejected"
-      | "revocation-unavailable",
+      | "grant-rejected",
   ) {
     super(kind);
   }
@@ -123,10 +122,7 @@ export async function beginAuthorization(
     throw failure(error);
   }
 }
-async function slackResponse(
-  method: "auth.test" | "auth.revoke",
-  token: string,
-) {
+async function slackResponse(method: "auth.test", token: string) {
   const response = await fetch("https://slack.com/api/" + method, {
     method: "POST",
     headers: {
@@ -157,14 +153,12 @@ async function freshGrant(reference: GrantReference, completing = false) {
     paramsFor(reference, completing),
     { forceRefresh: true },
   );
-  if (grant.token?.startsWith("xoxe.xoxp-"))
-    throw new ProviderFailure("revocation-unavailable");
-  // Rotating access-token revocation does not revoke the underlying Slack grant.
-  // Support standard user grants until a per-user grant revoke is available.
   if (
     grant.connector.id !== reference.connectorId ||
     grant.connector.type !== "slack" ||
-    !grant.token?.startsWith("xoxp-") ||
+    !(
+      grant.token?.startsWith("xoxp-") || grant.token?.startsWith("xoxe.xoxp-")
+    ) ||
     !grant.installationId ||
     grant.installationId === "*" ||
     (reference.installationId &&
@@ -234,22 +228,20 @@ export async function acquireVerifiedCredential(
 }
 export async function disconnect(reference: GrantReference) {
   try {
-    const grant = await freshGrant(reference),
-      evidence = await slackResponse("auth.test", grant.token);
-    if (!invalidToken(evidence.body)) {
-      verifyIdentity(reference, evidence.body);
-      const revoked = await slackResponse("auth.revoke", grant.token);
-      if (revoked.body.ok !== true || revoked.body.revoked !== true)
-        throw new Error("Revocation unconfirmed");
-    }
-    if (!invalidToken((await slackResponse("auth.test", grant.token)).body))
-      throw new Error("Revocation unconfirmed");
     await revokeToken(reference.connectorId, {
       subject: paramsFor(reference).subject,
       installationId: reference.installationId,
     });
     return { outcome: "succeeded" as const };
-  } catch {
+  } catch (error) {
+    // The exact user subject has no authorization left. Generic 404s can mean
+    // missing connectors/configuration, and no_token can mean a provider outage.
+    if (
+      error instanceof UserAuthorizationRequiredError &&
+      error.code === "user_authorization_required" &&
+      (error.status === 400 || error.status === 404)
+    )
+      return { outcome: "succeeded" as const };
     return { outcome: "failed" as const };
   }
 }

@@ -1,4 +1,9 @@
 import { beforeEach, expect, test, vi } from "vitest";
+import {
+  ConnectError,
+  NoValidTokenError,
+  UserAuthorizationRequiredError,
+} from "@vercel/connect";
 const sdk = vi.hoisted(() => ({
   metadata: vi.fn(),
   token: vi.fn(),
@@ -103,13 +108,12 @@ test("wrong identity, workspace, missing or broader effective scopes reject befo
     });
   }
 });
-test("wrong installation and rotating tokens cannot silently pass the supported user-grant flow", async () => {
+test("wrong installations and bot tokens cannot pass the user-grant flow", async () => {
   await expect(
     acquireVerifiedCredential({ ...slack, installationId: "*" }),
   ).rejects.toMatchObject({ kind: "grant-rejected" });
   for (const change of [
     { installationId: "install-b" },
-    { token: "xoxe.xoxp-rotating" },
     { token: "xoxb-bot" },
   ]) {
     sdk.token.mockResolvedValueOnce({
@@ -119,25 +123,24 @@ test("wrong installation and rotating tokens cannot silently pass the supported 
       ...change,
     });
     await expect(acquireVerifiedCredential(slack)).rejects.toMatchObject({
-      kind: change.token?.startsWith("xoxe.")
-        ? "revocation-unavailable"
-        : "grant-rejected",
+      kind: "grant-rejected",
     });
   }
 });
-test("disconnect requires actual Slack revocation and invalidation before deleting only the selected Connect grant", async () => {
-  fetcher
-    .mockResolvedValueOnce(Response.json(identity))
-    .mockResolvedValueOnce(Response.json({ ok: true, revoked: true }))
-    .mockResolvedValueOnce(
-      Response.json({ ok: false, error: "token_revoked" }),
-    );
+test("rotating user credentials retain the same identity and scope checks", async () => {
+  sdk.token.mockResolvedValueOnce({
+    token: "xoxe.xoxp-rotating",
+    installationId: "install-a",
+    connector: { id: "connector-a", type: "slack" },
+  });
+  expect((await acquireVerifiedCredential(slack)).accessToken).toBe(
+    "xoxe.xoxp-rotating",
+  );
+});
+test("disconnect uses only Connect for the exact original subject and installation", async () => {
   expect(await disconnect(slack)).toEqual({ outcome: "succeeded" });
-  expect(fetcher.mock.calls.map((call) => call[0])).toEqual([
-    "https://slack.com/api/auth.test",
-    "https://slack.com/api/auth.revoke",
-    "https://slack.com/api/auth.test",
-  ]);
+  expect(sdk.token).not.toHaveBeenCalled();
+  expect(fetcher).not.toHaveBeenCalled();
   expect(sdk.revoke).toHaveBeenCalledWith("connector-a", {
     subject: {
       type: "user",
@@ -147,22 +150,43 @@ test("disconnect requires actual Slack revocation and invalidation before deleti
     installationId: "install-a",
   });
 });
-test("SDK success alone is not proof of upstream disconnect; an active bearer or provider outage retains retry state", async () => {
-  fetcher
-    .mockResolvedValueOnce(Response.json(identity))
-    .mockResolvedValueOnce(Response.json({ ok: true, revoked: true }))
-    .mockResolvedValueOnce(Response.json(identity));
+test("a failed or lost Connect response retries the same target without fetching a deleted token", async () => {
+  sdk.revoke.mockRejectedValueOnce(new Error("response lost"));
   expect(await disconnect(slack)).toEqual({ outcome: "failed" });
-  expect(sdk.revoke).not.toHaveBeenCalled();
-  fetcher.mockRejectedValueOnce(new Error("private-provider-error"));
-  expect(await disconnect(slack)).toEqual({ outcome: "failed" });
+  expect(await disconnect(slack)).toEqual({ outcome: "succeeded" });
+  expect(sdk.revoke.mock.calls[0]).toEqual(sdk.revoke.mock.calls[1]);
+  expect(sdk.token).not.toHaveBeenCalled();
+  expect(fetcher).not.toHaveBeenCalled();
 });
-test("disconnect retries can finish after provider revoke succeeded and Connect deletion failed", async () => {
-  fetcher.mockImplementation(async () =>
-    Response.json({ ok: false, error: "token_revoked" }),
+test("only an explicit absent user authorization is completion; configuration and provider failures stay errors", async () => {
+  sdk.revoke.mockRejectedValueOnce(
+    new UserAuthorizationRequiredError("absent", {
+      status: 404,
+      code: "user_authorization_required",
+    }),
   );
   expect(await disconnect(slack)).toEqual({ outcome: "succeeded" });
-  expect(fetcher).toHaveBeenCalledTimes(2);
+  for (const error of [
+    new ConnectError("missing connector", { status: 404, code: "not_found" }),
+    new ConnectError("forbidden", { status: 403, code: "forbidden" }),
+    new NoValidTokenError("provider unavailable", {
+      status: 400,
+      code: "no_token",
+    }),
+    new UserAuthorizationRequiredError("authentication failure", {
+      status: 401,
+      code: "user_authorization_required",
+    }),
+    new Error("network unavailable"),
+  ]) {
+    sdk.revoke.mockRejectedValueOnce(error);
+    expect(await disconnect(slack)).toEqual({ outcome: "failed" });
+  }
+  sdk.revoke.mockClear();
+  expect(await disconnect({ ...slack, installationId: "*" })).toEqual({
+    outcome: "failed",
+  });
+  expect(sdk.revoke).not.toHaveBeenCalled();
 });
 test("authorization uses selected connection permissions and obtains its first installation through consent", async () => {
   sdk.authorize.mockResolvedValue({ url: "https://provider.example/consent" });

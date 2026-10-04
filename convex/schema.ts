@@ -30,7 +30,11 @@ export default defineSchema({
     // Owner history and active-account lookup have distinct ordering.
     // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_ownerId", ["ownerId"])
-    .index("by_ownerId_and_state", ["ownerId", "state"])
+    .index("by_ownerId_and_state_and_disconnectOutcome", [
+      "ownerId",
+      "state",
+      "disconnectOutcome",
+    ])
     .index("by_authorizationKey_and_disconnectOutcome", [
       "authorizationKey",
       "disconnectOutcome",

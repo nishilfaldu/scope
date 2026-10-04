@@ -32,11 +32,31 @@ export const forOwner = query({
   returns: v.array(view),
   handler: async (ctx) => {
     const ownerId = await owner(ctx),
-      rows = await ctx.db
-        .query("connectedAccounts")
-        .withIndex("by_ownerId", (q) => q.eq("ownerId", ownerId))
-        .order("desc")
-        .take(100);
+      groups = await Promise.all([
+        ctx.db
+          .query("connectedAccounts")
+          .withIndex("by_ownerId_and_state_and_disconnectOutcome", (q) =>
+            q.eq("ownerId", ownerId).eq("state", "active"),
+          )
+          .order("desc")
+          .take(100),
+        ...([undefined, "pending", "failed"] as const).map((outcome) =>
+          ctx.db
+            .query("connectedAccounts")
+            .withIndex("by_ownerId_and_state_and_disconnectOutcome", (q) =>
+              q
+                .eq("ownerId", ownerId)
+                .eq("state", "blocked")
+                .eq("disconnectOutcome", outcome),
+            )
+            .order("desc")
+            .take(100),
+        ),
+      ]),
+      rows = groups
+        .flat()
+        .sort((a, b) => b._creationTime - a._creationTime)
+        .slice(0, 100);
     return rows.map((r) => ({
       _id: r._id,
       providerId: r.providerId,
@@ -287,8 +307,9 @@ export const completeConnection = mutation({
   },
 });
 export const block = mutation({
-  args: { id: v.id("connectedAccounts") },
+  args: { id: v.id("connectedAccounts"), grantVersion: v.number() },
   returns: v.object({
+    disconnected: v.boolean(),
     accountId: v.id("connectedAccounts"),
     connect: connectReference,
     providerId: v.string(),
@@ -297,10 +318,11 @@ export const block = mutation({
     providerUserId: v.string(),
     providerTenantId: v.optional(v.string()),
   }),
-  handler: async (ctx, { id }) => {
+  handler: async (ctx, { id, grantVersion }) => {
     const ownerId = await owner(ctx),
       row = await ctx.db.get("connectedAccounts", id);
-    if (!row || row.ownerId !== ownerId) throw new Error("Account unavailable");
+    if (!row || row.ownerId !== ownerId || row.grantVersion !== grantVersion)
+      throw new Error("Account unavailable");
     await ctx.db.patch("connectedAccounts", id, {
       state: "blocked",
       blockedAt: row.blockedAt ?? Date.now(),
@@ -308,6 +330,7 @@ export const block = mutation({
         row.disconnectOutcome === "succeeded" ? "succeeded" : "pending",
     });
     return {
+      disconnected: row.disconnectOutcome === "succeeded",
       accountId: id,
       connect: row.connect,
       providerId: row.providerId,
@@ -325,7 +348,7 @@ export const recordDisconnect = mutation({
     grantVersion: v.number(),
     outcome: v.union(v.literal("succeeded"), v.literal("failed")),
   },
-  returns: v.null(),
+  returns: v.union(v.literal("succeeded"), v.literal("failed")),
   handler: async (ctx, args) => {
     service(args.secret);
     const ownerId = await owner(ctx),
@@ -341,7 +364,7 @@ export const recordDisconnect = mutation({
       await ctx.db.patch("connectedAccounts", row._id, {
         disconnectOutcome: args.outcome,
       });
-    return null;
+    return row.disconnectOutcome === "succeeded" ? "succeeded" : args.outcome;
   },
 });
 export const expireAttempt = internalMutation({

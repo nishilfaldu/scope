@@ -80,9 +80,7 @@ export function ConnectionsBoard() {
         title:
           result === "connected"
             ? "Account connected."
-            : result === "revocation-unavailable"
-              ? "This Slack app cannot confirm full revocation. Connect an app with token rotation disabled."
-              : "Sign-in did not complete. Try connecting again.",
+            : "Sign-in did not complete. Try connecting again.",
         type: result === "connected" ? "success" : "error",
         priority: result === "connected" ? "low" : "high",
       });
@@ -109,17 +107,13 @@ export function ConnectionsBoard() {
       setBusy(false);
     }
   }
-  async function connectAccount(
-    integration: ProviderView,
-    targetAccountId?: string,
-  ) {
-    setConnectingId(targetAccountId ?? integration.providerId);
+  async function connectAccount(integration: ProviderView) {
+    setConnectingId(integration.providerId);
     await run(async () => {
       const result = await approvalPost<{ url: string }>(
         "/api/accounts/authorize",
         {
           providerId: integration.providerId,
-          ...(targetAccountId ? { targetAccountId } : {}),
         },
       );
       window.location.assign(result.url);
@@ -130,7 +124,7 @@ export function ConnectionsBoard() {
     <>
       <header className={styles.pageHeading}>
         <h1>Connections</h1>
-        <p>Choose the accounts your agents can ask to use.</p>
+        <p>Your connected accounts.</p>
       </header>
       <div className={styles.connectionList}>
         {!provider && providerFailed ? null : !provider || !accounts ? (
@@ -164,57 +158,26 @@ export function ConnectionsBoard() {
                     <div>
                       <h3>{accountName(a.label)}</h3>
                       {a.providerEmail && <p>{a.providerEmail}</p>}
-                      {a.state === "blocked" && (
-                        <p className={styles.attention}>
-                          {a.disconnectOutcome === "succeeded"
-                            ? "Disconnected"
-                            : a.disconnectOutcome === "failed"
-                              ? "Sharing stopped · disconnect needs retry"
-                              : "Sharing stopped · disconnect pending"}
-                        </p>
-                      )}
                     </div>
-                    {(a.state === "active" ||
-                      a.disconnectOutcome !== "succeeded") && (
-                      <Button
-                        variant="ghost"
-                        className={styles.actionButton}
-                        onClick={() => {
-                          setManage(a);
-                        }}
-                      >
-                        {a.state === "blocked" ? "Retry disconnect" : "Manage"}
-                      </Button>
-                    )}
-                    {a.state === "blocked" &&
-                      a.disconnectOutcome === "succeeded" && (
-                        <Button
-                          variant="ghost"
-                          className={styles.actionButton}
-                          disabled={busy}
-                          onClick={() =>
-                            void connectAccount(integration, a._id)
-                          }
-                        >
-                          {connectingId === a._id && (
-                            <span className={styles.spinner} aria-hidden />
-                          )}
-                          Reconnect
-                        </Button>
-                      )}
+                    <Button
+                      variant="ghost"
+                      className={styles.actionButton}
+                      disabled={busy}
+                      onClick={() => setManage(a)}
+                    >
+                      Disconnect
+                    </Button>
                     <Collapsible className={styles.accountPermissions}>
                       <CollapsibleTrigger
                         className={styles.permissionsTrigger}
-                        aria-label={`${a.state === "active" ? "Granted permissions" : "Last granted permissions"} for ${accountName(a.label)} (${a.grantedScopes.length})`}
+                        aria-label={`Permissions for ${accountName(a.label)} (${a.grantedScopes.length})`}
                       >
                         <HugeiconsIcon
                           icon={ArrowDown01Icon}
                           size={14}
                           aria-hidden
                         />
-                        {a.state === "active"
-                          ? "Granted permissions"
-                          : "Last granted permissions"}
+                        Permissions
                         <span className={styles.permissionsCount}>
                           {a.grantedScopes.length}
                         </span>
@@ -272,13 +235,13 @@ export function ConnectionsBoard() {
                   if (!manage) return;
                   const result = await approvalPost<{ outcome: string }>(
                     "/api/accounts/disconnect",
-                    { id: manage._id },
+                    { id: manage._id, grantVersion: manage.grantVersion },
                   );
                   toast.add({
                     title:
                       result.outcome === "succeeded"
                         ? "Account disconnected."
-                        : "Sharing stopped. Retry disconnect to confirm Slack revocation.",
+                        : "Could not disconnect the account. Try again.",
                     type: result.outcome === "succeeded" ? "success" : "error",
                     priority: result.outcome === "succeeded" ? "low" : "high",
                   });
@@ -287,7 +250,7 @@ export function ConnectionsBoard() {
               }
             >
               {busy && <span className={styles.spinner} aria-hidden />}
-              {manage?.state === "blocked" ? "Retry disconnect" : "Disconnect"}
+              Disconnect
             </Button>
           </DialogFooter>
         </DialogContent>

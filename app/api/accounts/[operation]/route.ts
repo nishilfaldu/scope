@@ -92,11 +92,16 @@ export async function POST(
       return json(authorization);
     }
     if (operation === "disconnect") {
-      const { id } = z.object({ id: z.string() }).strict().parse(body),
+      const { id, grantVersion } = z
+          .object({ id: z.string(), grantVersion: z.number().int().positive() })
+          .strict()
+          .parse(body),
         accountId = id as Id<"connectedAccounts">;
       const blocked = await client.mutation(api.accounts.block, {
         id: accountId,
+        grantVersion,
       });
+      if (blocked.disconnected) return json({ outcome: "succeeded" });
       const result = await disconnect({
         ...blocked.connect,
         providerId: blocked.providerId,
@@ -104,13 +109,13 @@ export async function POST(
         providerUserId: blocked.providerUserId,
         providerTenantId: blocked.providerTenantId,
       });
-      await client.mutation(api.accounts.recordDisconnect, {
+      const outcome = await client.mutation(api.accounts.recordDisconnect, {
         secret,
         id: accountId,
         grantVersion: blocked.grantVersion,
         outcome: result.outcome,
       });
-      return json({ sharingStopped: true, outcome: result.outcome });
+      return json({ outcome });
     }
     return new Response(null, { status: 404 });
   } catch {

@@ -137,7 +137,7 @@ export const listAccounts = query({
     await clientActor(ctx, args);
     const rows = await ctx.db
       .query("connectedAccounts")
-      .withIndex("by_ownerId_and_state", (q) =>
+      .withIndex("by_ownerId_and_state_and_disconnectOutcome", (q) =>
         q.eq("ownerId", args.subject).eq("state", "active"),
       )
       .take(100);

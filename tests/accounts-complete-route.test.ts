@@ -111,13 +111,9 @@ test("completed retries check the bound account without another provider call or
   );
 });
 
-test("unsupported rotating Slack grants explain why the connection cannot complete", async () => {
-  mocks.grant.mockRejectedValueOnce(
-    new ProviderFailure("revocation-unavailable"),
-  );
+test("a mismatched grant cannot complete or leak provider errors", async () => {
+  mocks.grant.mockRejectedValueOnce(new ProviderFailure("grant-rejected"));
   const response = await invoke();
-  expect(response.headers.get("Location")).toContain(
-    "connection=revocation-unavailable",
-  );
+  expect(response.headers.get("Location")).toContain("connection=failed");
   expect(mocks.mutation).not.toHaveBeenCalled();
 });

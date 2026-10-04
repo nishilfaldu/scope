@@ -2,7 +2,19 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { ArrowDown01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
+import {
+  ArrowDown01Icon,
+  Tick02Icon,
+  Clock01Icon,
+  HourglassIcon,
+  MailReceive01Icon,
+  Cancel01Icon,
+  Timer02Icon,
+  PackageRemoveIcon,
+  HelpCircleIcon,
+  PauseIcon,
+  UnavailableIcon,
+} from "@hugeicons/core-free-icons";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
@@ -52,7 +64,18 @@ export function RequestRow({
   }, [focused]);
   const status = approvalStatus(request, now),
     pending = status === "Needs approval";
-  const attention = ["Receipt unconfirmed", "Not collected"].includes(status);
+  const statusIcon = {
+    "Needs approval": Clock01Icon,
+    "Waiting for pickup": HourglassIcon,
+    "Waiting for receipt": MailReceive01Icon,
+    Received: Tick02Icon,
+    Denied: Cancel01Icon,
+    Expired: Timer02Icon,
+    "Not collected": PackageRemoveIcon,
+    "Receipt unconfirmed": HelpCircleIcon,
+    "Delivery stopped": PauseIcon,
+    "Sharing blocked": UnavailableIcon,
+  }[status];
   const canStop =
     request.status === "approved" &&
     deliveryDeadline(request) > now &&
@@ -133,6 +156,10 @@ export function RequestRow({
             <span>Reason</span>
             <p>{request.reason}</p>
           </div>
+          <div className={styles.requestCommand}>
+            <span>Command</span>
+            <code>{request.command.argv.join(" ")}</code>
+          </div>
           {pending ? (
             <div className={styles.decision}>
               <Button
@@ -159,32 +186,20 @@ export function RequestRow({
             </div>
           ) : !open ? (
             <button
-              className={`${styles.outcome} ${attention ? styles.attention : ""}`}
+              className={styles.outcome}
               aria-expanded={open}
               aria-controls={`detail-${request._id}`}
               onClick={() => setOpen(!open)}
             >
-              {status === "Received" && (
-                <HugeiconsIcon icon={Tick02Icon} size={14} />
-              )}
+              <HugeiconsIcon icon={statusIcon} size={16} aria-hidden />
               {status === "Waiting for pickup"
                 ? "Approved · waiting for agent"
                 : status === "Waiting for receipt"
                   ? "Waiting for receipt"
                   : status}
-              {attention && <span aria-hidden>?</span>}
             </button>
           ) : null}
         </div>
-        {pending && (
-          <p className={styles.detailNote}>
-            <strong>Command</strong>
-            <br />
-            <code className="break-all text-xs">
-              {request.command.argv.join(" ")}
-            </code>
-          </p>
-        )}
       </div>
       {open && !pending && (
         <div id={`detail-${request._id}`} className={styles.requestDetail}>
@@ -193,11 +208,7 @@ export function RequestRow({
               {requestTimeline(request, now).map((event, i, all) => (
                 <li
                   key={`${event.label}-${i}`}
-                  className={
-                    i === all.length - 1
-                      ? `${styles.latest} ${attention ? styles.attention : ""}`
-                      : ""
-                  }
+                  className={i === all.length - 1 ? styles.latest : ""}
                 >
                   <span aria-hidden />
                   {event.label}

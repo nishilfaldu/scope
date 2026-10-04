@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { createHash } from "node:crypto";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { acquireVerifiedCredential, ProviderFailure } from "@/lib/providers";
+import { acquireVerifiedCredential } from "@/lib/providers";
 import { config, ownerDb, scopeOrigin } from "@/lib/scope-server";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
@@ -49,15 +49,10 @@ export async function GET(request: Request) {
       });
     }
     redirect.searchParams.set("connection", "connected");
-  } catch (error) {
-    redirect.searchParams.set(
-      "connection",
-      error instanceof ProviderFailure &&
-        error.kind === "revocation-unavailable"
-        ? "revocation-unavailable"
-        : "failed",
-    );
+  } catch {
+    redirect.searchParams.set("connection", "failed");
   }
+
   return new Response(null, {
     status: 303,
     headers: { Location: redirect.toString(), "Cache-Control": "no-store" },

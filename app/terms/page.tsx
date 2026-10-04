@@ -39,9 +39,12 @@ const sections: TermsSection[] = [
           You may connect only accounts you are authorized to use. You control
           which account and app are connected and may disconnect them from Scope
           or revoke Scope in the provider&apos;s account settings. Disconnect
-          blocks sharing immediately. Scope reports completion only after
-          upstream revocation is confirmed. Changing permissions requires
-          disconnecting and reconnecting.
+          blocks sharing immediately and asks Vercel Connect to revoke the
+          selected authorization. Connect attempts provider revocation where
+          supported. If the provider cannot revoke the credential, it may remain
+          valid until it expires. Scope reports completion when Connect confirms
+          removal; this does not independently confirm provider invalidation.
+          Changing permissions requires disconnecting and reconnecting.
         </p>
       </>
     ),

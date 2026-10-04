@@ -354,7 +354,7 @@
   background: #dbe2d9;
 }
 .evidence .latest {
-  color: var(--ink);
+  color: var(--green);
 }
 .evidence .latest > span {
   background: currentColor;
@@ -1042,20 +1042,29 @@
   font-size: 13px;
 }
 .requestBody {
-  margin: 12px 0 0 46px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
-  align-items: center;
+  margin: 20px 0 0 46px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: stretch;
 }
-.requestReason {
-  grid-column: 1 / -1;
-  grid-row: 2;
+.requestBody .access {
   display: grid;
-  gap: 4px;
-  max-width: 65ch;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  margin-left: -46px;
 }
-.requestReason > span {
+.requestBody .appMark {
+  justify-self: center;
+}
+.requestReason,
+.requestCommand {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.requestReason > span,
+.requestCommand > span {
   color: var(--quiet);
   font-size: 11px;
 }
@@ -1063,15 +1072,34 @@
   font-size: 13px;
   line-height: 1.6;
   overflow-wrap: anywhere;
+  max-width: 65ch;
+}
+.requestCommand code {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f7f9f7;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 .requestBody .decision {
-  grid-column: 1 / -1;
-  grid-row: 3;
-  justify-content: flex-end;
+  display: flex;
+  justify-content: flex-start;
+  margin: 0;
 }
 .requestBody .outcome {
-  grid-column: 2;
-  grid-row: 1;
+  justify-content: flex-start;
+  text-align: left;
+  align-self: flex-start;
+  max-width: none;
+  color: var(--green);
+  gap: 7px;
+}
+.requestBody .outcome > svg {
+  flex-shrink: 0;
 }
 .enabledStatus {
   color: var(--green);
@@ -1111,15 +1139,19 @@
     overflow: visible;
   }
   .requestBody {
-    margin: 17px 0 0 40px;
+    margin: 18px 0 0 40px;
     gap: 14px;
   }
-  .requestBody .decision {
-    margin-top: 0;
+  .requestBody .access {
+    grid-template-columns: 30px minmax(0, 1fr);
+    gap: 10px;
+    margin-left: -40px;
   }
-  .requestBody .outcome {
-    grid-column: 1 / -1;
-    grid-row: 3;
+  .requestBody .decision {
+    margin: 0;
+  }
+  .requestDetail {
+    padding-left: 58px;
   }
   .dialog [data-slot="button"] {
     height: 40px;

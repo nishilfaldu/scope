@@ -135,7 +135,11 @@ async function fixture(crashFirstPush = false) {
     });
   }
   async function revoke(id = accountId) {
-    const blocked = await owner.mutation(api.accounts.block, { id });
+    const blocked = await owner.mutation(api.accounts.block, {
+      id,
+      grantVersion: (await t.run((ctx) => ctx.db.get("connectedAccounts", id)))!
+        .grantVersion,
+    });
     await owner.mutation(api.accounts.recordDisconnect, {
       secret,
       id,
@@ -188,7 +192,10 @@ test("browser ownership uses verified WorkOS subject across sessions, never emai
   });
   expect(await sameEmail.query(api.accounts.forOwner, {})).toEqual([]);
   await expect(
-    sameEmail.mutation(api.accounts.block, { id: f.accountId }),
+    sameEmail.mutation(api.accounts.block, {
+      id: f.accountId,
+      grantVersion: 1,
+    }),
   ).rejects.toThrow("Account unavailable");
   for (const changed of [
     { issuer: "https://api.workos.com/user_management/another-environment" },
@@ -495,7 +502,10 @@ for (const change of [
         stop: true,
       });
     if (change === "disconnect")
-      await f.owner.mutation(api.accounts.block, { id: f.accountId });
+      await f.owner.mutation(api.accounts.block, {
+        id: f.accountId,
+        grantVersion: 1,
+      });
     if (change === "generation")
       await f.t.run((ctx) =>
         ctx.db.patch("connectedAccounts", f.accountId, { grantVersion: 2 }),
@@ -689,7 +699,10 @@ test("pending requests tied to blocked account or stopped requester cannot be ap
     const f = await fixture(),
       r = await f.t.mutation(api.approvals.request, f.requestArgs);
     if (stop === "account")
-      await f.owner.mutation(api.accounts.block, { id: f.accountId });
+      await f.owner.mutation(api.accounts.block, {
+        id: f.accountId,
+        grantVersion: 1,
+      });
     else
       await f.owner.mutation(api.clientConnections.update, {
         id: f.connection._id,
@@ -738,7 +751,10 @@ test("surviving duplicate user/workspace authorization is rejected, including fa
   await expect(f.complete(duplicate.id)).rejects.toThrow(
     "Revoke the previous authorization first",
   );
-  await f.owner.mutation(api.accounts.block, { id: f.accountId });
+  await f.owner.mutation(api.accounts.block, {
+    id: f.accountId,
+    grantVersion: 1,
+  });
   await expect(f.complete(duplicate.id)).rejects.toThrow(
     "Revoke the previous authorization first",
   );
@@ -763,7 +779,10 @@ test("permission changes require confirmed revoke and create a new grant generat
   await expect(f.attempt({ targetAccountId: f.accountId })).rejects.toThrow(
     "Revoke the previous authorization first",
   );
-  await f.owner.mutation(api.accounts.block, { id: f.accountId });
+  await f.owner.mutation(api.accounts.block, {
+    id: f.accountId,
+    grantVersion: 1,
+  });
   await expect(f.attempt({ targetAccountId: f.accountId })).rejects.toThrow(
     "Revoke the previous authorization first",
   );
@@ -795,6 +814,9 @@ test("permission changes require confirmed revoke and create a new grant generat
     ctx.db.get("connectedAccounts", f.accountId),
   );
   expect(account?.grantVersion).toBe(2);
+  await expect(
+    f.owner.mutation(api.accounts.block, { id: f.accountId, grantVersion: 1 }),
+  ).rejects.toThrow("Account unavailable");
   expect(account?.grantedScopes).toEqual(["channels:read"]);
   expect((await f.preflight(r.id)).status).toBe("unavailable");
   await expect(
@@ -834,9 +856,19 @@ test("confirmed revoke cannot be downgraded by late failure or overwrite reconne
     grantVersion: 1,
     outcome: "failed",
   });
+  expect(await f.owner.query(api.accounts.forOwner, {})).toEqual([]);
   expect(
-    (await f.owner.query(api.accounts.forOwner, {}))[0].disconnectOutcome,
+    (await f.t.run((ctx) => ctx.db.get("connectedAccounts", f.accountId)))
+      ?.disconnectOutcome,
   ).toBe("succeeded");
+  expect(
+    (
+      await f.owner.mutation(api.accounts.block, {
+        id: f.accountId,
+        grantVersion: 1,
+      })
+    ).disconnected,
+  ).toBe(true);
   const next = await f.attempt({ targetAccountId: f.accountId });
   await f.complete(next.id);
   await expect(
@@ -856,7 +888,10 @@ for (const change of ["block", "reconnect"] as const)
       (await f.owner.query(api.accounts.connectionAttempt, lookup)).accountId,
     ).toBe(f.accountId);
     if (change === "block")
-      await f.owner.mutation(api.accounts.block, { id: f.accountId });
+      await f.owner.mutation(api.accounts.block, {
+        id: f.accountId,
+        grantVersion: 1,
+      });
     else {
       await f.revoke();
       const next = await f.attempt({ targetAccountId: f.accountId });
@@ -1014,7 +1049,10 @@ for (const stop of [
           approve: false,
         });
       if (stop === "account")
-        await f.owner.mutation(api.accounts.block, { id: f.accountId });
+        await f.owner.mutation(api.accounts.block, {
+          id: f.accountId,
+          grantVersion: 1,
+        });
       if (stop === "requester")
         await f.owner.mutation(api.clientConnections.update, {
           id: f.connection._id,
@@ -1153,4 +1191,47 @@ test("test push returns configuration/failure facts and removes only gone owner'
   expect(
     await f.owner.query(api.notifications.pushStatus, { endpoint }),
   ).toEqual({ subscribed: false });
+});
+
+test("connection list keeps active and failed disconnections but preserves hidden history records", async () => {
+  const f = await fixture();
+  const r = await f.request();
+  expect(await f.owner.query(api.accounts.forOwner, {})).toHaveLength(1);
+  const blocked = await f.owner.mutation(api.accounts.block, {
+    id: f.accountId,
+    grantVersion: 1,
+  });
+  expect(blocked.disconnected).toBe(false);
+  expect(await f.owner.query(api.accounts.forOwner, {})).toHaveLength(1);
+  await f.owner.mutation(api.accounts.recordDisconnect, {
+    secret,
+    id: f.accountId,
+    grantVersion: 1,
+    outcome: "failed",
+  });
+  expect(await f.owner.query(api.accounts.forOwner, {})).toHaveLength(1);
+  await f.revoke();
+  expect(await f.owner.query(api.accounts.forOwner, {})).toEqual([]);
+  expect(
+    await f.t.run((ctx) => ctx.db.get("connectedAccounts", f.accountId)),
+  ).not.toBeNull();
+  expect(
+    (await f.owner.query(api.approvals.requestForOwner, { reference: r.id }))
+      ?.snapshot.accountLabel,
+  ).toBe("Owner (Workspace)");
+  // A new connection from the provider header retains the archived record.
+  const next = await f.attempt();
+  const connected = await f.complete(next.id);
+  expect(connected.accountId).not.toBe(f.accountId);
+  expect(
+    (
+      await f.owner.mutation(api.accounts.block, {
+        id: f.accountId,
+        grantVersion: 1,
+      })
+    ).disconnected,
+  ).toBe(true);
+  expect((await f.owner.query(api.accounts.forOwner, {}))[0].state).toBe(
+    "active",
+  );
 });

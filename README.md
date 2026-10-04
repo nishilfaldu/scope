@@ -11,7 +11,7 @@ pnpm dev
 
 Use [localhost:3000](http://localhost:3000). Read `AGENTS.md`, installed Next.js guides, and Convex guidelines before editing. Production service calls are disabled. The development preview is [scope-preview.vercel.app](https://scope-preview.vercel.app).
 
-In Connections, choose Connect account and review Slack's consent screen. Permission changes require updating the connector configuration, disconnecting and reconnecting. Disconnect blocks sharing immediately. It shows as complete only after Slack token invalidation is verified and the selected Connect grant is removed. Failed revocation keeps the internal reference and offers retry.
+In Connections, choose Connect account and review Slack's consent screen. Permission changes require updating the connector configuration, disconnecting and reconnecting. Disconnect blocks sharing immediately. It completes when Vercel Connect revokes the selected subject/installation. Connect handles upstream revocation where supported; provider credentials may otherwise remain valid until expiry. A failure shows a toast and leaves the same Disconnect action available. Completed accounts are hidden while their request history is retained.
 
 ## Use the CLI
 
@@ -40,7 +40,7 @@ The CLI masks the literal credential and common URL, base64 and hex encodings in
 
 Scope stores account identities, configured/effective scopes, generation, requests and receipts. It does not store provider access/refresh tokens. Vercel Connect manages provider grants. WorkOS AuthKit identifies both the browser owner and CLI through the immutable WorkOS user ID. Each CLI session remains a separate requester. A receipt confirms credential arrival, not successful business work. The fixed 30-minute approval deadline controls collection, not the provider credential's lifetime. See [credential flows](docs/credential-flows.md).
 
-Slack is the only implemented provider. The current flow supports standard nonrotating Slack user grants (`xoxp`), not bots or rotating grants. Rotated-token revocation does not remove the underlying installation, so those grants are rejected. Effective permissions are checked with Slack `auth.test` and `x-oauth-scopes` at connection and before release. Broader access is rejected. One Slack app/user/workspace authorization can have only one live Scope connection across owners; different workspaces and users remain separate.
+Slack is the only implemented provider. The current flow supports standard and rotating Slack user grants, not bots. Vercel Connect manages refresh and revocation. Effective permissions are checked with Slack `auth.test` and `x-oauth-scopes` at connection and before release. Broader access is rejected. One Slack app/user/workspace authorization can have only one live Scope connection across owners; different workspaces and users remain separate.
 
 ## Configuration
 

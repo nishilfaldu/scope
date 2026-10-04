@@ -181,3 +181,36 @@ test("stopped CLI timelines never wait and use only recorded stop times", () => 
     at: undefined,
   });
 });
+
+test("command is visible for every outcome, whether history is expanded or collapsed", () => {
+  const cases: ApprovalRequest[] = [
+    request,
+    { ...request, status: "denied" },
+    { ...request, status: "cancelled" },
+    { ...request, approvalExpiresAt: 500 },
+    { ...request, status: "approved" },
+    { ...request, status: "approved", deliveredAt: 700 },
+    { ...request, status: "approved", receivedAt: 800 },
+    { ...request, status: "approved", approvalExpiresAt: 500 },
+    {
+      ...request,
+      status: "approved",
+      deliveredAt: 300,
+      approvalExpiresAt: 500,
+    },
+    { ...request, accountAvailable: false },
+  ];
+  for (const r of cases)
+    for (const focused of [true, false]) {
+      const html = renderToStaticMarkup(
+        <RequestRow request={r} now={1000} focused={focused} />,
+      );
+      expect(html).toContain(">Command<");
+      expect(html).toContain("node script.mjs");
+      expect(html).not.toContain("channels:read");
+      expect(html).not.toContain("attention");
+      expect(html.indexOf(">Command<")).toBeLessThan(
+        html.indexOf(">Approve<") === -1 ? Infinity : html.indexOf(">Approve<"),
+      );
+    }
+});

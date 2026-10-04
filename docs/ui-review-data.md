@@ -11,10 +11,10 @@ These fixtures live only on personal dev `bright-dinosaur-692`, which both local
 | Requests    | Denied; expired without a decision; approved but not collected; receipt unconfirmed; received before the window ended                                  |
 | Requests    | Sharing stopped before/after receipt; account blocked with a recorded timestamp; stopped agent; pending requests whose account or agent is unavailable |
 | Requests    | Twenty-nine demo rows, including older history, to expose pagination                                                                                   |
-| Connections | Two active demo accounts, a long account label, a disconnected account with Reconnect, disconnect pending and Retry disconnect                         |
+| Connections | Two active demo accounts, a long account label, compact Permissions disclosures and Disconnect; completed disconnections are hidden                    |
 | Agents      | Three active demo agents, a long name and a stopped agent; rename and stop-sharing dialogs                                                             |
 
-Expand historical requests to review the timeline. Approve, Deny, rename and stop-sharing operations work on the synthetic records. These are UI fixtures; the fake accounts cannot supply Slack credentials. The existing real account and requests remain separate.
+Commands remain visible on every request. Expand historical requests to review the timeline. Approve, Deny, rename and stop-sharing operations work on the synthetic records. These are UI fixtures; the fake accounts cannot supply Slack credentials. The existing real account and requests remain separate.
 
 Pending requests follow the normal 30-minute window. Rerun the seed to restore the starting states and refresh their deadlines. Data cannot reproduce loading, sign-in errors or browser notification support; those depend on network and device conditions.
 

@@ -2,7 +2,7 @@
 
 An owner chooses Connect Slack. The server reads requested permissions from the configured Vercel Connect connector. Slack presents its OAuth consent screen. Scope has no custom permission picker or editor. A temporary connection attempt binds the owner, private browser proof, configured scopes, opaque Connect subject and ten-minute deadline. Slack `auth.test` identifies the user/workspace and returns effective scopes in `x-oauth-scopes`. Completion requires the exact configured permissions, with no missing or extra access.
 
-The provider-independent account record stores identity, label, immutable effective permissions, Connect reference and grant generation. It stores no bearer or refresh token. Only Slack is implemented. Standard user tokens are supported because their revocation resets authorization. Rotated grants are rejected: revoking a rotated access token alone leaves the underlying authorization active. [Slack rotation behavior](https://docs.slack.dev/authentication/using-token-rotation/), [OAuth scope accumulation](https://docs.slack.dev/authentication/installing-with-oauth/#appending-scopes).
+The provider-independent account record stores identity, label, immutable effective permissions, Connect reference and grant generation. It stores no bearer or refresh token. Only Slack is implemented. Standard and rotating user tokens are supported. Connect manages refresh and revocation; provider-side invalidation depends on provider capabilities. [Slack rotation behavior](https://docs.slack.dev/authentication/using-token-rotation/), [OAuth scope accumulation](https://docs.slack.dev/authentication/installing-with-oauth/#appending-scopes).
 
 ## CLI identity and approval
 
@@ -24,11 +24,13 @@ Known-secret output masking covers literal and common encoded forms across chunk
 
 ## Disconnect and reconnect
 
-Blocking an account immediately prevents decisions, requests and release for its generation. The server retains the reference while revocation is pending or failed. It gets the exact user's standard token, checks identity, calls Slack `auth.revoke`, verifies that `auth.test` rejects the token, then removes that exact subject/installation from Connect. Success requires provider evidence, not just an SDK response. [Slack revoke](https://docs.slack.dev/reference/methods/auth.revoke/), [Connect revocation limits](https://vercel.com/docs/connect/concepts/tokens#revocation).
+Blocking an account immediately prevents decisions, requests and release for its generation. The server retains the original reference while revocation is pending or failed, and calls Connect `revokeToken` with that exact user subject and installation. No token acquisition or separate Slack revoke/check is needed. A successful Connect response, or an explicit absent-user-authorization response, completes disconnection. Generic missing-connector, authorization, token-resolution and network errors remain failures. Retrying uses the same reference; confirmed success is monotonic and skips external IO on later clicks. Both blocking and recording require the original grant version, so stale actions cannot affect a replacement grant. [Connect revocation limits](https://vercel.com/docs/connect/concepts/tokens#revocation).
+
+Connections lists active accounts and disconnections that still need completion using owner/state/outcome index ranges. Confirmed disconnections disappear from this list, but their records remain for request history. The UI shows only Disconnect, a busy indicator, and success/error toasts; it does not expose internal outcome stages. Connect attempts upstream revocation where supported. Scope does not claim independent proof of upstream invalidation; unsupported provider credentials may continue until expiry.
 
 Reconnect requires confirmed prior disconnect and creates a new opaque subject and generation. Old approvals cannot use it. Slack OAuth permissions accumulate on surviving grants, so reducing scopes without revocation is rejected. A connector/user/workspace authorization is unique across owners while active or awaiting revocation. This avoids one connection revoking another live record's upstream authorization. The application/connector itself is never uninstalled across other users.
 
-Stopping a request or CLI connection prevents future release but does not revoke Slack. Account disconnect performs upstream revocation. WorkOS session changes are observed through access-token expiry; a local connection stop is immediate.
+Stopping a request or CLI connection prevents future release but does not revoke Slack. Account disconnect delegates provider revocation to Connect. WorkOS session changes are observed through access-token expiry; a local connection stop is immediate.
 
 ## Notifications
 
