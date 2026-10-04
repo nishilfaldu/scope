@@ -3,8 +3,8 @@ import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { api } from "@/convex/_generated/api";
-import { BoardShell } from "@/components/layout/board-shell";
 import { Button } from "@/components/ui/button";
+import { BoardSkeleton } from "@/components/layout/workspace-skeleton";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -65,7 +65,7 @@ export function AgentsBoard() {
     }
   }
   return (
-    <BoardShell title="Agents">
+    <>
       <header className={styles.pageHeading}>
         <h1>Agents</h1>
         <p>Recognize who’s asking before you approve.</p>
@@ -77,7 +77,7 @@ export function AgentsBoard() {
       )}
       <div className={styles.agentList}>
         {!connections ? (
-          <p className={styles.loading}>Loading agents…</p>
+          <BoardSkeleton kind="agents" />
         ) : !connections.length ? (
           <p className={styles.empty}>
             When an authorized agent first asks for access, its connection
@@ -129,24 +129,24 @@ export function AgentsBoard() {
         <DialogContent className={styles.dialog}>
           <DialogHeader>
             <DialogTitle>
-              {stopping ? "Stop further sharing?" : "Name this connection"}
+              {stopping ? "Stop further sharing?" : "Rename connection"}
             </DialogTitle>
-            <DialogDescription>
-              {stopping
-                ? "Previously received access and the agent’s sign-in are unaffected."
-                : "More than one chat may use this authorization."}
-            </DialogDescription>
+            {stopping && (
+              <DialogDescription>
+                Stop new requests from this connection.
+              </DialogDescription>
+            )}
           </DialogHeader>
           {!stopping && (
-            <>
-              <label htmlFor="agent-name">Connection name</label>
+            <div className={styles.formField}>
+              <label htmlFor="agent-name">Name</label>
               <Input
                 id="agent-name"
                 value={name}
                 maxLength={80}
                 onChange={(e) => setName(e.target.value)}
               />
-            </>
+            </div>
           )}
           {error && (
             <p role="alert" className={styles.error}>
@@ -166,7 +166,8 @@ export function AgentsBoard() {
               disabled={busy || (!stopping && !name.trim())}
               onClick={() => void save()}
             >
-              {busy ? "Saving…" : stopping ? "Stop sharing" : "Save name"}
+              {busy && <span className={styles.spinner} aria-hidden />}
+              {stopping ? "Stop sharing" : "Save"}
             </Button>
           </DialogFooter>
           {!stopping && editing?.stoppedAt === undefined && (
@@ -180,6 +181,6 @@ export function AgentsBoard() {
           )}
         </DialogContent>
       </Dialog>
-    </BoardShell>
+    </>
   );
 }

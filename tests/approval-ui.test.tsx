@@ -58,7 +58,7 @@ test("an expired approved request never says it is waiting for collection", () =
   );
 });
 
-test("a request is one compact row with purpose and full permissions", () => {
+test("a request separates its reason from app identity and omits permissions", () => {
   const r = {
     ...request,
     createdAt: 900,
@@ -69,14 +69,32 @@ test("a request is one compact row with purpose and full permissions", () => {
   );
   expect(html.match(/<article/g)).toHaveLength(1);
   expect(html).toContain("Research assistant");
-  expect(html).toContain("View public channels");
+  expect(html).toContain("Slack");
+  expect(html).toContain("Work workspace");
+  expect(html).not.toContain("View public channels");
   expect(html).not.toContain("Request timeline");
   expect(html).not.toContain("PAT");
   expect(html).not.toContain("scope:owner:client:consent");
   expect(html).not.toContain("usr-work");
   expect(html).toContain("Read workspace channel names");
-  expect(html).toContain("Full connection permissions");
-  expect(html).toContain("purpose does not limit");
+  expect(html).toContain(">Reason<");
+  expect(html).not.toContain("Full connection permissions");
+  expect(html).not.toContain("purpose does not limit");
+  const history = renderToStaticMarkup(
+    <RequestRow
+      request={{
+        ...r,
+        status: "approved",
+        receivedAt: 1100,
+        requesterStopped: true,
+      }}
+      now={1500}
+      focused
+    />,
+  );
+  expect(history).toContain("Read workspace channel names");
+  expect(history).not.toContain("channels:read");
+  expect(history).not.toContain("Previously received access may remain active");
 });
 test("approval, attempted delivery and receipt remain distinct even after expiry", () => {
   const approved = {

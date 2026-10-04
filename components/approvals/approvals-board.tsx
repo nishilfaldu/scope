@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { useQuery, usePaginatedQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { BoardShell } from "@/components/layout/board-shell";
+import { BoardSkeleton } from "@/components/layout/workspace-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { RequestRow } from "./request-row";
 import { useNow } from "@/hooks/use-now";
@@ -49,16 +50,18 @@ export function ApprovalsBoard({ requestId }: { requestId?: string }) {
   ).length;
   const loading = !pendingRows || page.status === "LoadingFirstPage";
   return (
-    <BoardShell title="Requests">
+    <>
       <header className={styles.pageHeading}>
         <h1>Requests</h1>
-        <p>
-          {loading
-            ? "Loading your requests…"
-            : pending
+        {loading ? (
+          <Skeleton className="mt-3 h-4 w-60 rounded-md" />
+        ) : (
+          <p>
+            {pending
               ? `${pending} request${pending === 1 ? " needs" : "s need"} your decision.`
               : "No requests need your approval."}
-        </p>
+          </p>
+        )}
       </header>
       {requestId && focused === null && (
         <p role="status" className={styles.notice}>
@@ -67,7 +70,7 @@ export function ApprovalsBoard({ requestId }: { requestId?: string }) {
       )}
       <div className={styles.requestList} aria-label="Access requests">
         {loading || (requestId && focused === undefined) ? (
-          <p className={styles.loading}>Loading requests…</p>
+          <BoardSkeleton kind="requests" />
         ) : !unique.length ? (
           <p className={styles.empty}>
             When an agent asks for access, you can review it here.
@@ -98,11 +101,14 @@ export function ApprovalsBoard({ requestId }: { requestId?: string }) {
           disabled={page.status === "LoadingMore"}
           onClick={() => page.loadMore(20)}
         >
-          {page.status === "LoadingMore" ? "Loading…" : "Load earlier requests"}
+          {page.status === "LoadingMore" && (
+            <span className={styles.spinner} aria-hidden />
+          )}
+          Load earlier requests
         </Button>
       ) : (
         !loading && <p className={styles.endNote}>That’s everything for now.</p>
       )}
-    </BoardShell>
+    </>
   );
 }

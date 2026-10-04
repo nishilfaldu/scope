@@ -23,8 +23,6 @@ import {
   requestTime,
   requestTimeline,
   requestAccess,
-  accessBoundary,
-  requestExplanation,
   type ApprovalRequest,
 } from "@/lib/approval-display";
 
@@ -41,8 +39,11 @@ export function RequestRow({
 }) {
   const decide = useMutation(api.approvals.decide),
     cancel = useMutation(api.approvals.cancel);
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+  const [busyAction, setBusyAction] = useState<
+    "approve" | "deny" | "stop" | null
+  >(null);
+  const busy = busyAction !== null;
+  const [error, setError] = useState("");
   const [open, setOpen] = useState(focused),
     [confirm, setConfirm] = useState(false);
   const row = useRef<HTMLElement>(null);
@@ -61,7 +62,7 @@ export function RequestRow({
     name = request.snapshot.requesterName;
   async function act(action: "approve" | "deny" | "stop") {
     onDecision?.();
-    setBusy(true);
+    setBusyAction(action);
     setError("");
     try {
       if (action === "stop") await cancel({ id: request._id });
@@ -72,7 +73,7 @@ export function RequestRow({
         "This request changed or expired. Check its status and try again.",
       );
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
   return (
@@ -122,22 +123,13 @@ export function RequestRow({
           <div className={styles.access}>
             <AppMark app={request.snapshot.providerName} />
             <div>
-              <p>{requestAccess(request)}</p>
-              <span>
-                {request.snapshot.providerName} /{" "}
-                {accountName(request.snapshot.accountLabel)}
-              </span>
-              {pending && (
-                <>
-                  <p className={styles.permission}>
-                    Full connection permissions: {accessBoundary(request)}
-                  </p>
-                  <p className={styles.permission}>
-                    The purpose does not limit these permissions.
-                  </p>
-                </>
-              )}
+              <p>{request.snapshot.providerName}</p>
+              <span>{accountName(request.snapshot.accountLabel)}</span>
             </div>
+          </div>
+          <div className={styles.requestReason}>
+            <span>Reason</span>
+            <p>{request.reason}</p>
           </div>
           {pending ? (
             <div className={styles.decision}>
@@ -146,7 +138,10 @@ export function RequestRow({
                 disabled={busy}
                 onClick={() => void act("approve")}
               >
-                {busy ? "Saving…" : "Approve"}
+                {busyAction === "approve" && (
+                  <span className={styles.spinner} aria-hidden />
+                )}
+                Approve
               </Button>
               <Button
                 variant="outline"
@@ -154,6 +149,9 @@ export function RequestRow({
                 disabled={busy}
                 onClick={() => void act("deny")}
               >
+                {busyAction === "deny" && (
+                  <span className={styles.spinner} aria-hidden />
+                )}
                 Deny
               </Button>
             </div>
@@ -193,11 +191,6 @@ export function RequestRow({
       </div>
       {open && !pending && (
         <div id={`detail-${request._id}`} className={styles.requestDetail}>
-          {requestExplanation(request, now) && (
-            <p className={styles.explanation}>
-              {requestExplanation(request, now)}
-            </p>
-          )}
           {!pending && (
             <ol aria-label="Request timeline" className={styles.evidence}>
               {requestTimeline(request, now).map((event, i, all) => (
@@ -220,11 +213,6 @@ export function RequestRow({
               ))}
             </ol>
           )}
-          {!pending && (
-            <p className={styles.detailNote}>
-              Full connection permissions: {accessBoundary(request)}
-            </p>
-          )}
           {canStop && (
             <button
               className={styles.textAction}
@@ -246,8 +234,7 @@ export function RequestRow({
           <DialogHeader>
             <DialogTitle>Stop further sharing?</DialogTitle>
             <DialogDescription>
-              Previously received access may remain active at{" "}
-              {request.snapshot.providerName}.
+              Stop new access deliveries for this request.
             </DialogDescription>
           </DialogHeader>
           {error && (
@@ -268,7 +255,8 @@ export function RequestRow({
               disabled={busy}
               onClick={() => void act("stop")}
             >
-              {busy ? "Stopping…" : "Stop sharing"}
+              {busy && <span className={styles.spinner} aria-hidden />}
+              Stop sharing
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { BoardShell } from "@/components/layout/board-shell";
 import { BrandMark } from "@/components/shared/brand-mark";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import {
   notificationSupport,
@@ -27,9 +27,11 @@ export function NotificationsBoard() {
     let active = true;
     async function refresh() {
       const next = notificationSupport();
-      if (active) setSupport(next);
       if (next !== "granted") {
-        if (active) setEndpoint("");
+        if (active) {
+          setSupport(next);
+          setEndpoint("");
+        }
         return;
       }
       try {
@@ -43,6 +45,8 @@ export function NotificationsBoard() {
         if (active) setEndpoint(subscription?.endpoint ?? "");
       } catch {
         if (active) setEndpoint("");
+      } finally {
+        if (active) setSupport(next);
       }
     }
     void refresh();
@@ -62,9 +66,7 @@ export function NotificationsBoard() {
       );
       await subscribe(data);
       setEndpoint(data.endpoint);
-      setMessage(
-        "Notifications enabled on this device. Send a test to check receipt.",
-      );
+      setMessage("Notifications enabled.");
     } catch (e) {
       setError(
         e instanceof Error
@@ -86,7 +88,7 @@ export function NotificationsBoard() {
         !result.configured
           ? "Notifications are not configured for this Scope environment."
           : result.sent
-            ? "Test sent to this device. Check it for receipt; sending does not confirm delivery."
+            ? "Test sent. Check your device."
             : "No test was sent. Enable notifications on a device and try again.",
       );
     } catch {
@@ -98,10 +100,9 @@ export function NotificationsBoard() {
   const enabled = support === "granted" && saved?.subscribed === true,
     canEnable = ["default", "granted"].includes(support);
   return (
-    <BoardShell title="Notifications">
+    <>
       <header className={styles.pageHeading}>
         <h1>Notifications</h1>
-        <p>Know when an agent needs your decision.</p>
       </header>
       <section className={styles.notificationSetup}>
         <div className={styles.phoneIllustration} aria-hidden>
@@ -112,30 +113,15 @@ export function NotificationsBoard() {
             </span>
           </div>
         </div>
-        <h2>
-          {enabled
-            ? "You’re ready for the next request"
-            : support === "install"
-              ? "Take Scope with you"
-              : support === "denied"
-                ? "Notifications are turned off"
-                : support === "unsupported"
-                  ? "Try another device"
-                  : support === "checking"
-                    ? "Checking this device…"
-                    : "Alerts in this browser"}
-        </h2>
-        <p>
-          {enabled
-            ? ""
-            : support === "install"
-              ? "On iPhone, add Scope to your Home Screen so access requests can reach you."
-              : support === "denied"
-                ? "Allow notifications for Scope in your device settings."
-                : support === "unsupported"
-                  ? "Use a browser that supports push notifications."
-                  : "Allow Scope notifications on this device."}
-        </p>
+        {support === "denied" && (
+          <p>Allow Scope notifications in your device settings.</p>
+        )}
+        {support === "unsupported" && (
+          <p>Use a browser that supports notifications.</p>
+        )}
+        {support === "install" && (
+          <p>Add Scope to your Home Screen to enable notifications.</p>
+        )}
         {support === "install" && (
           <ol className={styles.installSteps}>
             <li>
@@ -153,27 +139,39 @@ export function NotificationsBoard() {
           </ol>
         )}
         <div className={styles.actions}>
-          {canEnable && (
-            <Button
-              className={styles.approve}
-              disabled={!!busy}
-              onClick={() => void enable()}
-            >
-              {busy === "enable"
-                ? "Enabling…"
-                : enabled
-                  ? "Reconnect notifications"
-                  : "Enable notifications"}
-            </Button>
+          {(support === "checking" ||
+            (support === "granted" && !!endpoint && saved === undefined)) && (
+            <Skeleton className="h-9 w-40 rounded-lg" />
           )}
           {enabled && (
-            <button
-              className={styles.textAction}
+            <span className={styles.enabledStatus}>Notifications enabled</span>
+          )}
+          {canEnable &&
+            !enabled &&
+            !(support === "granted" && !!endpoint && saved === undefined) && (
+              <Button
+                className={styles.approve}
+                disabled={!!busy}
+                onClick={() => void enable()}
+              >
+                {busy === "enable" && (
+                  <span className={styles.spinner} aria-hidden />
+                )}
+                Enable notifications
+              </Button>
+            )}
+          {enabled && (
+            <Button
+              variant="ghost"
+              className={styles.actionButton}
               disabled={!!busy}
               onClick={() => void test()}
             >
-              {busy === "test" ? "Sending…" : "Send a test notification"}
-            </button>
+              {busy === "test" && (
+                <span className={styles.spinner} aria-hidden />
+              )}
+              Send test
+            </Button>
           )}
         </div>
         {message && (
@@ -187,6 +185,6 @@ export function NotificationsBoard() {
           </p>
         )}
       </section>
-    </BoardShell>
+    </>
   );
 }

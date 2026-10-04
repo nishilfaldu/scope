@@ -187,26 +187,3 @@ export function requestAccess(r: ApprovalRequest) {
 export function accessBoundary(r: ApprovalRequest) {
   return r.snapshot.accessDescription;
 }
-export function requestExplanation(r: ApprovalRequest, now: number) {
-  const status = approvalStatus(r, now);
-  if (
-    [
-      "Needs approval",
-      "Denied",
-      "Waiting for pickup",
-      "Waiting for receipt",
-    ].includes(status)
-  )
-    return "";
-  if (status === "Received")
-    return "Receipt confirms access arrived. Previously received access may remain active after sharing ends.";
-  if (status === "Expired" || status === "Not collected")
-    return "Ask the agent for a new request if you want it to continue.";
-  if (status === "Receipt unconfirmed")
-    return "Check with the agent before asking it to try again.";
-  return r.receivedAt
-    ? "Previously received access may remain active."
-    : r.deliveredAt
-      ? "The agent did not confirm receipt. Check with it before retrying."
-      : "";
-}

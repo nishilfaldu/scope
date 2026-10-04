@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { BoardShell } from "@/components/layout/board-shell";
+import { BoardSkeleton } from "@/components/layout/workspace-skeleton";
 import { AppMark } from "@/components/scope/app-mark";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,12 +27,11 @@ type ProviderView = {
 export function ConnectionsBoard() {
   const accounts = useQuery(api.accounts.forOwner, {});
   const [provider, setProvider] = useState<ProviderView>();
-  const [targetAccountId, setTargetAccountId] = useState<string>();
+  const [connectingId, setConnectingId] = useState<string>();
   const [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(""),
     [error, setError] = useState("");
-  const [connect, setConnect] = useState<ProviderView | null>(null),
-    [manage, setManage] = useState<ApprovalAccount | null>(null);
+  const [manage, setManage] = useState<ApprovalAccount | null>(null);
   useEffect(() => {
     let active = true;
     void fetch("/api/accounts/provider", { cache: "no-store" })
@@ -78,8 +77,25 @@ export function ConnectionsBoard() {
       setBusy(false);
     }
   }
+  async function connectAccount(
+    integration: ProviderView,
+    targetAccountId?: string,
+  ) {
+    setConnectingId(targetAccountId ?? integration.providerId);
+    await run(async () => {
+      const result = await approvalPost<{ url: string }>(
+        "/api/accounts/authorize",
+        {
+          providerId: integration.providerId,
+          ...(targetAccountId ? { targetAccountId } : {}),
+        },
+      );
+      window.location.assign(result.url);
+    });
+    setConnectingId(undefined);
+  }
   return (
-    <BoardShell title="Connections">
+    <>
       <header className={styles.pageHeading}>
         <h1>Connections</h1>
         <p>Choose the accounts your agents can ask to use.</p>
@@ -89,14 +105,14 @@ export function ConnectionsBoard() {
           {notice}
         </p>
       )}
-      {error && !connect && !manage && (
+      {error && !manage && (
         <p role="alert" className={styles.error}>
           {error}
         </p>
       )}
       <div className={styles.connectionList}>
-        {!provider || !accounts ? (
-          <p className={styles.loading}>Loading accounts…</p>
+        {!provider && error ? null : !provider || !accounts ? (
+          <BoardSkeleton kind="connections" />
         ) : (
           [provider].map((integration) => {
             const rows = accounts.filter(
@@ -112,12 +128,11 @@ export function ConnectionsBoard() {
                       variant="ghost"
                       className={styles.addAccount}
                       disabled={busy}
-                      onClick={() => {
-                        setConnect(integration);
-                        setTargetAccountId(undefined);
-                        setError("");
-                      }}
+                      onClick={() => void connectAccount(integration)}
                     >
+                      {connectingId === integration.providerId && (
+                        <span className={styles.spinner} aria-hidden />
+                      )}
                       Connect account
                     </Button>
                   }
@@ -139,28 +154,32 @@ export function ConnectionsBoard() {
                     </div>
                     {(a.state === "active" ||
                       a.disconnectOutcome !== "succeeded") && (
-                      <button
-                        className={styles.textAction}
+                      <Button
+                        variant="ghost"
+                        className={styles.actionButton}
                         onClick={() => {
                           setManage(a);
                           setError("");
                         }}
                       >
                         {a.state === "blocked" ? "Retry disconnect" : "Manage"}
-                      </button>
+                      </Button>
                     )}
                     {a.state === "blocked" &&
                       a.disconnectOutcome === "succeeded" && (
-                        <button
-                          className={styles.textAction}
-                          onClick={() => {
-                            setConnect(integration);
-                            setTargetAccountId(a._id);
-                            setError("");
-                          }}
+                        <Button
+                          variant="ghost"
+                          className={styles.actionButton}
+                          disabled={busy}
+                          onClick={() =>
+                            void connectAccount(integration, a._id)
+                          }
                         >
+                          {connectingId === a._id && (
+                            <span className={styles.spinner} aria-hidden />
+                          )}
                           Reconnect
-                        </button>
+                        </Button>
                       )}
                   </div>
                 ))}
@@ -173,63 +192,6 @@ export function ConnectionsBoard() {
         )}
       </div>
       <Dialog
-        open={!!connect}
-        onOpenChange={(open) => {
-          if (!open && !busy) setConnect(null);
-        }}
-      >
-        <DialogContent className={styles.dialog}>
-          <DialogHeader>
-            <DialogTitle>Connect {connect?.provider}</DialogTitle>
-            <DialogDescription>
-              Review the requested access in Slack. Each approved program gets
-              this connection&apos;s full permissions.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-[50vh] overflow-y-auto">
-            <p className={styles.detailNote}>Requested Slack permissions</p>
-            <ul className="space-y-2 text-sm">
-              {connect?.permissions.map((scope) => (
-                <li key={scope}>{scope}</li>
-              ))}
-            </ul>
-          </div>
-          {error && (
-            <p role="alert" className={styles.error}>
-              {error}
-            </p>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setConnect(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              className={styles.approve}
-              disabled={busy}
-              onClick={() =>
-                void run(async () => {
-                  if (!connect) return;
-                  const result = await approvalPost<{ url: string }>(
-                    "/api/accounts/authorize",
-                    {
-                      providerId: connect.providerId,
-                      ...(targetAccountId ? { targetAccountId } : {}),
-                    },
-                  );
-                  window.location.assign(result.url);
-                })
-              }
-            >
-              {busy ? "Connecting…" : `Sign in to ${connect?.provider}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog
         open={!!manage}
         onOpenChange={(open) => {
           if (!open && !busy) setManage(null);
@@ -237,15 +199,11 @@ export function ConnectionsBoard() {
       >
         <DialogContent className={styles.dialog}>
           <DialogHeader>
-            <DialogTitle>{accountName(manage?.label)}</DialogTitle>
+            <DialogTitle>Disconnect Slack?</DialogTitle>
             <DialogDescription>
-              Disconnect stops new sharing and revokes this Slack authorization.
-              Requests for this connection will no longer work.
+              Disconnect {accountName(manage?.label)} and stop its requests.
             </DialogDescription>
           </DialogHeader>
-          <p className={styles.detailNote}>
-            Full connection permissions: {manage?.accessDescription}
-          </p>
           {error && (
             <p role="alert" className={styles.error}>
               {error}
@@ -257,7 +215,7 @@ export function ConnectionsBoard() {
               disabled={busy}
               onClick={() => setManage(null)}
             >
-              Close
+              Cancel
             </Button>
             <Button
               className={styles.approve}
@@ -278,15 +236,12 @@ export function ConnectionsBoard() {
                 })
               }
             >
-              {busy
-                ? "Stopping…"
-                : manage?.state === "blocked"
-                  ? "Retry disconnect"
-                  : "Disconnect"}
+              {busy && <span className={styles.spinner} aria-hidden />}
+              {manage?.state === "blocked" ? "Retry disconnect" : "Disconnect"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </BoardShell>
+    </>
   );
 }

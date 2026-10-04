@@ -17,5 +17,5 @@ export default async function NotFound() {
       </AuthorizationShell>
     );
   }
-  return <BoardShell title="Page not found">{content}</BoardShell>;
+  return <BoardShell>{content}</BoardShell>;
 }
