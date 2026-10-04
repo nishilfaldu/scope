@@ -1,3 +1,5 @@
+> Historical evidence: this document describes earlier implementations. The current timed approval model is documented in README.md and docs/credential-flows.md.
+
 # Scope implementation and historical experiments
 
 Current work lives on `codex/scope-approval-prototypes` in the single shared checkout. [Draft PR 49](https://github.com/nishilfaldu/scope/pull/49) remains stacked on [PR 48](https://github.com/nishilfaldu/scope/pull/48); neither is merged. The branch preview is [scope-preview.vercel.app](https://scope-preview.vercel.app).

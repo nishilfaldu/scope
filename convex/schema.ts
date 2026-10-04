@@ -2,99 +2,81 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import {
   connectReference,
-  decision,
+  accessStatus,
+  section,
   disconnectOutcome,
-  principal,
   snapshot,
-  command,
 } from "./scope";
 
 export default defineSchema({
   connectedAccounts: defineTable({
     ownerId: v.string(),
+    visible: v.boolean(),
+    provisional: v.boolean(),
     providerId: v.string(),
     label: v.string(),
     providerName: v.string(),
     accessDescription: v.string(),
-    providerUserId: v.string(),
+    providerUserId: v.optional(v.string()),
     providerTenantId: v.optional(v.string()),
     providerEmail: v.optional(v.string()),
     connect: connectReference,
     grantedScopes: v.array(v.string()),
-    authorizationKey: v.string(),
+    authorizationKey: v.optional(v.string()),
     grantVersion: v.number(),
-    state: v.union(v.literal("active"), v.literal("blocked")),
+    state: v.union(
+      v.literal("connecting"),
+      v.literal("active"),
+      v.literal("blocked"),
+    ),
+    setupExpiresAt: v.optional(v.number()),
+    proofHash: v.optional(v.string()),
+    requestedScopes: v.optional(v.array(v.string())),
+    setupIssue: v.optional(v.string()),
     blockedAt: v.optional(v.number()),
     disconnectOutcome: v.optional(disconnectOutcome),
   })
-    .index("by_ownerId_and_state_and_disconnectOutcome", [
-      "ownerId",
-      "state",
-      "disconnectOutcome",
-    ])
-    .index("by_authorizationKey_and_disconnectOutcome", [
+    .index("by_ownerId_and_visible_and_state", ["ownerId", "visible", "state"])
+    .index("by_authorizationKey_and_provisional_and_visible", [
       "authorizationKey",
-      "disconnectOutcome",
+      "provisional",
+      "visible",
     ]),
-  connectionAttempts: defineTable({
+  accessApprovals: defineTable({
     ownerId: v.string(),
-    providerId: v.string(),
-    providerName: v.string(),
-    accessDescription: v.string(),
-    connect: connectReference,
-    requestedScopes: v.array(v.string()),
-    proofHash: v.string(),
-    targetAccountId: v.optional(v.id("connectedAccounts")),
-    targetGrantVersion: v.optional(v.number()),
-    accountId: v.optional(v.id("connectedAccounts")),
-    expiresAt: v.number(),
-  }),
-  clientConnections: defineTable({
-    ownerId: v.string(),
-    ...principal.fields,
-    name: v.string(),
-    stoppedAt: v.optional(v.number()),
-  })
-    .index("by_ownerId", ["ownerId"])
-    .index("by_issuer_and_subject_and_clientId_and_sessionId", [
-      "issuer",
-      "subject",
-      "clientId",
-      "sessionId",
-    ]),
-  approvalRequests: defineTable({
-    ownerId: v.string(),
-    requesterConnectionId: v.id("clientConnections"),
+    issuer: v.string(),
+    clientId: v.string(),
+    sessionId: v.string(),
     accountId: v.id("connectedAccounts"),
-    key: v.string(),
-    providerId: v.string(),
     grantVersion: v.number(),
+    providerId: v.string(),
     snapshot,
     reason: v.string(),
-    command,
-    status: decision,
-    approvalExpiresAt: v.number(),
-    expiredAt: v.optional(v.number()),
-    expiryJobId: v.optional(v.id("_scheduled_functions")),
-    decidedAt: v.optional(v.number()),
-    stoppedAt: v.optional(v.number()),
-    firstDeliveryAt: v.optional(v.number()),
-    lastDeliveryAt: v.optional(v.number()),
-    deliveryAttempts: v.optional(v.number()),
-    providerExpiresAt: v.optional(v.number()),
-    tokenId: v.optional(v.string()),
-    receiptProof: v.optional(v.string()),
+    status: accessStatus,
+    section,
+    waitingUntil: v.number(),
+    approvedAt: v.optional(v.number()),
+    until: v.optional(v.number()),
+    deniedAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+    endReason: v.optional(v.string()),
+    firstCollectedAt: v.optional(v.number()),
+    lastCollectedAt: v.optional(v.number()),
+    collectionCount: v.number(),
     receivedAt: v.optional(v.number()),
+    receiptProof: v.optional(v.string()),
   })
-    .index("by_requesterConnectionId_and_key", ["requesterConnectionId", "key"])
-    // Chronological history must not be ordered by decision/deadline.
-    .index("by_ownerId", ["ownerId"])
-    .index("by_status_and_ownerId_and_expiredAt_and_approvalExpiresAt", [
-      "status",
+    .index("by_ownerId_and_section", ["ownerId", "section"])
+    .index("by_actor_and_account_and_grant_and_status", [
       "ownerId",
-      "expiredAt",
-      "approvalExpiresAt",
-    ]),
+      "issuer",
+      "clientId",
+      "sessionId",
+      "accountId",
+      "grantVersion",
+      "status",
+    ])
+    .index("by_accountId_and_section", ["accountId", "section"]),
   pushSubscriptions: defineTable({
     ownerId: v.string(),
     endpoint: v.string(),

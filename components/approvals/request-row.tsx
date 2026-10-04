@@ -4,16 +4,11 @@ import { useMutation } from "convex/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   ArrowDown01Icon,
-  Tick02Icon,
-  HourglassIcon,
-  MailReceive01Icon,
   Cancel01Icon,
   Timer02Icon,
-  PackageRemoveIcon,
-  HelpCircleIcon,
   PauseIcon,
-  Clock01Icon,
   CheckmarkCircle02Icon,
+  Clock01Icon,
 } from "@hugeicons/core-free-icons";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -30,57 +25,51 @@ import {
   accountName,
   approvalStatus,
   formatRequestTime,
-  requestDecision,
-  requestDelivery,
   requestActivity,
-  requestAccess,
   type ApprovalRequest,
 } from "@/lib/approval-display";
-
 export function RequestRow({
   request,
   focused = false,
-  onDecision,
 }: {
   request: ApprovalRequest;
   focused?: boolean;
-  onDecision?: () => void;
 }) {
-  const decide = useMutation(api.approvals.decide);
-  const [busyAction, setBusyAction] = useState<"approve" | "deny" | null>(null);
-  const busy = busyAction !== null;
-  const row = useRef<HTMLElement>(null);
+  const decide = useMutation(api.access.decide),
+    end = useMutation(api.access.end);
+  const [busyAction, setBusyAction] = useState<
+      "approve" | "deny" | "end" | null
+    >(null),
+    [minutes, setMinutes] = useState<15 | 30 | 60>(30);
+  const busy = busyAction !== null,
+    row = useRef<HTMLElement>(null);
   useEffect(() => {
     if (focused) row.current?.scrollIntoView({ block: "nearest" });
   }, [focused]);
+  const pending = request.status === "pending",
+    name = request.snapshot.agentName;
   const status = approvalStatus(request),
-    pending = status === "Needs approval";
-  const decision = requestDecision(request),
-    delivery = requestDelivery(request);
-  const outcomeIcons = {
-    Approved: CheckmarkCircle02Icon,
-    Denied: Cancel01Icon,
-    Expired: Timer02Icon,
-    "Not decided": Clock01Icon,
-    Cancelled: PauseIcon,
-    "Waiting for pickup": HourglassIcon,
-    "Waiting for receipt": MailReceive01Icon,
-    Received: Tick02Icon,
-    "Not collected": PackageRemoveIcon,
-    "Receipt unconfirmed": HelpCircleIcon,
-    "Delivery stopped": PauseIcon,
-  };
-  const time = request.createdAt,
-    name = request.snapshot.requesterName;
-  async function act(action: "approve" | "deny") {
-    onDecision?.();
+    icons = {
+      Approved: CheckmarkCircle02Icon,
+      Denied: Cancel01Icon,
+      Expired: Timer02Icon,
+      Ended: PauseIcon,
+      "Needs approval": Clock01Icon,
+    };
+  async function act(action: "approve" | "deny" | "end") {
     setBusyAction(action);
     try {
-      await decide({ id: request._id, approve: action === "approve" });
+      if (action === "end") await end({ id: request._id });
+      else
+        await decide({
+          id: request._id,
+          approve: action === "approve",
+          minutes,
+        });
     } catch {
       toast.add({
         title:
-          "This request changed or expired. Check its status and try again.",
+          "This approval changed or expired. Check its status and try again.",
         type: "error",
         priority: "high",
       });
@@ -91,7 +80,7 @@ export function RequestRow({
   return (
     <article
       ref={row}
-      aria-label={`${name}: ${requestAccess(request)}`}
+      aria-label={`${name}: ${request.reason}`}
       className={`${styles.request} ${pending ? styles.pending : ""}`}
     >
       <div className={styles.requestHead}>
@@ -106,18 +95,14 @@ export function RequestRow({
           </span>
           <span className={styles.who}>
             <strong>{name}</strong>
-            <span>{"Authorized CLI connection"}</span>
+            <span>CLI access request</span>
           </span>
           <span className={styles.summaryEnd}>
             {pending ? (
-              <RequestCountdown deadline={request.approvalExpiresAt} />
+              <RequestCountdown deadline={request.waitingUntil} />
             ) : (
-              <time
-                dateTime={
-                  time !== undefined ? new Date(time).toISOString() : undefined
-                }
-              >
-                {time !== undefined ? formatRequestTime(time) : ""}
+              <time dateTime={new Date(request._creationTime).toISOString()}>
+                {formatRequestTime(request._creationTime)}
               </time>
             )}
           </span>
@@ -134,65 +119,68 @@ export function RequestRow({
             <span>Reason</span>
             <p>{request.reason}</p>
           </div>
-          <div className={styles.requestCommand}>
-            <span>Command</span>
-            <code>{request.command.argv.join(" ")}</code>
-          </div>
           {pending ? (
-            <div className={styles.decision}>
-              <Button
-                className={styles.approve}
-                disabled={busy}
-                onClick={() => void act("approve")}
-              >
-                {busyAction === "approve" && (
-                  <span className={styles.spinner} aria-hidden />
-                )}
-                Approve
-              </Button>
-              <Button
-                variant="outline"
-                className={styles.deny}
-                disabled={busy}
-                onClick={() => void act("deny")}
-              >
-                {busyAction === "deny" && (
-                  <span className={styles.spinner} aria-hidden />
-                )}
-                Deny
-              </Button>
-            </div>
-          ) : (
             <>
-              <dl
-                className={styles.requestOutcomes}
-                aria-label="Request outcome"
-              >
-                {[
-                  { category: "Decision", outcome: decision },
-                  ...(delivery
-                    ? [{ category: "Delivery", outcome: delivery }]
-                    : []),
-                ].map(({ category, outcome }) => (
-                  <div key={category}>
-                    <dt>{category}</dt>
-                    <dd>
-                      <HugeiconsIcon
-                        icon={outcomeIcons[outcome.label]}
-                        size={16}
-                        aria-hidden
-                      />
-                      <span>{outcome.label}</span>
-                      {outcome.at !== undefined && (
-                        <time dateTime={new Date(outcome.at).toISOString()}>
-                          {formatRequestTime(outcome.at)}
-                        </time>
-                      )}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
+              <fieldset className={styles.durationChoices} disabled={busy}>
+                <legend>Allow token requests without asking again for</legend>
+                <div>
+                  {([15, 30, 60] as const).map((value) => (
+                    <Button
+                      key={value}
+                      variant={minutes === value ? "default" : "outline"}
+                      aria-pressed={minutes === value}
+                      onClick={() => setMinutes(value)}
+                    >
+                      {value === 60 ? "1 hour" : `${value} min`}
+                    </Button>
+                  ))}
+                </div>
+              </fieldset>
+              <div className={styles.decision}>
+                <Button
+                  className={styles.approve}
+                  disabled={busy || !request.accountAvailable}
+                  onClick={() => void act("approve")}
+                >
+                  {busyAction === "approve" && (
+                    <span className={styles.spinner} aria-hidden />
+                  )}
+                  Approve
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={busy || !request.accountAvailable}
+                  onClick={() => void act("deny")}
+                >
+                  {busyAction === "deny" && (
+                    <span className={styles.spinner} aria-hidden />
+                  )}
+                  Deny
+                </Button>
+              </div>
             </>
+          ) : (
+            <div className={styles.accessStatus}>
+              <span>
+                <HugeiconsIcon icon={icons[status]} size={16} aria-hidden />
+                {request.status === "active" && request.until !== undefined
+                  ? `Approved until ${formatRequestTime(request.until)}`
+                  : status}
+              </span>
+              {request.status === "active" && (
+                <Button
+                  variant="ghost"
+                  className={styles.actionButton}
+                  disabled={busy}
+                  onClick={() => void act("end")}
+                >
+                  {busyAction === "end" && (
+                    <span className={styles.spinner} aria-hidden />
+                  )}
+                  End approval
+                </Button>
+              )}
+            </div>
           )}
           <Collapsible className={styles.requestActivity}>
             <CollapsibleTrigger className={styles.activityTrigger}>
@@ -200,7 +188,10 @@ export function RequestRow({
               Activity
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <ol aria-label="Request activity" className={styles.activityList}>
+              <ol
+                aria-label="Approval activity"
+                className={styles.activityList}
+              >
                 {requestActivity(request).map((event, i) => (
                   <li key={`${event.label}-${i}`}>
                     <span>{event.label}</span>
@@ -219,10 +210,9 @@ export function RequestRow({
     </article>
   );
 }
-
 function RequestCountdown({ deadline }: { deadline: number }) {
-  const now = useNow();
-  const minutes = Math.ceil((deadline - now) / 60_000);
+  const now = useNow(),
+    minutes = Math.ceil((deadline - now) / 60_000);
   return (
     <time dateTime={new Date(deadline).toISOString()}>
       {minutes > 0 ? `${minutes} min to decide` : "Closing…"}

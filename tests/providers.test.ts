@@ -152,7 +152,10 @@ test("disconnect uses only Connect for the exact original subject and installati
 });
 test("a failed or lost Connect response retries the same target without fetching a deleted token", async () => {
   sdk.revoke.mockRejectedValueOnce(new Error("response lost"));
-  expect(await disconnect(slack)).toEqual({ outcome: "failed" });
+  expect(await disconnect(slack)).toMatchObject({
+    outcome: "failed",
+    code: expect.any(String),
+  });
   expect(await disconnect(slack)).toEqual({ outcome: "succeeded" });
   expect(sdk.revoke.mock.calls[0]).toEqual(sdk.revoke.mock.calls[1]);
   expect(sdk.token).not.toHaveBeenCalled();
@@ -180,10 +183,13 @@ test("only an explicit absent user authorization is completion; configuration an
     new Error("network unavailable"),
   ]) {
     sdk.revoke.mockRejectedValueOnce(error);
-    expect(await disconnect(slack)).toEqual({ outcome: "failed" });
+    expect(await disconnect(slack)).toMatchObject({
+      outcome: "failed",
+      code: expect.any(String),
+    });
   }
   sdk.revoke.mockClear();
-  expect(await disconnect({ ...slack, installationId: "*" })).toEqual({
+  expect(await disconnect({ ...slack, installationId: "*" })).toMatchObject({
     outcome: "failed",
   });
   expect(sdk.revoke).not.toHaveBeenCalled();

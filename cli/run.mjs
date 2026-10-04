@@ -122,7 +122,9 @@ export async function executeCommand(
     });
   let bytes = 0,
     stopReason,
-    killTimer;
+    killTimer,
+    drainTimer,
+    finish;
   const stop = (reason) => {
     if (stopReason) return;
     stopReason = reason;
@@ -133,7 +135,12 @@ export async function executeCommand(
       } catch {}
     };
     kill("SIGTERM");
-    killTimer = setTimeout(() => kill("SIGKILL"), 1000);
+    killTimer = setTimeout(() => {
+      kill("SIGKILL");
+      child.stdout.destroy();
+      child.stderr.destroy();
+      finish?.(null, null);
+    }, 1000);
   };
   const out = streamRedactor([token, ...secrets], stdout),
     err = streamRedactor([token, ...secrets], stderr);
@@ -149,10 +156,10 @@ export async function executeCommand(
   const timer = setTimeout(() => stop("timeout"), timeoutMs);
   try {
     return await new Promise((resolveResult) => {
-      child.once("error", () =>
-        resolveResult({ exitCode: 127, reason: "start-failed" }),
-      );
-      child.once("close", (code, terminatedBy) =>
+      let done = false;
+      finish = (code, terminatedBy) => {
+        if (done) return;
+        done = true;
         resolveResult({
           exitCode:
             stopReason === "cancelled"
@@ -167,8 +174,23 @@ export async function executeCommand(
             : terminatedBy
               ? { reason: "signal" }
               : {}),
-        }),
-      );
+        });
+      };
+      child.once("error", () => {
+        if (!done) {
+          done = true;
+          resolveResult({ exitCode: 127, reason: "start-failed" });
+        }
+      });
+      child.once("close", finish);
+      // Detached descendants can inherit pipes. Bound draining after the main child exits.
+      child.once("exit", (code, terminatedBy) => {
+        drainTimer = setTimeout(() => {
+          child.stdout.destroy();
+          child.stderr.destroy();
+          finish(code, terminatedBy);
+        }, 100);
+      });
     });
   } finally {
     if (stopReason && process.platform !== "win32") {
@@ -178,6 +200,9 @@ export async function executeCommand(
     }
     clearTimeout(timer);
     clearTimeout(killTimer);
+    clearTimeout(drainTimer);
+    child.stdout.destroy();
+    child.stderr.destroy();
     signal?.removeEventListener("abort", abort);
     out.end();
     err.end();
@@ -189,7 +214,7 @@ async function saveJournal(path, journal) {
   await rename(temp, path);
 }
 export async function runApproved(
-  { accountId, reason, command, key, timeoutMs },
+  { accountId, reason, agentName = "CLI", command, key, timeoutMs },
   {
     call = scopeCall,
     signal,
@@ -227,7 +252,7 @@ export async function runApproved(
     if (!info.isFile() || info.mode & 0o077 || info.uid !== process.getuid?.())
       throw new Error("Invocation file must be private");
     journal = JSON.parse(await readFile(path, "utf8"));
-    const invocation = { accountId, reason: reason.trim(), command };
+    const invocation = { accountId, reason: reason.trim(), agentName, command };
     if (
       journal.invocation &&
       !isDeepStrictEqual(journal.invocation, invocation)
@@ -242,10 +267,16 @@ export async function runApproved(
     journal.invocation = invocation;
     // Persist the stable key before any approval request. Provider tokens are never journaled.
     await saveJournal(path, journal);
-    const request = await call("request", { key, ...invocation }, { signal });
+    const request = await call(
+      "request",
+      { accountId, reason: reason.trim(), agentName },
+      { signal },
+    );
     journal.requestId = request.id;
     await saveJournal(path, journal);
-    output(`Invocation ${key}\nApprove: ${request.approvalUrl}`);
+    output(
+      `Invocation ${key}\n${request.status === "active" ? "Active approval" : "Approve"}: ${request.approvalUrl}`,
+    );
     let context;
     for (;;) {
       if (signal?.aborted) throw new Error("Request cancelled");
@@ -253,14 +284,10 @@ export async function runApproved(
       if (context.status !== "pending") break;
       await wait(1000, undefined, { signal });
     }
-    if (context.status !== "approved")
+    if (context.status !== "active")
       throw new Error(`Access ${context.status}`);
-    if (
-      context.accountId !== accountId ||
-      context.reason !== reason.trim() ||
-      !isDeepStrictEqual(context.command, command)
-    )
-      throw new Error("Approval does not match this invocation");
+    if (context.accountId !== accountId)
+      throw new Error("Approval does not match this account");
     const credential = await call("deliver", { id: request.id }, { signal });
     if (
       credential.status !== "ready" ||
@@ -268,11 +295,11 @@ export async function runApproved(
       credential.accountId !== accountId ||
       credential.requestId !== request.id ||
       credential.grantVersion !== context.grantVersion ||
-      credential.requesterConnectionId !== context.requesterConnectionId ||
-      !isDeepStrictEqual(credential.command, command) ||
       JSON.stringify(credential.grantedScopes) !==
         JSON.stringify(context.snapshot.grantedScopes) ||
-      credential.approvalExpiresAt <= Date.now()
+      typeof credential.until !== "number" ||
+      !Number.isFinite(credential.until) ||
+      credential.until <= Date.now()
     )
       throw new Error("Credential does not match this approval");
     await call(
@@ -291,13 +318,6 @@ export async function runApproved(
     journal.result = result;
     await saveJournal(path, journal);
     return result;
-  } catch (error) {
-    if (signal?.aborted && journal?.requestId && journal.state !== "finished") {
-      try {
-        await call("cancel", { id: journal.requestId }, {});
-      } catch {}
-    }
-    throw error;
   } finally {
     await release();
   }

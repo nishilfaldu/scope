@@ -128,7 +128,7 @@ test("one invocation freezes context, waits, receipts privately and never reruns
     timeoutMs: 1000,
   };
   const context = {
-    status: "approved",
+    status: "active",
     accountId: "account",
     reason: "Summarize",
     command: { envVar: command.envVar, cwd: command.cwd, argv: command.argv },
@@ -137,9 +137,11 @@ test("one invocation freezes context, waits, receipts privately and never reruns
     snapshot: { grantedScopes: ["channels:read"] },
   };
   let statuses = 0;
-  const call = vi.fn(async (operation: string) => {
-    if (operation === "request")
-      return { id: "request", approvalUrl: "https://scope/approvals" };
+  const call = vi.fn(async (operation: string, _body?: unknown) => {
+    if (operation === "request") {
+      expect(_body).not.toHaveProperty("command");
+      return { id: "request", approvalUrl: "https://scope/access" };
+    }
     if (operation === "status")
       return statuses++ ? context : { status: "pending" };
     if (operation === "deliver")
@@ -149,7 +151,7 @@ test("one invocation freezes context, waits, receipts privately and never reruns
         requestId: "request",
         grantedScopes: ["channels:read"],
         accessToken: secret,
-        approvalExpiresAt: Date.now() + 10000,
+        until: Date.now() + 10000,
         receiptProof: "private",
       };
     if (operation === "receipt") return { received: true };
@@ -166,7 +168,23 @@ test("one invocation freezes context, waits, receipts privately and never reruns
         wait: async () => {},
       }),
     ).toEqual({ exitCode: 0 });
-    expect(execute).toHaveBeenCalledOnce();
+    expect(call.mock.calls.find((c) => c[0] === "request")?.[1]).toEqual({
+      accountId: "account",
+      reason: "Summarize",
+      agentName: "CLI",
+    });
+    await runApproved(
+      {
+        ...args,
+        key: "another-invocation-123",
+        command: {
+          ...command,
+          argv: [process.execPath, "-e", "console.log('second')"],
+        },
+      },
+      { call, execute, journalRoot, output: () => {} },
+    );
+    expect(execute).toHaveBeenCalledTimes(2);
     const saved = await readFile(join(journalRoot, args.key + ".json"), "utf8");
     expect(saved).not.toContain(secret);
     expect(saved).not.toContain("receiptProof");
@@ -179,7 +197,7 @@ test("one invocation freezes context, waits, receipts privately and never reruns
         { call, execute, journalRoot },
       ),
     ).rejects.toThrow("Invocation changed");
-    expect(execute).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledTimes(2);
   } finally {
     await rm(journalRoot, { recursive: true, force: true });
   }
@@ -193,7 +211,7 @@ test("denied, expired and mismatched approvals never start a child", async () =>
     "SLACK_TOKEN",
   );
   try {
-    for (const status of ["denied", "expired", "unavailable", "cancelled"]) {
+    for (const status of ["denied", "expired", "unavailable", "ended"]) {
       const call = vi.fn(async (operation: string) =>
         operation === "request" ? { id: "request" } : { status },
       );
@@ -210,6 +228,72 @@ test("denied, expired and mismatched approvals never start a child", async () =>
       ).rejects.toThrow();
       expect(call.mock.calls.map((c) => c[0])).not.toContain("deliver");
     }
+    expect(execute).not.toHaveBeenCalled();
+  } finally {
+    await rm(journalRoot, { recursive: true, force: true });
+  }
+});
+
+test("detached descendants inheriting pipes cannot keep a timed-out runner waiting", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "scope-pipes-")),
+    file = join(directory, "pid");
+  const program = `const {spawn}=require('node:child_process');const fs=require('node:fs');const p=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:['ignore',1,2]});fs.writeFileSync(${JSON.stringify(file)},String(p.pid));setInterval(()=>{},1000)`;
+  const command = await commandContext(
+    [process.execPath, "-e", program],
+    process.cwd(),
+    "SLACK_TOKEN",
+  );
+  const started = Date.now();
+  try {
+    expect(
+      await executeCommand(command, secret, {
+        timeoutMs: 300,
+        stdout: () => {},
+        stderr: () => {},
+      }),
+    ).toMatchObject({ exitCode: 124, reason: "timeout" });
+    expect(Date.now() - started).toBeLessThan(2500);
+  } finally {
+    try {
+      process.kill(Number(await readFile(file, "utf8")), "SIGKILL");
+    } catch {}
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+test("cancelling while waiting never ends the shared approval", async () => {
+  const journalRoot = await mkdtemp(join(tmpdir(), "scope-abort-")),
+    controller = new AbortController(),
+    execute = vi.fn();
+  const call = vi.fn(async (op: string) => {
+    if (op === "request") {
+      controller.abort();
+      return { id: "shared" };
+    }
+    throw new Error("unexpected");
+  });
+  try {
+    await expect(
+      runApproved(
+        {
+          accountId: "account",
+          reason: "Read",
+          command: {
+            argv: ["node"],
+            cwd: process.cwd(),
+            envVar: "SLACK_TOKEN",
+          },
+          key: "invocation-abort-123",
+        },
+        {
+          call,
+          execute,
+          journalRoot,
+          signal: controller.signal,
+          output: () => {},
+        },
+      ),
+    ).rejects.toThrow("cancelled");
+    expect(call.mock.calls.map((c) => c[0])).toEqual(["request"]);
     expect(execute).not.toHaveBeenCalled();
   } finally {
     await rm(journalRoot, { recursive: true, force: true });

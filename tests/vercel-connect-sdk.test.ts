@@ -31,8 +31,8 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
     providerUserId: "U1",
     providerTenantId: "T1",
   };
-  let tokens = 0,
-    revoked = false;
+  let tokens = 0;
+  const deletes: unknown[] = [];
   const transport = vi
     .spyOn(globalThis, "fetch")
     .mockImplementation(async (input, init) => {
@@ -84,15 +84,10 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
         if (url.endsWith("/connectors/scl_slack/tokens")) {
           expect(method).toBe("DELETE");
           expect(body.installationId).toBe("inst_T1");
+          deletes.push({ method, body });
           return new Response(null, { status: 204 });
         }
       }
-      if (url === "https://slack.com/api/auth.revoke") {
-        revoked = true;
-        return Response.json({ ok: true, revoked: true });
-      }
-      if (url === "https://slack.com/api/auth.test" && revoked)
-        return Response.json({ ok: false, error: "token_revoked" });
       if (url === "https://slack.com/api/auth.test")
         return Response.json(
           { ok: true, team_id: "T1", user_id: "U1" },
@@ -113,5 +108,18 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
   });
   expect(tokens).toBe(2);
   expect(await disconnect(ref)).toEqual({ outcome: "succeeded" });
-  expect(transport).toHaveBeenCalled();
+  expect(deletes).toEqual([
+    {
+      method: "DELETE",
+      body: expect.objectContaining({
+        subject: { type: "user", id: ref.subjectId, issuer: ref.issuer },
+        installationId: "inst_T1",
+      }),
+    },
+  ]);
+  expect(
+    transport.mock.calls.some(([input]) =>
+      String(input).includes("auth.revoke"),
+    ),
+  ).toBe(false);
 });

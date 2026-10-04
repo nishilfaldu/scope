@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useQuery } from "convex/react";
+import { usePaginatedQuery } from "convex/react";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { api } from "@/convex/_generated/api";
@@ -27,17 +27,22 @@ import {
   type ApprovalAccount,
 } from "@/lib/approval-display";
 import styles from "@/components/scope/scope.module.css";
+import { failureMessage } from "@/shared/failures.mjs";
 type ProviderView = {
   providerId: string;
   provider: string;
   permissions: string[];
 };
 export function ConnectionsBoard() {
-  const accounts = useQuery(api.accounts.forOwner, {});
+  const page = usePaginatedQuery(
+    api.accounts.forOwner,
+    {},
+    { initialNumItems: 20 },
+  );
+  const accounts = page.results;
   const [provider, setProvider] = useState<ProviderView>();
   const [connectingId, setConnectingId] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const [providerFailed, setProviderFailed] = useState(false);
   const [manage, setManage] = useState<ApprovalAccount | null>(null);
   useEffect(() => {
     let active = true;
@@ -54,7 +59,6 @@ export function ConnectionsBoard() {
         }
       } catch {
         if (!active) return;
-        setProviderFailed(true);
         toast.add({
           id: "provider-load",
           timeout: 0,
@@ -64,7 +68,6 @@ export function ConnectionsBoard() {
           actionProps: {
             children: "Retry",
             onClick: () => {
-              setProviderFailed(false);
               void loadProvider();
             },
           },
@@ -80,11 +83,12 @@ export function ConnectionsBoard() {
         title:
           result === "connected"
             ? "Account connected."
-            : "Sign-in did not complete. Try connecting again.",
+            : failureMessage(url.searchParams.get("error")),
         type: result === "connected" ? "success" : "error",
         priority: result === "connected" ? "low" : "high",
       });
       url.searchParams.delete("connection");
+      url.searchParams.delete("error");
       window.history.replaceState({}, "", url.pathname + url.search + url.hash);
     }
     return () => {
@@ -96,10 +100,12 @@ export function ConnectionsBoard() {
     setBusy(true);
     try {
       await action();
-    } catch {
+    } catch (error) {
       toast.add({
         title:
-          "Could not complete this connection. Check your sign-in and try again.",
+          error instanceof Error
+            ? error.message
+            : "Could not complete this connection. Try again.",
         type: "error",
         priority: "high",
       });
@@ -127,10 +133,18 @@ export function ConnectionsBoard() {
         <p>Your connected accounts.</p>
       </header>
       <div className={styles.connectionList}>
-        {!provider && providerFailed ? null : !provider || !accounts ? (
+        {page.status === "LoadingFirstPage" ? (
           <BoardSkeleton kind="connections" />
         ) : (
-          [provider].map((integration) => {
+          [
+            {
+              providerId: "slack",
+              provider:
+                accounts.find((a) => a.providerId === "slack")?.providerName ??
+                "Slack",
+              permissions: provider?.permissions ?? [],
+            },
+          ].map((integration) => {
             const rows = accounts.filter(
               (a) => a.providerId === integration.providerId,
             );
@@ -143,7 +157,7 @@ export function ConnectionsBoard() {
                     <Button
                       variant="ghost"
                       className={styles.addAccount}
-                      disabled={busy}
+                      disabled={busy || !provider}
                       onClick={() => void connectAccount(integration)}
                     >
                       {connectingId === integration.providerId && (
@@ -206,6 +220,16 @@ export function ConnectionsBoard() {
           })
         )}
       </div>
+      {(page.status === "CanLoadMore" || page.status === "LoadingMore") && (
+        <Button
+          variant="outline"
+          className="mt-4"
+          disabled={page.status === "LoadingMore"}
+          onClick={() => page.loadMore(20)}
+        >
+          Load more accounts
+        </Button>
+      )}
       <Dialog
         open={!!manage}
         onOpenChange={(open) => {
@@ -216,7 +240,8 @@ export function ConnectionsBoard() {
           <DialogHeader>
             <DialogTitle>Disconnect Slack?</DialogTitle>
             <DialogDescription>
-              Disconnect {accountName(manage?.label)} and stop its requests.
+              Stop token collection for {accountName(manage?.label)} and revoke
+              its connection.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -233,15 +258,18 @@ export function ConnectionsBoard() {
               onClick={() =>
                 void run(async () => {
                   if (!manage) return;
-                  const result = await approvalPost<{ outcome: string }>(
-                    "/api/accounts/disconnect",
-                    { id: manage._id, grantVersion: manage.grantVersion },
-                  );
+                  const result = await approvalPost<{
+                    outcome: string;
+                    code?: string;
+                  }>("/api/accounts/disconnect", {
+                    id: manage._id,
+                    grantVersion: manage.grantVersion,
+                  });
                   toast.add({
                     title:
                       result.outcome === "succeeded"
                         ? "Account disconnected."
-                        : "Could not disconnect the account. Try again.",
+                        : failureMessage(result.code),
                     type: result.outcome === "succeeded" ? "success" : "error",
                     priority: result.outcome === "succeeded" ? "low" : "high",
                   });

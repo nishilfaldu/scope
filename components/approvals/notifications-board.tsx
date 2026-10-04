@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import {
+  matchesApplicationKey,
   notificationSupport,
   enableBrowserNotifications,
   type NotificationSupport,
@@ -15,6 +16,7 @@ import styles from "@/components/scope/scope.module.css";
 export function NotificationsBoard() {
   const sendTest = useAction(api.notificationDelivery.test);
   const subscribe = useMutation(api.notifications.subscribe);
+  const unsubscribe = useMutation(api.notifications.unsubscribe);
   const [support, setSupport] = useState<NotificationSupport>("checking"),
     [endpoint, setEndpoint] = useState("");
   const saved = useQuery(
@@ -41,7 +43,16 @@ export function NotificationsBoard() {
           ),
         );
         const subscription = await registration?.pushManager.getSubscription();
-        if (active) setEndpoint(subscription?.endpoint ?? "");
+        if (active)
+          setEndpoint(
+            subscription &&
+              matchesApplicationKey(
+                subscription,
+                process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
+              )
+              ? subscription.endpoint
+              : "",
+          );
       } catch {
         if (active) setEndpoint("");
       } finally {
@@ -61,7 +72,9 @@ export function NotificationsBoard() {
       const data = await enableBrowserNotifications(
         process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "",
       );
-      await subscribe(data);
+      const { replacedEndpoint, ...subscription } = data;
+      if (replacedEndpoint) await unsubscribe({ endpoint: replacedEndpoint });
+      await subscribe(subscription);
       setEndpoint(data.endpoint);
       toast.add({ title: "Notifications enabled.", type: "success" });
     } catch (e) {

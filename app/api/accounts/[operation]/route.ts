@@ -7,6 +7,8 @@ import {
   beginAuthorization,
   configuredSlack,
   disconnect,
+  inspectConnection,
+  ProviderFailure,
 } from "@/lib/providers";
 import {
   config,
@@ -15,6 +17,7 @@ import {
   scopeOrigin,
   json,
   safeError,
+  safeFailure,
 } from "@/lib/scope-server";
 export const runtime = "nodejs";
 export async function GET(
@@ -23,6 +26,10 @@ export async function GET(
 ) {
   try {
     await ownerDb();
+  } catch {
+    return safeError(401);
+  }
+  try {
     if ((await params).operation !== "provider")
       return new Response(null, { status: 404 });
     const { scopes } = await configuredSlack();
@@ -31,8 +38,8 @@ export async function GET(
       provider: "Slack",
       permissions: scopes,
     });
-  } catch {
-    return safeError(401);
+  } catch (error) {
+    return safeFailure(error);
   }
 }
 export async function POST(
@@ -48,11 +55,9 @@ export async function POST(
     if (Buffer.byteLength(raw) > 8192) return safeError(413);
     const body: unknown = JSON.parse(raw);
     if (operation === "authorize") {
-      const args = z
-        .object({
-          providerId: z.literal("slack"),
-          targetAccountId: z.string().optional(),
-        })
+      z.object({
+        providerId: z.literal("slack"),
+      })
         .strict()
         .parse(body);
       const { connectorId, scopes: requestedScopes } = await configuredSlack(),
@@ -65,13 +70,10 @@ export async function POST(
         issuer,
         requestedScopes,
         providerName: "Slack",
-        accessDescription: requestedScopes.join(", "),
         proofHash: createHash("sha256").update(proof).digest("hex"),
-        targetAccountId: args.targetAccountId as
-          Id<"connectedAccounts"> | undefined,
       });
       const callback = new URL("/api/accounts/complete", scopeOrigin());
-      callback.searchParams.set("attempt", attempt.id);
+      callback.searchParams.set("setup", attempt.id);
       const authorization = await beginAuthorization(
         {
           providerId: "slack",
@@ -97,11 +99,51 @@ export async function POST(
           .strict()
           .parse(body),
         accountId = id as Id<"connectedAccounts">;
+      let saved = await client.query(api.accounts.setupForOwner, {
+        secret,
+        id: accountId,
+      });
+      if (saved.grantVersion !== grantVersion)
+        throw new Error("Account changed");
+      if (saved.provisional && !saved.connect.installationId) {
+        try {
+          const grant = await inspectConnection({
+            ...saved.connect,
+            providerId: saved.providerId,
+            grantedScopes: saved.requestedScopes ?? saved.grantedScopes,
+          });
+          await client.mutation(api.accounts.completeConnection, {
+            secret,
+            id: accountId,
+            activate: false,
+            providerUserId: grant.providerUserId,
+            providerTenantId: grant.providerTenantId,
+            label: grant.label,
+            installationId: grant.installationId,
+            grantedScopes: grant.grantedScopes,
+          });
+          saved = await client.query(api.accounts.setupForOwner, {
+            secret,
+            id: accountId,
+          });
+        } catch (error) {
+          if (error instanceof ProviderFailure && error.authorizationAbsent) {
+            await client.mutation(api.accounts.abandonWithoutGrant, {
+              secret,
+              id: accountId,
+            });
+            return json({ outcome: "succeeded" });
+          }
+          throw error;
+        }
+      }
       const blocked = await client.mutation(api.accounts.block, {
+        secret,
         id: accountId,
         grantVersion,
       });
-      if (blocked.disconnected) return json({ outcome: "succeeded" });
+      if (blocked.disconnectOutcome === "succeeded")
+        return json({ outcome: "succeeded" });
       const result = await disconnect({
         ...blocked.connect,
         providerId: blocked.providerId,
@@ -115,10 +157,13 @@ export async function POST(
         grantVersion: blocked.grantVersion,
         outcome: result.outcome,
       });
-      return json({ outcome });
+      return json({
+        outcome,
+        ...(result.outcome === "failed" ? { code: result.code } : {}),
+      });
     }
     return new Response(null, { status: 404 });
-  } catch {
-    return safeError();
+  } catch (error) {
+    return safeFailure(error);
   }
 }

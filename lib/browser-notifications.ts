@@ -95,23 +95,45 @@ export async function enableBrowserNotifications(publicKey: string) {
       updateViaCache: "none",
     }),
   );
-  const subscription =
-    (await registration.pushManager.getSubscription()) ??
-    (await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: Uint8Array.from(
-        atob(publicKey.replace(/-/g, "+").replace(/_/g, "/")),
-        (c) => c.charCodeAt(0),
-      ),
-    }));
+  let subscription = await registration.pushManager.getSubscription();
+  let replacedEndpoint: string | undefined;
+  if (subscription && !matchesApplicationKey(subscription, publicKey)) {
+    replacedEndpoint = subscription.endpoint;
+    if (!(await subscription.unsubscribe()))
+      throw new Error("Could not update notification setup. Try again.");
+    subscription = null;
+  }
+  subscription ??= await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: decodeKey(publicKey),
+  });
   const data = subscription.toJSON();
   if (!data.keys?.p256dh || !data.keys.auth)
     throw new Error(
       "The browser did not finish notification setup. Try again.",
     );
   return {
+    replacedEndpoint,
     endpoint: subscription.endpoint,
     p256dh: data.keys.p256dh,
     auth: data.keys.auth,
   };
+}
+
+function decodeKey(key: string) {
+  return Uint8Array.from(atob(key.replace(/-/g, "+").replace(/_/g, "/")), (c) =>
+    c.charCodeAt(0),
+  );
+}
+export function matchesApplicationKey(
+  subscription: PushSubscription,
+  publicKey: string,
+) {
+  if (!publicKey || !subscription.options.applicationServerKey) return false;
+  const actual = new Uint8Array(subscription.options.applicationServerKey),
+    expected = decodeKey(publicKey);
+  return (
+    actual.length === expected.length &&
+    actual.every((byte, i) => byte === expected[i])
+  );
 }

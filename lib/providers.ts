@@ -33,6 +33,7 @@ export class ProviderFailure extends Error {
       | "configuration-invalid"
       | "retryable-unavailable"
       | "grant-rejected",
+    public readonly authorizationAbsent = false,
   ) {
     super(kind);
   }
@@ -44,7 +45,12 @@ function failure(error: unknown): ProviderFailure {
     error instanceof UserAuthorizationRequiredError ||
     error instanceof ConnectorInstallationRequiredError
   )
-    return new ProviderFailure("reauthorization-required");
+    return new ProviderFailure(
+      "reauthorization-required",
+      error instanceof UserAuthorizationRequiredError &&
+        error.code === "user_authorization_required" &&
+        (error.status === 400 || error.status === 404),
+    );
   if (
     error instanceof ConnectError &&
     error.status !== undefined &&
@@ -187,6 +193,7 @@ function verifyIdentity(
 export async function acquireVerifiedCredential(
   reference: GrantReference,
   completing = false,
+  inspectOnly = false,
 ) {
   try {
     const grant = await freshGrant(reference, completing),
@@ -209,8 +216,9 @@ export async function acquireVerifiedCredential(
       throw new ProviderFailure("grant-rejected");
     }
     if (
+      !inspectOnly &&
       JSON.stringify(grantedScopes) !==
-      JSON.stringify(canonicalScopes(reference.grantedScopes))
+        JSON.stringify(canonicalScopes(reference.grantedScopes))
     ) {
       throw new ProviderFailure("grant-rejected");
     }
@@ -242,6 +250,13 @@ export async function disconnect(reference: GrantReference) {
       (error.status === 400 || error.status === 404)
     )
       return { outcome: "succeeded" as const };
-    return { outcome: "failed" as const };
+    return { outcome: "failed" as const, code: failure(error).kind };
   }
+}
+
+// Setup inspection records the actual grant before deciding whether it is safe to activate.
+export async function inspectConnection(reference: GrantReference) {
+  const grant = await acquireVerifiedCredential(reference, true, true);
+  if (!grant.installationId) throw new ProviderFailure("grant-rejected");
+  return { ...grant, installationId: grant.installationId };
 }

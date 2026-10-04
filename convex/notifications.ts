@@ -77,38 +77,32 @@ export const pushStatus = query({
 // The retry component persists only the two IDs, never destination keys.
 export const deliverySubscription = internalQuery({
   args: {
-    requestId: v.id("approvalRequests"),
+    requestId: v.id("accessApprovals"),
     subscriptionId: v.id("pushSubscriptions"),
     now: v.number(),
   },
   returns: v.union(v.null(), subscription.extend({ ownerId: v.string() })),
   handler: async (ctx, { requestId, subscriptionId, now }) => {
     const [request, sub] = await Promise.all([
-      ctx.db.get("approvalRequests", requestId),
+      ctx.db.get("accessApprovals", requestId),
       ctx.db.get("pushSubscriptions", subscriptionId),
     ]);
     if (
       !request ||
       request.status !== "pending" ||
-      request.approvalExpiresAt <= now ||
+      request.waitingUntil <= now ||
       !sub ||
       sub.ownerId !== request.ownerId
     )
       return null;
-    const [account, requester] = await Promise.all([
-      ctx.db.get("connectedAccounts", request.accountId),
-      ctx.db.get("clientConnections", request.requesterConnectionId),
-    ]);
+    const account = await ctx.db.get("connectedAccounts", request.accountId);
     if (
       !account ||
       account.ownerId !== request.ownerId ||
       account.state !== "active" ||
       account.providerId !== request.providerId ||
       account.grantVersion !== request.grantVersion ||
-      !sameScopes(account.grantedScopes, request.snapshot.grantedScopes) ||
-      !requester ||
-      requester.ownerId !== request.ownerId ||
-      requester.stoppedAt !== undefined
+      !sameScopes(account.grantedScopes, request.snapshot.grantedScopes)
     )
       return null;
     return {

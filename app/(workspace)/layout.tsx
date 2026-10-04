@@ -14,13 +14,11 @@ import {
 export default function WorkspaceLayout({ children }: { children: ReactNode }) {
   const path = usePathname();
   const kind: BoardKind =
-    path === "/agents"
-      ? "agents"
-      : path === "/connections"
-        ? "connections"
-        : path === "/notifications"
-          ? "notifications"
-          : "requests";
+    path === "/connections"
+      ? "connections"
+      : path === "/notifications"
+        ? "notifications"
+        : "access";
   const title = kind[0].toUpperCase() + kind.slice(1);
   return (
     <PendingRequestsProvider>

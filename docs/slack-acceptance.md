@@ -1,3 +1,5 @@
+> Historical evidence: this document describes earlier implementations. The current timed approval model is documented in README.md and docs/credential-flows.md.
+
 > Current disconnect behavior: Scope now delegates revocation to Vercel Connect for the exact subject/installation. The explicit Slack revoke/invalidation checks described below are historical acceptance evidence from the earlier implementation. They are not a guarantee of the current flow; provider revocation remains subject to Connect’s documented limits.
 
 # Slack live acceptance

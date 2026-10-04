@@ -1,3 +1,5 @@
+> Historical evidence: this document describes earlier implementations. The current timed approval model is documented in README.md and docs/credential-flows.md.
+
 # Scope: a quiet access inbox
 
 The approved design described here has been adopted into the real app. `/design-review` now redirects to `/approvals`. The review boundary, sample interactions and screenshots below document the earlier prototype; current validation is recorded in `implementation-review.md`.

@@ -43,11 +43,10 @@ const sections: PolicySection[] = [
       <>
         <p>
           Scope uses provider authorization data to show you which accounts are
-          connected and to provide the access-control features you request. When
-          an agent requests access, Scope shows you the app, connected account,
-          access permissions, task, and sharing window. Scope issues credentials
-          for that request only after the required approval and ownership checks
-          succeed.
+          connected and provide the access controls you request. Access shows
+          the account, stated purpose and current approval status. You choose
+          how long to allow token requests without asking again. The window
+          begins at approval and does not set the provider token&apos;s expiry.
         </p>
         <p>
           Scope does not use connected-service data for advertising, credit
@@ -63,11 +62,10 @@ const sections: PolicySection[] = [
       <>
         <p>
           When you approve an access request, Scope provides a credential to the
-          CLI identified in the request so it can access the app and account
-          authorization you approved. Every approval gives the program the
-          connection&apos;s full permissions. The purpose explains the
-          agent&apos;s task; it does not restrict what a received credential can
-          do. You should approve only agents and requests you trust.
+          authenticated CLI session for the selected account and grant. Every
+          token includes all permissions granted when you connected the account.
+          The stated purpose does not restrict the token. Approve only requests
+          from programs you trust.
         </p>
         <p>
           Scope uses infrastructure service providers to host the application,
@@ -111,13 +109,15 @@ const sections: PolicySection[] = [
           limited period to protect users and investigate service abuse.
         </p>
         <p>
-          You can stop further sharing through an account, request, or
-          authorized CLI connection in Scope. Previously received credentials
-          may remain active after a request or CLI connection stops. Account
-          disconnect blocks sharing immediately and is complete only after Slack
-          revocation is confirmed. A failed disconnect can be retried. You can
-          also revoke Scope in the connected provider&apos;s account settings.
-          To request deletion of your Scope account and associated data, email{" "}
+          End approval stops further token collection in Scope. It does not
+          revoke tokens already received or stop programs. Disconnect blocks
+          collection immediately and asks Vercel Connect to revoke the selected
+          subject and installation. Connect attempts provider revocation where
+          supported. Scope reports completion from Connect&apos;s result.
+          Provider credentials may remain valid when upstream revocation is
+          unsupported. A failure can be retried with Disconnect. You can also
+          revoke Scope in the provider&apos;s account settings. To request
+          deletion of your Scope account and associated data, email{" "}
           <a href="mailto:nishilfaldu@gmail.com">nishilfaldu@gmail.com</a>.
         </p>
       </>
@@ -152,7 +152,7 @@ export default function PrivacyPage() {
           <aside className="lg:sticky lg:top-10 lg:self-start">
             <p className="text-sm font-semibold">Scope</p>
             <p className="mt-1 text-sm text-[#68746a] dark:text-muted-foreground">
-              Effective October 3, 2026
+              Effective October 4, 2026
             </p>
             <nav
               className="mt-7 hidden border-l border-[#d8e1d4] pl-4 text-sm lg:block dark:border-border"

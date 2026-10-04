@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
-export type BoardKind = "requests" | "connections" | "agents" | "notifications";
-export function BoardSkeleton({ kind = "requests" }: { kind?: BoardKind }) {
+export type BoardKind = "access" | "connections" | "notifications";
+export function BoardSkeleton({ kind = "access" }: { kind?: BoardKind }) {
   return (
     <div role="status" aria-label={`Loading ${kind}`} aria-busy="true">
       <span className="sr-only">Loading {kind}</span>
@@ -12,13 +12,13 @@ export function BoardSkeleton({ kind = "requests" }: { kind?: BoardKind }) {
           </div>
         ) : (
           <div className="divide-y divide-[#e3e9e3]">
-            {Array.from({ length: kind === "requests" ? 3 : 2 }, (_, i) => (
+            {Array.from({ length: kind === "access" ? 3 : 2 }, (_, i) => (
               <div key={i} className="flex gap-4 p-6">
                 <Skeleton className="size-9 shrink-0 rounded-full" />
                 <div className="flex-1 space-y-3 py-1">
                   <Skeleton className="h-4 w-2/5 max-w-64 rounded-md" />
                   <Skeleton className="h-3 w-3/5 max-w-80 rounded-md" />
-                  {kind === "requests" && (
+                  {kind === "access" && (
                     <Skeleton className="mt-5 h-3 w-4/5 rounded-md" />
                   )}
                 </div>
@@ -32,7 +32,7 @@ export function BoardSkeleton({ kind = "requests" }: { kind?: BoardKind }) {
   );
 }
 export function WorkspaceSkeleton({
-  kind = "requests",
+  kind = "access",
   title,
 }: {
   kind?: BoardKind;

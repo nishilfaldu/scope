@@ -3,20 +3,21 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { useConvexAuth, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import type { ApprovalRequest } from "@/lib/approval-display";
 
-type PendingRequests = { rows: ApprovalRequest[] | undefined };
+type PendingRequests = { count: number | undefined };
 const PendingRequestsContext = createContext<PendingRequests | null>(null);
 
 export function PendingRequestsProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useConvexAuth();
-  const rows = useQuery(
-    api.approvals.pendingForOwner,
+  const count = useQuery(
+    api.access.pendingCount,
     isAuthenticated ? {} : "skip",
   );
 
   return (
-    <PendingRequestsContext value={{ rows }}>{children}</PendingRequestsContext>
+    <PendingRequestsContext value={{ count }}>
+      {children}
+    </PendingRequestsContext>
   );
 }
 

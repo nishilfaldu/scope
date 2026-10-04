@@ -19,27 +19,27 @@ export const principal = v.object({
 export const actor = principal.extend({
   secret: v.string(),
 });
-export const decision = v.union(
+export const accessStatus = v.union(
   v.literal("pending"),
-  v.literal("approved"),
+  v.literal("active"),
   v.literal("denied"),
-  v.literal("cancelled"),
+  v.literal("ended"),
+  v.literal("expired"),
+);
+export const section = v.union(
+  v.literal("pending"),
+  v.literal("active"),
+  v.literal("history"),
 );
 export const disconnectOutcome = v.union(
   v.literal("pending"),
   v.literal("succeeded"),
   v.literal("failed"),
 );
-export const command = v.object({
-  argv: v.array(v.string()),
-  cwd: v.string(),
-  envVar: v.string(),
-});
 export const snapshot = v.object({
   accountLabel: v.string(),
   providerName: v.string(),
-  accessDescription: v.string(),
-  requesterName: v.string(),
+  agentName: v.string(),
   grantedScopes: v.array(v.string()),
 });
 export type Actor = Infer<typeof actor>;
@@ -86,26 +86,6 @@ export async function verifiedActor(_ctx: Ctx, args: Actor) {
     !validSession(args.sessionId)
   )
     throw new Error("Unauthorized");
-}
-export async function clientActor(ctx: Ctx, args: Actor, allowStopped = false) {
-  await verifiedActor(ctx, args);
-  const row = await ctx.db
-    .query("clientConnections")
-    .withIndex("by_issuer_and_subject_and_clientId_and_sessionId", (q) =>
-      q
-        .eq("issuer", args.issuer)
-        .eq("subject", args.subject)
-        .eq("clientId", args.clientId)
-        .eq("sessionId", args.sessionId),
-    )
-    .unique();
-  if (
-    !row ||
-    row.ownerId !== args.subject ||
-    (!allowStopped && row.stoppedAt !== undefined)
-  )
-    throw new Error("Connection unavailable");
-  return row;
 }
 export function sameScopes(a: string[], b: string[]) {
   const left = canonicalScopes(a),

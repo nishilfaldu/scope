@@ -8,6 +8,6 @@ export async function GET(request: NextRequest) {
     !value.startsWith("//") &&
     !value.includes("\\")
       ? value
-      : "/approvals";
+      : "/access";
   return NextResponse.redirect(await getSignInUrl({ returnTo }));
 }

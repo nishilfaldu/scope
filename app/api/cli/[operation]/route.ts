@@ -1,15 +1,12 @@
 import { z } from "zod";
-import { validCommand } from "@/shared/contracts.mjs";
-import type { CommandContext } from "@/lib/approval-service";
 import type { Id } from "@/convex/_generated/dataModel";
-import { clientActor, json, safeError } from "@/lib/scope-server";
+import { clientActor, json, safeError, safeFailure } from "@/lib/scope-server";
 import {
   deliverCredential,
   listAccounts,
   recordReceipt,
   requestAccess,
   requestStatus,
-  cancelRequest,
 } from "@/lib/approval-service";
 export const runtime = "nodejs";
 export async function POST(
@@ -20,22 +17,26 @@ export async function POST(
   try {
     actor = await clientActor(request);
   } catch {
-    return safeError(401);
+    return safeError(401, "authority-invalid");
   }
   try {
     const { operation } = await params,
       raw = await request.text();
-    if (Buffer.byteLength(raw) > 32768) return safeError(413);
+    if (Buffer.byteLength(raw) > 32768) return safeError(413, "invalid-input");
     const body: unknown = JSON.parse(raw);
-    if (operation === "accounts")
-      return json({ accounts: await listAccounts(actor) });
+    if (operation === "accounts") {
+      const { cursor } = z
+        .object({ cursor: z.string().nullable().optional() })
+        .strict()
+        .parse(body);
+      return json(await listAccounts(actor, cursor ?? null));
+    }
     if (operation === "request") {
       const args = z
         .object({
           accountId: z.string(),
-          key: z.string().min(16).max(128),
+          agentName: z.string().trim().min(1).max(100),
           reason: z.string().trim().min(1).max(1000),
-          command: z.custom<CommandContext>(validCommand),
         })
         .strict()
         .parse(body);
@@ -50,11 +51,7 @@ export async function POST(
         .object({ id: z.string(), receiptProof: z.string().optional() })
         .strict()
         .parse(body),
-      id = args.id as Id<"approvalRequests">;
-    if (operation === "cancel") {
-      await cancelRequest(actor, id);
-      return json({ cancelled: true });
-    }
+      id = args.id as Id<"accessApprovals">;
     if (operation === "status") return json(await requestStatus(actor, id));
     if (operation === "deliver")
       return json(await deliverCredential(actor, id));
@@ -63,7 +60,7 @@ export async function POST(
       return json({ received: true });
     }
     return new Response(null, { status: 404 });
-  } catch {
-    return safeError();
+  } catch (error) {
+    return safeFailure(error);
   }
 }

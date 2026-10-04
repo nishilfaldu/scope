@@ -18,6 +18,7 @@ async function main() {
       origin: { type: "string" },
       account: { type: "string" },
       reason: { type: "string" },
+      name: { type: "string" },
       env: { type: "string" },
       id: { type: "string" },
       timeout: { type: "string" },
@@ -64,12 +65,17 @@ async function main() {
   if (operation === "logout") {
     await logout();
     console.log(
-      "Local Scope session removed. Stop the CLI connection in Agents to block pending approvals.",
+      "Local Scope session removed. End active approvals in Access to stop token collection.",
     );
     return;
   }
   if (operation === "accounts") {
-    console.log(JSON.stringify(await scopeCall("accounts", {}), null, 2));
+    let cursor = null;
+    do {
+      const page = await scopeCall("accounts", { cursor });
+      console.log(JSON.stringify(page.page, null, 2));
+      cursor = page.isDone ? null : page.continueCursor;
+    } while (cursor);
     return;
   }
   if (operation === "status" && positionals.length === 1) {
@@ -80,11 +86,6 @@ async function main() {
         2,
       ),
     );
-    return;
-  }
-  if (operation === "cancel" && positionals.length === 1) {
-    await scopeCall("cancel", { id: positionals[0] });
-    console.log("Request cancelled.");
     return;
   }
   if (operation === "run") {
@@ -99,12 +100,13 @@ async function main() {
       timeoutMs > 3_600_000
     )
       throw new Error(
-        "Use scope run --account ID --reason PURPOSE --env SLACK_TOKEN [--id ID] [--timeout SECONDS] -- COMMAND",
+        "Use scope run --account ID --reason PURPOSE --env SLACK_TOKEN [--name NAME] [--id ID] [--timeout SECONDS] -- COMMAND",
       );
     const result = await runApproved(
       {
         accountId: values.account,
         reason: values.reason,
+        agentName: values.name ?? "CLI",
         key: values.id ?? randomUUID(),
         command: await commandContext(command, process.cwd(), values.env),
         timeoutMs,
@@ -117,7 +119,7 @@ async function main() {
     return;
   }
   console.log(
-    "scope login --origin URL\nscope logout\nscope accounts\nscope status REQUEST_ID\nscope cancel REQUEST_ID\nscope run --account ID --reason PURPOSE --env SLACK_TOKEN -- COMMAND",
+    "scope login --origin URL\nscope logout\nscope accounts\nscope status REQUEST_ID\nscope run --account ID --reason PURPOSE --env SLACK_TOKEN [--name NAME] [--id ID] [--timeout SECONDS] -- COMMAND\n\nAn approval allows this CLI session to collect tokens for the selected account for 15, 30, or 60 minutes, starting when approved. Token collection does not extend the window. The window does not set the provider token lifetime.\nEvery token includes all permissions granted when you connected the account. The stated purpose does not restrict the token.\nEnd approval in Access to stop new collection. Disconnect in Connections to request provider revocation through Vercel Connect.",
   );
 }
 try {

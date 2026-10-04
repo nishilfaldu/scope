@@ -57,16 +57,19 @@ const sections: TermsSection[] = [
         <p>
           Agents are operated by you or by third parties you choose. Scope does
           not verify an agent&apos;s claims, instructions, or fitness for a
-          task. Review the connection, account, permissions, task, and sharing
-          window before approving access.
+          task. Review the account, stated purpose and approval window before
+          allowing token collection. Agent names and reasons are claims from the
+          requesting program; Scope does not verify them.
         </p>
         <p>
-          An approval allows the identified CLI to receive access within its
-          sharing window. It gives the program the connection&apos;s full
-          permissions. The purpose does not restrict what the received
-          credential can do. Previously received access may remain active at the
-          provider after Scope stops sharing. You are responsible for approvals
-          you grant and for the agents you authorize.
+          An approval lets the authenticated CLI session collect tokens for the
+          selected account without asking again for 15 minutes, 30 minutes or 1
+          hour. The window starts when you approve. Collection and receipt do
+          not extend it. Every token includes all permissions granted when you
+          connected the account. The stated purpose does not restrict the token.
+          End approval stops further collection in Scope. It does not change
+          provider token expiry, revoke received tokens or stop programs. You
+          are responsible for approvals you grant.
         </p>
       </>
     ),
@@ -123,8 +126,7 @@ const sections: TermsSection[] = [
     content: (
       <p>
         You may stop using Scope at any time, disconnect provider accounts, and
-        stop further sharing through authorized CLI connections and requests. To
-        request deletion of your Scope account, email{" "}
+        end active approvals. To request deletion of your Scope account, email{" "}
         <a href="mailto:nishilfaldu@gmail.com">nishilfaldu@gmail.com</a>. We may
         suspend or terminate access for a material breach of these terms or when
         needed to protect the service.
@@ -153,7 +155,7 @@ export default function TermsPage() {
           <aside className="lg:sticky lg:top-10 lg:self-start">
             <p className="text-sm font-semibold">Scope</p>
             <p className="mt-1 text-sm text-[#68746a] dark:text-muted-foreground">
-              Effective October 3, 2026
+              Effective October 4, 2026
             </p>
             <nav
               className="mt-7 hidden border-l border-[#d8e1d4] pl-4 text-sm lg:block dark:border-border"

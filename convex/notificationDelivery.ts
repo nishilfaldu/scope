@@ -8,7 +8,7 @@ import { owner } from "./scope";
 
 export const deliver = internalAction({
   args: {
-    requestId: v.id("approvalRequests"),
+    requestId: v.id("accessApprovals"),
     subscriptionId: v.id("pushSubscriptions"),
   },
   returns: v.null(),

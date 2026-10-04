@@ -8,8 +8,8 @@ self.addEventListener("push", (event) => {
     /* A malformed notification still opens the authenticated inbox. */
   }
   const url = requestId
-    ? `/approvals?request=${encodeURIComponent(requestId)}#request-${encodeURIComponent(requestId)}`
-    : "/approvals";
+    ? `/access?request=${encodeURIComponent(requestId)}#request-${encodeURIComponent(requestId)}`
+    : "/access";
   event.waitUntil(
     self.registration.showNotification("Scope approval requested", {
       body: "Open Scope to review the requester and selected account.",
@@ -21,12 +21,12 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const target = new URL(
-    event.notification.data?.url ?? "/approvals",
+    event.notification.data?.url ?? "/access",
     self.location.origin,
   );
   if (
     target.origin !== self.location.origin ||
-    !["/lab", "/approvals"].includes(target.pathname)
+    !["/lab", "/access"].includes(target.pathname)
   )
     return;
   event.waitUntil(self.clients.openWindow(target.href));

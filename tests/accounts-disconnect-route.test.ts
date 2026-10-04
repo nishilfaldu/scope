@@ -1,54 +1,71 @@
 // @vitest-environment node
 import { beforeEach, expect, test, vi } from "vitest";
-import { getFunctionName, type FunctionReference } from "convex/server";
-const mocks = vi.hoisted(() => ({ mutation: vi.fn(), disconnect: vi.fn() }));
+import { getFunctionName } from "convex/server";
+const mocks = vi.hoisted(() => ({
+  query: vi.fn(),
+  mutation: vi.fn(),
+  disconnect: vi.fn(),
+  metadata: vi.fn(),
+  owner: vi.fn(),
+  inspect: vi.fn(),
+}));
 vi.mock("next/headers", () => ({ cookies: vi.fn() }));
 vi.mock("../lib/scope-server", () => ({
   config: () => "private-service",
-  ownerDb: async () => ({ mutation: mocks.mutation }),
+  ownerDb: async () => {
+    await mocks.owner();
+    return mocks;
+  },
   sameOrigin: vi.fn(),
   json: (body: unknown) => Response.json(body),
-  safeError: () =>
-    Response.json({ error: "Could not complete" }, { status: 400 }),
+  safeError: (status = 400) =>
+    Response.json({ code: "authority-invalid" }, { status }),
+  safeFailure: () =>
+    Response.json({ code: "retryable-unavailable" }, { status: 503 }),
 }));
-vi.mock("../lib/providers", () => ({ disconnect: mocks.disconnect }));
-import { POST } from "../app/api/accounts/[operation]/route";
+vi.mock("../lib/providers", async (original) => ({
+  ...(await original<typeof import("../lib/providers")>()),
+  disconnect: mocks.disconnect,
+  configuredSlack: mocks.metadata,
+  inspectConnection: mocks.inspect,
+}));
+import { GET, POST } from "../app/api/accounts/[operation]/route";
+import { ProviderFailure } from "../lib/providers";
 const reference = {
-  disconnected: false,
+  provisional: false,
   connect: {
     connectorId: "connector",
-    subjectId: "original-grant",
+    subjectId: "original",
     issuer: "https://scope.example",
     installationId: "installation",
   },
   providerId: "slack",
-  grantedScopes: ["identify", "channels:read"],
+  grantedScopes: ["channels:read"],
   grantVersion: 3,
-  providerUserId: "user",
-  providerTenantId: "workspace",
+  providerUserId: "U1",
 };
-const invoke = (body: unknown = { id: "account", grantVersion: 3 }) =>
+const invoke = () =>
   POST(
     new Request("https://scope.example/api/accounts/disconnect", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify({ id: "account", grantVersion: 3 }),
     }),
     { params: Promise.resolve({ operation: "disconnect" }) },
   );
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.mutation.mockImplementation(
-    async (fn: FunctionReference<"mutation">) =>
-      getFunctionName(fn) === "accounts:block" ? reference : "succeeded",
+  mocks.query.mockResolvedValue(reference);
+  mocks.mutation.mockImplementation(async (fn) =>
+    getFunctionName(fn) === "accounts:block" ? reference : "succeeded",
   );
   mocks.disconnect.mockResolvedValue({ outcome: "succeeded" });
 });
-test("blocks sharing before provider IO and records the original generation", async () => {
+test("blocks before Connect IO, targets the exact grant and records completion", async () => {
   expect(await (await invoke()).json()).toEqual({ outcome: "succeeded" });
-  expect(mocks.mutation.mock.calls[0][1]).toEqual({
-    id: "account",
-    grantVersion: 3,
-  });
+  expect(mocks.mutation.mock.calls.map((c) => getFunctionName(c[0]))).toEqual([
+    "accounts:block",
+    "accounts:recordDisconnect",
+  ]);
   expect(mocks.mutation.mock.invocationCallOrder[0]).toBeLessThan(
     mocks.disconnect.mock.invocationCallOrder[0],
   );
@@ -56,34 +73,55 @@ test("blocks sharing before provider IO and records the original generation", as
     ...reference.connect,
     providerId: "slack",
     grantedScopes: reference.grantedScopes,
-    providerUserId: "user",
-    providerTenantId: "workspace",
-  });
-  expect(mocks.mutation.mock.calls[1][1]).toMatchObject({
-    id: "account",
-    grantVersion: 3,
-    outcome: "succeeded",
+    providerUserId: "U1",
+    providerTenantId: undefined,
   });
 });
-test("a completed retry does not call Connect or write another outcome", async () => {
-  mocks.mutation.mockResolvedValueOnce({ ...reference, disconnected: true });
+test("completed retry never revokes again", async () => {
+  mocks.mutation.mockResolvedValueOnce({
+    ...reference,
+    disconnectOutcome: "succeeded",
+  });
   expect(await (await invoke()).json()).toEqual({ outcome: "succeeded" });
   expect(mocks.disconnect).not.toHaveBeenCalled();
-  expect(mocks.mutation).toHaveBeenCalledTimes(1);
 });
-test("a late provider failure cannot override another retry's confirmed completion", async () => {
-  mocks.disconnect.mockResolvedValue({ outcome: "failed" });
-  expect(await (await invoke()).json()).toEqual({ outcome: "succeeded" });
-  expect(mocks.mutation.mock.calls[1][1]).toMatchObject({ outcome: "failed" });
+test("metadata outage is a service error and does not stop saved-account disconnect", async () => {
+  mocks.metadata.mockRejectedValue(
+    new ProviderFailure("retryable-unavailable"),
+  );
+  expect(
+    (
+      await GET(new Request("https://scope.example/api/accounts/provider"), {
+        params: Promise.resolve({ operation: "provider" }),
+      })
+    ).status,
+  ).toBe(503);
+  expect((await invoke()).status).toBe(200);
+  mocks.owner.mockRejectedValue(new Error("Unauthorized"));
+  expect(
+    (
+      await GET(new Request("https://scope.example/api/accounts/provider"), {
+        params: Promise.resolve({ operation: "provider" }),
+      })
+    ).status,
+  ).toBe(401);
 });
-test("malformed or stale actions stop before Connect and a record failure is surfaced", async () => {
-  expect((await invoke({ id: "account" })).status).toBe(400);
-  expect(mocks.mutation).not.toHaveBeenCalled();
-  mocks.mutation.mockRejectedValueOnce(new Error("stale generation"));
-  expect((await invoke()).status).toBe(400);
-  expect(mocks.disconnect).not.toHaveBeenCalled();
-  mocks.mutation
-    .mockResolvedValueOnce(reference)
-    .mockRejectedValueOnce(new Error("record failed"));
-  expect((await invoke()).status).toBe(400);
+test("provisional cleanup stores recovered installation before blocking and revoking", async () => {
+  mocks.query.mockResolvedValueOnce({
+    ...reference,
+    provisional: true,
+    connect: { ...reference.connect, installationId: undefined },
+  });
+  mocks.inspect.mockResolvedValue({
+    providerUserId: "U1",
+    installationId: "installation",
+    label: "Work",
+    grantedScopes: reference.grantedScopes,
+  });
+  expect((await invoke()).status).toBe(200);
+  expect(mocks.mutation.mock.calls.map((c) => getFunctionName(c[0]))).toEqual([
+    "accounts:completeConnection",
+    "accounts:block",
+    "accounts:recordDisconnect",
+  ]);
 });

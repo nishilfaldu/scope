@@ -47,6 +47,9 @@ test("permission refusal stops setup before registration", async () => {
 test("existing lab subscription is reused after moving notification settings", async () => {
   browser("granted");
   const subscription = {
+    options: {
+      applicationServerKey: Uint8Array.from(Buffer.from("public")).buffer,
+    },
     endpoint: "https://push.example/device",
     toJSON: () => ({ keys: { p256dh: "key", auth: "auth" } }),
   };
@@ -64,6 +67,7 @@ test("existing lab subscription is reused after moving notification settings", a
     register,
   });
   expect(await enableBrowserNotifications("cHVibGlj")).toEqual({
+    replacedEndpoint: undefined,
     endpoint: subscription.endpoint,
     p256dh: "key",
     auth: "auth",
@@ -108,17 +112,50 @@ test("notification clicks stay on Scope and support old and new approval links",
     waitUntil: vi.fn(),
   });
   expect(showNotification.mock.calls[0][1].data.url).toContain(
-    "/approvals?request=request-123",
+    "/access?request=request-123",
   );
   const click = (url: string) =>
     listeners.notificationclick({
       notification: { close: vi.fn(), data: { url } },
       waitUntil: vi.fn(),
     });
-  click("https://evil.example/approvals");
+  click("https://evil.example/access");
   click("/connections");
   expect(openWindow).not.toHaveBeenCalled();
   click("/lab?request=legacy");
-  click("/approvals?request=new");
+  click("/access?request=new");
   expect(openWindow).toHaveBeenCalledTimes(2);
+});
+
+test("VAPID rotation replaces stale browser subscriptions", async () => {
+  browser("granted");
+  const old = {
+    endpoint: "https://push.example/old",
+    options: { applicationServerKey: Uint8Array.from([1, 2]).buffer },
+    unsubscribe: vi.fn().mockResolvedValue(true),
+  };
+  const subscribe = vi.fn().mockResolvedValue({
+    endpoint: "https://push.example/new",
+    toJSON: () => ({ keys: { p256dh: "new-key", auth: "new-auth" } }),
+  });
+  const registration = {
+    scope: "https://scope.example/",
+    active: { scriptURL: "https://scope.example/scope-sw.js" },
+    pushManager: { getSubscription: async () => old, subscribe },
+  };
+  Object.assign(navigator.serviceWorker, {
+    getRegistrations: async () => [registration],
+    register: async () => registration,
+  });
+  expect(await enableBrowserNotifications("cHVibGlj")).toEqual({
+    replacedEndpoint: old.endpoint,
+    endpoint: "https://push.example/new",
+    p256dh: "new-key",
+    auth: "new-auth",
+  });
+  expect(old.unsubscribe).toHaveBeenCalledOnce();
+  expect(subscribe).toHaveBeenCalledWith({
+    userVisibleOnly: true,
+    applicationServerKey: Uint8Array.from(Buffer.from("public")),
+  });
 });

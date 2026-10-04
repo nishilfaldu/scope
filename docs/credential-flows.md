@@ -1,49 +1,33 @@
-# Credential delivery
+# Credential flows
 
-An owner chooses Connect Slack. The server reads requested permissions from the configured Vercel Connect connector. Slack presents its OAuth consent screen. Scope has no custom permission picker or editor. A temporary connection attempt binds the owner, private browser proof, configured scopes, opaque Connect subject and ten-minute deadline. Slack `auth.test` identifies the user/workspace and returns effective scopes in `x-oauth-scopes`. Completion requires the exact configured permissions, with no missing or extra access.
+The current model has connected accounts, access approvals and push subscriptions. Agents are labels on approval snapshots. There is no separate agent authorization table and no server-side command binding.
 
-The provider-independent account record stores identity, label, immutable effective permissions, Connect reference and grant generation. It stores no bearer or refresh token. Only Slack is implemented. Standard and rotating user tokens are supported. Connect manages refresh and revocation; provider-side invalidation depends on provider capabilities. [Slack rotation behavior](https://docs.slack.dev/authentication/using-token-rotation/), [OAuth scope accumulation](https://docs.slack.dev/authentication/installing-with-oauth/#appending-scopes).
+## Connection
 
-## CLI identity and approval
+The signed-in owner starts Slack consent. Scope inserts a provisional account with a unique Connect subject, expected permissions and a browser proof hash. The callback verifies the owner and proof, resolves the actual identity, installation and permissions, and records those references on the same row before deciding whether to activate it. Expired, mismatched and failed setups retain a recovery path. A duplicate grant cannot be activated or revoked while another saved account holds it.
 
-The browser and first-party CLI use WorkOS AuthKit in one environment, with hosted Magic Auth email codes. The browser uses the managed Next.js SDK and `/callback`. The public CLI uses native device authorization and rotating refresh at `api.workos.com/user_management`; no API key, client secret or loopback server exists in the CLI. [AuthKit CLI flow](https://workos.com/docs/authkit/cli-auth).
+Saved-account management and CLI discovery use indexed pagination. Connector metadata is needed only to start new consent. Confirmed disconnections are hidden with an indexed visibility field. Failed disconnections remain available through the same action.
 
-Verification requires RS256 signature, the exact modern issuer `https://api.workos.com/user_management/<default Web client ID>`, expiry, immutable `user_` subject, signed intended application `client_id` and `session_` session. Public keys come from the default application's `/sso/jwks/<client ID>`. Modern first-party AuthKit tokens have no Scope API resource audience; we enforce the signed application and environment instead. Browser owner APIs require the Web application; CLI service APIs require the CLI application. Ownership uses the verified subject directly, with no local user table, email mapping or external-auth bridge. The issuer/subject/client/session tuple identifies each separate CLI connection. Refresh cannot switch its user or session.
+## Approval
 
-Each invocation freezes an account/generation, authenticated requester, stable key, purpose, command argv, working directory, credential environment variable. It receives the account's full permissions. No caller-supplied request scopes or operation profile exists. Reusing a key with changed context fails. The owner approves or denies in Scope. The deadline stays thirty minutes from request creation.
+The Next service verifies the WorkOS bearer signature, issuer, audience/client and session claims. A private service boundary forwards those immutable claims to Convex. Convex checks owner, issuer, client, session, account and grant version. A transaction reuses an eligible active approval or pending request. Display names and reasons never authorize access.
 
-## Release and execution
+Pending requests wait 30 minutes. Approval starts a separate 15-, 30- or 60-minute collection window, defaulting to 30 minutes. Scheduled Convex mutations move expired approvals into History. The UI uses subscriptions; only a pending countdown has a local timer. An aggregate supplies the full pending count, independent of pagination.
 
-The CLI calls `/api/cli/deliver`. Preflight rejects pending, denied, cancelled, expired or unavailable requests. Connect resolves the exact frozen subject/installation/full scopes with `forceRefresh: true`. Slack identity and effective scopes must match the connection. After provider IO, a Convex transaction rechecks time, owner, requester liveness, active account, scopes and generation. Only then does the server release the bearer privately to the same requester.
+## Collection
 
-No provider tokens, encrypted replay or delivery leases enter the database. A private stable receipt proof survives credential-delivery retries and stays out of browser queries. A receipt records arrival, not successful work. Concurrent collection cannot change authority or extend the deadline. A lost credential response can be collected again before execution; an arbitrary command is never retried automatically.
+Preflight checks the approved window and current account. Provider IO resolves a fresh token through Connect, verifies Slack identity and effective permissions, and then a final mutation checks authority again. Ending approval, disconnecting, changing the grant or expiry during IO prevents release. Tokens remain in the server and CLI response path; they are never written to Convex or exposed to browser pages.
 
-The CLI confirms receipt, records `running` in a private metadata journal, then directly spawns argv. It injects the bearer into one environment variable and excludes broker credentials. The journal blocks repeated execution once a command started, including crashes with an uncertain result. There is no shell unless explicitly requested and no separate execution server.
+Every token includes all permissions granted when you connected the account. The stated purpose does not restrict the token.
 
-Known-secret output masking covers literal and common encoded forms across chunks. Output and execution time are bounded. Native coding-host restrictions apply. A bearer-bearing child can deliberately write or transmit its credential; masking is not isolation. Tests use fake secrets to show both masking and file/network disclosure limits.
+Each collection increments a count and records first/last times. A private receipt proof records arrival. Collection and receipt do not extend or close approval. There is no unbounded per-token log.
 
-## Disconnect and reconnect
+## Execution and revocation
 
-Blocking an account immediately prevents decisions, requests and release for its generation. The server retains the original reference while revocation is pending or failed, and calls Connect `revokeToken` with that exact user subject and installation. No token acquisition or separate Slack revoke/check is needed. A successful Connect response, or an explicit absent-user-authorization response, completes disconnection. Generic missing-connector, authorization, token-resolution and network errors remain failures. Retrying uses the same reference; confirmed success is monotonic and skips external IO on later clicks. Both blocking and recording require the original grant version, so stale actions cannot affect a replacement grant. [Connect revocation limits](https://vercel.com/docs/connect/concepts/tokens#revocation).
+Commands belong to the local invocation journal. New commands can share an approval. A journal marked running or finished cannot rerun automatically. Cancellation stops local execution without ending another invocation's shared approval. Pipe draining after child exit and timeout is bounded even when detached descendants inherit output streams.
 
-Connections lists active accounts and disconnections that still need completion using owner/state/outcome index ranges. Confirmed disconnections disappear from this list, but their records remain for request history. The UI shows only Disconnect, a busy indicator, and success/error toasts; it does not expose internal outcome stages. Connect attempts upstream revocation where supported. Scope does not claim independent proof of upstream invalidation; unsupported provider credentials may continue until expiry.
+End approval stops Scope collection only. Disconnect first blocks the account, then calls Connect revoke with the exact subject and installation. Completion is monotonic. A retry uses the same reference and accepts only an explicit absent user authorization as already complete. Connect handles provider revocation where supported; Scope does not independently call Slack revoke or test invalidation. A collection window never changes a provider token's lifetime.
 
-Reconnect requires confirmed prior disconnect and creates a new opaque subject and generation. Old approvals cannot use it. Slack OAuth permissions accumulate on surviving grants, so reducing scopes without revocation is rejected. A connector/user/workspace authorization is unique across owners while active or awaiting revocation. This avoids one connection revoking another live record's upstream authorization. The application/connector itself is never uninstalled across other users.
+The Access page shows Needs approval, Active approvals and History. Each has indexed pagination, one current status and optional Activity. Permissions belong to the collapsed account disclosure in Connections.
 
-Stopping a request or CLI connection prevents future release but does not revoke Slack. Account disconnect delegates provider revocation to Connect. WorkOS session changes are observed through access-token expiry; a local connection stop is immediate.
-
-## Notifications
-
-Push endpoints use a service allowlist. Action Retrier handles bounded retries and crash recovery. Each send checks current cancellation, expiry, account generation and requester authority. Notification tags make at-least-once delivery replace the same request notification. The owner-only test returns counts, not subscription secrets. Provider acceptance does not prove physical device receipt. Notification clicks open the exact authenticated request.
-
-## Removed architecture
-
-Hosted AuthKit replaced Convex Auth, Resend, the private `store._handler` patch, auth tables, and the WorkOS Connect Standalone bridge. The obsolete Connect helper application's tokens are no longer accepted. Disposable development data was reset rather than migrated. Magic Auth uses WorkOS email delivery and its documented sending/rate limits; no unlimited email claim is made.
-
-Action Retrier replaced the custom notification-job table, leases, completion fencing and watchdog. Workpool's queue/concurrency policy would add machinery this application does not need. Script hashing was removed: approvals retain argv, working directory, environment variable, account and purpose without claiming code attestation.
-
-## Request expiry
-
-Request creation schedules an internal Convex mutation at the fixed 30-minute deadline in the same transaction. It records `expiredAt` for unresolved pending/approved requests, preserving the decision and any confirmed receipt. Repeated, early or stale callbacks are harmless. Actual server deadline checks still protect approval and credential release if scheduling is delayed. A valid late receipt remains a receipt.
-
-Owner queries subscribe to stored expiry state with stable arguments. Only the actionable request’s countdown runs a local timer; it does not refresh queries or rerender the board/navigation. The pending index includes `expiredAt` before the deadline, so expired requests leave that subscription when the mutation runs. Existing requests are initialized by `migrations:requestExpiry`; rerunning with `cursor: null` or the group runner’s `reset: true` safely processes new imported fixtures without duplicating jobs.
+Sources: [Connect SDK](https://vercel.com/docs/connect/ts-sdk-reference), [revocation semantics](https://vercel.com/docs/connect/concepts/tokens#revocation).

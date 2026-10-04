@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Scope",
     // Preserve the identity of existing Home Screen installations.
     id: "/lab",
-    start_url: "/approvals",
+    start_url: "/access",
     scope: "/",
     display: "standalone",
     background_color: "#ffffff",

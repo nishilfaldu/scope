@@ -1,5 +1,8 @@
 import { ConvexHttpClient } from "convex/browser";
 import { withAuth } from "@workos-inc/authkit-nextjs";
+import { ProviderFailure } from "./providers";
+import { failureMessage } from "@/shared/failures.mjs";
+import { ZodError } from "zod";
 import { verifyClient } from "./client-auth";
 
 export function config(name: string): string {
@@ -43,11 +46,20 @@ export function json(value: unknown, status = 200) {
     headers: { "Cache-Control": "no-store" },
   });
 }
-export function safeError(status = 400) {
-  return json(
-    { error: "Request unavailable. Check your sign-in and setup." },
-    status,
-  );
+export function safeError(status = 400, code = "authority-invalid") {
+  return json({ code, error: failureMessage(code) }, status);
+}
+export function safeFailure(error: unknown) {
+  if (error instanceof ProviderFailure)
+    return safeError(error.kind === "grant-rejected" ? 409 : 503, error.kind);
+  if (error instanceof ZodError || error instanceof SyntaxError)
+    return safeError(400, "invalid-input");
+  const text = error instanceof Error ? error.message : "";
+  if (text.includes("Connection recovery required"))
+    return safeError(409, "connection-recovery");
+  if (text.includes("configuration unavailable"))
+    return safeError(503, "configuration-invalid");
+  return safeError(409, "authority-invalid");
 }
 export async function clientActor(request: Request) {
   const token = request.headers

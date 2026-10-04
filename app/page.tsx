@@ -24,12 +24,12 @@ const controls = [
   {
     icon: ShieldKeyIcon,
     title: "Approval before access",
-    body: "Review the account and permissions before deciding.",
+    body: "Review the account and purpose, then choose an approval window.",
   },
   {
     icon: Clock01Icon,
-    title: "Sharing with an end time",
-    body: "Each request has a sharing window. Stop further sharing at any time; previously received access may remain active.",
+    title: "A timed approval window",
+    body: "Allow token requests without asking again for 15 minutes, 30 minutes or 1 hour. End approval at any time.",
   },
   {
     icon: Key01Icon,
@@ -55,13 +55,14 @@ export default function HomePage() {
               Let agents ask. You decide what they can reach.
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-[#526054] dark:text-muted-foreground">
-              Review each agent’s request for a connected account.
+              Choose how long a verified CLI session can request tokens for a
+              connected account.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Button
                 size="lg"
                 nativeButton={false}
-                render={<Link href="/signin?redirectTo=/approvals" />}
+                render={<Link href="/signin?redirectTo=/access" />}
               >
                 Sign in to Scope
                 <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
@@ -86,7 +87,7 @@ export default function HomePage() {
                     Example request
                   </p>
                 </div>
-                <span className="size-2.5 rounded-full bg-[#8be000]" />
+                <span className="size-2.5 rounded-full bg-primary" />
               </div>
               <div className="px-6 py-6 sm:px-8">
                 <p className="text-sm text-[#68746a] dark:text-muted-foreground">
@@ -101,21 +102,17 @@ export default function HomePage() {
                   </div>
                   <HugeiconsIcon
                     icon={CheckmarkCircle02Icon}
-                    className="size-5 text-[#659f09]"
+                    className="size-5 text-primary"
                     strokeWidth={2}
                   />
                 </div>
                 <div className="mt-6 grid grid-cols-[7rem_1fr] gap-x-4 gap-y-3 text-sm">
                   <span className="text-[#68746a] dark:text-muted-foreground">
-                    Full permissions
-                  </span>
-                  <span>View public channels</span>
-                  <span className="text-[#68746a] dark:text-muted-foreground">
                     Purpose
                   </span>
                   <span>Summarize workspace channels</span>
                   <span className="text-[#68746a] dark:text-muted-foreground">
-                    Decide within
+                    Allow token requests for
                   </span>
                   <span>30 minutes</span>
                 </div>
@@ -132,6 +129,10 @@ export default function HomePage() {
           </div>
         </section>
 
+        <p className="mx-auto max-w-6xl px-5 pb-10 text-sm leading-6 text-muted-foreground sm:px-8">
+          Every token includes all permissions granted when you connected the
+          account. The stated purpose does not restrict the token.
+        </p>
         <section className="border-y border-[#dde5da] bg-white dark:border-border dark:bg-card">
           <div className="mx-auto grid max-w-6xl px-5 sm:px-8 lg:grid-cols-3">
             {controls.map((control, index) => (
@@ -141,7 +142,7 @@ export default function HomePage() {
               >
                 <HugeiconsIcon
                   icon={control.icon}
-                  className="size-5 text-[#659f09]"
+                  className="size-5 text-primary"
                   strokeWidth={1.8}
                 />
                 <h2 className="mt-5 font-semibold">{control.title}</h2>

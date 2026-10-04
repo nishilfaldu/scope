@@ -33,7 +33,7 @@ const context = {
   providerId: "slack",
   grantVersion: 1,
   requesterConnectionId: "native",
-  approvalExpiresAt: Date.now() + 100_000,
+  until: Date.now() + 100_000,
   account: {
     connectorId: "connector",
     subjectId: "opaque",
@@ -44,7 +44,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.query.mockResolvedValue(context);
   mocks.mutation.mockResolvedValue({
-    approvalExpiresAt: context.approvalExpiresAt,
+    until: context.until,
     receiptProof: "private-proof",
   });
   mocks.credential.mockResolvedValue({
@@ -65,10 +65,10 @@ test("every retry resolves fresh bytes and authorizes after provider IO without 
     };
   });
   mocks.mutation.mockImplementation(async (ref) => {
-    if (getFunctionName(ref) === "approvals:authorizeDelivery")
+    if (getFunctionName(ref) === "access:authorizeCollection")
       order.push("authority");
     return {
-      approvalExpiresAt: context.approvalExpiresAt,
+      until: context.until,
       receiptProof: "stable",
     };
   });
@@ -101,29 +101,23 @@ test("receipt records historical evidence without re-registering a stopped clien
   expect(mocks.query).not.toHaveBeenCalled();
   expect(mocks.mutation).toHaveBeenCalledOnce();
   expect(getFunctionName(mocks.mutation.mock.calls[0][0])).toBe(
-    "approvals:acknowledge",
+    "access:acknowledge",
   );
 });
 test("request creation delegates account ownership to the authoritative mutation", async () => {
   mocks.mutation.mockImplementation(async (ref) => {
-    if (getFunctionName(ref) === "approvals:request")
+    if (getFunctionName(ref) === "access:request")
       throw new Error("Account unavailable");
   });
   await expect(
     requestAccess(actor, {
-      key: "key-with-sixteen-chars",
+      agentName: "Assistant",
       accountId: "other" as never,
       reason: "Read",
-      command: {
-        argv: ["node", "script.js"],
-        cwd: "/tmp",
-        envVar: "SLACK_TOKEN",
-      },
     }),
   ).rejects.toThrow("Account unavailable");
   expect(mocks.query).not.toHaveBeenCalled();
   expect(mocks.mutation.mock.calls.map((c) => getFunctionName(c[0]))).toEqual([
-    "clientConnections:ensure",
-    "approvals:request",
+    "access:request",
   ]);
 });

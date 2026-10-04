@@ -7,13 +7,11 @@ import {
 export default function Loading() {
   const path = usePathname();
   const kind: BoardKind =
-    path === "/agents"
-      ? "agents"
-      : path === "/connections"
-        ? "connections"
-        : path === "/notifications"
-          ? "notifications"
-          : "requests";
+    path === "/connections"
+      ? "connections"
+      : path === "/notifications"
+        ? "notifications"
+        : "access";
   return (
     <WorkspaceSkeleton
       kind={kind}

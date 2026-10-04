@@ -1,344 +1,299 @@
+import { omit } from "convex-helpers";
+import {
+  paginationOptsValidator,
+  paginationResultValidator,
+} from "convex/server";
 import { v } from "convex/values";
-import { query, mutation, internalMutation } from "./_generated/server";
+import {
+  query,
+  mutation,
+  internalMutation,
+  type QueryCtx,
+  type MutationCtx,
+} from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
-  connectReference,
-  disconnectOutcome,
+  actor,
+  verifiedActor,
   owner,
   service,
   canonicalScopes,
   sameScopes,
   authorizationKey,
+  disconnectOutcome,
 } from "./scope";
 import { randomSecret, hashesEqual } from "./lib/secrets";
-
-const view = v.object({
-  _id: v.id("connectedAccounts"),
-  providerId: v.string(),
-  providerName: v.string(),
-  label: v.string(),
-  accessDescription: v.string(),
-  providerUserId: v.string(),
-  providerTenantId: v.optional(v.string()),
-  providerEmail: v.optional(v.string()),
-  grantedScopes: v.array(v.string()),
-  state: v.union(v.literal("active"), v.literal("blocked")),
-  blockedAt: v.optional(v.number()),
-  grantVersion: v.number(),
-  disconnectOutcome: v.optional(disconnectOutcome),
-});
+import schema from "./schema";
+import type { Doc } from "./_generated/dataModel";
+const view = schema
+  .doc("connectedAccounts")
+  .omit("proofHash", "authorizationKey");
+async function owned(
+  ctx: QueryCtx | MutationCtx,
+  id: Doc<"connectedAccounts">["_id"],
+) {
+  const ownerId = await owner(ctx),
+    row = await ctx.db.get("connectedAccounts", id);
+  if (!row || row.ownerId !== ownerId) throw new Error("Account unavailable");
+  return row;
+}
+async function conflict(
+  ctx: QueryCtx | MutationCtx,
+  row: Doc<"connectedAccounts">,
+  key = row.authorizationKey,
+) {
+  if (!key) return null;
+  const rows = await ctx.db
+    .query("connectedAccounts")
+    .withIndex("by_authorizationKey_and_provisional_and_visible", (q) =>
+      q
+        .eq("authorizationKey", key)
+        .eq("provisional", false)
+        .eq("visible", true),
+    )
+    .take(2);
+  return rows.find((r) => r._id !== row._id) ?? null;
+}
 export const forOwner = query({
-  args: {},
-  returns: v.array(view),
-  handler: async (ctx) => {
-    const ownerId = await owner(ctx),
-      groups = await Promise.all([
-        ctx.db
-          .query("connectedAccounts")
-          .withIndex("by_ownerId_and_state_and_disconnectOutcome", (q) =>
-            q.eq("ownerId", ownerId).eq("state", "active"),
-          )
-          .order("desc")
-          .take(100),
-        ...([undefined, "pending", "failed"] as const).map((outcome) =>
-          ctx.db
-            .query("connectedAccounts")
-            .withIndex("by_ownerId_and_state_and_disconnectOutcome", (q) =>
-              q
-                .eq("ownerId", ownerId)
-                .eq("state", "blocked")
-                .eq("disconnectOutcome", outcome),
-            )
-            .order("desc")
-            .take(100),
-        ),
-      ]),
-      rows = groups
-        .flat()
-        .sort((a, b) => b._creationTime - a._creationTime)
-        .slice(0, 100);
-    return rows.map((r) => ({
-      _id: r._id,
-      providerId: r.providerId,
-      providerName: r.providerName,
-      label: r.label,
-      accessDescription: r.accessDescription,
-      providerUserId: r.providerUserId,
-      providerTenantId: r.providerTenantId,
-      providerEmail: r.providerEmail,
-      grantedScopes: r.grantedScopes,
-      state: r.state,
-      blockedAt: r.blockedAt,
-      grantVersion: r.grantVersion,
-      disconnectOutcome: r.disconnectOutcome,
-    }));
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(view),
+  handler: async (ctx, args) => {
+    const id = await owner(ctx);
+    const page = await ctx.db
+      .query("connectedAccounts")
+      .withIndex("by_ownerId_and_visible_and_state", (q) =>
+        q.eq("ownerId", id).eq("visible", true),
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
+    return {
+      ...page,
+      page: page.page.map((r) => omit(r, ["proofHash", "authorizationKey"])),
+    };
+  },
+});
+export const listForClient = query({
+  args: { ...actor.fields, paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(
+    v.object({
+      id: v.id("connectedAccounts"),
+      providerId: v.string(),
+      label: v.string(),
+      grantVersion: v.number(),
+      grantedScopes: v.array(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    await verifiedActor(ctx, args);
+    const page = await ctx.db
+      .query("connectedAccounts")
+      .withIndex("by_ownerId_and_visible_and_state", (q) =>
+        q.eq("ownerId", args.subject).eq("visible", true).eq("state", "active"),
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
+    return {
+      ...page,
+      page: page.page.map((r) => ({
+        id: r._id,
+        providerId: r.providerId,
+        label: r.label,
+        grantVersion: r.grantVersion,
+        grantedScopes: r.grantedScopes,
+      })),
+    };
   },
 });
 export const beginConnection = mutation({
   args: {
     secret: v.string(),
-    providerId: v.string(),
+    providerId: v.literal("slack"),
     providerName: v.string(),
-    accessDescription: v.string(),
     connectorId: v.string(),
     issuer: v.string(),
     requestedScopes: v.array(v.string()),
     proofHash: v.string(),
-    targetAccountId: v.optional(v.id("connectedAccounts")),
   },
-  returns: v.object({
-    id: v.id("connectionAttempts"),
-    subjectId: v.string(),
-    connectorId: v.string(),
-    expiresAt: v.number(),
-  }),
+  returns: v.object({ id: v.id("connectedAccounts"), subjectId: v.string() }),
   handler: async (ctx, args) => {
     service(args.secret);
-    const ownerId = await owner(ctx),
-      requestedScopes = canonicalScopes(args.requestedScopes);
+    const ownerId = await owner(ctx);
+    const scopes = canonicalScopes(args.requestedScopes);
     if (
-      ![
-        args.providerId,
-        args.providerName,
-        args.accessDescription,
-        args.connectorId,
-        args.issuer,
-      ].every((s) => s.trim()) ||
+      !args.connectorId ||
+      !args.issuer.startsWith("https://") ||
       !/^[a-f0-9]{64}$/.test(args.proofHash)
     )
-      throw new Error("Invalid connection");
-    const target = args.targetAccountId
-      ? await ctx.db.get("connectedAccounts", args.targetAccountId)
-      : null;
-    if (
-      args.targetAccountId &&
-      (!target ||
-        target.ownerId !== ownerId ||
-        target.providerId !== args.providerId ||
-        target.state !== "blocked" ||
-        target.disconnectOutcome !== "succeeded")
-    )
-      throw new Error("Revoke the previous authorization first");
-    const subjectId = randomSecret("scope_grant_"),
+      throw new Error("Invalid input");
+    const subjectId = randomSecret(`scope:${ownerId}:grant:`),
       expiresAt = Date.now() + 10 * 60_000;
-    const id = await ctx.db.insert("connectionAttempts", {
+    const id = await ctx.db.insert("connectedAccounts", {
       ownerId,
+      visible: true,
+      provisional: true,
       providerId: args.providerId,
       providerName: args.providerName,
-      accessDescription: args.accessDescription,
+      label: "Unfinished Slack connection",
+      accessDescription: scopes.join(", "),
       connect: {
         connectorId: args.connectorId,
         subjectId,
         issuer: args.issuer,
       },
-      requestedScopes,
+      grantedScopes: scopes,
+      grantVersion: 1,
+      state: "connecting",
+      requestedScopes: scopes,
       proofHash: args.proofHash,
-      targetAccountId: args.targetAccountId,
-      targetGrantVersion: target?.grantVersion,
-      expiresAt,
+      setupExpiresAt: expiresAt,
     });
-    await ctx.scheduler.runAt(expiresAt, internal.accounts.expireAttempt, {
+    await ctx.scheduler.runAt(expiresAt, internal.accounts.expireSetup, {
       id,
+      deadline: expiresAt,
     });
-    return { id, subjectId, connectorId: args.connectorId, expiresAt };
+    return { id, subjectId };
   },
 });
-export const connectionAttempt = query({
+export const setupForOwner = query({
   args: {
     secret: v.string(),
-    id: v.id("connectionAttempts"),
-    proofHash: v.string(),
+    id: v.id("connectedAccounts"),
+    proofHash: v.optional(v.string()),
   },
-  returns: v.object({
-    id: v.id("connectionAttempts"),
-    providerId: v.string(),
-    connect: connectReference,
-    requestedScopes: v.array(v.string()),
-    expiresAt: v.number(),
-    accountId: v.optional(v.id("connectedAccounts")),
-  }),
+  returns: schema.doc("connectedAccounts"),
   handler: async (ctx, args) => {
     service(args.secret);
-    const ownerId = await owner(ctx),
-      row = await ctx.db.get("connectionAttempts", args.id);
+    const row = await owned(ctx, args.id);
     if (
-      !row ||
-      row.ownerId !== ownerId ||
-      !hashesEqual(row.proofHash, args.proofHash)
+      args.proofHash !== undefined &&
+      (!row.proofHash || !hashesEqual(row.proofHash, args.proofHash))
     )
       throw new Error("Connection unavailable");
-    if (row.accountId) {
-      const account = await ctx.db.get("connectedAccounts", row.accountId);
-      if (
-        !account ||
-        account.ownerId !== ownerId ||
-        account.state !== "active" ||
-        account.providerId !== row.providerId ||
-        !sameScopes(account.grantedScopes, row.requestedScopes) ||
-        account.connect.subjectId !== row.connect.subjectId ||
-        account.connect.connectorId !== row.connect.connectorId ||
-        account.connect.issuer !== row.connect.issuer ||
-        account.connect.installationId !== row.connect.installationId
-      )
-        throw new Error("Account identity changed");
-    }
-    return {
-      id: row._id,
-      providerId: row.providerId,
-      connect: row.connect,
-      requestedScopes: row.requestedScopes,
-      expiresAt: row.expiresAt,
-      accountId: row.accountId,
-    };
+    return row;
   },
 });
 export const completeConnection = mutation({
   args: {
     secret: v.string(),
-    id: v.id("connectionAttempts"),
-    proofHash: v.string(),
+    id: v.id("connectedAccounts"),
+    proofHash: v.optional(v.string()),
+    activate: v.boolean(),
     providerUserId: v.string(),
     providerTenantId: v.optional(v.string()),
     label: v.string(),
-    providerEmail: v.optional(v.string()),
-    installationId: v.optional(v.string()),
+    installationId: v.string(),
     grantedScopes: v.array(v.string()),
   },
-  returns: v.object({ accountId: v.id("connectedAccounts") }),
+  returns: v.object({
+    accountId: v.id("connectedAccounts"),
+    active: v.boolean(),
+    issue: v.optional(v.string()),
+  }),
   handler: async (ctx, args) => {
     service(args.secret);
-    const ownerId = await owner(ctx),
-      row = await ctx.db.get("connectionAttempts", args.id);
+    const row = await owned(ctx, args.id);
     if (
-      !row ||
-      row.ownerId !== ownerId ||
-      !hashesEqual(row.proofHash, args.proofHash) ||
-      row.expiresAt <= Date.now()
+      args.proofHash !== undefined &&
+      (!row.proofHash || !hashesEqual(row.proofHash, args.proofHash))
     )
       throw new Error("Connection unavailable");
-    const grantedScopes = canonicalScopes(args.grantedScopes);
-    if (!sameScopes(grantedScopes, row.requestedScopes))
-      throw new Error("Provider permissions differ from connector permissions");
     if (
-      !args.providerUserId.trim() ||
+      !args.providerUserId ||
+      !args.installationId ||
+      args.installationId === "*" ||
       !args.label.trim() ||
-      args.label.length > 200 ||
-      (args.installationId !== undefined &&
-        (!args.installationId.trim() || args.installationId === "*"))
+      args.label.length > 200
     )
-      throw new Error("Invalid provider grant");
-    const connect = { ...row.connect, installationId: args.installationId };
-    if (row.accountId) {
-      const old = await ctx.db.get("connectedAccounts", row.accountId);
+      throw new Error("Invalid grant");
+    const scopes = canonicalScopes(args.grantedScopes),
+      key = authorizationKey(
+        row.providerId,
+        args.providerUserId,
+        args.providerTenantId,
+        row.connect.connectorId,
+      );
+    if (!row.provisional) {
       if (
-        !old ||
-        old.ownerId !== ownerId ||
-        old.state !== "active" ||
-        old.connect.subjectId !== row.connect.subjectId ||
-        old.connect.connectorId !== row.connect.connectorId ||
-        old.connect.issuer !== row.connect.issuer ||
-        old.providerId !== row.providerId ||
-        !sameScopes(old.grantedScopes, grantedScopes) ||
-        old.providerUserId !== args.providerUserId ||
-        old.providerTenantId !== args.providerTenantId ||
-        old.connect.installationId !== args.installationId
+        row.state !== "active" ||
+        row.authorizationKey !== key ||
+        row.connect.installationId !== args.installationId ||
+        !sameScopes(row.grantedScopes, scopes)
       )
-        throw new Error("Account identity changed");
-      return { accountId: old._id };
+        throw new Error("Connection changed");
+      return { accountId: row._id, active: true };
     }
-    // An index key keeps user/workspace/connector isolation bounded without
-    // exposing a provider-specific identity model to the approval engine.
-    const key = authorizationKey(
-      row.providerId,
-      args.providerUserId,
-      args.providerTenantId,
-      row.connect.connectorId,
-    );
-    for (const outcome of [undefined, "pending", "failed"] as const) {
-      const surviving = await ctx.db
-        .query("connectedAccounts")
-        .withIndex("by_authorizationKey_and_disconnectOutcome", (q) =>
-          q.eq("authorizationKey", key).eq("disconnectOutcome", outcome),
-        )
-        .first();
-      if (surviving && surviving._id !== row.targetAccountId)
-        throw new Error("Revoke the previous authorization first");
-    }
-    const values = {
-      ownerId,
-      authorizationKey: key,
-      providerId: row.providerId,
-      providerName: row.providerName,
-      accessDescription: row.accessDescription,
-      connect,
+    const issue =
+      !row.visible || row.disconnectOutcome === "succeeded"
+        ? "setup-closed"
+        : (await conflict(ctx, row, key))
+          ? "grant-conflict"
+          : !sameScopes(row.requestedScopes!, scopes)
+            ? "grant-rejected"
+            : !args.activate || row.setupExpiresAt! <= Date.now()
+              ? "setup-expired"
+              : undefined;
+    await ctx.db.patch("connectedAccounts", row._id, {
+      visible: true,
       providerUserId: args.providerUserId,
       providerTenantId: args.providerTenantId,
       label: args.label.trim(),
-      providerEmail: args.providerEmail,
-      grantedScopes,
-      state: "active" as const,
-    };
-    let accountId;
-    if (row.targetAccountId) {
-      const target = await ctx.db.get("connectedAccounts", row.targetAccountId);
-      if (
-        !target ||
-        target.ownerId !== ownerId ||
-        target.providerId !== row.providerId ||
-        target.grantVersion !== row.targetGrantVersion ||
-        target.state !== "blocked" ||
-        target.disconnectOutcome !== "succeeded" ||
-        target.providerUserId !== args.providerUserId ||
-        target.providerTenantId !== args.providerTenantId
-      )
-        throw new Error("Account identity changed");
-      accountId = target._id;
-      await ctx.db.replace("connectedAccounts", accountId, {
-        ...values,
-        grantVersion: target.grantVersion + 1,
+      connect: { ...row.connect, installationId: args.installationId },
+      authorizationKey: key,
+      grantedScopes: scopes,
+      state: issue ? "blocked" : "active",
+      provisional: !!issue,
+      setupIssue: issue,
+      disconnectOutcome: issue ? "failed" : undefined,
+    });
+    return { accountId: row._id, active: !issue, issue };
+  },
+});
+export const setupFailed = mutation({
+  args: {
+    secret: v.string(),
+    id: v.id("connectedAccounts"),
+    issue: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    service(args.secret);
+    const row = await owned(ctx, args.id);
+    if (row.provisional && row.disconnectOutcome !== "succeeded")
+      await ctx.db.patch("connectedAccounts", row._id, {
+        state: "blocked",
+        setupIssue: args.issue,
+        disconnectOutcome: "failed",
       });
-    } else
-      accountId = await ctx.db.insert("connectedAccounts", {
-        ...values,
-        grantVersion: 1,
-      });
-    await ctx.db.patch("connectionAttempts", row._id, { accountId, connect });
-    return { accountId };
+    return null;
   },
 });
 export const block = mutation({
-  args: { id: v.id("connectedAccounts"), grantVersion: v.number() },
-  returns: v.object({
-    disconnected: v.boolean(),
-    accountId: v.id("connectedAccounts"),
-    connect: connectReference,
-    providerId: v.string(),
+  args: {
+    secret: v.string(),
+    id: v.id("connectedAccounts"),
     grantVersion: v.number(),
-    grantedScopes: v.array(v.string()),
-    providerUserId: v.string(),
-    providerTenantId: v.optional(v.string()),
-  }),
-  handler: async (ctx, { id, grantVersion }) => {
-    const ownerId = await owner(ctx),
-      row = await ctx.db.get("connectedAccounts", id);
-    if (!row || row.ownerId !== ownerId || row.grantVersion !== grantVersion)
-      throw new Error("Account unavailable");
-    await ctx.db.patch("connectedAccounts", id, {
-      state: "blocked",
-      blockedAt: row.blockedAt ?? Date.now(),
-      disconnectOutcome:
-        row.disconnectOutcome === "succeeded" ? "succeeded" : "pending",
-    });
-    return {
-      disconnected: row.disconnectOutcome === "succeeded",
-      accountId: id,
-      connect: row.connect,
-      providerId: row.providerId,
-      grantVersion: row.grantVersion,
-      grantedScopes: row.grantedScopes,
-      providerUserId: row.providerUserId,
-      providerTenantId: row.providerTenantId,
-    };
+  },
+  returns: schema.doc("connectedAccounts"),
+  handler: async (ctx, { secret, id, grantVersion }) => {
+    service(secret);
+    const row = await owned(ctx, id);
+    if (row.grantVersion !== grantVersion) throw new Error("Account changed");
+    if (
+      row.provisional &&
+      (!row.authorizationKey ||
+        !row.connect.installationId ||
+        (await conflict(ctx, row)))
+    )
+      throw new Error("Connection recovery required");
+    if (row.disconnectOutcome !== "succeeded") {
+      await ctx.db.patch("connectedAccounts", id, {
+        state: "blocked",
+        blockedAt: row.blockedAt ?? Date.now(),
+        disconnectOutcome: "pending",
+      });
+      await ctx.scheduler.runAfter(0, internal.access.closeAccount, { id });
+    }
+    return (await ctx.db.get("connectedAccounts", id))!;
   },
 });
 export const recordDisconnect = mutation({
@@ -346,34 +301,53 @@ export const recordDisconnect = mutation({
     secret: v.string(),
     id: v.id("connectedAccounts"),
     grantVersion: v.number(),
-    outcome: v.union(v.literal("succeeded"), v.literal("failed")),
+    outcome: disconnectOutcome,
   },
-  returns: v.union(v.literal("succeeded"), v.literal("failed")),
+  returns: disconnectOutcome,
   handler: async (ctx, args) => {
     service(args.secret);
-    const ownerId = await owner(ctx),
-      row = await ctx.db.get("connectedAccounts", args.id);
-    if (
-      !row ||
-      row.ownerId !== ownerId ||
-      row.state !== "blocked" ||
-      row.grantVersion !== args.grantVersion
-    )
-      throw new Error("Account unavailable");
-    if (row.disconnectOutcome !== "succeeded")
-      await ctx.db.patch("connectedAccounts", row._id, {
-        disconnectOutcome: args.outcome,
-      });
-    return row.disconnectOutcome === "succeeded" ? "succeeded" : args.outcome;
+    const row = await owned(ctx, args.id);
+    if (row.state !== "blocked" || row.grantVersion !== args.grantVersion)
+      throw new Error("Account changed");
+    if (row.disconnectOutcome === "succeeded") return "succeeded" as const;
+    await ctx.db.patch("connectedAccounts", row._id, {
+      disconnectOutcome: args.outcome,
+      visible: args.outcome !== "succeeded",
+    });
+    return args.outcome;
   },
 });
-export const expireAttempt = internalMutation({
-  args: { id: v.id("connectionAttempts") },
+export const abandonWithoutGrant = mutation({
+  args: { secret: v.string(), id: v.id("connectedAccounts") },
   returns: v.null(),
-  handler: async (ctx, { id }) => {
-    const row = await ctx.db.get("connectionAttempts", id);
-    if (row && row.expiresAt <= Date.now())
-      await ctx.db.delete("connectionAttempts", id);
+  handler: async (ctx, args) => {
+    service(args.secret);
+    const row = await owned(ctx, args.id);
+    if (!row.provisional || row.connect.installationId)
+      throw new Error("Account changed");
+    await ctx.db.patch("connectedAccounts", row._id, {
+      state: "blocked",
+      visible: false,
+      disconnectOutcome: "succeeded",
+    });
+    return null;
+  },
+});
+export const expireSetup = internalMutation({
+  args: { id: v.id("connectedAccounts"), deadline: v.number() },
+  returns: v.null(),
+  handler: async (ctx, { id, deadline }) => {
+    const row = await ctx.db.get("connectedAccounts", id);
+    if (
+      row?.state === "connecting" &&
+      row.setupExpiresAt === deadline &&
+      deadline <= Date.now()
+    )
+      await ctx.db.patch("connectedAccounts", id, {
+        state: "blocked",
+        setupIssue: "setup-expired",
+        disconnectOutcome: "failed",
+      });
     return null;
   },
 });

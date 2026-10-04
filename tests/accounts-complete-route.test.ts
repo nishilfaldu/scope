@@ -1,12 +1,11 @@
 // @vitest-environment node
 import { beforeEach, expect, test, vi } from "vitest";
-import { createHash } from "node:crypto";
+import { getFunctionName } from "convex/server";
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   mutation: vi.fn(),
-  grant: vi.fn(),
-  proof: "private-browser-proof",
-  disconnect: vi.fn(),
+  inspect: vi.fn(),
+  proof: "private-proof",
 }));
 vi.mock("next/headers", () => ({
   cookies: async () => ({
@@ -14,106 +13,72 @@ vi.mock("next/headers", () => ({
   }),
 }));
 vi.mock("../lib/scope-server", () => ({
-  config: (name: string) =>
-    name === "SCOPE_ORIGIN" ? "https://scope.example" : "private-service",
-  ownerDb: async () => ({ query: mocks.query, mutation: mocks.mutation }),
+  config: () => "private-service",
+  ownerDb: async () => mocks,
   scopeOrigin: () => "https://scope.example",
 }));
 vi.mock("../lib/providers", async (original) => ({
   ...(await original<typeof import("../lib/providers")>()),
-  acquireVerifiedCredential: mocks.grant,
-  disconnect: mocks.disconnect,
+  inspectConnection: mocks.inspect,
 }));
-import { ProviderFailure } from "../lib/providers";
 import { GET } from "../app/api/accounts/complete/route";
-const invoke = (extra = "") =>
-  GET(
-    new Request(
-      "https://scope.example/api/accounts/complete?attempt=abc123" + extra,
-    ),
-  );
+const invoke = () =>
+  GET(new Request("https://scope.example/api/accounts/complete?setup=abc123"));
 beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.proof = "private-browser-proof";
+  vi.resetAllMocks();
+  mocks.proof = "private-proof";
   mocks.query.mockResolvedValue({
-    id: "abc123",
+    provisional: true,
     providerId: "slack",
-    requestedScopes: ["channels:read"],
     connect: {
       connectorId: "connector",
-      subjectId: "unique-subject",
-      issuer: "https://scope.convex.site",
+      subjectId: "original",
+      issuer: "https://scope.example",
     },
-    expiresAt: Date.now() + 600_000,
-    proofHash: createHash("sha256").update(mocks.proof).digest("hex"),
+    requestedScopes: ["channels:read"],
   });
-  mocks.grant.mockResolvedValue({
-    providerUserId: "usr-verified",
-    providerEmail: "owner@example.com",
-    installationId: "install-verified",
+  mocks.inspect.mockResolvedValue({
+    providerUserId: "U1",
+    installationId: "I1",
+    label: "Work",
+    grantedScopes: ["channels:read"],
   });
-  mocks.mutation.mockResolvedValue({ accountId: "account" });
+  mocks.mutation.mockResolvedValue({ active: true, accountId: "abc123" });
 });
-test("only verified success completes the account and redirects to connections", async () => {
-  const response = await invoke();
-  expect(response.headers.get("location")).toBe(
-    "https://scope.example/connections?connection=connected",
-  );
-  expect(response.headers.get("cache-control")).toBe("no-store");
+test("verified callback activates the durable record", async () => {
+  const res = await invoke();
+  expect(res.headers.get("location")).toContain("connection=connected");
   expect(mocks.mutation.mock.calls[0][1]).toMatchObject({
     id: "abc123",
-    providerUserId: "usr-verified",
-    installationId: "install-verified",
+    activate: true,
+    installationId: "I1",
   });
-  expect(response.headers.get("set-cookie")).toBeNull(); // Proof survives identical callback retries until fixed expiry.
+  expect(res.headers.get("cache-control")).toBe("no-store");
 });
-test("provider failure or cancelled sign-in cannot save an account", async () => {
-  mocks.grant.mockRejectedValue(new Error("Provider mismatch"));
-  expect((await invoke()).headers.get("location")).toContain(
-    "connection=failed",
+test("failed callback retains the record for recovery", async () => {
+  mocks.inspect.mockRejectedValue(new Error("private upstream error"));
+  const res = await invoke();
+  expect(res.headers.get("location")).toContain("connection=failed");
+  expect(res.headers.get("location")).not.toContain("private");
+  expect(getFunctionName(mocks.mutation.mock.calls[0][0])).toBe(
+    "accounts:setupFailed",
   );
-  expect(mocks.mutation).not.toHaveBeenCalled();
-  mocks.grant.mockClear();
-  expect(
-    (await invoke("&error=access_denied")).headers.get("location"),
-  ).toContain("connection=failed");
-  expect(mocks.grant).not.toHaveBeenCalled();
-  expect(mocks.mutation).not.toHaveBeenCalled();
 });
-test("missing proof, wrong proof, owner rejection and expiry fail before provider IO", async () => {
+test("missing or rejected proof stops before provider IO", async () => {
   mocks.proof = "";
   await invoke();
   expect(mocks.query).not.toHaveBeenCalled();
-  mocks.proof = "different";
-  mocks.query.mockRejectedValueOnce(new Error("Invalid proof"));
+  mocks.proof = "bad";
+  mocks.query.mockRejectedValue(new Error("Invalid proof"));
   await invoke();
-  mocks.query.mockRejectedValueOnce(new Error("Connection unavailable"));
-  await invoke();
-  mocks.query.mockResolvedValueOnce({
-    expiresAt: Date.now() - 1,
-    proofHash: createHash("sha256").update(mocks.proof).digest("hex"),
-  });
-  await invoke();
-  expect(mocks.grant).not.toHaveBeenCalled();
+  expect(mocks.inspect).not.toHaveBeenCalled();
   expect(mocks.mutation).not.toHaveBeenCalled();
 });
-test("completed retries check the bound account without another provider call or write", async () => {
-  const original = await mocks.query();
-  mocks.query.mockResolvedValueOnce({ ...original, accountId: "account" });
+test("completed callback is idempotent without another provider call", async () => {
+  mocks.query.mockResolvedValue({ provisional: false, state: "active" });
   expect((await invoke()).headers.get("location")).toContain(
     "connection=connected",
   );
-  expect(mocks.grant).not.toHaveBeenCalled();
-  expect(mocks.mutation).not.toHaveBeenCalled();
-  mocks.query.mockRejectedValueOnce(new Error("Blocked completed account"));
-  expect((await invoke()).headers.get("location")).toContain(
-    "connection=failed",
-  );
-});
-
-test("a mismatched grant cannot complete or leak provider errors", async () => {
-  mocks.grant.mockRejectedValueOnce(new ProviderFailure("grant-rejected"));
-  const response = await invoke();
-  expect(response.headers.get("Location")).toContain("connection=failed");
+  expect(mocks.inspect).not.toHaveBeenCalled();
   expect(mocks.mutation).not.toHaveBeenCalled();
 });

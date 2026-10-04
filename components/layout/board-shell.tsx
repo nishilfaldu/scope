@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
-  AiChat02Icon,
   Plug01Icon,
   Notification01Icon,
   ShieldKeyIcon,
@@ -35,20 +34,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePendingRequests } from "@/components/approvals/pending-requests-provider";
-import { approvalStatus } from "@/lib/approval-display";
 import styles from "@/components/scope/scope.module.css";
 const navigation = [
-  { label: "Requests", path: "/approvals", icon: ShieldKeyIcon },
+  { label: "Access", path: "/access", icon: ShieldKeyIcon },
   { label: "Connections", path: "/connections", icon: Plug01Icon },
-  { label: "Agents", path: "/agents", icon: AiChat02Icon },
   { label: "Notifications", path: "/notifications", icon: Notification01Icon },
 ];
 export function BoardShell({ children }: { children: ReactNode }) {
   const path = usePathname();
   const { user, signOut } = useAuth();
-  const { rows: pending } = usePendingRequests();
-  const count =
-    pending?.filter((r) => approvalStatus(r) === "Needs approval").length ?? 0;
+  const { count: pendingCount } = usePendingRequests();
+  const count = pendingCount ?? 0;
   return (
     <div className={styles.review}>
       <SidebarProvider
@@ -57,7 +53,7 @@ export function BoardShell({ children }: { children: ReactNode }) {
       >
         <Sidebar collapsible="none" className={styles.rail}>
           <SidebarHeader className="p-0">
-            <Link href="/approvals" className={styles.brand}>
+            <Link href="/access" className={styles.brand}>
               <BrandMark className="size-7" />
               <span>Scope</span>
             </Link>
@@ -78,7 +74,7 @@ export function BoardShell({ children }: { children: ReactNode }) {
                     >
                       <HugeiconsIcon icon={icon} size={20} strokeWidth={1.7} />
                       <span>{label}</span>
-                      {href === "/approvals" && count > 0 && (
+                      {href === "/access" && count > 0 && (
                         <span className={styles.navCount}>{count}</span>
                       )}
                     </SidebarMenuButton>

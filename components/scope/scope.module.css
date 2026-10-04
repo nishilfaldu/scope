@@ -1122,3 +1122,46 @@
     animation: none;
   }
 }
+
+.accessSection {
+  margin-bottom: 32px;
+}
+.accessSection > h2 {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0 0 14px;
+}
+.durationChoices {
+  border: 0;
+  padding: 0;
+  margin: 24px 0 16px;
+}
+.durationChoices legend {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+.durationChoices button[aria-pressed="true"] {
+  background: var(--green);
+  color: white;
+  border-color: var(--green);
+}
+.durationChoices > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.accessStatus {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+  color: #285a40;
+}
+.accessStatus > span {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+}

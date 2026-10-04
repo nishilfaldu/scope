@@ -1,3 +1,4 @@
+import { failureMessage } from "../shared/failures.mjs";
 import { accessToken } from "./oauth.mjs";
 export async function scopeCall(
   operation,
@@ -17,7 +18,9 @@ export async function scopeCall(
       ? AbortSignal.any([signal, AbortSignal.timeout(15_000)])
       : AbortSignal.timeout(15_000),
   });
-  if (!response.ok)
-    throw new Error("Scope authentication or approval unavailable");
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(failureMessage(body.code));
+  }
   return response.json();
 }

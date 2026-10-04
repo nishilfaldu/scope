@@ -35,7 +35,7 @@ export function PublicHeader() {
             variant="outline"
             size="sm"
             nativeButton={false}
-            render={<Link href="/signin?redirectTo=/agents" />}
+            render={<Link href="/signin?redirectTo=/access" />}
           >
             Sign in
           </Button>
