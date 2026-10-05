@@ -8,7 +8,7 @@ Scope lets a person allow a verified CLI session to collect tokens for a connect
 An existing WorkOS login, bound to its verified owner, issuer, client and session claims. Agent names are display labels. Two chats using the same login share its active approval.
 
 **Connected account**:
-A saved provider identity and grant. Vercel Connect holds its credentials. A provisional account retains setup references until activation or confirmed cleanup.
+A saved provider identity and grant. Vercel Connect holds its credentials. Scope selects connectors through a server-owned catalog and retains the exact authorization parameters. Permission information is recorded at setup, when available; Scope does not independently inspect each delivered token. A provisional account retains setup references until activation or confirmed cleanup.
 
 **Access request**:
 A CLI session's request to collect tokens for one account and grant. It waits up to 30 minutes for the owner's decision. A reason describes the intended use, but does not restrict the token.

@@ -1,7 +1,7 @@
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { ClientActor } from "./client-auth";
-import { acquireVerifiedCredential } from "./providers";
+import { acquireCredential } from "./connect";
 import { db, scopeOrigin } from "./scope-server";
 export type ServiceActor = ClientActor & { secret: string };
 export async function listAccounts(
@@ -50,12 +50,12 @@ export async function deliverCredential(
     preflight.providerId === undefined
   )
     return { status: preflight.status };
-  const credential = await acquireVerifiedCredential(preflight.account);
+  const credential = await acquireCredential(preflight.account);
   const authorized = await db().mutation(api.access.authorizeCollection, {
     ...actor,
     id,
     grantVersion: preflight.grantVersion,
-    grantedScopes: credential.grantedScopes,
+    connect: preflight.account,
   });
   return {
     status: "ready" as const,
@@ -63,7 +63,6 @@ export async function deliverCredential(
     accountId: preflight.accountId,
     providerId: preflight.providerId,
     grantVersion: preflight.grantVersion,
-    grantedScopes: credential.grantedScopes,
     accessToken: credential.accessToken,
     until: authorized.until,
     receiptProof: authorized.receiptProof,

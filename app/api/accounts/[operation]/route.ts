@@ -5,11 +5,12 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
   beginAuthorization,
-  configuredSlack,
+  configuredConnector,
+  availableConnectors,
   disconnect,
   inspectConnection,
   ProviderFailure,
-} from "@/lib/providers";
+} from "@/lib/connect";
 import {
   config,
   ownerDb,
@@ -30,14 +31,9 @@ export async function GET(
     return safeError(401);
   }
   try {
-    if ((await params).operation !== "provider")
+    if ((await params).operation !== "providers")
       return new Response(null, { status: 404 });
-    const { scopes } = await configuredSlack();
-    return json({
-      providerId: "slack",
-      provider: "Slack",
-      permissions: scopes,
-    });
+    return json({ providers: await availableConnectors() });
   } catch (error) {
     return safeFailure(error);
   }
@@ -55,32 +51,34 @@ export async function POST(
     if (Buffer.byteLength(raw) > 8192) return safeError(413);
     const body: unknown = JSON.parse(raw);
     if (operation === "authorize") {
-      z.object({
-        providerId: z.literal("slack"),
-      })
+      const { providerId } = z
+        .object({ providerId: z.string().min(1).max(64) })
         .strict()
         .parse(body);
-      const { connectorId, scopes: requestedScopes } = await configuredSlack(),
+      const {
+          connectorId,
+          scopes: requestedScopes,
+          provider,
+        } = await configuredConnector(providerId),
         issuer = config("NEXT_PUBLIC_CONVEX_SITE_URL"),
         proof = randomBytes(32).toString("hex");
       const attempt = await client.mutation(api.accounts.beginConnection, {
         secret,
-        providerId: "slack",
+        providerId,
         connectorId,
         issuer,
         requestedScopes,
-        providerName: "Slack",
+        providerName: provider,
         proofHash: createHash("sha256").update(proof).digest("hex"),
       });
       const callback = new URL("/api/accounts/complete", scopeOrigin());
       callback.searchParams.set("setup", attempt.id);
       const authorization = await beginAuthorization(
         {
-          providerId: "slack",
           connectorId,
           subjectId: attempt.subjectId,
           issuer,
-          grantedScopes: requestedScopes,
+          scopes: requestedScopes,
         },
         callback.toString(),
       );
@@ -105,12 +103,13 @@ export async function POST(
       });
       if (saved.grantVersion !== grantVersion)
         throw new Error("Account changed");
-      if (saved.provisional && !saved.connect.installationId) {
+      if (saved.provisional && !saved.authorizationKey) {
         try {
           const grant = await inspectConnection({
             ...saved.connect,
             providerId: saved.providerId,
-            grantedScopes: saved.requestedScopes ?? saved.grantedScopes,
+            providerName: saved.providerName,
+            scopes: saved.requestedScopes,
           });
           await client.mutation(api.accounts.completeConnection, {
             secret,
@@ -146,10 +145,6 @@ export async function POST(
         return json({ outcome: "succeeded" });
       const result = await disconnect({
         ...blocked.connect,
-        providerId: blocked.providerId,
-        grantedScopes: blocked.grantedScopes,
-        providerUserId: blocked.providerUserId,
-        providerTenantId: blocked.providerTenantId,
       });
       const outcome = await client.mutation(api.accounts.recordDisconnect, {
         secret,

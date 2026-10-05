@@ -23,14 +23,13 @@ vi.mock("../lib/scope-server", () => ({
   safeFailure: () =>
     Response.json({ code: "retryable-unavailable" }, { status: 503 }),
 }));
-vi.mock("../lib/providers", async (original) => ({
-  ...(await original<typeof import("../lib/providers")>()),
+vi.mock("../lib/connect", async (original) => ({
+  ...(await original<typeof import("../lib/connect")>()),
   disconnect: mocks.disconnect,
-  configuredSlack: mocks.metadata,
+  availableConnectors: mocks.metadata,
   inspectConnection: mocks.inspect,
 }));
 import { GET, POST } from "../app/api/accounts/[operation]/route";
-import { ProviderFailure } from "../lib/providers";
 const reference = {
   provisional: false,
   connect: {
@@ -71,10 +70,6 @@ test("blocks before Connect IO, targets the exact grant and records completion",
   );
   expect(mocks.disconnect).toHaveBeenCalledWith({
     ...reference.connect,
-    providerId: "slack",
-    grantedScopes: reference.grantedScopes,
-    providerUserId: "U1",
-    providerTenantId: undefined,
   });
 });
 test("completed retry never revokes again", async () => {
@@ -85,23 +80,23 @@ test("completed retry never revokes again", async () => {
   expect(await (await invoke()).json()).toEqual({ outcome: "succeeded" });
   expect(mocks.disconnect).not.toHaveBeenCalled();
 });
-test("metadata outage is a service error and does not stop saved-account disconnect", async () => {
-  mocks.metadata.mockRejectedValue(
-    new ProviderFailure("retryable-unavailable"),
-  );
+test("metadata unavailability does not stop saved-account disconnect", async () => {
+  mocks.metadata.mockResolvedValue([
+    { providerId: "slack", provider: "Slack", available: false },
+  ]);
   expect(
     (
-      await GET(new Request("https://scope.example/api/accounts/provider"), {
-        params: Promise.resolve({ operation: "provider" }),
+      await GET(new Request("https://scope.example/api/accounts/providers"), {
+        params: Promise.resolve({ operation: "providers" }),
       })
     ).status,
-  ).toBe(503);
+  ).toBe(200);
   expect((await invoke()).status).toBe(200);
   mocks.owner.mockRejectedValue(new Error("Unauthorized"));
   expect(
     (
-      await GET(new Request("https://scope.example/api/accounts/provider"), {
-        params: Promise.resolve({ operation: "provider" }),
+      await GET(new Request("https://scope.example/api/accounts/providers"), {
+        params: Promise.resolve({ operation: "providers" }),
       })
     ).status,
   ).toBe(401);

@@ -295,8 +295,6 @@ export async function runApproved(
       credential.accountId !== accountId ||
       credential.requestId !== request.id ||
       credential.grantVersion !== context.grantVersion ||
-      JSON.stringify(credential.grantedScopes) !==
-        JSON.stringify(context.snapshot.grantedScopes) ||
       typeof credential.until !== "number" ||
       !Number.isFinite(credential.until) ||
       credential.until <= Date.now()

@@ -1,6 +1,6 @@
 import { ConvexHttpClient } from "convex/browser";
 import { withAuth } from "@workos-inc/authkit-nextjs";
-import { ProviderFailure } from "./providers";
+import { ProviderFailure } from "./connect";
 import { failureMessage } from "@/shared/failures.mjs";
 import { ZodError } from "zod";
 import { verifyClient } from "./client-auth";

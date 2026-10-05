@@ -134,7 +134,7 @@ test("one invocation freezes context, waits, receipts privately and never reruns
     command: { envVar: command.envVar, cwd: command.cwd, argv: command.argv },
     grantVersion: 1,
     requesterConnectionId: "cli",
-    snapshot: { grantedScopes: ["channels:read"] },
+    snapshot: {},
   };
   let statuses = 0;
   const call = vi.fn(async (operation: string, _body?: unknown) => {
@@ -149,7 +149,6 @@ test("one invocation freezes context, waits, receipts privately and never reruns
         ...context,
         status: "ready",
         requestId: "request",
-        grantedScopes: ["channels:read"],
         accessToken: secret,
         until: Date.now() + 10000,
         receiptProof: "private",

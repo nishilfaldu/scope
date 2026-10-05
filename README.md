@@ -41,11 +41,13 @@ Connections lists saved accounts even when connector metadata is unavailable. Ad
 
 ## Security boundary
 
-Scope stores provider identities, granted permissions, account versions, approval windows and collection evidence. It never stores provider access or refresh tokens. Vercel Connect manages provider credentials. WorkOS identifies the browser owner and the CLI session. Owner, issuer, client, session, account, version and permissions are checked before and after provider IO. A receipt is evidence of arrival, not successful work or termination of authority.
+Scope stores provider identities, granted permissions, account versions, approval windows and collection evidence. It never stores provider access or refresh tokens. Vercel Connect manages provider credentials. WorkOS identifies the browser owner and the CLI session. Owner, issuer, client, session, account, grant version and saved Connect reference are checked before and after token retrieval. A receipt is evidence of arrival, not successful work or termination of authority.
 
 The CLI supplies a small normal environment and excludes broker credentials. It masks literal credentials and common encodings in output, including split chunks. **It is not a sandbox.** A program with a bearer token can write, encode or transmit it. Use your coding host's normal execution controls.
 
-Slack user grants are the only implemented provider. Effective permissions and identity are checked with Slack `auth.test` before release. Broader or mismatched grants are rejected. Permission changes require disconnecting and reconnecting.
+Slack user grants are the only enabled connector. A server-owned catalog selects the connector; clients cannot supply a Connect target. Shared Connect operations handle authorization, token retrieval and revocation. Slack `auth.test` runs only during setup or recovery to identify duplicate grants and record available permissions. Those permissions describe setup, not each delivered token. Scope does not independently inspect each token’s identity or effective permissions. It relies on Connect for the saved authorization. `forceRefresh: true` bypasses the SDK cache; it does not guarantee newly minted bytes. Configuration changes require reconnecting; existing accounts keep their saved authorization parameters.
+
+To add a connector, add a catalog entry and configure it in Connect. Confirm its identity metadata supports safe duplicate detection and cleanup. Add a setup helper only when needed, then test that connector’s setup and token behavior. The approval engine and CLI remain shared.
 
 ## Configuration
 
@@ -64,4 +66,4 @@ pnpm exec tsc --noEmit
 pnpm build
 ```
 
-See [credential flows](docs/credential-flows.md), [UI review data](docs/ui-review-data.md), [timed access acceptance](docs/timed-access-acceptance.md) and [historical live acceptance](docs/slack-acceptance.md). Provider behavior is described in [Connect token documentation](https://vercel.com/docs/connect/concepts/tokens#revocation). Automated tests do not establish live provider consent or device delivery.
+See [connector architecture](docs/connector-architecture.md), [credential flows](docs/credential-flows.md), [UI review data](docs/ui-review-data.md), [timed access acceptance](docs/timed-access-acceptance.md) and [historical live acceptance](docs/slack-acceptance.md). Provider behavior is described in [Connect token documentation](https://vercel.com/docs/connect/concepts/tokens#revocation). Automated tests do not establish live provider consent or device delivery.

@@ -18,7 +18,6 @@ export const request = {
     accountLabel: "Work workspace",
     providerName: "Slack",
     agentName: "Research assistant",
-    grantedScopes: ["channels:read"],
   },
 } as ApprovalRequest;
 test("pending row offers duration choices defaulting to thirty minutes, with reason apart from app identity", () => {

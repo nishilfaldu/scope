@@ -1,7 +1,7 @@
 import { omit } from "convex-helpers";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
-import { fixture, scopes, secret } from "./access-fixture";
+import { fixture, secret } from "./access-fixture";
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
@@ -72,14 +72,14 @@ test("approval starts its duration at decision and collection or receipt never e
     ...f.actor,
     id: r.id,
     grantVersion: 1,
-    grantedScopes: scopes,
+    connect: f.collectionReference,
   });
   vi.setSystemTime(Date.now() + 60_000);
   const second = await f.t.mutation(api.access.authorizeCollection, {
     ...f.actor,
     id: r.id,
     grantVersion: 1,
-    grantedScopes: scopes,
+    connect: f.collectionReference,
   });
   await f.t.mutation(api.access.acknowledge, {
     ...f.actor,
@@ -123,11 +123,11 @@ test("approval starts its duration at decision and collection or receipt never e
       ...f.actor,
       id: r.id,
       grantVersion: 1,
-      grantedScopes: scopes,
+      connect: f.collectionReference,
     }),
   ).rejects.toThrow();
 });
-test("ending, disconnecting, changed grant and changed permissions fence final delivery", async () => {
+test("ending, disconnecting, changed grant and changed authorization parameters fence final delivery", async () => {
   for (const change of ["end", "disconnect", "version", "scopes"]) {
     const f = await fixture(),
       r = await f.request();
@@ -154,7 +154,7 @@ test("ending, disconnecting, changed grant and changed permissions fence final d
           f.accountId,
           change === "version"
             ? { grantVersion: 2 }
-            : { grantedScopes: ["identify"] },
+            : { requestedScopes: ["chat:write"] },
         ),
       );
     await expect(
@@ -162,7 +162,7 @@ test("ending, disconnecting, changed grant and changed permissions fence final d
         ...f.actor,
         id: r.id,
         grantVersion: 1,
-        grantedScopes: scopes,
+        connect: f.collectionReference,
       }),
     ).rejects.toThrow();
   }
@@ -185,7 +185,7 @@ test("late receipts remain evidence after ending, and a later request can ask ag
     ...f.actor,
     id: r.id,
     grantVersion: 1,
-    grantedScopes: scopes,
+    connect: f.collectionReference,
   });
   await f.owner.mutation(api.access.end, { id: r.id });
   await f.t.mutation(api.access.acknowledge, {
@@ -358,4 +358,111 @@ test("a callback after provisional cleanup cannot reactivate the closed setup", 
   expect(saved.visible).toBe(true);
   expect(saved.state).toBe("blocked");
   expect(saved.connect.installationId).toBe("Ilate");
+});
+
+test("informational permissions are not token verification; exact Connect references still fence release", async () => {
+  const f = await fixture(),
+    r = await f.request();
+  await f.t.run((ctx) =>
+    ctx.db.patch("connectedAccounts", f.accountId, { grantedScopes: [] }),
+  );
+  for (const change of [
+    { connectorId: "other" },
+    { subjectId: "other" },
+    { issuer: "https://other" },
+    { installationId: "other" },
+    { scopes: ["*"] },
+  ]) {
+    await expect(
+      f.t.mutation(api.access.authorizeCollection, {
+        ...f.actor,
+        id: r.id,
+        grantVersion: 1,
+        connect: { ...f.collectionReference, ...change },
+      }),
+    ).rejects.toThrow();
+  }
+  await expect(
+    f.t.mutation(api.access.authorizeCollection, {
+      ...f.actor,
+      id: r.id,
+      grantVersion: 1,
+      connect: f.collectionReference,
+    }),
+  ).resolves.toHaveProperty("receiptProof");
+});
+test("connection storage supports another service with unknown permissions and no installation", async () => {
+  const f = await fixture();
+  const start = await f.owner.mutation(api.accounts.beginConnection, {
+    ...f.setup,
+    providerId: "example",
+    providerName: "Example",
+    requestedScopes: [],
+  });
+  const provisional = await f.owner.query(api.accounts.setupForOwner, {
+    secret,
+    id: start.id,
+  });
+  expect(provisional.grantedScopes).toEqual([]);
+  const completed = await f.owner.mutation(api.accounts.completeConnection, {
+    secret,
+    id: start.id,
+    activate: true,
+    providerUserId: "E1",
+    label: "Example account",
+    grantedScopes: [],
+  });
+  expect(completed.active).toBe(true);
+  const request = await f.t.mutation(api.access.request, {
+    ...f.requestArgs,
+    accountId: start.id,
+  });
+  await f.owner.mutation(api.access.decide, {
+    id: request.id,
+    approve: true,
+    minutes: 15,
+  });
+  await expect(
+    f.t.mutation(api.access.authorizeCollection, {
+      ...f.actor,
+      id: request.id,
+      grantVersion: 1,
+      connect: {
+        connectorId: f.setup.connectorId,
+        issuer: f.setup.issuer,
+        subjectId: start.subjectId,
+        scopes: [],
+      },
+    }),
+  ).resolves.toHaveProperty("receiptProof");
+  const duplicate = await f.owner.mutation(api.accounts.beginConnection, {
+    ...f.setup,
+    providerId: "example",
+    providerName: "Example",
+    requestedScopes: [],
+  });
+  expect(
+    await f.owner.mutation(api.accounts.completeConnection, {
+      secret,
+      id: duplicate.id,
+      activate: true,
+      providerUserId: "E1",
+      label: "Example account",
+      grantedScopes: [],
+    }),
+  ).toMatchObject({ active: false, issue: "grant-conflict" });
+  await expect(
+    f.owner.mutation(api.accounts.block, {
+      secret,
+      id: duplicate.id,
+      grantVersion: 1,
+    }),
+  ).rejects.toThrow("recovery");
+  await expect(
+    f.owner.mutation(api.accounts.block, {
+      secret,
+      id: start.id,
+      grantVersion: 1,
+    }),
+  ).resolves.toHaveProperty("state", "blocked");
 });

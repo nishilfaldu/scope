@@ -4,7 +4,7 @@ The current model has connected accounts, access approvals and push subscription
 
 ## Connection
 
-The signed-in owner starts Slack consent. Scope inserts a provisional account with a unique Connect subject, expected permissions and a browser proof hash. The callback verifies the owner and proof, resolves the actual identity, installation and permissions, and records those references on the same row before deciding whether to activate it. Expired, mismatched and failed setups retain a recovery path. A duplicate grant cannot be activated or revoked while another saved account holds it.
+The signed-in owner selects a product key from the server-owned connector catalog. Scope chooses the configured Connect target and starts consent. Scope inserts a provisional account with a unique Connect subject, saved authorization parameters and a browser proof hash. The callback verifies the owner and proof, resolves the identity and installation, and records available permission information, and records those references on the same row before deciding whether to activate it. Expired, mismatched and failed setups retain a recovery path. A duplicate grant cannot be activated or revoked while another saved account holds it.
 
 Saved-account management and CLI discovery use indexed pagination. Connector metadata is needed only to start new consent. Confirmed disconnections are hidden with an indexed visibility field. Failed disconnections remain available through the same action.
 
@@ -16,7 +16,7 @@ Pending requests wait 30 minutes. Approval starts a separate 15-, 30- or 60-minu
 
 ## Collection
 
-Preflight checks the approved window and current account. Provider IO resolves a fresh token through Connect, verifies Slack identity and effective permissions, and then a final mutation checks authority again. Ending approval, disconnecting, changing the grant or expiry during IO prevents release. Tokens remain in the server and CLI response path; they are never written to Convex or exposed to browser pages.
+Preflight checks the approved window and current account. Token retrieval uses the saved Connect connector, subject, issuer, installation and authorization parameters with `forceRefresh: true`. The SDK cache is bypassed; Connect may return the same token. A final mutation checks the same reference and authority again. Scope does not independently inspect the delivered token’s identity or effective permissions. Ending approval, disconnecting, changing the grant or expiry during IO prevents release. Tokens remain in the server and CLI response path; they are never written to Convex or exposed to browser pages.
 
 Every token includes all permissions granted when you connected the account. The stated purpose does not restrict the token.
 
@@ -28,6 +28,6 @@ Commands belong to the local invocation journal. New commands can share an appro
 
 End approval stops Scope collection only. Disconnect first blocks the account, then calls Connect revoke with the exact subject and installation. Completion is monotonic. A retry uses the same reference and accepts only an explicit absent user authorization as already complete. Connect handles provider revocation where supported; Scope does not independently call Slack revoke or test invalidation. A collection window never changes a provider token's lifetime.
 
-The Access page shows Needs approval, Active approvals and History. Each has indexed pagination, one current status and optional Activity. Permissions belong to the collapsed account disclosure in Connections.
+The Access page shows Needs approval, Active approvals and History. Each has indexed pagination, one current status and optional Activity. Permissions recorded at setup belong to the collapsed account disclosure in Connections. Unknown permissions are shown as unavailable. Connect has no uniform granted-permissions field. Slack inspection is a setup helper for identity and permission information; it is not part of delivery or disconnect.
 
 Sources: [Connect SDK](https://vercel.com/docs/connect/ts-sdk-reference), [revocation semantics](https://vercel.com/docs/connect/concepts/tokens#revocation).

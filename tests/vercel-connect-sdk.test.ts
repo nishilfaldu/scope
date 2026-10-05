@@ -2,9 +2,9 @@
 import { afterEach, expect, test, vi } from "vitest";
 import {
   beginAuthorization,
-  acquireVerifiedCredential,
+  acquireCredential,
   disconnect,
-} from "../lib/providers";
+} from "../lib/connect";
 const SLACK_SCOPES = ["channels:read"];
 
 afterEach(() => {
@@ -27,7 +27,7 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
     connectorId: "scl_slack",
     installationId: "inst_T1",
     providerId: "slack",
-    grantedScopes: ["channels:read"],
+    scopes: ["channels:read"],
     providerUserId: "U1",
     providerTenantId: "T1",
   };
@@ -88,22 +88,16 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
           return new Response(null, { status: 204 });
         }
       }
-      if (url === "https://slack.com/api/auth.test")
-        return Response.json(
-          { ok: true, team_id: "T1", user_id: "U1" },
-          { headers: { "x-oauth-scopes": "channels:read" } },
-        );
       throw new Error(`Unexpected SDK request ${url}`);
     });
   await beginAuthorization(
     ref,
     "https://scope.example.com/api/accounts/complete?attempt=attempt",
   );
-  expect(await acquireVerifiedCredential(ref)).toMatchObject({
+  expect(await acquireCredential(ref)).toMatchObject({
     accessToken: "xoxp-1",
-    providerUserId: "U1",
   });
-  expect(await acquireVerifiedCredential(ref)).toMatchObject({
+  expect(await acquireCredential(ref)).toMatchObject({
     accessToken: "xoxp-2",
   });
   expect(tokens).toBe(2);
@@ -119,7 +113,33 @@ test("installed SDK uses project OIDC, explicit subject/scopes, bypasses cache, 
   ]);
   expect(
     transport.mock.calls.some(([input]) =>
-      String(input).includes("auth.revoke"),
+      String(input).startsWith("https://slack.com/"),
     ),
   ).toBe(false);
+});
+
+test("an explicit empty parameter set reaches Connect without the SDK wildcard default", async () => {
+  const oidc = `e30.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })).toString("base64url")}.test`;
+  vi.stubEnv("VERCEL_OIDC_TOKEN", oidc);
+  vi.stubEnv("VERCEL_REGION", "");
+  vi.stubEnv("VERCEL_CONNECT_INTERACTIVE_AUTH_MODE", "");
+  const transport = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (_input, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.scopes).toEqual([]);
+      return Response.json({
+        token: "opaque",
+        connector: { id: "connector-empty", type: "other" },
+      });
+    });
+  expect(
+    await acquireCredential({
+      connectorId: "connector-empty",
+      subjectId: "saved",
+      issuer: "https://scope.example",
+      scopes: [],
+    }),
+  ).toEqual({ accessToken: "opaque" });
+  expect(transport).toHaveBeenCalledOnce();
 });

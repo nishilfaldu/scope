@@ -68,6 +68,7 @@ export const seed = internalMutation({
           installationId: "demo",
         },
         grantVersion: 1,
+        requestedScopes: ["channels:read"],
         grantedScopes: ["channels:read", "identify"],
         state: "active",
       }));
@@ -108,7 +109,6 @@ export const seed = internalMutation({
               i === 0
                 ? "Demo · Design assistant"
                 : "Demo · Research assistant " + i,
-            grantedScopes: ["channels:read", "identify"],
           },
           reason:
             i === 0

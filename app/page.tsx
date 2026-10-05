@@ -131,7 +131,9 @@ export default function HomePage() {
 
         <p className="mx-auto max-w-6xl px-5 pb-10 text-sm leading-6 text-muted-foreground sm:px-8">
           Every token includes all permissions granted when you connected the
-          account. The stated purpose does not restrict the token.
+          account. The stated purpose does not restrict the token. Vercel
+          Connect manages credentials; Scope does not inspect each token&apos;s
+          permissions.
         </p>
         <section className="border-y border-[#dde5da] bg-white dark:border-border dark:bg-card">
           <div className="mx-auto grid max-w-6xl px-5 sm:px-8 lg:grid-cols-3">

@@ -44,6 +44,9 @@ const sections: TermsSection[] = [
           supported. If the provider cannot revoke the credential, it may remain
           valid until it expires. Scope reports completion when Connect confirms
           removal; this does not independently confirm provider invalidation.
+          Vercel Connect manages provider credentials. Scope does not
+          independently inspect each delivered token&apos;s effective
+          permissions. Permissions shown in Connections were recorded at setup.
           Changing permissions requires disconnecting and reconnecting.
         </p>
       </>
@@ -155,7 +158,7 @@ export default function TermsPage() {
           <aside className="lg:sticky lg:top-10 lg:self-start">
             <p className="text-sm font-semibold">Scope</p>
             <p className="mt-1 text-sm text-[#68746a] dark:text-muted-foreground">
-              Effective October 4, 2026
+              Effective October 5, 2026
             </p>
             <nav
               className="mt-7 hidden border-l border-[#d8e1d4] pl-4 text-sm lg:block dark:border-border"

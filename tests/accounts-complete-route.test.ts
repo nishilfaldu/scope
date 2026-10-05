@@ -17,8 +17,8 @@ vi.mock("../lib/scope-server", () => ({
   ownerDb: async () => mocks,
   scopeOrigin: () => "https://scope.example",
 }));
-vi.mock("../lib/providers", async (original) => ({
-  ...(await original<typeof import("../lib/providers")>()),
+vi.mock("../lib/connect", async (original) => ({
+  ...(await original<typeof import("../lib/connect")>()),
   inspectConnection: mocks.inspect,
 }));
 import { GET } from "../app/api/accounts/complete/route";
@@ -30,6 +30,7 @@ beforeEach(() => {
   mocks.query.mockResolvedValue({
     provisional: true,
     providerId: "slack",
+    providerName: "Slack",
     connect: {
       connectorId: "connector",
       subjectId: "original",
@@ -52,6 +53,14 @@ test("verified callback activates the durable record", async () => {
     id: "abc123",
     activate: true,
     installationId: "I1",
+  });
+  expect(mocks.inspect).toHaveBeenCalledWith({
+    connectorId: "connector",
+    subjectId: "original",
+    issuer: "https://scope.example",
+    providerId: "slack",
+    providerName: "Slack",
+    scopes: ["channels:read"],
   });
   expect(res.headers.get("cache-control")).toBe("no-store");
 });

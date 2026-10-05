@@ -60,7 +60,7 @@ export async function fixture(crashFirstPush = false) {
     providerName: "Slack",
     connectorId: "connector",
     issuer: "https://scope.convex.site",
-    requestedScopes: scopes,
+    requestedScopes: ["channels:read"],
     proofHash: "a".repeat(64),
   };
   const completion = {
@@ -98,5 +98,12 @@ export async function fixture(crashFirstPush = false) {
     request,
     setup,
     completion,
+    collectionReference: {
+      connectorId: setup.connectorId,
+      subjectId: initial.subjectId,
+      issuer: setup.issuer,
+      installationId: completion.installationId,
+      scopes: setup.requestedScopes,
+    },
   };
 }

@@ -11,8 +11,8 @@ vi.mock("../lib/scope-server", () => ({
   config: () => "service",
   scopeOrigin: () => "http://localhost:3000",
 }));
-vi.mock("../lib/providers", () => ({
-  acquireVerifiedCredential: mocks.credential,
+vi.mock("../lib/connect", () => ({
+  acquireCredential: mocks.credential,
 }));
 import {
   deliverCredential,
@@ -38,6 +38,7 @@ const context = {
     connectorId: "connector",
     subjectId: "opaque",
     issuer: "https://scope.convex.site",
+    scopes: ["channels:read"],
   },
 };
 beforeEach(() => {
@@ -51,11 +52,10 @@ beforeEach(() => {
     accessToken: "private-provider",
     providerExpiresAt: Date.now() + 60_000,
     providerUserId: "provider",
-    grantedScopes: ["channels:read"],
     tokenId: "token-id",
   });
 });
-test("every retry resolves fresh bytes and authorizes after provider IO without sending credentials to Convex", async () => {
+test("each retry calls Connect and authorizes after IO without sending credentials to Convex", async () => {
   const order: string[] = [];
   mocks.credential.mockImplementation(async () => {
     order.push("provider");
@@ -76,6 +76,10 @@ test("every retry resolves fresh bytes and authorizes after provider IO without 
     second = await deliverCredential(actor, id);
   expect(order).toEqual(["provider", "authority", "provider", "authority"]);
   expect(first).not.toEqual(second);
+  expect(first).not.toHaveProperty("grantedScopes");
+  expect(mocks.mutation.mock.calls[0][1]).toMatchObject({
+    connect: context.account,
+  });
   expect(JSON.stringify(mocks.mutation.mock.calls)).not.toContain("private-");
   expect(JSON.stringify(mocks.query.mock.calls)).not.toContain("private-");
 });

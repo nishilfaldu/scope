@@ -28,11 +28,7 @@ import {
 } from "@/lib/approval-display";
 import styles from "@/components/scope/scope.module.css";
 import { failureMessage } from "@/shared/failures.mjs";
-type ProviderView = {
-  providerId: string;
-  provider: string;
-  permissions: string[];
-};
+import type { ConnectorView } from "@/lib/connector-catalog";
 export function ConnectionsBoard() {
   const page = usePaginatedQuery(
     api.accounts.forOwner,
@@ -40,7 +36,16 @@ export function ConnectionsBoard() {
     { initialNumItems: 20 },
   );
   const accounts = page.results;
-  const [provider, setProvider] = useState<ProviderView>();
+  const [providers, setProviders] = useState<ConnectorView[]>();
+  const integrations = new Map((providers ?? []).map((p) => [p.providerId, p]));
+  for (const account of accounts) {
+    if (!integrations.has(account.providerId))
+      integrations.set(account.providerId, {
+        providerId: account.providerId,
+        provider: account.providerName,
+        available: false,
+      });
+  }
   const [connectingId, setConnectingId] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [manage, setManage] = useState<ApprovalAccount | null>(null);
@@ -48,17 +53,20 @@ export function ConnectionsBoard() {
     let active = true;
     async function loadProvider() {
       try {
-        const response = await fetch("/api/accounts/provider", {
+        const response = await fetch("/api/accounts/providers", {
           cache: "no-store",
         });
         if (!response.ok) throw new Error("Unavailable");
         const data = await response.json();
         if (active) {
-          setProvider(data);
+          setProviders(data.providers);
+          if (data.providers.some((p: ConnectorView) => !p.available))
+            throw new Error("Unavailable");
           toast.close("provider-load");
         }
       } catch {
         if (!active) return;
+        setProviders((current) => current ?? []);
         toast.add({
           id: "provider-load",
           timeout: 0,
@@ -113,7 +121,7 @@ export function ConnectionsBoard() {
       setBusy(false);
     }
   }
-  async function connectAccount(integration: ProviderView) {
+  async function connectAccount(integration: ConnectorView) {
     setConnectingId(integration.providerId);
     await run(async () => {
       const result = await approvalPost<{ url: string }>(
@@ -133,18 +141,11 @@ export function ConnectionsBoard() {
         <p>Your connected accounts.</p>
       </header>
       <div className={styles.connectionList}>
-        {page.status === "LoadingFirstPage" ? (
+        {page.status === "LoadingFirstPage" ||
+        (!providers && !accounts.length) ? (
           <BoardSkeleton kind="connections" />
         ) : (
-          [
-            {
-              providerId: "slack",
-              provider:
-                accounts.find((a) => a.providerId === "slack")?.providerName ??
-                "Slack",
-              permissions: provider?.permissions ?? [],
-            },
-          ].map((integration) => {
+          [...integrations.values()].map((integration) => {
             const rows = accounts.filter(
               (a) => a.providerId === integration.providerId,
             );
@@ -157,7 +158,7 @@ export function ConnectionsBoard() {
                     <Button
                       variant="ghost"
                       className={styles.addAccount}
-                      disabled={busy || !provider}
+                      disabled={busy || !integration.available}
                       onClick={() => void connectAccount(integration)}
                     >
                       {connectingId === integration.providerId && (
@@ -184,7 +185,7 @@ export function ConnectionsBoard() {
                     <Collapsible className={styles.accountPermissions}>
                       <CollapsibleTrigger
                         className={styles.permissionsTrigger}
-                        aria-label={`Permissions for ${accountName(a.label)} (${a.grantedScopes.length})`}
+                        aria-label={`Permissions for ${accountName(a.label)} (${a.grantedScopes.length || "not available"})`}
                       >
                         <HugeiconsIcon
                           icon={ArrowDown01Icon}
@@ -193,27 +194,32 @@ export function ConnectionsBoard() {
                         />
                         Permissions
                         <span className={styles.permissionsCount}>
-                          {a.grantedScopes.length}
+                          {a.grantedScopes.length || "—"}
                         </span>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         {a.grantedScopes.length ? (
-                          <ul className={styles.scopeList}>
-                            {a.grantedScopes.map((scope) => (
-                              <li key={scope}>
-                                <code>{scope}</code>
-                              </li>
-                            ))}
-                          </ul>
+                          <>
+                            <p>Recorded at connection.</p>
+                            <ul className={styles.scopeList}>
+                              {a.grantedScopes.map((scope) => (
+                                <li key={scope}>
+                                  <code>{scope}</code>
+                                </li>
+                              ))}
+                            </ul>
+                          </>
                         ) : (
-                          <p>No permissions recorded.</p>
+                          <p>Granted permissions are not available.</p>
                         )}
                       </CollapsibleContent>
                     </Collapsible>
                   </div>
                 ))}
                 {!rows.length && (
-                  <p className={styles.empty}>No Slack accounts connected.</p>
+                  <p className={styles.empty}>
+                    No {integration.provider} accounts connected.
+                  </p>
                 )}
               </section>
             );
@@ -238,7 +244,7 @@ export function ConnectionsBoard() {
       >
         <DialogContent className={styles.dialog}>
           <DialogHeader>
-            <DialogTitle>Disconnect Slack?</DialogTitle>
+            <DialogTitle>Disconnect {manage?.providerName}?</DialogTitle>
             <DialogDescription>
               Stop token collection for {accountName(manage?.label)} and revoke
               its connection.

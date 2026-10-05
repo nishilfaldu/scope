@@ -7,7 +7,7 @@ import {
 } from "./_generated/server";
 import { components } from "./_generated/api";
 import { ActionRetrier } from "@convex-dev/action-retrier";
-import { owner, sameScopes } from "./scope";
+import { owner } from "./scope";
 import { validatePushEndpoint } from "./lib/push";
 export const retrier = new ActionRetrier(components.actionRetrier, {
   initialBackoffMs: 5000,
@@ -101,8 +101,7 @@ export const deliverySubscription = internalQuery({
       account.ownerId !== request.ownerId ||
       account.state !== "active" ||
       account.providerId !== request.providerId ||
-      account.grantVersion !== request.grantVersion ||
-      !sameScopes(account.grantedScopes, request.snapshot.grantedScopes)
+      account.grantVersion !== request.grantVersion
     )
       return null;
     return {

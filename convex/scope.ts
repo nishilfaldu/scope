@@ -40,7 +40,6 @@ export const snapshot = v.object({
   accountLabel: v.string(),
   providerName: v.string(),
   agentName: v.string(),
-  grantedScopes: v.array(v.string()),
 });
 export type Actor = Infer<typeof actor>;
 export type Ctx = QueryCtx | MutationCtx;

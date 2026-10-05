@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { createHash } from "node:crypto";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { inspectConnection, ProviderFailure } from "@/lib/providers";
+import { inspectConnection, ProviderFailure } from "@/lib/connect";
 import { config, ownerDb, scopeOrigin } from "@/lib/scope-server";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
@@ -32,7 +32,8 @@ export async function GET(request: Request) {
       const grant = await inspectConnection({
         ...row.connect,
         providerId: row.providerId,
-        grantedScopes: row.requestedScopes ?? row.grantedScopes,
+        providerName: row.providerName,
+        scopes: row.requestedScopes,
       });
       const result = await client.mutation(api.accounts.completeConnection, {
         secret,

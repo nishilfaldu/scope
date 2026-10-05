@@ -46,7 +46,6 @@ const pending = {
     accountLabel: "Work",
     providerName: "Slack",
     agentName: "Research",
-    grantedScopes: [],
   },
 };
 beforeEach(() => {

@@ -31,7 +31,7 @@ export default defineSchema({
     ),
     setupExpiresAt: v.optional(v.number()),
     proofHash: v.optional(v.string()),
-    requestedScopes: v.optional(v.array(v.string())),
+    requestedScopes: v.array(v.string()),
     setupIssue: v.optional(v.string()),
     blockedAt: v.optional(v.number()),
     disconnectOutcome: v.optional(disconnectOutcome),

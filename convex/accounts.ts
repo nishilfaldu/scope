@@ -107,7 +107,7 @@ export const listForClient = query({
 export const beginConnection = mutation({
   args: {
     secret: v.string(),
-    providerId: v.literal("slack"),
+    providerId: v.string(),
     providerName: v.string(),
     connectorId: v.string(),
     issuer: v.string(),
@@ -120,6 +120,9 @@ export const beginConnection = mutation({
     const ownerId = await owner(ctx);
     const scopes = canonicalScopes(args.requestedScopes);
     if (
+      !/^[a-z][a-z0-9-]{0,63}$/.test(args.providerId) ||
+      !args.providerName.trim() ||
+      args.providerName.length > 100 ||
       !args.connectorId ||
       !args.issuer.startsWith("https://") ||
       !/^[a-f0-9]{64}$/.test(args.proofHash)
@@ -133,14 +136,14 @@ export const beginConnection = mutation({
       provisional: true,
       providerId: args.providerId,
       providerName: args.providerName,
-      label: "Unfinished Slack connection",
+      label: `Unfinished ${args.providerName} connection`,
       accessDescription: scopes.join(", "),
       connect: {
         connectorId: args.connectorId,
         subjectId,
         issuer: args.issuer,
       },
-      grantedScopes: scopes,
+      grantedScopes: [],
       grantVersion: 1,
       state: "connecting",
       requestedScopes: scopes,
@@ -181,7 +184,7 @@ export const completeConnection = mutation({
     providerUserId: v.string(),
     providerTenantId: v.optional(v.string()),
     label: v.string(),
-    installationId: v.string(),
+    installationId: v.optional(v.string()),
     grantedScopes: v.array(v.string()),
   },
   returns: v.object({
@@ -199,13 +202,15 @@ export const completeConnection = mutation({
       throw new Error("Connection unavailable");
     if (
       !args.providerUserId ||
-      !args.installationId ||
-      args.installationId === "*" ||
+      (args.installationId !== undefined &&
+        (!args.installationId || args.installationId === "*")) ||
       !args.label.trim() ||
       args.label.length > 200
     )
       throw new Error("Invalid grant");
-    const scopes = canonicalScopes(args.grantedScopes),
+    const scopes = args.grantedScopes.length
+        ? canonicalScopes(args.grantedScopes)
+        : [],
       key = authorizationKey(
         row.providerId,
         args.providerUserId,
@@ -227,11 +232,9 @@ export const completeConnection = mutation({
         ? "setup-closed"
         : (await conflict(ctx, row, key))
           ? "grant-conflict"
-          : !sameScopes(row.requestedScopes!, scopes)
-            ? "grant-rejected"
-            : !args.activate || row.setupExpiresAt! <= Date.now()
-              ? "setup-expired"
-              : undefined;
+          : !args.activate || row.setupExpiresAt! <= Date.now()
+            ? "setup-expired"
+            : undefined;
     await ctx.db.patch("connectedAccounts", row._id, {
       visible: true,
       providerUserId: args.providerUserId,
@@ -280,9 +283,7 @@ export const block = mutation({
     if (row.grantVersion !== grantVersion) throw new Error("Account changed");
     if (
       row.provisional &&
-      (!row.authorizationKey ||
-        !row.connect.installationId ||
-        (await conflict(ctx, row)))
+      (!row.authorizationKey || (await conflict(ctx, row)))
     )
       throw new Error("Connection recovery required");
     if (row.disconnectOutcome !== "succeeded") {

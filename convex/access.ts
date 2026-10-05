@@ -48,8 +48,7 @@ async function accountFor(
     a.ownerId === r.ownerId &&
     a.state === "active" &&
     a.grantVersion === r.grantVersion &&
-    a.providerId === r.providerId &&
-    sameScopes(a.grantedScopes, r.snapshot.grantedScopes)
+    a.providerId === r.providerId
     ? a
     : null;
 }
@@ -147,7 +146,6 @@ export const request = mutation({
         accountLabel: a.label,
         providerName: a.providerName,
         agentName: args.agentName.trim(),
-        grantedScopes: a.grantedScopes,
       },
       reason: args.reason.trim(),
       status: "pending",
@@ -322,12 +320,7 @@ const acquisition = v.object({
   accountId: v.id("connectedAccounts"),
   providerId: v.string(),
   grantVersion: v.number(),
-  account: connectReference.extend({
-    providerId: v.string(),
-    providerUserId: v.string(),
-    providerTenantId: v.optional(v.string()),
-    grantedScopes: v.array(v.string()),
-  }),
+  account: connectReference.extend({ scopes: v.array(v.string()) }),
 });
 export const preflight = query({
   args: { ...actor.fields, id: v.id("accessApprovals"), now: v.number() },
@@ -346,10 +339,7 @@ export const preflight = query({
       grantVersion: a.grantVersion,
       account: {
         ...a.connect,
-        providerId: a.providerId,
-        providerUserId: a.providerUserId!,
-        providerTenantId: a.providerTenantId,
-        grantedScopes: a.grantedScopes,
+        scopes: a.requestedScopes,
       },
     };
   },
@@ -359,17 +349,22 @@ export const authorizeCollection = mutation({
     ...actor.fields,
     id: v.id("accessApprovals"),
     grantVersion: v.number(),
-    grantedScopes: v.array(v.string()),
+    connect: connectReference.extend({ scopes: v.array(v.string()) }),
   },
   returns: v.object({ until: v.number(), receiptProof: v.string() }),
   handler: async (ctx, args) => {
-    const r = await checked(ctx, args, args.id);
+    const r = await checked(ctx, args, args.id),
+      a = await accountFor(ctx, r);
     if (
       r.status !== "active" ||
       r.until! <= Date.now() ||
       r.grantVersion !== args.grantVersion ||
-      !sameScopes(r.snapshot.grantedScopes, args.grantedScopes) ||
-      !(await accountFor(ctx, r))
+      !a ||
+      a.connect.connectorId !== args.connect.connectorId ||
+      a.connect.subjectId !== args.connect.subjectId ||
+      a.connect.issuer !== args.connect.issuer ||
+      a.connect.installationId !== args.connect.installationId ||
+      !sameScopes(a.requestedScopes, args.connect.scopes)
     )
       throw new Error("Access unavailable");
     const now = Date.now();

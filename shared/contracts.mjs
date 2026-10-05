@@ -30,7 +30,6 @@ export function validCommand(value) {
 export function canonicalScopes(scopes) {
   if (
     !Array.isArray(scopes) ||
-    !scopes.length ||
     scopes.length > 128 ||
     scopes.some(
       (scope) =>
