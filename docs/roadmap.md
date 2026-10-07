@@ -72,10 +72,10 @@ Code, tests, typecheck, lint and build pass. Verified live on dev: agent creatio
 - If the browser session has expired, open the page instead of acting.
 - iOS web push has no action buttons. A tap opens the page.
 
-### Step 3: permissions (minimal)
+### Step 3: permissions (done for Slack; verified live)
 
-- Add an optional `readGrant(token)` per connector. Start with Slack: read the `x-oauth-scopes` header from `auth.test`.
-- Call it once in the consent callback. Store `grantedScopes` and `checkedAt` on the account for display only.
+- Add an optional scope reader per provider (`scopeReaders` in `lib/connect.ts`). Start with Slack: read the `x-oauth-scopes` header from `auth.test`.
+- Call it once in the consent callback. Store `permissions: { scopes, checkedAt }` on the account for display only. If the reader fails, connect anyway and store nothing.
 - Map the Slack scopes Scope requests to plain language. Show raw names for unknown scopes.
 - Show the list on the approval page, in the notification, and on the Accounts page as "as of {date}".
 - If a provider reports nothing, say "Permissions were set on {provider}'s consent screen". Never show requested scopes as granted.

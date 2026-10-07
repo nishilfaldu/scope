@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
+import { PermissionList } from "@/components/accounts/permission-list";
 import { AppMark } from "@/components/shared/app-mark";
 import { PageHeading, Section, Spinner } from "@/components/shared/page-parts";
 import { ListSkeleton } from "@/components/layout/workspace-skeleton";
@@ -72,15 +73,25 @@ export function AccountsBoard({ providers }: { providers: Provider[] }) {
             return (
               <div
                 key={provider.providerId}
-                className="flex items-center gap-3 px-6 py-5"
+                className="flex items-start gap-3 px-6 py-5"
               >
                 <AppMark providerId={provider.providerId} />
-                <div className="min-w-0 flex-1">
-                  <h2 className="font-medium">{provider.provider}</h2>
-                  <p className="truncate text-xs text-scope-quiet">
-                    {account?.label ??
-                      (provider.available ? "Not connected" : "Not configured")}
-                  </p>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div>
+                    <h2 className="font-medium">{provider.provider}</h2>
+                    <p className="truncate text-xs text-scope-quiet">
+                      {account?.label ??
+                        (provider.available
+                          ? "Not connected"
+                          : "Not configured")}
+                    </p>
+                  </div>
+                  {account && (
+                    <PermissionList
+                      account={account}
+                      heading="Approved agents get these permissions"
+                    />
+                  )}
                 </div>
                 {account && (
                   <Button

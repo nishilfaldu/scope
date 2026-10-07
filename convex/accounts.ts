@@ -38,6 +38,7 @@ export const save = mutation({
     connectorId: v.string(),
     installationId: v.optional(v.string()),
     label: v.string(),
+    grantedScopes: v.optional(v.array(v.string())),
   },
   returns: v.object({
     replaced: v.optional(
@@ -54,7 +55,10 @@ export const save = mutation({
       !connectorFor(args.providerId) ||
       !args.connectorId ||
       !label ||
-      label.length > 200
+      label.length > 200 ||
+      (args.grantedScopes &&
+        (args.grantedScopes.length > 100 ||
+          args.grantedScopes.some((s) => !s || s.length > 100)))
     )
       throw new ConvexError("invalid-input");
     const existing = await ctx.db
@@ -67,6 +71,10 @@ export const save = mutation({
       connectorId: args.connectorId,
       installationId: args.installationId,
       label,
+      permissions: args.grantedScopes && {
+        scopes: args.grantedScopes,
+        checkedAt: Date.now(),
+      },
     };
     if (!existing) {
       await ctx.db.insert("accounts", {

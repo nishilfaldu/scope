@@ -6,6 +6,7 @@ import {
   query,
 } from "./_generated/server";
 import { providerName } from "../shared/connectors";
+import { permissionSummary } from "../shared/permissions";
 import { onlyAccount } from "./approvals";
 import { validatePushEndpoint } from "./lib/push";
 import { ownerId as owner } from "./lib/identity";
@@ -119,7 +120,19 @@ export const deliverySubscription = internalQuery({
       expiresAt: approval.expiresAt,
       message: {
         title: `${agent?.name ?? "An agent"} wants ${providerName(approval.providerId)}`,
-        body: account ? `${reason}\n${account.label}` : reason,
+        body: account
+          ? [
+              reason,
+              account.label,
+              account.permissions?.scopes.length &&
+                permissionSummary(
+                  approval.providerId,
+                  account.permissions.scopes,
+                ),
+            ]
+              .filter(Boolean)
+              .join("\n")
+          : reason,
         quickApprove: !!account,
       },
     };

@@ -197,6 +197,17 @@ test("notifications describe the request and offer quick approval for a single a
     body: "Summarize public channels\nAcme workspace",
     quickApprove: true,
   });
+  await owner.mutation(api.accounts.save, {
+    providerId: "slack",
+    connectorId: "conn_slack",
+    installationId: "T1",
+    label: "Acme workspace",
+    grantedScopes: ["channels:read", "channels:history", "chat:write", "x:y"],
+  });
+  expect((await delivery())?.message.body).toBe(
+    "Summarize public channels\nAcme workspace\n" +
+      "Can: See public channels; Read messages in public channels; Send messages (+1 more)",
+  );
 
   await owner.mutation(api.approvals.approve, { id, minutes: 30 });
   const [approved] = (await owner.query(api.approvals.open, {})).approved;
@@ -224,7 +235,23 @@ test("reconnecting with a different installation reports the replaced grant", as
       installationId,
       label: "Acme workspace",
     });
+  expect(
+    await owner.mutation(api.accounts.save, {
+      providerId: "slack",
+      connectorId: "conn_slack",
+      installationId: "T1",
+      label: "Acme workspace",
+      grantedScopes: ["channels:read"],
+    }),
+  ).toEqual({});
+  expect((await owner.query(api.accounts.list, {}))[0].permissions).toEqual({
+    scopes: ["channels:read"],
+    checkedAt: expect.any(Number),
+  });
   expect(await save("T1")).toEqual({});
+  expect(
+    (await owner.query(api.accounts.list, {}))[0].permissions,
+  ).toBeUndefined();
   expect(await save("T2")).toEqual({
     replaced: { connectorId: "conn_slack", installationId: "T1" },
   });

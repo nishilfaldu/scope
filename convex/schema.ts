@@ -25,6 +25,10 @@ export default defineSchema({
     connectorId: v.string(),
     installationId: v.optional(v.string()),
     label: v.string(),
+    // What the provider reported at connect time. Display only; it does not restrict the token.
+    permissions: v.optional(
+      v.object({ scopes: v.array(v.string()), checkedAt: v.number() }),
+    ),
   }).index("by_ownerId_and_providerId", ["ownerId", "providerId"]),
 
   approvals: defineTable({

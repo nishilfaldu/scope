@@ -6,6 +6,7 @@ import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { PermissionList } from "@/components/accounts/permission-list";
 import { AppMark } from "@/components/shared/app-mark";
 import {
   Empty,
@@ -170,7 +171,8 @@ function PendingRequest({
   const [busy, setBusy] = useState<"approve" | "deny">();
   const now = useNow(),
     left = Math.ceil((request.expiresAt - now) / 60_000);
-  const selected = accountId ?? accounts[0]?._id;
+  const selected = accountId ?? accounts[0]?._id,
+    selectedAccount = accounts.find((a) => a._id === selected);
   async function act(action: "approve" | "deny") {
     setBusy(action);
     try {
@@ -216,6 +218,12 @@ function PendingRequest({
             </select>
           </label>
         )
+      )}
+      {selectedAccount && (
+        <PermissionList
+          account={selectedAccount}
+          heading="If you approve, the agent gets"
+        />
       )}
       <fieldset disabled={!!busy} className="pt-1">
         <legend className="mb-2 text-xs text-scope-quiet">
