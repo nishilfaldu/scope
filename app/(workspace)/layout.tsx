@@ -1,48 +1,25 @@
 "use client";
-import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
-import { useEffect, type ReactNode } from "react";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { toast } from "@/components/ui/toast";
-import { usePathname } from "next/navigation";
-import { BoardShell } from "@/components/layout/board-shell";
-import { PendingRequestsProvider } from "@/components/approvals/pending-requests-provider";
-import {
-  WorkspaceSkeleton,
-  type BoardKind,
-} from "@/components/layout/workspace-skeleton";
-export default function WorkspaceLayout({ children }: { children: ReactNode }) {
-  const path = usePathname();
-  const kind: BoardKind =
-    path === "/connections"
-      ? "connections"
-      : path === "/notifications"
-        ? "notifications"
-        : "access";
-  const title = kind[0].toUpperCase() + kind.slice(1);
-  return (
-    <PendingRequestsProvider>
-      <BoardShell>
-        <Authenticated>{children}</Authenticated>
-        <AuthLoading>
-          <WorkspaceSkeleton title={title} kind={kind} />
-        </AuthLoading>
-        <Unauthenticated>
-          <SessionRecovery />
-        </Unauthenticated>
-      </BoardShell>
-    </PendingRequestsProvider>
-  );
-}
 
-function SessionRecovery() {
-  useEffect(() => {
-    toast.add({
-      id: "session-verification",
-      title: "Your session could not be verified. Sign in again to continue.",
-      type: "error",
-      priority: "high",
-    });
-  }, []);
-  return <Button render={<Link href="/signin" />}>Sign in</Button>;
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
+import { WorkspaceShell } from "@/components/layout/workspace-shell";
+import { WorkspaceSkeleton } from "@/components/layout/workspace-skeleton";
+import { Button } from "@/components/ui/button";
+
+export default function WorkspaceLayout({ children }: { children: ReactNode }) {
+  return (
+    <WorkspaceShell>
+      <Authenticated>{children}</Authenticated>
+      <AuthLoading>
+        <WorkspaceSkeleton />
+      </AuthLoading>
+      <Unauthenticated>
+        <p className="mb-4 text-scope-quiet">
+          Your session could not be verified. Sign in again to continue.
+        </p>
+        <Button render={<Link href="/signin" />}>Sign in</Button>
+      </Unauthenticated>
+    </WorkspaceShell>
+  );
 }

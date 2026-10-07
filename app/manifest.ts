@@ -1,11 +1,12 @@
 import type { MetadataRoute } from "next";
+
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Scope",
     short_name: "Scope",
     // Preserve the identity of existing Home Screen installations.
     id: "/lab",
-    start_url: "/access",
+    start_url: "/requests",
     scope: "/",
     display: "standalone",
     background_color: "#ffffff",

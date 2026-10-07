@@ -1,5 +1,3 @@
-import type { Metadata } from "next";
-import Link from "next/link";
 import {
   ArrowRight01Icon,
   CheckmarkCircle02Icon,
@@ -8,6 +6,8 @@ import {
   ShieldKeyIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import type { Metadata } from "next";
+import Link from "next/link";
 
 import { PublicFooter } from "@/components/public/public-footer";
 import { PublicHeader } from "@/components/public/public-header";
@@ -55,14 +55,13 @@ export default function HomePage() {
               Let agents ask. You decide what they can reach.
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-[#526054] dark:text-muted-foreground">
-              Choose how long a verified CLI session can request tokens for a
-              connected account.
+              Choose which account an agent can use, and for how long.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Button
                 size="lg"
                 nativeButton={false}
-                render={<Link href="/signin?redirectTo=/access" />}
+                render={<Link href="/signin?redirectTo=/requests" />}
               >
                 Sign in to Scope
                 <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />

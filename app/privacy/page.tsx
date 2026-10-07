@@ -22,17 +22,15 @@ const sections: PolicySection[] = [
           Scope collects your email address for sign-in and stores account and
           security records needed to operate the service. When you connect a
           provider account, Scope stores the provider account identifier,
-          display name or email returned by the provider, the app you connected,
-          granted authorization metadata, and a Vercel Connect account
-          reference. Scope does not store provider access or refresh tokens.
+          display name returned by the provider, and a Vercel Connect account
+          reference. Scope does not store a permission list, or provider access
+          or refresh tokens.
         </p>
         <p>
-          Scope connects Slack accounts through Vercel Connect. Provider sign-in
-          shows the requested permissions and is separate from Scope sign-in.
-          Slack shows the permissions requested by the configured Connect
-          connector. The CLI requests approval and receives credentials
-          privately for a local program. Scope records available permissions at
-          setup and does not inspect each delivered token&apos;s permissions.
+          Provider sign-in is separate from Scope sign-in. The provider shows
+          the permissions for that connection. The CLI requests approval and
+          receives credentials privately for a local program. Scope does not
+          inspect each delivered token.
         </p>
       </>
     ),

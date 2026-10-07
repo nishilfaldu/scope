@@ -16,4 +16,5 @@ const eslintConfig = defineConfig([
     "convex/_generated/**",
   ]),
 ]);
+
 export default eslintConfig;

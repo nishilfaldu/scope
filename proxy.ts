@@ -1,4 +1,5 @@
 import { authkitProxy } from "@workos-inc/authkit-nextjs";
+
 export default authkitProxy({
   middlewareAuth: {
     enabled: true,
@@ -8,10 +9,11 @@ export default authkitProxy({
       "/terms",
       "/signin",
       "/callback",
-      "/api/cli/:path*",
+      "/api/agent/:path*",
     ],
   },
 });
+
 export const config = {
   matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
 };

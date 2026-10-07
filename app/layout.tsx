@@ -3,7 +3,6 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { ConvexClientProvider } from "./ConvexClientProvider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/toast";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
@@ -55,9 +54,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           disableTransitionOnChange
         >
           <Toaster>
-            <TooltipProvider>
-              <ConvexClientProvider>{children}</ConvexClientProvider>
-            </TooltipProvider>
+            <ConvexClientProvider>{children}</ConvexClientProvider>
           </Toaster>
         </ThemeProvider>
       </body>

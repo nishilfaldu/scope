@@ -1,26 +1,26 @@
 import { failureMessage } from "../shared/failures.mjs";
-import { accessToken } from "./oauth.mjs";
+import { loadConfig } from "./config.mjs";
+
 export async function scopeCall(
   operation,
   body,
-  { session = accessToken, fetcher = fetch, signal } = {},
+  { config, fetcher = fetch, signal } = {},
 ) {
-  const config = await session();
-  const response = await fetcher(config.origin + "/api/cli/" + operation, {
+  const { origin, token } = config ?? (await loadConfig());
+  const response = await fetcher(`${origin}/api/agent/${operation}`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${config.accessToken}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
     redirect: "error",
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(15_000)])
-      : AbortSignal.timeout(15_000),
+    signal: AbortSignal.any([
+      AbortSignal.timeout(15_000),
+      ...(signal ? [signal] : []),
+    ]),
   });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(failureMessage(body.code));
-  }
-  return response.json();
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(failureMessage(result.code));
+  return result;
 }

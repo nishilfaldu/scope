@@ -8,16 +8,13 @@
  * @module
  */
 
-import type * as access from "../access.js";
 import type * as accounts from "../accounts.js";
-import type * as http from "../http.js";
+import type * as agents from "../agents.js";
+import type * as approvals from "../approvals.js";
+import type * as lib_identity from "../lib/identity.js";
 import type * as lib_push from "../lib/push.js";
-import type * as lib_responses from "../lib/responses.js";
-import type * as lib_secrets from "../lib/secrets.js";
 import type * as notificationDelivery from "../notificationDelivery.js";
 import type * as notifications from "../notifications.js";
-import type * as scope from "../scope.js";
-import type * as uiReview from "../uiReview.js";
 
 import type {
   ApiFromModules,
@@ -26,16 +23,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  access: typeof access;
   accounts: typeof accounts;
-  http: typeof http;
+  agents: typeof agents;
+  approvals: typeof approvals;
+  "lib/identity": typeof lib_identity;
   "lib/push": typeof lib_push;
-  "lib/responses": typeof lib_responses;
-  "lib/secrets": typeof lib_secrets;
   notificationDelivery: typeof notificationDelivery;
   notifications: typeof notifications;
-  scope: typeof scope;
-  uiReview: typeof uiReview;
 }>;
 
 /**
@@ -64,7 +58,4 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {
-  actionRetrier: import("@convex-dev/action-retrier/_generated/component.js").ComponentApi<"actionRetrier">;
-  accessCounts: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"accessCounts">;
-};
+export declare const components: {};

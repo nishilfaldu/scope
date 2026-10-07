@@ -1,2 +1,3 @@
 import { handleAuth } from "@workos-inc/authkit-nextjs";
-export const GET = handleAuth({ returnPathname: "/access" });
+
+export const GET = handleAuth({ returnPathname: "/requests" });

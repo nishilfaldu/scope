@@ -44,10 +44,9 @@ const sections: TermsSection[] = [
           supported. If the provider cannot revoke the credential, it may remain
           valid until it expires. Scope reports completion when Connect confirms
           removal; this does not independently confirm provider invalidation.
-          Vercel Connect manages provider credentials. Scope does not
-          independently inspect each delivered token&apos;s effective
-          permissions. Permissions shown in Connections were recorded at setup.
-          Changing permissions requires disconnecting and reconnecting.
+          Vercel Connect manages provider credentials. Scope does not store a
+          permission list or inspect each delivered token. The provider consent
+          screen is where you review that grant.
         </p>
       </>
     ),
@@ -67,8 +66,8 @@ const sections: TermsSection[] = [
         <p>
           An approval lets the authenticated CLI session collect tokens for the
           selected account without asking again for 15 minutes, 30 minutes or 1
-          hour. The window starts when you approve. Collection and receipt do
-          not extend it. Every token includes all permissions granted when you
+          hour. The window starts when you approve. Collecting a token does not
+          extend it. Every token includes the provider grant from when you
           connected the account. The stated purpose does not restrict the token.
           End approval stops further collection in Scope. It does not change
           provider token expiry, revoke received tokens or stop programs. You

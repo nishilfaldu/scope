@@ -7,7 +7,9 @@ const response = await fetch(
     signal: AbortSignal.timeout(10_000),
   },
 );
+
 const body = await response.json();
+
 if (!response.ok || body.ok !== true)
   throw new Error("Slack channel read failed");
 console.log(
