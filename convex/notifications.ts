@@ -5,6 +5,8 @@ import {
   mutation,
   query,
 } from "./_generated/server";
+import { providerName } from "../shared/connectors";
+import { onlyAccount } from "./approvals";
 import { validatePushEndpoint } from "./lib/push";
 import { ownerId as owner } from "./lib/identity";
 
@@ -77,7 +79,18 @@ export const deliverySubscription = internalQuery({
     approvalId: v.id("approvals"),
     subscriptionId: v.id("pushSubscriptions"),
   },
-  returns: v.union(v.null(), subscription.extend({ ownerId: v.string() })),
+  returns: v.union(
+    v.null(),
+    subscription.extend({
+      ownerId: v.string(),
+      expiresAt: v.number(),
+      message: v.object({
+        title: v.string(),
+        body: v.string(),
+        quickApprove: v.boolean(),
+      }),
+    }),
+  ),
   handler: async (ctx, { approvalId, subscriptionId }) => {
     const [approval, sub] = await Promise.all([
       ctx.db.get("approvals", approvalId),
@@ -90,11 +103,25 @@ export const deliverySubscription = internalQuery({
       sub.ownerId !== approval.ownerId
     )
       return null;
+    const [agent, account] = await Promise.all([
+      ctx.db.get("agents", approval.agentId),
+      onlyAccount(ctx, approval.ownerId, approval.providerId),
+    ]);
+    const reason =
+      approval.reason.length > 180
+        ? `${approval.reason.slice(0, 179)}…`
+        : approval.reason;
     return {
       ownerId: sub.ownerId,
       endpoint: sub.endpoint,
       p256dh: sub.p256dh,
       auth: sub.auth,
+      expiresAt: approval.expiresAt,
+      message: {
+        title: `${agent?.name ?? "An agent"} wants ${providerName(approval.providerId)}`,
+        body: account ? `${reason}\n${account.label}` : reason,
+        quickApprove: !!account,
+      },
     };
   },
 });

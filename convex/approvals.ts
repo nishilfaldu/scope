@@ -275,16 +275,33 @@ export const pendingCount = query({
   },
 });
 
+export async function onlyAccount(
+  ctx: QueryCtx,
+  ownerId: string,
+  providerId: string,
+) {
+  const rows = await ctx.db
+    .query("accounts")
+    .withIndex("by_ownerId_and_providerId", (q) =>
+      q.eq("ownerId", ownerId).eq("providerId", providerId),
+    )
+    .take(2);
+  return rows.length === 1 ? rows[0] : null;
+}
+
 export const approve = mutation({
   args: {
     id: v.id("approvals"),
-    accountId: v.id("accounts"),
+    // Without it, the owner must have exactly one account for the provider.
+    accountId: v.optional(v.id("accounts")),
     minutes: v.union(v.literal(15), v.literal(30), v.literal(60)),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const row = await owned(ctx, args.id),
-      account = await ctx.db.get("accounts", args.accountId),
+      account = args.accountId
+        ? await ctx.db.get("accounts", args.accountId)
+        : await onlyAccount(ctx, row.ownerId, row.providerId),
       now = Date.now();
     if (
       row.status !== "pending" ||

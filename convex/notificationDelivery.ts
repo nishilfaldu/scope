@@ -42,8 +42,13 @@ export const deliver = internalAction({
           endpoint: sub.endpoint,
           keys: { p256dh: sub.p256dh, auth: sub.auth },
         },
-        JSON.stringify({ approvalId }),
-        { vapidDetails: details, TTL: 300, timeout: 5000 },
+        JSON.stringify({ approvalId, ...sub.message }),
+        {
+          vapidDetails: details,
+          TTL: Math.max(0, Math.floor((sub.expiresAt - Date.now()) / 1000)),
+          urgency: "high",
+          timeout: 5000,
+        },
       );
     } catch (error) {
       const status = (error as { statusCode?: number }).statusCode;

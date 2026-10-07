@@ -8,7 +8,7 @@ This file records the target design and the build order. Read it before you chan
 
 - Keep the simplest version that still delivers the premise.
 - Convex owns all state and all authorization checks.
-- Next runs only the work that calls Vercel Connect. The Connect SDK needs a Vercel OIDC token, so this work must run on Vercel.
+- Next runs only the work that calls Vercel Connect, plus the notification action route. The Connect SDK needs a Vercel OIDC token, so this work must run on Vercel.
 - Scope never stores provider tokens. Vercel Connect stores them.
 - Agent names and reasons are display text. They never grant access.
 
@@ -47,6 +47,7 @@ This file records the target design and the build order. Read it before you chan
 ### Routes
 
 - Next: `POST /api/accounts/connect`, `GET /api/accounts/callback`, `POST /api/accounts/disconnect`, `POST /api/agent/[operation]` (`whoami`, `request`, `status`, `token`).
+- Next also has `POST /api/approvals/decide` for notification actions. It does not call Connect. It exists because the service worker has only the session cookie, not a Convex token.
 - Pages: `/requests`, `/accounts`, `/agents`, `/notifications`.
 
 ## Build order
@@ -62,9 +63,9 @@ Code, tests, typecheck, lint and build pass. Verified live on dev: agent creatio
 - Remove the account setup lifecycle, provider-specific identity calls, label refresh, `design-review`, UI review seed data, empty directories and `scope.module.css` (Tailwind and shadcn stay).
 - Dev data is deleted, not migrated. The app is not in production.
 
-### Step 2: notifications
+### Step 2: notifications (done; verified live on desktop Chrome)
 
-- Keep the existing web push.
+- Keep the existing web push. The push lives until the decision deadline and is sent with high urgency.
 - Put the agent name, provider and reason in the notification.
 - Add a one-tap Deny action.
 - Add a one-tap Approve action with a 30-minute default. Use it only when the person has exactly one account for that provider. Otherwise open the page with choices filled in.

@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -173,6 +173,46 @@ test("ending, disconnecting or deleting the agent stops collection", async () =>
   await expect(t.query(api.agents.whoami, { token })).rejects.toThrow(
     "authority-invalid",
   );
+});
+
+test("notifications describe the request and offer quick approval for a single account", async () => {
+  vi.useFakeTimers();
+  const { t, owner, account, request } = await setup();
+  const { id } = await request();
+  await owner.mutation(api.notifications.subscribe, {
+    endpoint: "https://fcm.googleapis.com/fcm/send/device",
+    p256dh: "key",
+    auth: "secret",
+  });
+  const subscriptionId = await t.run(
+    async (ctx) => (await ctx.db.query("pushSubscriptions").first())!._id,
+  );
+  const delivery = () =>
+    t.query(internal.notifications.deliverySubscription, {
+      approvalId: id,
+      subscriptionId,
+    });
+  expect((await delivery())?.message).toEqual({
+    title: "Research assistant wants Slack",
+    body: "Summarize public channels\nAcme workspace",
+    quickApprove: true,
+  });
+
+  await owner.mutation(api.approvals.approve, { id, minutes: 30 });
+  const [approved] = (await owner.query(api.approvals.open, {})).approved;
+  expect(approved).toMatchObject({ accountId: account._id });
+  expect(await delivery()).toBeNull();
+
+  const other = await owner.mutation(api.agents.create, { name: "Other" });
+  const second = await t.mutation(api.approvals.request, {
+    token: other.token,
+    providerId: "slack",
+    reason: "Read channels",
+  });
+  await owner.mutation(api.accounts.remove, { id: account._id });
+  await expect(
+    owner.mutation(api.approvals.approve, { id: second.id, minutes: 30 }),
+  ).rejects.toThrow("authority-invalid");
 });
 
 test("reconnecting with a different installation reports the replaced grant", async () => {
