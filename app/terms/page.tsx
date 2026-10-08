@@ -17,11 +17,12 @@ const sections: TermsSection[] = [
     title: "Using Scope",
     content: (
       <p>
-        Scope lets you connect third-party accounts and control an agent&apos;s
-        access to them. You must provide accurate account information, keep your
-        sign-in email secure, and use Scope only in compliance with applicable
-        laws and these terms. You must be old enough and authorized to accept
-        these terms for yourself or the organization you represent.
+        Scope is an MCP server that lets AI apps you choose use your connected
+        accounts under rules you set. You must provide accurate account
+        information, keep your sign-in email secure, and use Scope only in
+        compliance with applicable laws and these terms. You must be old enough
+        and authorized to accept these terms for yourself or the organization
+        you represent.
       </p>
     ),
   },
@@ -31,47 +32,49 @@ const sections: TermsSection[] = [
     content: (
       <>
         <p>
-          Scope connects Slack accounts through Vercel Connect. Your use of a
+          Scope connects Slack, GitHub, Notion, Google (Gmail and Google
+          Calendar) and Vercel accounts through Vercel Connect. Your use of a
           connected service remains subject to that provider&apos;s terms and
           policies. Scope is not operated by or endorsed by those providers.
         </p>
         <p>
-          You may connect only accounts you are authorized to use. You control
-          which account and app are connected and may disconnect them from Scope
-          or revoke Scope in the provider&apos;s account settings. Disconnect
-          blocks sharing immediately and asks Vercel Connect to revoke the
-          selected authorization. Connect attempts provider revocation where
-          supported. If the provider cannot revoke the credential, it may remain
-          valid until it expires. Scope reports completion when Connect confirms
-          removal; this does not independently confirm provider invalidation.
-          Vercel Connect manages provider credentials. Scope does not store a
-          permission list or inspect each delivered token. The provider consent
-          screen is where you review that grant.
+          You may connect only accounts you are authorized to use. You review
+          the permissions for a connection on the provider&apos;s consent
+          screen. Disconnect asks Vercel Connect to revoke the authorization and
+          ends active approvals for that account. If a provider cannot revoke
+          the credential, it may remain valid until it expires. You can also
+          revoke Scope in the provider&apos;s account settings.
         </p>
       </>
     ),
   },
   {
-    id: "agents-approvals",
-    title: "Agents and approvals",
+    id: "apps-approvals",
+    title: "AI apps, rules and approvals",
     content: (
       <>
         <p>
-          Agents are operated by you or by third parties you choose. Scope does
-          not verify an agent&apos;s claims, instructions, or fitness for a
-          task. Review the account, stated purpose and approval window before
-          allowing token collection. Agent names and reasons are claims from the
-          requesting program; Scope does not verify them.
+          AI apps that connect to Scope are operated by you or by third parties
+          you choose. Scope does not verify an app&apos;s instructions or
+          fitness for a task. App names come from the app and are display text.
+          For each app and tool, you choose Allow, Ask me or Block. By default,
+          tools that only read run without asking, and other tools ask you
+          first.
         </p>
         <p>
-          An approval lets the authenticated CLI session collect tokens for the
-          selected account without asking again for 15 minutes, 30 minutes or 1
-          hour. The window starts when you approve. Collecting a token does not
-          extend it. Every token includes the provider grant from when you
-          connected the account. The stated purpose does not restrict the token.
-          End approval stops further collection in Scope. It does not change
-          provider token expiry, revoke received tokens or stop programs. You
-          are responsible for approvals you grant.
+          When a tool asks, Scope shows a summary of the request. Scope builds
+          the summary from the request and from details it looks up from the
+          provider, such as a channel name or page title. Review it before you
+          approve. &quot;This call only&quot; covers one call with the same
+          arguments for 10 minutes. A timed approval lets that app use that tool
+          with any arguments for 15 minutes, 30 minutes or 1 hour. End approval
+          stops a timed approval. Revoke stops all calls from one app. Neither
+          takes back results that the app already received.
+        </p>
+        <p>
+          Scope returns tool results to the app that made the call. What the app
+          does with them is governed by that app&apos;s own terms. You are
+          responsible for the rules you set and the approvals you grant.
         </p>
       </>
     ),
@@ -96,10 +99,10 @@ const sections: TermsSection[] = [
     content: (
       <p>
         Scope is a pre-release service and may change, experience interruptions,
-        or stop supporting a provider or feature. Connected providers may also
-        change or revoke their APIs and credentials. We may update the service
-        and these terms; continued use after updated terms take effect means you
-        accept them.
+        or stop supporting a provider, tool or feature. Connected providers may
+        also change or revoke their APIs, MCP servers and credentials. We may
+        update the service and these terms; continued use after updated terms
+        take effect means you accept them.
       </p>
     ),
   },
@@ -111,13 +114,13 @@ const sections: TermsSection[] = [
         <p>
           Scope is provided on an &quot;as is&quot; and &quot;as available&quot;
           basis without warranties of uninterrupted operation, fitness for a
-          particular purpose, or compatibility with every agent or provider.
+          particular purpose, or compatibility with every AI app or provider.
         </p>
         <p>
           To the extent permitted by law, the developer of Scope will not be
           liable for indirect, incidental, special, consequential, or punitive
           damages, or for loss of data, access, revenue, or opportunity arising
-          from use of Scope or an authorized agent.
+          from use of Scope or of an AI app you connect to it.
         </p>
       </>
     ),
@@ -127,8 +130,9 @@ const sections: TermsSection[] = [
     title: "Ending use",
     content: (
       <p>
-        You may stop using Scope at any time, disconnect provider accounts, and
-        end active approvals. To request deletion of your Scope account, email{" "}
+        You may stop using Scope at any time, revoke apps, disconnect provider
+        accounts, and end active approvals. To request deletion of your Scope
+        account, email{" "}
         <a href="mailto:nishilfaldu@gmail.com">nishilfaldu@gmail.com</a>. We may
         suspend or terminate access for a material breach of these terms or when
         needed to protect the service.
@@ -157,7 +161,7 @@ export default function TermsPage() {
           <aside className="lg:sticky lg:top-10 lg:self-start">
             <p className="text-sm font-semibold">Scope</p>
             <p className="mt-1 text-sm text-[#68746a] dark:text-muted-foreground">
-              Effective October 5, 2026
+              Effective October 7, 2026
             </p>
             <nav
               className="mt-7 hidden border-l border-[#d8e1d4] pl-4 text-sm lg:block dark:border-border"
@@ -184,8 +188,8 @@ export default function TermsPage() {
             </h1>
             <p className="mt-6 text-lg leading-8 text-[#526054] dark:text-muted-foreground">
               These terms govern your access to and use of Scope, including
-              provider connections, agent approvals, and credentials issued
-              through the service.
+              provider connections, the AI apps you connect, and the rules and
+              approvals you set.
             </p>
             <div className="mt-12 divide-y divide-[#d8e1d4] border-y border-[#d8e1d4] dark:divide-border dark:border-border">
               {sections.map((section) => (
