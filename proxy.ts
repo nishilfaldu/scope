@@ -9,7 +9,6 @@ export default authkitProxy({
       "/terms",
       "/signin",
       "/callback",
-      "/api/agent/:path*",
       "/mcp",
     ],
   },

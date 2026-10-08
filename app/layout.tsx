@@ -22,11 +22,11 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://scope.nishilfaldu.site"),
   title: "Scope",
   description:
-    "Approve exactly which apps and connected accounts an AI agent may access.",
+    "One MCP server for all your AI apps, with rules per app, phone approvals and an audit log.",
   openGraph: {
     title: "Scope",
     description:
-      "Approve exactly which apps and connected accounts an AI agent may access.",
+      "One MCP server for all your AI apps, with rules per app, phone approvals and an audit log.",
     url: "/",
     siteName: "Scope",
     type: "website",

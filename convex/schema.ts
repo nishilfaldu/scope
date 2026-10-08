@@ -51,15 +51,6 @@ export default defineSchema({
     .index("by_ownerId", ["ownerId"])
     .index("by_clientId_and_tool", ["clientId", "tool"]),
 
-  agents: defineTable({
-    ownerId: v.string(),
-    name: v.string(),
-    tokenHash: v.string(),
-    lastUsedAt: v.optional(v.number()),
-  })
-    .index("by_ownerId", ["ownerId"])
-    .index("by_tokenHash", ["tokenHash"]),
-
   accounts: defineTable({
     ownerId: v.string(),
     providerId: v.string(),
@@ -72,12 +63,11 @@ export default defineSchema({
     ),
   }).index("by_ownerId_and_providerId", ["ownerId", "providerId"]),
 
-  // A CLI agent asks for a token (agentId), or an MCP app asks to run a tool (clientId and tool).
+  // An MCP app asks to run a tool.
   approvals: defineTable({
     ownerId: v.string(),
-    agentId: v.optional(v.id("agents")),
-    clientId: v.optional(v.id("clients")),
-    tool: v.optional(v.string()),
+    clientId: v.id("clients"),
+    tool: v.string(),
     // Approve once: valid for one call with exactly these arguments.
     once: v.optional(v.boolean()),
     argsHash: v.optional(v.string()),
@@ -96,11 +86,6 @@ export default defineSchema({
     // eslint-disable-next-line @convex-dev/no-duplicate-indexes
     .index("by_ownerId", ["ownerId"])
     .index("by_ownerId_and_status", ["ownerId", "status"])
-    .index("by_agentId_and_status_and_providerId", [
-      "agentId",
-      "status",
-      "providerId",
-    ])
     .index("by_accountId_and_status", ["accountId", "status"])
     .index("by_clientId_and_status_and_tool", ["clientId", "status", "tool"]),
 

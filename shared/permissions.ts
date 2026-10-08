@@ -42,9 +42,3 @@ export function describeScope(providerId: string, scope: string) {
 export function unreportedPermissions(providerId: string) {
   return `Permissions were set on ${providerName(providerId)}'s consent screen.`;
 }
-
-export function permissionSummary(providerId: string, scopes: string[]) {
-  const shown = scopes.slice(0, 3).map((s) => describeScope(providerId, s));
-  const more = scopes.length - shown.length;
-  return `Can: ${shown.join("; ")}${more > 0 ? ` (+${more} more)` : ""}`;
-}

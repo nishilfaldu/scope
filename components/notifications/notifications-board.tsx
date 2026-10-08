@@ -122,7 +122,7 @@ export function NotificationsBoard() {
   return (
     <>
       <PageHeading title="Notifications">
-        Get a notification on this device when an agent asks for a token.
+        Get a notification on this device when an app asks to run a tool.
       </PageHeading>
       <div className="space-y-5 rounded-2xl border border-scope-line bg-white p-6">
         <div
@@ -133,7 +133,7 @@ export function NotificationsBoard() {
           <span className="flex flex-col text-xs text-scope-quiet">
             Scope
             <strong className="text-sm font-medium text-scope-ink">
-              An agent needs your approval
+              An app needs your approval
             </strong>
           </span>
         </div>

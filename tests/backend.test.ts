@@ -2,6 +2,7 @@
 import { convexTest } from "convex-test";
 import { afterEach, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -19,8 +20,10 @@ async function setup() {
   const t = convexTest(schema, modules);
   const owner = t.withIdentity({ ...web, subject: "user_owner" });
   const stranger = t.withIdentity({ ...web, subject: "user_stranger" });
-  const { token } = await owner.mutation(api.agents.create, {
-    name: "Research assistant",
+  const app = t.withIdentity({
+    issuer: "https://auth.test",
+    subject: "user_owner",
+    client_id: "https://cursor.com/oauth/client.json",
   });
   await owner.mutation(api.accounts.save, {
     providerId: "slack",
@@ -29,13 +32,18 @@ async function setup() {
     label: "Acme workspace",
   });
   const [account] = await owner.query(api.accounts.list, {});
-  const request = () =>
-    t.mutation(api.approvals.request, {
-      token,
-      providerId: "slack",
-      reason: "Summarize public channels",
+  const request = async (argsHash = "h1") => {
+    const result = await app.mutation(api.gateway.authorize, {
+      tool: "slack_post_message",
+      summary: "Post in #general",
+      argsHash,
     });
-  return { t, owner, stranger, token, account, request };
+    if (result.decision !== "waiting") throw new Error(result.decision);
+    return result.approvalId;
+  };
+  const status = (id: Id<"approvals">) =>
+    app.query(api.gateway.approvalStatus, { id });
+  return { t, owner, stranger, app, account, request, status };
 }
 
 test("owner calls require the web app's client id", async () => {
@@ -47,7 +55,7 @@ test("owner calls require the web app's client id", async () => {
         subject: "user_owner",
         client_id: "client_other",
       })
-      .query(api.agents.list, {}),
+      .query(api.clients.list, {}),
   ).rejects.toThrow("authority-invalid");
   await expect(
     t
@@ -56,58 +64,14 @@ test("owner calls require the web app's client id", async () => {
         subject: "user_owner",
         client_id: "client_web",
       })
-      .query(api.agents.list, {}),
+      .query(api.clients.list, {}),
   ).rejects.toThrow("authority-invalid");
 });
 
-test("agent tokens are the only agent authority", async () => {
-  const { t, token, owner } = await setup();
-  expect(await t.query(api.agents.whoami, { token })).toEqual({
-    name: "Research assistant",
-  });
-  await expect(
-    t.query(api.agents.whoami, { token: "scope_" + "0".repeat(64) }),
-  ).rejects.toThrow("authority-invalid");
-  const [agent] = await owner.query(api.agents.list, {});
-  expect(agent).not.toHaveProperty("tokenHash");
-});
-
-test("a request needs a connected account and reuses the open request", async () => {
-  const { t, token, owner, request } = await setup();
-  await expect(
-    t.mutation(api.approvals.request, {
-      token,
-      providerId: "github",
-      reason: "Read issues",
-    }),
-  ).rejects.toThrow("no-account");
-  await expect(
-    t.mutation(api.approvals.request, {
-      token,
-      providerId: "unknown",
-      reason: "Anything",
-    }),
-  ).rejects.toThrow("invalid-input");
-  const first = await request(),
-    second = await request();
-  expect(second.id).toBe(first.id);
-  expect(await owner.query(api.approvals.pendingCount, {})).toBe(1);
-  const other = await owner.mutation(api.agents.create, { name: "Other" });
-  const separate = await t.mutation(api.approvals.request, {
-    token: other.token,
-    providerId: "slack",
-    reason: "Summarize public channels",
-  });
-  expect(separate.id).not.toBe(first.id);
-});
-
-test("only the owner approves, and claim works only inside the window", async () => {
+test("only the owner approves, and a timed approval ends with its window", async () => {
   vi.useFakeTimers();
-  const { t, owner, stranger, token, account, request } = await setup();
-  const { id } = await request();
-  await expect(t.mutation(api.approvals.claim, { token, id })).rejects.toThrow(
-    "authority-invalid",
-  );
+  const { t, owner, stranger, account, request, status } = await setup();
+  const id = await request();
   await expect(
     stranger.mutation(api.approvals.approve, {
       id,
@@ -120,47 +84,27 @@ test("only the owner approves, and claim works only inside the window", async ()
     accountId: account._id,
     minutes: 15,
   });
-  const other = await owner.mutation(api.agents.create, { name: "Other" });
-  await expect(
-    t.mutation(api.approvals.claim, { token: other.token, id }),
-  ).rejects.toThrow("authority-invalid");
-  const claim = await t.mutation(api.approvals.claim, { token, id });
-  expect(claim).toMatchObject({
-    ownerId: "user_owner",
-    providerId: "slack",
-    connectorId: "conn_slack",
-    installationId: "T1",
-  });
-  await t.mutation(api.approvals.claim, { token, id });
   expect((await owner.query(api.approvals.open, {})).approved[0]).toMatchObject(
-    { collections: 2, agentName: "Research assistant" },
+    { appName: "cursor.com", accountId: account._id },
   );
-  expect((await request()).id).toBe(id);
   vi.advanceTimersByTime(15 * 60_000);
   await t.finishAllScheduledFunctions(vi.runAllTimers);
-  expect(await t.query(api.approvals.status, { token, id })).toMatchObject({
-    status: "expired",
-  });
-  await expect(t.mutation(api.approvals.claim, { token, id })).rejects.toThrow(
-    "authority-invalid",
-  );
+  expect(await status(id)).toBe("expired");
 });
 
 test("pending requests expire after the decision window", async () => {
   vi.useFakeTimers();
-  const { t, token, request } = await setup();
-  const { id } = await request();
+  const { t, request, status } = await setup();
+  const id = await request();
   vi.advanceTimersByTime(30 * 60_000);
   await t.finishAllScheduledFunctions(vi.runAllTimers);
-  expect((await t.query(api.approvals.status, { token, id })).status).toBe(
-    "expired",
-  );
+  expect(await status(id)).toBe("expired");
 });
 
-test("ending, disconnecting or deleting the agent stops collection", async () => {
-  const { t, owner, token, account, request } = await setup();
-  const approve = async () => {
-    const { id } = await request();
+test("ending an approval or disconnecting the account stops it", async () => {
+  const { owner, account, request, status } = await setup();
+  const approve = async (argsHash: string) => {
+    const id = await request(argsHash);
     await owner.mutation(api.approvals.approve, {
       id,
       accountId: account._id,
@@ -168,29 +112,18 @@ test("ending, disconnecting or deleting the agent stops collection", async () =>
     });
     return id;
   };
-  const ended = await approve();
+  const ended = await approve("a");
   await owner.mutation(api.approvals.end, { id: ended });
-  await expect(
-    t.mutation(api.approvals.claim, { token, id: ended }),
-  ).rejects.toThrow();
+  expect(await status(ended)).toBe("ended");
 
-  const disconnected = await approve();
+  const disconnected = await approve("b");
   await owner.mutation(api.accounts.remove, { id: account._id });
-  expect(
-    (await t.query(api.approvals.status, { token, id: disconnected })).status,
-  ).toBe("ended");
-
-  const [agent] = await owner.query(api.agents.list, {});
-  await owner.mutation(api.agents.remove, { id: agent._id });
-  await expect(t.query(api.agents.whoami, { token })).rejects.toThrow(
-    "authority-invalid",
-  );
+  expect(await status(disconnected)).toBe("ended");
 });
 
-test("notifications describe the request and offer quick approval for a single account", async () => {
-  vi.useFakeTimers();
+test("notifications describe the call and offer approve once for a single account", async () => {
   const { t, owner, account, request } = await setup();
-  const { id } = await request();
+  const id = await request();
   await owner.mutation(api.notifications.subscribe, {
     endpoint: "https://fcm.googleapis.com/fcm/send/device",
     p256dh: "key",
@@ -205,38 +138,20 @@ test("notifications describe the request and offer quick approval for a single a
       subscriptionId,
     });
   expect((await delivery())?.message).toEqual({
-    title: "Research assistant wants Slack",
-    body: "Summarize public channels\nAcme workspace",
+    title: "cursor.com wants Slack: Post a message",
+    body: "Post in #general\nAcme workspace",
     quickApprove: true,
-    approveLabel: "Approve 30 min",
-    approveMinutes: 30,
+    approveLabel: "Approve once",
+    approveMinutes: 0,
   });
-  await owner.mutation(api.accounts.save, {
-    providerId: "slack",
-    connectorId: "conn_slack",
-    installationId: "T1",
-    label: "Acme workspace",
-    grantedScopes: ["channels:read", "channels:history", "chat:write", "x:y"],
-  });
-  expect((await delivery())?.message.body).toBe(
-    "Summarize public channels\nAcme workspace\n" +
-      "Can: See public channels; Read messages in public channels; Send messages (+1 more)",
-  );
 
-  await owner.mutation(api.approvals.approve, { id, minutes: 30 });
-  const [approved] = (await owner.query(api.approvals.open, {})).approved;
-  expect(approved).toMatchObject({ accountId: account._id });
+  await owner.mutation(api.approvals.approve, { id, minutes: 0 });
   expect(await delivery()).toBeNull();
 
-  const other = await owner.mutation(api.agents.create, { name: "Other" });
-  const second = await t.mutation(api.approvals.request, {
-    token: other.token,
-    providerId: "slack",
-    reason: "Read channels",
-  });
+  const second = await request("other");
   await owner.mutation(api.accounts.remove, { id: account._id });
   await expect(
-    owner.mutation(api.approvals.approve, { id: second.id, minutes: 30 }),
+    owner.mutation(api.approvals.approve, { id: second, minutes: 0 }),
   ).rejects.toThrow("authority-invalid");
 });
 

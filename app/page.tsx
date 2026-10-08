@@ -15,26 +15,26 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Scope · Approve agent access to your accounts",
+  title: "Scope · One MCP server for all your AI apps",
   description:
-    "Scope lets you review agent requests for access to connected accounts.",
+    "Scope runs AI app tool calls with your accounts. Set rules per app, approve from your phone and see every call.",
 };
 
 const controls = [
   {
     icon: ShieldKeyIcon,
-    title: "Approval before access",
-    body: "Review the account and purpose, then choose an approval window.",
+    title: "Rules for each app",
+    body: "Allow, ask or block each tool, per app. Revoke one app without touching the others.",
   },
   {
     icon: Clock01Icon,
-    title: "A timed approval window",
-    body: "Allow token requests without asking again for 15 minutes, 30 minutes or 1 hour. End approval at any time.",
+    title: "Approve from your phone",
+    body: "Approve one call, or let an app use a tool for 15 minutes, 30 minutes or 1 hour. Every call appears in Activity.",
   },
   {
     icon: Key01Icon,
-    title: "Credentials stay out of the browser",
-    body: "The CLI gives credentials to your program privately.",
+    title: "Apps never get your tokens",
+    body: "Scope runs each tool call with your connected account and returns only the result.",
   },
 ];
 
@@ -52,10 +52,11 @@ export default function HomePage() {
               Scope
             </Badge>
             <h1 className="max-w-[13ch] text-5xl font-semibold leading-[0.98] tracking-[-0.055em] sm:text-6xl lg:text-7xl">
-              Let agents ask. You decide what they can reach.
+              Connect once. Decide what each AI app can do.
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-[#526054] dark:text-muted-foreground">
-              Choose which account an agent can use, and for how long.
+              One MCP server for Cursor, Claude, ChatGPT and your other AI apps,
+              with rules for each.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Button
@@ -81,7 +82,7 @@ export default function HomePage() {
             <div className="relative overflow-hidden rounded-[1.5rem] border border-[#d8e1d4] bg-white dark:border-border dark:bg-card">
               <div className="flex items-center justify-between border-b border-[#e4eae1] px-6 py-5 dark:border-border">
                 <div>
-                  <p className="text-sm font-semibold">Research assistant</p>
+                  <p className="text-sm font-semibold">Cursor</p>
                   <p className="mt-0.5 text-xs text-[#68746a] dark:text-muted-foreground">
                     Example request
                   </p>
@@ -90,7 +91,7 @@ export default function HomePage() {
               </div>
               <div className="px-6 py-6 sm:px-8">
                 <p className="text-sm text-[#68746a] dark:text-muted-foreground">
-                  Requested account
+                  Wants to post a message with
                 </p>
                 <div className="mt-3 flex items-center justify-between rounded-xl bg-[#f3f6f1] px-4 py-4 dark:bg-muted">
                   <div>
@@ -107,13 +108,13 @@ export default function HomePage() {
                 </div>
                 <div className="mt-6 grid grid-cols-[7rem_1fr] gap-x-4 gap-y-3 text-sm">
                   <span className="text-[#68746a] dark:text-muted-foreground">
-                    Purpose
+                    Request
                   </span>
-                  <span>Summarize workspace channels</span>
+                  <span>Post in #launch: &quot;Release is live&quot;</span>
                   <span className="text-[#68746a] dark:text-muted-foreground">
-                    Allow token requests for
+                    Approve
                   </span>
-                  <span>30 minutes</span>
+                  <span>This call only</span>
                 </div>
                 <div className="mt-7 flex gap-3 border-t border-[#e4eae1] pt-6 dark:border-border">
                   <span className="flex h-10 flex-1 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground">

@@ -93,7 +93,7 @@ test("writes ask, and approving once covers only that exact call", async () => {
 
   const [pending] = (await owner.query(api.approvals.open, {})).pending;
   expect(pending).toMatchObject({
-    agentName: "cursor.com",
+    appName: "cursor.com",
     tool: "slack_post_message",
     reason: "Run slack_post_message",
   });

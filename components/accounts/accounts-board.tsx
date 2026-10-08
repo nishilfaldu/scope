@@ -59,8 +59,8 @@ export function AccountsBoard({ providers }: { providers: Provider[] }) {
   return (
     <>
       <PageHeading title="Accounts">
-        Agents can ask for tokens from these accounts. You approve each request.
-        One account per provider.
+        Scope runs app tool calls with these accounts. Apps never get the
+        tokens. One account per provider.
       </PageHeading>
       <Section>
         {accounts === undefined ? (
@@ -89,7 +89,7 @@ export function AccountsBoard({ providers }: { providers: Provider[] }) {
                   {account && (
                     <PermissionList
                       account={account}
-                      heading="Approved agents get these permissions"
+                      heading="Scope can use these permissions"
                     />
                   )}
                 </div>
@@ -136,8 +136,7 @@ export function AccountsBoard({ providers }: { providers: Provider[] }) {
             <DialogTitle>Disconnect {disconnecting?.label}?</DialogTitle>
             <DialogDescription>
               Scope asks Vercel Connect to revoke this grant and ends active
-              approvals for it. Tokens already given to agents can stay valid if
-              the provider does not support revocation.
+              approvals for it. Apps lose this provider&apos;s tools.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

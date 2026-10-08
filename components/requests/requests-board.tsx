@@ -6,7 +6,6 @@ import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { PermissionList } from "@/components/accounts/permission-list";
 import { AppMark } from "@/components/shared/app-mark";
 import {
   Empty,
@@ -47,7 +46,7 @@ export function RequestsBoard({ focusId }: { focusId?: string }) {
     <>
       <PageHeading title="Requests">
         {open === undefined
-          ? "Agents ask here for a provider token."
+          ? "Apps ask here before they run a tool."
           : pending
             ? `${pending} request${pending === 1 ? " needs" : "s need"} your decision.`
             : "No requests need your decision."}
@@ -92,8 +91,7 @@ export function RequestsBoard({ focusId }: { focusId?: string }) {
               <p className="text-xs text-scope-quiet">
                 {statusLabel[row.status]} ·{" "}
                 {formatTime(row.endedAt ?? row.decidedAt ?? row._creationTime)}
-                {row.collections > 0 &&
-                  ` · token collected ${row.collections}×`}
+                {row.collections > 0 && ` · used ${row.collections}×`}
               </p>
             </Row>
           ))
@@ -126,21 +124,20 @@ function Row({
   return (
     <article
       ref={ref}
-      aria-label={`${approval.agentName}: ${approval.reason}`}
+      aria-label={`${approval.appName}: ${approval.reason}`}
       className={cn("flex gap-3 px-6 py-5", focused && "bg-scope-hover/60")}
     >
       <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-scope-hover text-xs font-semibold text-scope-green">
-        {initials(approval.agentName)}
+        {initials(approval.appName)}
       </span>
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex items-center gap-2">
-          <strong className="font-medium">{approval.agentName}</strong>
+          <strong className="font-medium">{approval.appName}</strong>
           <span className="text-scope-quiet">wants</span>
           <AppMark providerId={approval.providerId} />
           <span>
-            {providerName(approval.providerId)}
-            {approval.tool &&
-              `: ${toolFor(approval.tool)?.title ?? approval.tool}`}
+            {providerName(approval.providerId)}:{" "}
+            {toolFor(approval.tool)?.title ?? approval.tool}
             {approval.accountLabel && (
               <span className="text-scope-quiet">
                 {" "}
@@ -170,18 +167,12 @@ function PendingRequest({
   const [accountId, setAccountId] = useState<Id<"accounts"> | undefined>(
     accounts[0]?._id,
   );
-  // An app request is for one tool call, so it defaults to approving once.
-  const durations = request.tool
-    ? ([0, 15, 30, 60] as const)
-    : ([15, 30, 60] as const);
-  const [minutes, setMinutes] = useState<0 | 15 | 30 | 60>(
-    request.tool ? 0 : 30,
-  );
+  const durations = [0, 15, 30, 60] as const;
+  const [minutes, setMinutes] = useState<0 | 15 | 30 | 60>(0);
   const [busy, setBusy] = useState<"approve" | "deny">();
   const now = useNow(),
     left = Math.ceil((request.expiresAt - now) / 60_000);
-  const selected = accountId ?? accounts[0]?._id,
-    selectedAccount = accounts.find((a) => a._id === selected);
+  const selected = accountId ?? accounts[0]?._id;
   async function act(action: "approve" | "deny") {
     setBusy(action);
     try {
@@ -228,17 +219,10 @@ function PendingRequest({
           </label>
         )
       )}
-      {selectedAccount && !request.tool && (
-        <PermissionList
-          account={selectedAccount}
-          heading="If you approve, the agent gets"
-        />
-      )}
       <fieldset disabled={!!busy} className="pt-1">
         <legend className="mb-2 text-xs text-scope-quiet">
-          {request.tool
-            ? "Approve this call only, or let this app use this tool without asking for"
-            : "Allow token collection without asking again for"}
+          Approve this call only, or let this app use this tool without asking
+          for
         </legend>
         <div className="flex flex-wrap gap-2">
           {durations.map((value) => (
@@ -297,7 +281,7 @@ function ActiveApproval({
             ? `Approved for one call, until ${formatTime(approval.expiresAt)}`
             : `Approved until ${formatTime(approval.expiresAt)}`}
           {approval.lastCollectedAt !== undefined &&
-            ` · token collected ${approval.collections}×, last at ${formatTime(approval.lastCollectedAt)}`}
+            ` · used ${approval.collections}×, last at ${formatTime(approval.lastCollectedAt)}`}
         </p>
         <Button
           variant="ghost"

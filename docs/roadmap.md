@@ -1,8 +1,8 @@
 # Scope roadmap
 
-Scope lets a person use their accounts from any AI app without giving the app a token. Today an agent asks for a token, the person approves on the web or on their phone, and the agent's command runs with it. From step 4 on, Scope becomes an MCP gateway: apps call tools through Scope, and the person sets rules per app and per tool.
+Scope lets a person use their accounts from any AI app without giving the app a token. Apps call tools through Scope's MCP endpoint. Scope runs each call with the person's account, applies the rule for that app and tool, asks on the phone when the rule says so, and logs the call.
 
-This file records the target design and the build order. Read it before you change the data model, the trust model, or the CLI.
+This file records the target design and the build order. Read it before you change the data model or the trust model.
 
 ## Design rules
 
@@ -10,29 +10,28 @@ This file records the target design and the build order. Read it before you chan
 - Convex owns all state and all authorization checks.
 - Next runs only the work that calls Vercel Connect (including `/mcp` tool calls), the OAuth metadata routes, and the notification action route. The Connect SDK needs a Vercel OIDC token, so this work must run on Vercel.
 - Scope never stores provider tokens. Vercel Connect stores them.
-- Agent names and reasons are display text. They never grant access.
+- App names and request summaries are display text. They never grant access.
 
 ## Target design
 
 ### Identity
 
 - **Person:** a WorkOS AuthKit login in the web app. Convex reads it from `ctx.auth`.
-- **Agent:** a record that the person creates on the Agents page. Scope shows a random token once. Convex stores only its SHA-256 hash. `scope login` saves the token in a private file. Deleting the agent revokes the token and ends its open approvals.
+- **App:** an MCP client that signed in through AuthKit. Its access token has Scope's `/mcp` resource as audience. Convex reads the owner and the OAuth client ID from it. Revoking the app ends its open approvals.
 - **Connect subject:** `{ type: "user", id: <WorkOS user id>, issuer: <WorkOS issuer> }`. Scope derives it from the person. A client cannot choose it. This removes the need for a shared service secret between Next and Convex.
 
 ### Data
 
 | Table               | Fields                                                                                                    |
 | ------------------- | --------------------------------------------------------------------------------------------------------- |
-| `agents`            | owner, name, token hash, last used                                                                        |
 | `accounts`          | owner, provider, connector, installation (optional), label                                                |
-| `approvals`         | owner, agent, provider, account (set on approval), reason, status, `expiresAt`, collection count and time |
+| `approvals`         | owner, client, tool, provider, account (set on approval), reason, status, `expiresAt`, use count and time |
 | `pushSubscriptions` | owner, endpoint, keys                                                                                     |
 | `clients`           | owner, OAuth client ID, name, revoked at, last used                                                       |
 | `rules`             | client, tool, rule (only overrides of the default)                                                        |
 | `calls`             | owner, client, tool, decision, outcome                                                                    |
 
-- An app approval has a client and a tool instead of an agent. "Once" approvals also store a SHA-256 hash of the canonical arguments.
+- "Once" approvals also store a SHA-256 hash of the canonical arguments. `reason` holds the summary Scope built from provider lookups.
 
 - An account row exists only after consent succeeds. There is no setup state.
 - One account per provider per person, for now. Connecting again replaces the account.
@@ -43,18 +42,18 @@ This file records the target design and the build order. Read it before you chan
 ### Flows
 
 1. **Connect.** The person picks a provider. Next starts Connect consent for the derived subject. The callback reads the label and installation from the Connect token response and saves the account. If an older Slack installation is replaced, Next revokes it.
-2. **Request.** `scope run slack --reason "…" --env SLACK_TOKEN -- cmd`. The agent asks for a provider, not an account. An open request or approval for the same agent and provider is reused. A push notification goes to each saved device.
-3. **Approve.** The person picks the account and the duration, or denies.
-4. **Collect.** The CLI polls, then calls Next. Next calls one Convex mutation, `claim`. It checks the agent, the approval, the window and the account, then records the collection. Next gets the token from Connect and returns it. The CLI runs the command with the token in one environment variable, a small base environment, and a timeout.
-5. **End approval.** This stops further collection. It does not revoke tokens that were already released.
+2. **Call.** An app calls a tool on `/mcp`. Convex checks the app and the rule. Allowed calls run. An "ask" call opens a request, or reuses the open one for the same app and tool, and a push notification goes to each saved device. The call waits 25 seconds, then tells the app to call again.
+3. **Approve.** The person approves this call only, or the tool for 15, 30 or 60 minutes, or denies.
+4. **Run.** Next gets the token from Connect, runs the tool and returns only the result. Convex records the decision and the outcome in `calls`.
+5. **End approval.** This stops a timed approval. The next call asks again.
 6. **Disconnect.** Next revokes the grant in Connect first. If that succeeds, Convex deletes the account and ends its open approvals. If it fails, the account stays and the person can retry.
 
 ### Routes
 
-- Next: `POST /api/accounts/connect`, `GET /api/accounts/callback`, `POST /api/accounts/disconnect`, `POST /api/agent/[operation]` (`whoami`, `request`, `status`, `token`).
+- Next: `POST /api/accounts/connect`, `GET /api/accounts/callback`, `POST /api/accounts/disconnect`.
 - Next also has `POST /api/approvals/decide` for notification actions. It does not call Connect. It exists because the service worker has only the session cookie, not a Convex token.
 - MCP: `POST /mcp` (stateless streamable HTTP), `GET /.well-known/oauth-protected-resource` (also at `/mcp`), `GET /.well-known/oauth-authorization-server` (proxies AuthKit).
-- Pages: `/requests`, `/apps`, `/activity`, `/accounts`, `/agents`, `/notifications`.
+- Pages: `/requests`, `/apps`, `/activity`, `/accounts`, `/notifications`.
 
 ## Build order
 
@@ -138,9 +137,9 @@ Built as below, with these differences: `clients` sits beside `agents` until ste
 - Vercel also uses an MCP-target connector (`mcp.vercel.com`). A connector backed by our own Vercel App got personal-only tokens, because team permissions for Vercel Apps are in private beta. The MCP-target connector reaches team projects.
 - Open: Google calls fail until the Cloud project is in the Google Workspace Developer Preview Program.
 
-### Step 7: retire raw-token release
+### Step 7: retire raw-token release (done)
 
-Remove `scope run` token release, or keep it only for the owner's own scripts behind a per-account switch. Decide after step 5.
+Decided: remove it. A released token carries every permission of the grant, and Scope cannot apply rules to it, log what it does or take it back on revoke. Every target app speaks MCP. Removed: `scope login` and `scope run`, the `agents` table and agent tokens, `/api/agent/*`, the Agents page and the examples. If a CLI is needed later, it should be an MCP client that signs in like any app, with no raw tokens.
 
 ### Not now
 

@@ -8,7 +8,6 @@ import { useAuth } from "@workos-inc/authkit-nextjs/components";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
   Activity01Icon,
-  AiBrain01Icon,
   DashboardSquare01Icon,
   Notification01Icon,
   Plug01Icon,
@@ -24,7 +23,6 @@ const navigation = [
   { label: "Apps", path: "/apps", icon: DashboardSquare01Icon },
   { label: "Activity", path: "/activity", icon: Activity01Icon },
   { label: "Accounts", path: "/accounts", icon: Plug01Icon },
-  { label: "CLI agents", path: "/agents", icon: AiBrain01Icon },
   { label: "Notifications", path: "/notifications", icon: Notification01Icon },
 ];
 

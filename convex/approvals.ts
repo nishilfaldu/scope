@@ -3,7 +3,6 @@ import {
   paginationResultValidator,
 } from "convex/server";
 import { ConvexError, v } from "convex/values";
-import { connectorFor } from "../shared/connectors";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
@@ -13,25 +12,21 @@ import {
   type QueryCtx,
   query,
 } from "./_generated/server";
-import { agentFor, ownerId } from "./lib/identity";
+import { ownerId } from "./lib/identity";
 
 const decisionWindowMs = 30 * 60_000,
   onceWindowMs = 10 * 60_000;
 
 export async function requesterName(ctx: QueryCtx, row: Doc<"approvals">) {
-  if (row.clientId)
-    return (await ctx.db.get("clients", row.clientId))?.name ?? "Removed app";
-  if (row.agentId)
-    return (await ctx.db.get("agents", row.agentId))?.name ?? "Deleted agent";
-  return "Unknown";
+  return (await ctx.db.get("clients", row.clientId))?.name ?? "Removed app";
 }
 
 async function view(ctx: QueryCtx, row: Doc<"approvals">) {
-  const [agentName, account] = await Promise.all([
+  const [appName, account] = await Promise.all([
     requesterName(ctx, row),
     row.accountId ? ctx.db.get("accounts", row.accountId) : null,
   ]);
-  return { ...row, agentName, accountLabel: account?.label };
+  return { ...row, appName, accountLabel: account?.label };
 }
 
 // Creates a pending request, schedules its expiry and notifies every device.
@@ -39,13 +34,7 @@ export async function openPending(
   ctx: MutationCtx,
   fields: Pick<
     Doc<"approvals">,
-    | "ownerId"
-    | "agentId"
-    | "clientId"
-    | "tool"
-    | "argsHash"
-    | "providerId"
-    | "reason"
+    "ownerId" | "clientId" | "tool" | "argsHash" | "providerId" | "reason"
   >,
 ) {
   const expiresAt = Date.now() + decisionWindowMs;
@@ -98,20 +87,6 @@ async function close(
     });
 }
 
-export async function endForAgent(ctx: MutationCtx, agentId: Id<"agents">) {
-  for (const status of ["pending", "approved"] as const)
-    await close(
-      ctx,
-      await ctx.db
-        .query("approvals")
-        .withIndex("by_agentId_and_status_and_providerId", (q) =>
-          q.eq("agentId", agentId).eq("status", status),
-        )
-        .take(100),
-      "ended",
-    );
-}
-
 export async function endForClient(ctx: MutationCtx, clientId: Id<"clients">) {
   for (const status of ["pending", "approved"] as const)
     await close(
@@ -142,106 +117,14 @@ export async function endForAccount(
   );
 }
 
-// Agent-facing. The agent token is the only authority.
-
-export const request = mutation({
-  args: { token: v.string(), providerId: v.string(), reason: v.string() },
-  returns: v.object({ id: v.id("approvals"), status: v.string() }),
-  handler: async (ctx, args) => {
-    const agent = await agentFor(ctx, args.token),
-      reason = args.reason.trim();
-    if (!connectorFor(args.providerId) || !reason || reason.length > 1000)
-      throw new ConvexError("invalid-input");
-    const account = await ctx.db
-      .query("accounts")
-      .withIndex("by_ownerId_and_providerId", (q) =>
-        q.eq("ownerId", agent.ownerId).eq("providerId", args.providerId),
-      )
-      .first();
-    if (!account) throw new ConvexError("no-account");
-    const now = Date.now();
-    for (const status of ["approved", "pending"] as const) {
-      const open = await ctx.db
-        .query("approvals")
-        .withIndex("by_agentId_and_status_and_providerId", (q) =>
-          q
-            .eq("agentId", agent._id)
-            .eq("status", status)
-            .eq("providerId", args.providerId),
-        )
-        .first();
-      if (!open) continue;
-      if (open.expiresAt > now) return { id: open._id, status };
-      await close(ctx, [open], "expired");
-    }
-    const id = await openPending(ctx, {
-      ownerId: agent.ownerId,
-      agentId: agent._id,
-      providerId: args.providerId,
-      reason,
-    });
-    await ctx.db.patch("agents", agent._id, { lastUsedAt: now });
-    return { id, status: "pending" };
-  },
-});
-
-export const status = query({
-  args: { token: v.string(), id: v.id("approvals") },
-  returns: v.object({ status: v.string(), expiresAt: v.number() }),
-  handler: async (ctx, args) => {
-    const agent = await agentFor(ctx, args.token),
-      row = await ctx.db.get("approvals", args.id);
-    if (!row || row.agentId !== agent._id)
-      throw new ConvexError("authority-invalid");
-    return { status: row.status, expiresAt: row.expiresAt };
-  },
-});
-
-export const claim = mutation({
-  args: { token: v.string(), id: v.id("approvals") },
-  returns: v.object({
-    ownerId: v.string(),
-    providerId: v.string(),
-    connectorId: v.string(),
-    installationId: v.optional(v.string()),
-    expiresAt: v.number(),
-  }),
-  handler: async (ctx, args) => {
-    const agent = await agentFor(ctx, args.token),
-      row = await ctx.db.get("approvals", args.id),
-      now = Date.now();
-    if (
-      !row ||
-      row.agentId !== agent._id ||
-      row.status !== "approved" ||
-      row.expiresAt <= now ||
-      !row.accountId
-    )
-      throw new ConvexError("authority-invalid");
-    const account = await ctx.db.get("accounts", row.accountId);
-    if (!account || account.ownerId !== row.ownerId)
-      throw new ConvexError("authority-invalid");
-    await spendApproval(ctx, row);
-    await ctx.db.patch("agents", agent._id, { lastUsedAt: now });
-    return {
-      ownerId: row.ownerId,
-      providerId: row.providerId,
-      connectorId: account.connectorId,
-      installationId: account.installationId,
-      expiresAt: row.expiresAt,
-    };
-  },
-});
-
 // Owner-facing.
 
 const approvalView = v.object({
   _id: v.id("approvals"),
   _creationTime: v.number(),
   ownerId: v.string(),
-  agentId: v.optional(v.id("agents")),
-  clientId: v.optional(v.id("clients")),
-  tool: v.optional(v.string()),
+  clientId: v.id("clients"),
+  tool: v.string(),
   once: v.optional(v.boolean()),
   argsHash: v.optional(v.string()),
   providerId: v.string(),
@@ -253,7 +136,7 @@ const approvalView = v.object({
   endedAt: v.optional(v.number()),
   collections: v.number(),
   lastCollectedAt: v.optional(v.number()),
-  agentName: v.string(),
+  appName: v.string(),
   accountLabel: v.optional(v.string()),
 });
 
@@ -344,7 +227,7 @@ export const approve = mutation({
     id: v.id("approvals"),
     // Without it, the owner must have exactly one account for the provider.
     accountId: v.optional(v.id("accounts")),
-    // 0 approves once: one call or one token collection.
+    // 0 approves once: one call with the same arguments.
     minutes: v.union(v.literal(0), v.literal(15), v.literal(30), v.literal(60)),
   },
   returns: v.null(),
