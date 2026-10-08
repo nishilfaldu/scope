@@ -8,67 +8,15 @@
  * @module
  */
 
-import type * as auth from "../auth.js";
-import type * as devSeed from "../devSeed.js";
-import type * as domain_apps from "../domain/apps.js";
-import type * as domain_handoff from "../domain/handoff.js";
-import type * as domain_requests from "../domain/requests.js";
-import type * as domain_returnPaths from "../domain/returnPaths.js";
-import type * as domain_slices from "../domain/slices.js";
-import type * as functions from "../functions.js";
-import type * as http from "../http.js";
-import type * as http_contracts from "../http/contracts.js";
-import type * as http_googleBroker from "../http/googleBroker.js";
-import type * as http_helpers from "../http/helpers.js";
-import type * as http_httpAccessRequestHandlers from "../http/httpAccessRequestHandlers.js";
-import type * as http_httpAccountsHandler from "../http/httpAccountsHandler.js";
-import type * as http_httpAgentConnectionHandlers from "../http/httpAgentConnectionHandlers.js";
-import type * as http_httpAgentSliceHandlers from "../http/httpAgentSliceHandlers.js";
-import type * as http_httpAppsHandler from "../http/httpAppsHandler.js";
-import type * as http_httpClaimHandler from "../http/httpClaimHandler.js";
-import type * as http_httpCredentialsHandler from "../http/httpCredentialsHandler.js";
-import type * as http_mint from "../http/mint.js";
-import type * as http_oauth from "../http/oauth.js";
-import type * as lib_errors from "../lib/errors.js";
-import type * as lib_json from "../lib/json.js";
-import type * as lib_requests from "../lib/requests.js";
-import type * as lib_responses from "../lib/responses.js";
-import type * as lib_secrets from "../lib/secrets.js";
-import type * as lib_tokenEncryption from "../lib/tokenEncryption.js";
-import type * as oauth_access from "../oauth/access.js";
-import type * as oauth_index from "../oauth/index.js";
-import type * as oauth_providers_airtable from "../oauth/providers/airtable.js";
-import type * as oauth_providers_github from "../oauth/providers/github.js";
-import type * as oauth_providers_google from "../oauth/providers/google.js";
-import type * as oauth_providers_index from "../oauth/providers/index.js";
-import type * as oauth_providers_linear from "../oauth/providers/linear.js";
-import type * as oauth_providers_notion from "../oauth/providers/notion.js";
-import type * as oauth_providers_slack from "../oauth/providers/slack.js";
-import type * as oauth_providers_vercel from "../oauth/providers/vercel.js";
-import type * as oauth_providers_zoom from "../oauth/providers/zoom.js";
-import type * as oauth_shared from "../oauth/shared.js";
-import type * as oauth_types from "../oauth/types.js";
-import type * as tables_agentConnectionExpiry from "../tables/agentConnectionExpiry.js";
-import type * as tables_agentConnections from "../tables/agentConnections.js";
-import type * as tables_agentDashboard from "../tables/agentDashboard.js";
-import type * as tables_connections_actions from "../tables/connections/actions.js";
-import type * as tables_connections_helpers from "../tables/connections/helpers.js";
-import type * as tables_connections_mutations from "../tables/connections/mutations.js";
-import type * as tables_connections_queries from "../tables/connections/queries.js";
-import type * as tables_oauthStates_finish from "../tables/oauthStates/finish.js";
-import type * as tables_oauthStates_mutations from "../tables/oauthStates/mutations.js";
-import type * as tables_oauthStates_queries from "../tables/oauthStates/queries.js";
-import type * as tables_slices_credentials from "../tables/slices/credentials.js";
-import type * as tables_slices_googleBroker from "../tables/slices/googleBroker.js";
-import type * as tables_slices_helpers from "../tables/slices/helpers.js";
-import type * as tables_slices_mutations from "../tables/slices/mutations.js";
-import type * as tables_slices_queries from "../tables/slices/queries.js";
-import type * as tables_slices_sliceRequestClaims from "../tables/slices/sliceRequestClaims.js";
-import type * as tables_slices_sliceRequestExpiry from "../tables/slices/sliceRequestExpiry.js";
-import type * as tables_slices_sliceRequests from "../tables/slices/sliceRequests.js";
-import type * as tables_slices_tokenRequestClaims from "../tables/slices/tokenRequestClaims.js";
-import type * as tables_slices_tokenRequests from "../tables/slices/tokenRequests.js";
-import type * as users from "../users.js";
+import type * as accounts from "../accounts.js";
+import type * as activity from "../activity.js";
+import type * as approvals from "../approvals.js";
+import type * as clients from "../clients.js";
+import type * as gateway from "../gateway.js";
+import type * as lib_identity from "../lib/identity.js";
+import type * as lib_push from "../lib/push.js";
+import type * as notificationDelivery from "../notificationDelivery.js";
+import type * as notifications from "../notifications.js";
 
 import type {
   ApiFromModules,
@@ -77,67 +25,15 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  auth: typeof auth;
-  devSeed: typeof devSeed;
-  "domain/apps": typeof domain_apps;
-  "domain/handoff": typeof domain_handoff;
-  "domain/requests": typeof domain_requests;
-  "domain/returnPaths": typeof domain_returnPaths;
-  "domain/slices": typeof domain_slices;
-  functions: typeof functions;
-  http: typeof http;
-  "http/contracts": typeof http_contracts;
-  "http/googleBroker": typeof http_googleBroker;
-  "http/helpers": typeof http_helpers;
-  "http/httpAccessRequestHandlers": typeof http_httpAccessRequestHandlers;
-  "http/httpAccountsHandler": typeof http_httpAccountsHandler;
-  "http/httpAgentConnectionHandlers": typeof http_httpAgentConnectionHandlers;
-  "http/httpAgentSliceHandlers": typeof http_httpAgentSliceHandlers;
-  "http/httpAppsHandler": typeof http_httpAppsHandler;
-  "http/httpClaimHandler": typeof http_httpClaimHandler;
-  "http/httpCredentialsHandler": typeof http_httpCredentialsHandler;
-  "http/mint": typeof http_mint;
-  "http/oauth": typeof http_oauth;
-  "lib/errors": typeof lib_errors;
-  "lib/json": typeof lib_json;
-  "lib/requests": typeof lib_requests;
-  "lib/responses": typeof lib_responses;
-  "lib/secrets": typeof lib_secrets;
-  "lib/tokenEncryption": typeof lib_tokenEncryption;
-  "oauth/access": typeof oauth_access;
-  "oauth/index": typeof oauth_index;
-  "oauth/providers/airtable": typeof oauth_providers_airtable;
-  "oauth/providers/github": typeof oauth_providers_github;
-  "oauth/providers/google": typeof oauth_providers_google;
-  "oauth/providers/index": typeof oauth_providers_index;
-  "oauth/providers/linear": typeof oauth_providers_linear;
-  "oauth/providers/notion": typeof oauth_providers_notion;
-  "oauth/providers/slack": typeof oauth_providers_slack;
-  "oauth/providers/vercel": typeof oauth_providers_vercel;
-  "oauth/providers/zoom": typeof oauth_providers_zoom;
-  "oauth/shared": typeof oauth_shared;
-  "oauth/types": typeof oauth_types;
-  "tables/agentConnectionExpiry": typeof tables_agentConnectionExpiry;
-  "tables/agentConnections": typeof tables_agentConnections;
-  "tables/agentDashboard": typeof tables_agentDashboard;
-  "tables/connections/actions": typeof tables_connections_actions;
-  "tables/connections/helpers": typeof tables_connections_helpers;
-  "tables/connections/mutations": typeof tables_connections_mutations;
-  "tables/connections/queries": typeof tables_connections_queries;
-  "tables/oauthStates/finish": typeof tables_oauthStates_finish;
-  "tables/oauthStates/mutations": typeof tables_oauthStates_mutations;
-  "tables/oauthStates/queries": typeof tables_oauthStates_queries;
-  "tables/slices/credentials": typeof tables_slices_credentials;
-  "tables/slices/googleBroker": typeof tables_slices_googleBroker;
-  "tables/slices/helpers": typeof tables_slices_helpers;
-  "tables/slices/mutations": typeof tables_slices_mutations;
-  "tables/slices/queries": typeof tables_slices_queries;
-  "tables/slices/sliceRequestClaims": typeof tables_slices_sliceRequestClaims;
-  "tables/slices/sliceRequestExpiry": typeof tables_slices_sliceRequestExpiry;
-  "tables/slices/sliceRequests": typeof tables_slices_sliceRequests;
-  "tables/slices/tokenRequestClaims": typeof tables_slices_tokenRequestClaims;
-  "tables/slices/tokenRequests": typeof tables_slices_tokenRequests;
-  users: typeof users;
+  accounts: typeof accounts;
+  activity: typeof activity;
+  approvals: typeof approvals;
+  clients: typeof clients;
+  gateway: typeof gateway;
+  "lib/identity": typeof lib_identity;
+  "lib/push": typeof lib_push;
+  notificationDelivery: typeof notificationDelivery;
+  notifications: typeof notifications;
 }>;
 
 /**
@@ -166,6 +62,4 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {
-  resend: import("@convex-dev/resend/_generated/component.js").ComponentApi<"resend">;
-};
+export declare const components: {};

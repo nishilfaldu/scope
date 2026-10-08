@@ -3,9 +3,7 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { ConvexClientProvider } from "./ConvexClientProvider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/toast";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -24,11 +22,11 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://scope.nishilfaldu.site"),
   title: "Scope",
   description:
-    "Approve exactly which apps and connected accounts an AI agent may access.",
+    "One MCP server for all your AI apps, with rules per app, phone approvals and an audit log.",
   openGraph: {
     title: "Scope",
     description:
-      "Approve exactly which apps and connected accounts an AI agent may access.",
+      "One MCP server for all your AI apps, with rules per app, phone approvals and an audit log.",
     url: "/",
     siteName: "Scope",
     type: "website",
@@ -37,33 +35,29 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <ConvexAuthNextjsServerProvider shouldHandleCode={false}>
-      <html
-        lang="en"
-        suppressHydrationWarning
-        className={cn(
-          "h-full antialiased font-sans",
-          geistSans.variable,
-          geistMono.variable,
-          inter.variable,
-        )}
-      >
-        <body className="flex min-h-full flex-col bg-background text-foreground">
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="light"
-            forcedTheme="light"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <Toaster>
-              <TooltipProvider>
-                <ConvexClientProvider>{children}</ConvexClientProvider>
-              </TooltipProvider>
-            </Toaster>
-          </ThemeProvider>
-        </body>
-      </html>
-    </ConvexAuthNextjsServerProvider>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={cn(
+        "h-full antialiased font-sans",
+        geistSans.variable,
+        geistMono.variable,
+        inter.variable,
+      )}
+    >
+      <body className="flex min-h-full flex-col bg-background text-foreground">
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          forcedTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <Toaster>
+            <ConvexClientProvider>{children}</ConvexClientProvider>
+          </Toaster>
+        </ThemeProvider>
+      </body>
+    </html>
   );
 }

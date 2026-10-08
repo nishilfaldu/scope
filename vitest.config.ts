@@ -1,14 +1,16 @@
-import { defineConfig } from "vitest/config";
 import { resolve } from "node:path";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: { alias: { "@": resolve(__dirname, ".") } },
   test: {
     environment: "edge-runtime",
-    // Required for connection save/read paths (AES-GCM). 32-byte key, base64.
+
     env: {
-      TOKEN_ENCRYPTION_KEY: "dGVzdC10b2tlbi1lbmNyeXB0aW9uLWtleS0zMmJ5ISE=",
-      BOARD_ORIGIN: "http://localhost:3000",
+      SCOPE_ORIGIN: "http://localhost:3000",
+      WORKOS_CLIENT_ID: "client_web",
+      WORKOS_AUTHKIT_DOMAIN: "https://auth.test",
+      SCOPE_MCP_RESOURCE: "http://localhost:3000/mcp",
     },
     server: {
       deps: {

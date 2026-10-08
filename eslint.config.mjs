@@ -7,9 +7,8 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   ...convexPlugin.configs.recommended,
-  // Override default ignores of eslint-config-next.
+
   globalIgnores([
-    // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
     "build/**",
@@ -17,4 +16,5 @@ const eslintConfig = defineConfig([
     "convex/_generated/**",
   ]),
 ]);
+
 export default eslintConfig;

@@ -1,5 +1,3 @@
-import type { Metadata } from "next";
-import Link from "next/link";
 import {
   ArrowRight01Icon,
   CheckmarkCircle02Icon,
@@ -8,6 +6,8 @@ import {
   ShieldKeyIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import type { Metadata } from "next";
+import Link from "next/link";
 
 import { PublicFooter } from "@/components/public/public-footer";
 import { PublicHeader } from "@/components/public/public-header";
@@ -15,26 +15,26 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Scope · Approve agent access to your accounts",
+  title: "Scope · One MCP server for all your AI apps",
   description:
-    "Scope lets you connect accounts and approve exactly which apps, accounts, and duration an AI agent may use.",
+    "Scope runs AI app tool calls with your accounts. Set rules per app, approve from your phone and see every call.",
 };
 
 const controls = [
   {
     icon: ShieldKeyIcon,
-    title: "Approval before access",
-    body: "An agent can ask, but only you can approve a request for a specific app and connected account.",
+    title: "Rules for each app",
+    body: "Allow, ask or block each tool, per app. Revoke one app without touching the others.",
   },
   {
     icon: Clock01Icon,
-    title: "Access with an end time",
-    body: "Every approved slice has a duration. You can revoke the slice or its agent connection sooner.",
+    title: "Approve from your phone",
+    body: "Approve one call, or let an app use a tool for 15 minutes, 30 minutes or 1 hour. Every call appears in Activity.",
   },
   {
     icon: Key01Icon,
-    title: "Credentials stay out of the browser",
-    body: "Provider credentials remain in Scope's encrypted vault. Approval pages never expose them.",
+    title: "Apps never get your tokens",
+    body: "Scope runs each tool call with your connected account and returns only the result.",
   },
 ];
 
@@ -52,18 +52,17 @@ export default function HomePage() {
               Scope
             </Badge>
             <h1 className="max-w-[13ch] text-5xl font-semibold leading-[0.98] tracking-[-0.055em] sm:text-6xl lg:text-7xl">
-              Let agents ask. You decide what they can reach.
+              Connect once. Decide what each AI app can do.
             </h1>
             <p className="mt-7 max-w-xl text-lg leading-8 text-[#526054] dark:text-muted-foreground">
-              Scope is an access control service for AI agents. Connect your
-              accounts once, then review each agent request by app, account,
-              permissions, reason, and duration.
+              One MCP server for Cursor, Claude, ChatGPT and your other AI apps,
+              with rules for each.
             </p>
             <div className="mt-9 flex flex-wrap items-center gap-3">
               <Button
                 size="lg"
                 nativeButton={false}
-                render={<Link href="/signin?redirectTo=/agents" />}
+                render={<Link href="/signin?redirectTo=/requests" />}
               >
                 Sign in to Scope
                 <HugeiconsIcon icon={ArrowRight01Icon} data-icon="inline-end" />
@@ -80,47 +79,42 @@ export default function HomePage() {
           </div>
 
           <div className="relative lg:pl-4">
-            <div className="absolute -inset-7 -z-0 rounded-[2rem] bg-[radial-gradient(circle_at_50%_45%,rgba(139,224,0,0.2),transparent_67%)]" />
-            <div className="relative overflow-hidden rounded-[1.5rem] border border-[#d8e1d4] bg-white shadow-[0_32px_80px_-48px_rgba(26,48,25,0.5)] dark:border-border dark:bg-card">
+            <div className="relative overflow-hidden rounded-[1.5rem] border border-[#d8e1d4] bg-white dark:border-border dark:bg-card">
               <div className="flex items-center justify-between border-b border-[#e4eae1] px-6 py-5 dark:border-border">
                 <div>
-                  <p className="text-sm font-semibold">Research assistant</p>
+                  <p className="text-sm font-semibold">Cursor</p>
                   <p className="mt-0.5 text-xs text-[#68746a] dark:text-muted-foreground">
-                    requests access for 2 hours
+                    Example request
                   </p>
                 </div>
-                <span className="size-2.5 rounded-full bg-[#8be000] shadow-[0_0_0_5px_rgba(139,224,0,0.16)]" />
+                <span className="size-2.5 rounded-full bg-primary" />
               </div>
               <div className="px-6 py-6 sm:px-8">
                 <p className="text-sm text-[#68746a] dark:text-muted-foreground">
-                  Requested account
+                  Wants to post a message with
                 </p>
                 <div className="mt-3 flex items-center justify-between rounded-xl bg-[#f3f6f1] px-4 py-4 dark:bg-muted">
                   <div>
-                    <p className="font-medium">Google Drive</p>
+                    <p className="font-medium">Slack</p>
                     <p className="mt-0.5 text-sm text-[#68746a] dark:text-muted-foreground">
-                      you@company.com
+                      Research workspace
                     </p>
                   </div>
                   <HugeiconsIcon
                     icon={CheckmarkCircle02Icon}
-                    className="size-5 text-[#659f09]"
+                    className="size-5 text-primary"
                     strokeWidth={2}
                   />
                 </div>
                 <div className="mt-6 grid grid-cols-[7rem_1fr] gap-x-4 gap-y-3 text-sm">
                   <span className="text-[#68746a] dark:text-muted-foreground">
-                    Can do
+                    Request
                   </span>
-                  <span>Read and manage selected Drive files</span>
+                  <span>Post in #launch: &quot;Release is live&quot;</span>
                   <span className="text-[#68746a] dark:text-muted-foreground">
-                    Reason
+                    Approve
                   </span>
-                  <span>Summarize the project research folder</span>
-                  <span className="text-[#68746a] dark:text-muted-foreground">
-                    Ends
-                  </span>
-                  <span>Today at 4:30 PM</span>
+                  <span>This call only</span>
                 </div>
                 <div className="mt-7 flex gap-3 border-t border-[#e4eae1] pt-6 dark:border-border">
                   <span className="flex h-10 flex-1 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground">
@@ -135,6 +129,12 @@ export default function HomePage() {
           </div>
         </section>
 
+        <p className="mx-auto max-w-6xl px-5 pb-10 text-sm leading-6 text-muted-foreground sm:px-8">
+          Every token includes all permissions granted when you connected the
+          account. The stated purpose does not restrict the token. Vercel
+          Connect manages credentials; Scope does not inspect each token&apos;s
+          permissions.
+        </p>
         <section className="border-y border-[#dde5da] bg-white dark:border-border dark:bg-card">
           <div className="mx-auto grid max-w-6xl px-5 sm:px-8 lg:grid-cols-3">
             {controls.map((control, index) => (
@@ -144,7 +144,7 @@ export default function HomePage() {
               >
                 <HugeiconsIcon
                   icon={control.icon}
-                  className="size-5 text-[#659f09]"
+                  className="size-5 text-primary"
                   strokeWidth={1.8}
                 />
                 <h2 className="mt-5 font-semibold">{control.title}</h2>

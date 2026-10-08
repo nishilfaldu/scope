@@ -1,21 +1,29 @@
 # Scope
 
-Scope lets a person grant bounded access to connected provider accounts to an agent.
+Scope lets a person give an AI agent a provider token for a limited time.
 
 ## Language
 
-**Agent lineage**:
-The stable, user-approved identity of one agent across credential rotations and reconnects. Slices and slice requests belong to this lineage.
-_Avoid_: Agent connection, credential generation
+**Person**:
+The owner, signed in to the web app with WorkOS AuthKit. Their WorkOS user ID is also their Vercel Connect subject.
 
-**Connection generation**:
-One replaceable ID and secret pair that authenticates an agent lineage. Rotating or reconnecting swaps the active generation without moving the lineage's grants.
-_Avoid_: Agent identity
+**Agent**:
+A record the person creates. It has a name and a secret token that the CLI saves. Scope stores only the token's hash. Two agents never share approvals.
 
-**Slice**:
-A time-bounded grant from a user to an agent lineage for selected provider accounts.
-_Avoid_: Connection, credential
+**Account**:
+A connected provider grant. Vercel Connect holds its credentials. A person has at most one account per provider. Connecting again replaces it.
 
-**Slice request**:
-An agent lineage's request for a new slice, pending a user's decision.
-_Avoid_: Approval inbox item
+**Request**:
+An agent's ask for a token from one provider, with a reason. It waits up to 30 minutes. The reason is display text and does not restrict the token.
+
+**Approval**:
+The person's yes to a request. The person picks the account and a 15-, 30- or 60-minute window. The window starts at approval. During the window the same agent can collect tokens for that provider without another prompt.
+
+**Token collection**:
+One release of a provider token to the agent. Scope counts collections and records the last time. Collection does not extend the window.
+
+**End approval**:
+Stops further collection. Tokens that were already released stay valid.
+
+**Disconnect**:
+Revokes the grant in Vercel Connect, then deletes the account and ends its approvals.

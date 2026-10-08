@@ -15,26 +15,30 @@ type PolicySection = { id: string; title: string; content: ReactNode };
 const sections: PolicySection[] = [
   {
     id: "data-we-collect",
-    title: "Data we collect and access",
+    title: "Data we collect and store",
     content: (
       <>
         <p>
-          Scope collects your email address for sign-in and stores account and
-          security records needed to operate the service. When you connect a
-          provider account, Scope stores the provider account identifier,
-          display name or email returned by the provider, the app you connected,
-          granted authorization metadata, and encrypted OAuth access and refresh
-          credentials.
+          Scope collects your email address for sign-in. For each provider
+          account you connect, Scope stores the provider, a Vercel Connect
+          reference, an installation identifier where the provider has one, a
+          display name such as the workspace name, and the permissions the
+          provider reported at connect time, where it reports them. Scope does
+          not store provider access or refresh tokens.
         </p>
         <p>
-          Scope supports connections to GitHub, Gmail, Google Calendar, Google
-          Drive, Google Docs, Google Sheets, Slack, Airtable, Notion, Linear,
-          Vercel, and Zoom. Depending on the service and permissions you choose,
-          a connection may permit access to repositories, messages, email,
-          calendars, files, documents, spreadsheets, databases, projects,
-          deployments, meetings, and related account metadata. The provider
-          shows the permissions before you connect. Provider OAuth is not used
-          to sign in to Scope.
+          For each AI app that signs in, Scope stores its OAuth client
+          identifier, its name, when it was last used, whether it is revoked,
+          and the rules you set for it. Activity stores the app, tool, decision,
+          outcome and time of each call. Activity never stores tool arguments or
+          results.
+        </p>
+        <p>
+          An approval request stores the app, tool, account, status and times,
+          and a short summary of the call. The summary can include parts of the
+          request, such as a channel name, an email recipient, a page title or
+          the first characters of a message. For notifications, Scope stores the
+          push subscription of each device you enable.
         </p>
       </>
     ),
@@ -45,18 +49,26 @@ const sections: PolicySection[] = [
     content: (
       <>
         <p>
-          Scope uses provider authorization data to show you which accounts are
-          connected and to provide the access-control features you request. When
-          an agent requests access, Scope shows you the app, connected account,
-          requested permissions, reason, and duration. Scope issues credentials
-          for that request only after the required approval and ownership checks
-          succeed.
+          When an app calls a tool, Scope gets a credential from Vercel Connect,
+          sends the request to the provider&apos;s API or official MCP server,
+          and returns the result to that app. Scope processes the request and
+          result only to complete the call. To write approval summaries, Scope
+          may read small details from the provider, such as a channel name, page
+          title, issue title, event title or deployment address.
         </p>
         <p>
           Scope does not use connected-service data for advertising, credit
-          decisions, or sale to data brokers. Scope does not use Google
-          Workspace API data to develop, improve, or train generalized or
-          non-personalized AI or machine-learning models.
+          decisions, training models, or sale to data brokers. People do not
+          read your connected-service data, except with your permission, for
+          security, or when required by law.
+        </p>
+        <p>
+          Scope&apos;s use and transfer of information received from Google APIs
+          adheres to the{" "}
+          <a href="https://developers.google.com/terms/api-services-user-data-policy">
+            Google API Services User Data Policy
+          </a>
+          , including the Limited Use requirements.
         </p>
       </>
     ),
@@ -67,19 +79,21 @@ const sections: PolicySection[] = [
     content: (
       <>
         <p>
-          When you approve an access request, Scope provides a credential to the
-          agent identified in the request so it can access the specific app and
-          account you approved. The agent may then process data from that
-          connected service to perform the task described in the request. You
-          should approve only agents and requests you trust.
+          Scope sends tool results only to the AI app that made the call, under
+          the rules and approvals you set. That app&apos;s own privacy policy
+          governs what it does with the results, including sending them to its
+          model provider. Approve only calls from apps you trust.
         </p>
         <p>
-          Scope uses infrastructure service providers to host the application,
-          store encrypted credentials and application records, and deliver
-          transactional sign-in email. They process data only to provide those
-          services. Scope may also disclose information when required by law or
-          to protect the service and its users. Scope does not sell
-          connected-service data or transfer it for advertising.
+          Scope uses service providers to host the application (Vercel), manage
+          provider credentials (Vercel Connect), store application records
+          (Convex), handle sign-in and sign-in email (WorkOS), and deliver push
+          notifications (the push service of your browser or device). A
+          notification contains the app name, tool and request summary. These
+          providers process data only to provide their services. Scope may also
+          disclose information when required by law or to protect the service
+          and its users. Scope does not sell connected-service data or transfer
+          it for advertising.
         </p>
       </>
     ),
@@ -89,11 +103,14 @@ const sections: PolicySection[] = [
     title: "Storage and security",
     content: (
       <p>
-        Provider access and refresh credentials are encrypted before storage.
-        Scope keeps provider secrets and slice secrets out of browser approval
-        pages and applies ownership checks before issuing credentials. Data is
-        encrypted in transit using HTTPS. No security measure is perfect, but we
-        limit access to the systems and data required to operate Scope.
+        Vercel Connect stores and refreshes provider credentials. AI apps never
+        receive them. Each app signs in separately and can act only through
+        Scope&apos;s tools, under its own rules. Scope checks the app, the rule,
+        the approval and the account before each call. For tools that forward to
+        a provider&apos;s MCP server, Scope sends only the arguments that it
+        accepts for that tool. Data is encrypted in transit using HTTPS. No
+        security measure is perfect, but we limit access to the systems and data
+        required to operate Scope.
       </p>
     ),
   },
@@ -103,33 +120,23 @@ const sections: PolicySection[] = [
     content: (
       <>
         <p>
-          Scope retains your account information while your account is active.
-          Connection credentials and metadata are retained until you disconnect
-          that provider account or request account deletion, unless a longer
-          period is required for security, fraud prevention, or law. Request,
-          approval, and audit records may be retained for a limited period to
-          protect users and investigate service abuse.
+          Scope retains your account information, connected accounts, apps,
+          rules, approval history and Activity while your account is active. A
+          longer retention period may be required for security, fraud
+          prevention, or law.
         </p>
         <p>
-          You can disconnect a provider account or revoke an agent connection or
-          slice in Scope. This stops future credentials from being issued
-          through that connection. You can also revoke Scope in the connected
-          provider&apos;s account settings. To request deletion of your Scope
-          account and associated data, email{" "}
+          Revoke stops all calls from one app. End approval stops a timed
+          approval. Neither deletes results that an app already received.
+          Disconnect asks Vercel Connect to revoke the authorization, deletes
+          the connected account from Scope, and ends its approvals. Provider
+          credentials may remain valid when the provider does not support
+          revocation. You can also revoke Scope in the provider&apos;s account
+          settings. To request deletion of your Scope account and associated
+          data, email{" "}
           <a href="mailto:nishilfaldu@gmail.com">nishilfaldu@gmail.com</a>.
         </p>
       </>
-    ),
-  },
-  {
-    id: "limited-use",
-    title: "Google API Services User Data Policy",
-    content: (
-      <p>
-        Scope&apos;s use and transfer to any other app of information received
-        from Google APIs adheres to the Google API Services User Data Policy,
-        including the Limited Use requirements.
-      </p>
     ),
   },
   {
@@ -161,7 +168,7 @@ export default function PrivacyPage() {
           <aside className="lg:sticky lg:top-10 lg:self-start">
             <p className="text-sm font-semibold">Scope</p>
             <p className="mt-1 text-sm text-[#68746a] dark:text-muted-foreground">
-              Effective September 20, 2026
+              Effective October 7, 2026
             </p>
             <nav
               className="mt-7 hidden border-l border-[#d8e1d4] pl-4 text-sm lg:block dark:border-border"
