@@ -6,7 +6,7 @@
     "dev": "convex dev --start 'next dev'",
     "dev:frontend": "next dev",
     "build": "next build --webpack",
-    "build:convex": "convex deploy --cmd 'next build'",
+    "build:convex": "convex deploy --cmd 'pnpm build'",
     "start": "next start",
     "format": "prettier --write .",
     "lint": "eslint",
