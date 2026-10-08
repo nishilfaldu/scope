@@ -34,7 +34,7 @@ async function setup() {
   const [account] = await owner.query(api.accounts.list, {});
   const request = async (argsHash = "h1") => {
     const result = await app.mutation(api.gateway.authorize, {
-      tool: "slack_post_message",
+      tool: "slack_send_message",
       summary: "Post in #general",
       argsHash,
     });
@@ -138,7 +138,7 @@ test("notifications describe the call and offer approve once for a single accoun
       subscriptionId,
     });
   expect((await delivery())?.message).toEqual({
-    title: "cursor.com wants Slack: Post a message",
+    title: "cursor.com wants Slack: Send a message",
     body: "Post in #general\nAcme workspace",
     quickApprove: true,
     approveLabel: "Approve once",

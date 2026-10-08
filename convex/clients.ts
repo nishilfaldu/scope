@@ -45,7 +45,11 @@ export const list = query({
           clientKey: row.clientKey,
           revokedAt: row.revokedAt,
           lastUsedAt: row.lastUsedAt,
-          rules: Object.fromEntries(overrides.map((r) => [r.tool, r.rule])),
+          rules: Object.fromEntries(
+            overrides
+              .filter((r) => toolFor(r.tool))
+              .map((r) => [r.tool, r.rule]),
+          ),
         };
       }),
     );
