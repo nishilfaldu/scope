@@ -1,171 +1,98 @@
-import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { appValidator } from "./domain/apps";
-import { storedRequestStatusValidator } from "./domain/requests";
-import {
-  bridgeCommandValidator,
-  connectReferenceValidator,
-} from "./connect/contracts";
 
-const sliceStatusValidator = v.union(
-  v.literal("staged"),
-  v.literal("active"),
-  v.literal("revoked"),
+export const approvalStatus = v.union(
+  v.literal("pending"),
+  v.literal("approved"),
+  v.literal("denied"),
+  v.literal("ended"),
+  v.literal("expired"),
 );
 
-const mintPolicyValidator = v.union(v.literal("auto"), v.literal("approve"));
-const agentConnectionStatusValidator = v.union(
-  v.literal("staged"),
-  v.literal("active"),
-  v.literal("revoked"),
+export const rule = v.union(
+  v.literal("allow"),
+  v.literal("ask"),
+  v.literal("block"),
 );
-
-const requestLifecycle = {
-  publicToken: v.string(),
-  status: storedRequestStatusValidator,
-  expiresAt: v.number(),
-};
 
 export default defineSchema({
-  ...authTables,
-
-  agentConnections: defineTable({
-    userId: v.id("users"),
-    agentId: v.string(),
+  // One row per MCP app. Created on the app's first request.
+  clients: defineTable({
+    ownerId: v.string(),
+    clientKey: v.string(),
     name: v.string(),
-    secretHash: v.string(),
-    status: agentConnectionStatusValidator,
+    revokedAt: v.optional(v.number()),
     lastUsedAt: v.optional(v.number()),
-    revokedAt: v.optional(v.number()),
-    revocationReason: v.optional(v.string()),
-  })
-    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
-    .index("by_user", ["userId"])
-    .index("by_user_status", ["userId", "status"])
-    .index("by_agentId_status", ["agentId", "status"]),
+  }).index("by_ownerId_and_clientKey", ["ownerId", "clientKey"]),
 
-  agentLineages: defineTable({
-    agentId: v.string(),
-    userId: v.id("users"),
-    revokedAt: v.optional(v.number()),
-  }).index("by_agentId", ["agentId"]),
+  // Only rules that differ from the tool's default are stored.
+  rules: defineTable({
+    clientId: v.id("clients"),
+    tool: v.string(),
+    rule,
+  }).index("by_clientId_and_tool", ["clientId", "tool"]),
 
-  agentConnectionInvites: defineTable({
-    publicToken: v.string(),
-    claimSecretHash: v.string(),
-    agentId: v.string(),
-    agentName: v.string(),
-    status: v.union(
-      v.literal("pending"),
+  // Audit log. Never stores tool arguments or results.
+  calls: defineTable({
+    ownerId: v.string(),
+    clientId: v.id("clients"),
+    tool: v.string(),
+    decision: v.union(
+      v.literal("allowed"),
       v.literal("approved"),
+      v.literal("blocked"),
       v.literal("denied"),
-      v.literal("claimed"),
-      v.literal("expired"),
+      v.literal("waiting"),
+      v.literal("no-account"),
+      v.literal("revoked"),
     ),
-    approvalDeadlineAt: v.number(),
-    pickupDeadlineAt: v.optional(v.number()),
-    ackDeadlineAt: v.optional(v.number()),
-    activationDeadlineAt: v.optional(v.number()),
-    firstClaimedAt: v.optional(v.number()),
-    activatedAt: v.optional(v.number()),
-    terminalReason: v.optional(v.string()),
-    userId: v.optional(v.id("users")),
-    replacesAgentConnectionId: v.optional(v.id("agentConnections")),
-    agentConnectionId: v.optional(v.id("agentConnections")),
-    issuedSecretCipher: v.optional(v.string()),
-    claimAcknowledgedAt: v.optional(v.number()),
+    outcome: v.optional(v.union(v.literal("ok"), v.literal("failed"))),
   })
-    .index("by_public_token", ["publicToken"])
-    .index("by_claim_secret_hash", ["claimSecretHash"])
-    .index("by_agent_connection_id", ["agentConnectionId"]),
+    .index("by_ownerId", ["ownerId"])
+    .index("by_clientId_and_tool", ["clientId", "tool"]),
 
-  slices: defineTable({
-    userId: v.id("users"),
-    agentId: v.string(),
-    name: v.string(),
-    token: v.string(),
-    secretHash: v.string(),
-    status: sliceStatusValidator,
-    revocationReason: v.optional(v.string()),
-    revokedAt: v.optional(v.number()),
-    expiresAt: v.number(),
-    mintPolicy: mintPolicyValidator,
-  })
-    .index("by_token", ["token"])
-    .index("by_agentId", ["agentId"]),
+  accounts: defineTable({
+    ownerId: v.string(),
+    providerId: v.string(),
+    connectorId: v.string(),
+    installationId: v.optional(v.string()),
+    label: v.string(),
+    // What the provider reported at connect time. Display only; it does not restrict the token.
+    permissions: v.optional(
+      v.object({ scopes: v.array(v.string()), checkedAt: v.number() }),
+    ),
+  }).index("by_ownerId_and_providerId", ["ownerId", "providerId"]),
 
-  sliceBindings: defineTable({
-    sliceId: v.id("slices"),
-    app: appValidator,
-    connectionId: v.id("connections"),
-  }).index("by_slice_app_connectionId", ["sliceId", "app", "connectionId"]),
-
-  sliceRequests: defineTable({
-    publicToken: v.string(),
-    status: storedRequestStatusValidator,
-    approvalDeadlineAt: v.number(),
-    pickupDeadlineAt: v.optional(v.number()),
-    ackDeadlineAt: v.optional(v.number()),
-    firstClaimedAt: v.optional(v.number()),
-    terminalReason: v.optional(v.string()),
-    claimSecretHash: v.string(),
-    agentId: v.string(),
-    userId: v.optional(v.id("users")),
-    createdSliceId: v.optional(v.id("slices")),
-    apps: v.array(appValidator),
-    ttlMs: v.number(),
+  // An MCP app asks to run a tool.
+  approvals: defineTable({
+    ownerId: v.string(),
+    clientId: v.id("clients"),
+    tool: v.string(),
+    // Approve once: valid for one call with exactly these arguments.
+    once: v.optional(v.boolean()),
+    argsHash: v.optional(v.string()),
+    providerId: v.string(),
+    accountId: v.optional(v.id("accounts")),
     reason: v.string(),
-    issuedSliceSecretCipher: v.optional(v.string()),
-    claimAcknowledgedAt: v.optional(v.number()),
-    idempotencyKeyHash: v.optional(v.string()),
-    claimHandleCipher: v.optional(v.string()),
-  })
-    .index("by_public_token", ["publicToken"])
-    .index("by_claim_secret_hash", ["claimSecretHash"])
-    .index("by_idempotency_key_hash", ["idempotencyKeyHash"])
-    .index("by_agentId", ["agentId"])
-    .index("by_createdSliceId", ["createdSliceId"])
-    .index("by_userId_status_approvalDeadlineAt", [
-      "userId",
-      "status",
-      "approvalDeadlineAt",
-    ])
-    .index("by_status_approvalDeadlineAt", ["status", "approvalDeadlineAt"]),
-
-  tokenRequests: defineTable({
-    ...requestLifecycle,
-    sliceId: v.id("slices"),
-    app: appValidator,
-    bindingId: v.id("sliceBindings"),
-  })
-    .index("by_public_token", ["publicToken"])
-    .index("by_slice_status_expiresAt", ["sliceId", "status", "expiresAt"]),
-
-  connectBridgeTickets: defineTable({
-    secretHash: v.string(),
+    status: approvalStatus,
+    // Decision deadline while pending; end of the window once approved.
     expiresAt: v.number(),
-    command: bridgeCommandValidator,
-  }).index("by_secretHash", ["secretHash"]),
+    decidedAt: v.optional(v.number()),
+    endedAt: v.optional(v.number()),
+    collections: v.number(),
+    lastCollectedAt: v.optional(v.number()),
+  })
+    // History needs creation-time order across every closed status.
+    // eslint-disable-next-line @convex-dev/no-duplicate-indexes
+    .index("by_ownerId", ["ownerId"])
+    .index("by_ownerId_and_status", ["ownerId", "status"])
+    .index("by_accountId_and_status", ["accountId", "status"])
+    .index("by_clientId_and_status_and_tool", ["clientId", "status", "tool"]),
 
-  connections: defineTable({
-    backend: v.literal("vercel-connect"),
-    userId: v.id("users"),
-    app: appValidator,
-    login: v.string(),
-    providerUserId: v.string(),
-    connect: connectReferenceValidator,
-    grantedScopes: v.array(v.string()),
-    grantVersion: v.number(),
-  }).index("by_user_app_providerUserId", ["userId", "app", "providerUserId"]),
-
-  oauthStates: defineTable({
-    userId: v.id("users"),
-    app: appValidator,
-    state: v.string(),
-    connectSubjectId: v.string(),
-    browserProofHash: v.string(),
-    returnTo: v.string(),
-    expiresAt: v.number(),
-  }).index("by_state", ["state"]),
+  pushSubscriptions: defineTable({
+    ownerId: v.string(),
+    endpoint: v.string(),
+    p256dh: v.string(),
+    auth: v.string(),
+  }).index("by_ownerId", ["ownerId"]),
 });

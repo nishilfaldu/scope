@@ -1,68 +1,60 @@
 # Scope
 
-Scope connects Slack accounts through Vercel Connect and lets an operator approve time-limited agent access to selected accounts.
+Scope is one MCP server for all your AI apps. An app signs in to Scope, and Scope runs each tool call with your connected account. The app never gets a provider token. You set a rule per app and per tool (Allow, Ask me, Block), approve "Ask me" calls from your phone, revoke one app at a time, and see every call in Activity.
 
-## How it works
+The target design and the build order are in [docs/roadmap.md](docs/roadmap.md).
 
-- A **connection** stores a Slack workspace/user identity and a Vercel Connect reference. Scope stores no Slack access or refresh tokens. One user can connect multiple Slack accounts.
-- A **slice** belongs to a user and stable agent lineage, has a token and secret, an expiry, a revocation state, and an `auto` or `approve` mint policy.
-- An **agent connection** is an operator-approved relationship with an opaque ID and secret. It identifies the Scope account that later slice requests must address. Revoking it blocks new requests and every slice created through it.
-- Each allowed account has one indexed **slice binding** that selects a connection. A slice can allow several accounts for the same app. Bindings are separate rows; the slice does not store an array of apps or accounts.
-- An agent presents its slice token and secret to `POST /api/credentials`. If several Slack accounts are allowed, it selects a `bindingId` from `GET /api/accounts?app=slack`. Scope requests a fresh rotating Slack user token through Connect. Under `approve`, the operator first approves a one-time mint request for that account.
+## Run locally
 
-**Revocation boundary:** Revoking an agent, revoking a slice, or disconnecting an account blocks future mints. An issued Slack bearer token can remain usable until Slack expires or revokes it. Scope reports the actual provider expiry and rejects standing tokens, bot tokens, unexpected scopes, and mismatched account references.
-
-## Agent approval
-
-An agent first calls `POST /api/agent-connections`, sends only the returned `connectUrl` to the operator, and keeps the private claim handle. The operator verifies their email in Scope and explicitly connects the agent. The agent claims a stable agent ID plus an opaque connection ID and secret, stores them, and acknowledges delivery with `POST /api/agent-connections/ack` using `claimHandle` and `agentConnectionSecret`. A lost claim response can be retried until two minutes after the first claim. New connections cannot request access before acknowledgment; unacknowledged connections are retired at that fixed deadline. The pairing name is requester supplied and is not a verified identity.
-
-For planned rotation, the agent calls the same endpoint with its active connection ID and secret in the connection headers. The link is bound to the original Scope account. Approval stages replacement credentials while the current connection remains active. The agent may retry the claim until it receives those credentials, then proves possession through `POST /api/agent-connections/activate`. Activation atomically swaps the active credential generation and revokes the previous one; slices and slice requests remain attached to the stable agent lineage. Retrying activation is safe.
-
-If an agent loses its credentials, it creates an ordinary connection link. The operator may explicitly replace one of their active agents and preserve that agent's grants. A deliberately revoked connection cannot rotate or be selected for reconnection; it must connect as new and request new grants.
-
-Every later `POST /api/access-requests` includes that connection ID and secret in `x-agent-connection-id` and `x-agent-connection-secret`. The backend derives the owner from the connection before issuing the request link. The operator reviews requested apps and permissions, chooses connected accounts, and explicitly approves or denies. OTP verification only creates a session. If an account is missing, the operator adds it in `/connections` and returns to the request.
-
-For an existing slice with approval policy, `POST /api/credentials` returns a `/requests/token/[token]` link. The decision screen shows the slice, app, and specific connected account. Only the slice owner's Scope user ID can read or decide it. A connected provider login is never used to establish ownership. Approval permits one short-lived credential claim through the existing private agent claim path; the browser never receives provider tokens or slice secrets.
-
-Scope sign-in uses email codes, independently of Slack. Codes are 128-bit random values, expire in 10 minutes, and are single use.
-
-Use a random, task-stable `Idempotency-Key` header (32–128 characters) when creating an access request. The same key and payload return the same pending or approved request and private handle before it is claimed. A different payload with that key returns `IDEMPOTENCY_CONFLICT`. Treat this key as a secret because a caller holding it can recover the claim handle while the request is live. Agent errors include stable `code`, `retryable`, and `nextAction` fields. A denied or expired request needs a fresh task and key. An approved slice can first be claimed for five minutes after approval. The first claim starts a fixed two-minute acknowledgment window; retries do not extend it. A completed acknowledgment can be confirmed later through the ack endpoint or status.
-
-## Connect and account selection
-
-Slack authorization and refresh are managed by Vercel Connect. The signed-in operator connects from `/connections`; accounts are keyed by Scope user and Slack workspace/user ID. Display names never authorize access. Each slice binds one or more selected accounts, with ownership and grant-version checks before credential delivery.
-
-## Slack Connect setup
-
-Create a managed Slack connector in Vercel and link it to the intended project environments. Configure `CONNECT_SLACK_CONNECTOR`, `CONNECT_BRIDGE_SECRET`, `SCOPE_CONVEX_SITE_URL`, and `SCOPE_BOARD_ORIGIN` on the Next.js deployment. The bridge uses the project's Vercel OIDC identity. Configure `CONNECT_BRIDGE_URL` and the same `CONNECT_BRIDGE_SECRET` on Convex, plus `BOARD_ORIGIN` for the frontend. A protected preview can additionally use the temporary `CONNECT_BRIDGE_PROTECTION_COOKIE`.
-
-The bridge resolves a short-lived, one-use Convex ticket before authorizing, minting, or revoking an account. Managed Slack consent requests only the supported user permissions in `convex/connect/contracts.ts`; Slack's implicit `identify` scope is accepted. There is no legacy OAuth fallback.
-
-An agent may reduce its own authority without operator approval. Connection credentials authorize `POST /api/agent-connections/revoke`; slice credentials authorize `POST /api/slices/revoke`. Private request credentials authorize cancellation through `/api/agent-connections/cancel`, `/api/access-requests/cancel`, and `/api/credentials/cancel`. Revocation and cancellation never expand access. Request fields are immutable after a link is created.
-
-A failed Connect request leaves an approved mint request available to retry until its claim window expires. Local revocation and account changes are checked again after the bridge responds.
-
-`GET /` on the Convex HTTP origin provides route discovery and a complete polling, claim, and acknowledgment guide. A running or resumable agent must do the polling; Scope does not wake it. All deadline fields and `serverTime` are Unix milliseconds. `status` remains inspectable after denial or timeout, while a wrong private handle returns 401. `GET /` also lists routes. `GET /api/apps` reports app availability for a slice. Its `connected` flag means at least one account allowed by the slice is still connected; unbound apps report `false`. `GET /api/accounts?app=<app>` returns each available account's display login and opaque `bindingId`. If an account is removed from the slice while a mint is pending, that mint can no longer be claimed.
-
-## Run it
-
-```bash
+```sh
 pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Convex HTTP routes live on the deployment's `.convex.site` origin.
+Open [localhost:3000/requests](http://localhost:3000/requests). Read `AGENTS.md`, the installed Next.js guides and the Convex guidelines before you edit. The personal development backend is `bright-dinosaur-692`.
 
-## Deploy
+## Use from an AI app (MCP)
 
-Set `BOARD_ORIGIN` to the frontend origin and configure the Connect bridge above. Set `RESEND_API_KEY` and verify the sending domain in Resend. OTP mail defaults to `Scope <login@nishilfaldu.site>`; `RESEND_FROM` overrides the sender.
+1. In Scope, open **Accounts** and connect a provider.
+2. Add the MCP server URL from **Apps** (`http://localhost:3000/mcp` locally) to the AI app. For Cursor, add `"scope": { "url": "http://localhost:3000/mcp" }` to `~/.cursor/mcp.json`.
+3. The app opens a WorkOS sign-in. After sign-in, it appears on **Apps**.
 
-`TOKEN_ENCRYPTION_KEY` is a base64-encoded 32-byte AES-256 key used to encrypt recoverable agent and slice claim secrets. Keep the key stable across deployments so outstanding handoffs remain readable. Slack tokens are managed by Connect and are never stored in Scope.
+Read-only tools run without asking. Other tools send an approval request. The call waits about 25 seconds for a decision, then tells the app to call again. "This call only" covers the same arguments for 10 minutes. A timed approval (15, 30 or 60 minutes) covers any arguments for that tool. A blocked tool is hidden from that app. After a deny, the same call is not asked again for 2 minutes.
 
-`GET /api/health` reports whether the Slack bridge is configured, without returning secrets or verifying external availability.
+Tools exist for Slack, GitHub, Notion, Gmail, Google Calendar and Vercel. An app sees only the tools of providers you connected. Every tool forwards to the provider's official MCP server (`lib/tools/upstream.ts`).
 
-## Test
+## End approval, Disconnect and Revoke
 
-```bash
+- **End approval** stops a timed approval. The next call asks again.
+- **Disconnect** asks Vercel Connect to revoke the grant. If that succeeds, Scope deletes the account and ends its approvals. Tokens can stay valid if the provider does not support revocation.
+- **Revoke** on **Apps** stops one app's calls and ends its open requests and approvals. Other apps keep working.
+
+## Security boundary
+
+- Scope never stores provider tokens. Vercel Connect stores and refreshes them.
+- The Connect subject is the person's WorkOS user ID. No client can choose it.
+- App names come from the app and are display text. They never grant access.
+- An MCP app's only authority is its AuthKit access token, whose audience is Scope's `/mcp` resource. Each OAuth client is a separate app with its own rules. App tokens cannot call owner functions, and the web session cannot call gateway functions.
+- For forwarded tools, Scope sends only the arguments in its own schema and decides itself which tools are read-only. It does not trust the upstream server's tool hints.
+- Approval requests show names that Scope looks up from the provider, such as the Slack channel name or Notion page title, not names from the model. Activity stores the app, tool, decision and outcome, never arguments or results.
+
+## Configuration
+
+Next: `NEXT_PUBLIC_CONVEX_URL`, `SCOPE_ORIGIN`, `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_PASSWORD`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `WORKOS_AUTHKIT_DOMAIN` (for example `https://example.authkit.app`), and one connector ID per provider: `SCOPE_SLACK_CONNECTOR`, `SCOPE_GITHUB_CONNECTOR`, `SCOPE_GOOGLE_CONNECTOR`, `SCOPE_NOTION_CONNECTOR`, `SCOPE_VERCEL_CONNECTOR`.
+
+Convex: `WORKOS_CLIENT_ID`, `SCOPE_VAPID_PUBLIC_KEY`, `SCOPE_VAPID_PRIVATE_KEY`, `WORKOS_AUTHKIT_DOMAIN`, `SCOPE_MCP_RESOURCE` (`<SCOPE_ORIGIN>/mcp`).
+
+WorkOS: enable Dynamic Client Registration (and Client ID Metadata Documents for ChatGPT and Claude.ai), and add `<SCOPE_ORIGIN>/mcp` as a Resource Indicator. Without the Resource Indicator, sign-in fails with `invalid_target`.
+
+Vercel Connect: the Notion and Vercel connectors must use the MCP target (`https://mcp.notion.com/mcp` and `https://mcp.vercel.com`). Tokens from a Notion API connector fail on Notion's MCP server. A Vercel connector backed by your own Vercel App reaches only the personal account, because team permissions for Vercel Apps are in private beta. Google's MCP servers need the Cloud project in the Google Workspace Developer Preview Program. Slack's MCP server accepts only internal and Slack Marketplace apps, with MCP access turned on in the Slack app settings and the user token scopes from `shared/connectors.ts`.
+
+To add a provider, add an entry to `shared/connectors.ts` and configure its connector in Vercel Connect. To add a tool, add it to `shared/tools.ts` and its implementation under `lib/tools/`.
+
+## Verification
+
+```sh
 pnpm test
+pnpm lint
+pnpm exec tsc --noEmit
+pnpm build
 ```
