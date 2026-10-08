@@ -44,9 +44,12 @@ export default defineSchema({
       v.literal("denied"),
       v.literal("waiting"),
       v.literal("no-account"),
+      v.literal("revoked"),
     ),
     outcome: v.optional(v.union(v.literal("ok"), v.literal("failed"))),
-  }).index("by_ownerId", ["ownerId"]),
+  })
+    .index("by_ownerId", ["ownerId"])
+    .index("by_clientId_and_tool", ["clientId", "tool"]),
 
   agents: defineTable({
     ownerId: v.string(),

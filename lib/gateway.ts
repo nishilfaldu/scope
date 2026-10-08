@@ -165,17 +165,6 @@ export async function handleMcp(request: Request) {
   if (!token) return unauthorized();
   const client = db();
   client.setAuth(token);
-  let visible: string[];
-  try {
-    visible = await client.query(api.gateway.visibleTools, {});
-  } catch (error) {
-    if (error instanceof ConvexError && error.data === "client-revoked")
-      return Response.json(
-        { error: "This app was revoked in Scope." },
-        { status: 403, headers: corsHeaders },
-      );
-    return unauthorized();
-  }
   let body: unknown;
   try {
     body = await request.json();
@@ -189,9 +178,46 @@ export async function handleMcp(request: Request) {
       { status: 400, headers: corsHeaders },
     );
   }
-  const init = (Array.isArray(body) ? body : [body]).find(
-    (m) => m?.method === "initialize",
-  );
+  const messages = Array.isArray(body) ? body : [body];
+  const toolCall = messages.find((m) => m?.method === "tools/call"),
+    called =
+      typeof toolCall?.params?.name === "string"
+        ? toolFor(toolCall.params.name)
+        : undefined;
+  const refuse = async () => {
+    if (called)
+      await client
+        .mutation(api.gateway.refused, { tool: called.name })
+        .catch(() => undefined);
+  };
+  let visible: string[];
+  try {
+    visible = await client.query(api.gateway.visibleTools, {});
+  } catch (error) {
+    if (!(error instanceof ConvexError && error.data === "client-revoked"))
+      return unauthorized();
+    await refuse();
+    return Response.json(
+      { error: "This app was revoked in Scope." },
+      { status: 403, headers: corsHeaders },
+    );
+  }
+  // Apps can keep a tool list from before the tool was blocked.
+  if (called && !visible.includes(called.name) && !Array.isArray(body)) {
+    await refuse();
+    return Response.json(
+      {
+        jsonrpc: "2.0",
+        id: toolCall.id ?? null,
+        result: text(
+          `The user blocked "${called.title}" for this app in Scope.`,
+          true,
+        ),
+      },
+      { headers: corsHeaders },
+    );
+  }
+  const init = messages.find((m) => m?.method === "initialize");
   const info = init?.params?.clientInfo,
     name = info?.title || info?.name;
   if (init)

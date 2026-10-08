@@ -17,6 +17,7 @@ const decisionLabel: Record<string, string> = {
   denied: "Denied by you",
   waiting: "Asked you",
   "no-account": "No account connected",
+  revoked: "Refused: app revoked",
 };
 
 export function ActivityBoard() {
@@ -39,7 +40,9 @@ export function ActivityBoard() {
             const tool = toolFor(call.tool);
             const failed =
               call.outcome === "failed" ||
-              ["blocked", "denied", "no-account"].includes(call.decision);
+              ["blocked", "denied", "no-account", "revoked"].includes(
+                call.decision,
+              );
             return (
               <div
                 key={call._id}

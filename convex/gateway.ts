@@ -238,6 +238,42 @@ export const authorize = mutation({
   },
 });
 
+// Logs a call that never reached authorize: the app is revoked, or the tool
+// is blocked and was hidden. One row per app, tool and decision per minute.
+export const refused = mutation({
+  args: { tool: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const caller = await mcpCaller(ctx),
+      tool = toolFor(args.tool);
+    const client = await ctx.db
+      .query("clients")
+      .withIndex("by_ownerId_and_clientKey", (q) =>
+        q.eq("ownerId", caller.ownerId).eq("clientKey", caller.clientKey),
+      )
+      .unique();
+    if (!client || !tool) return null;
+    const decision =
+      client.revokedAt !== undefined
+        ? "revoked"
+        : (await ruleFor(ctx, client._id, tool)) === "block"
+          ? "blocked"
+          : undefined;
+    if (!decision) return null;
+    const last = await ctx.db
+      .query("calls")
+      .withIndex("by_clientId_and_tool", (q) =>
+        q.eq("clientId", client._id).eq("tool", tool.name),
+      )
+      .order("desc")
+      .first();
+    if (last?.decision === decision && last._creationTime > Date.now() - 60_000)
+      return null;
+    await log(ctx, client, tool.name, decision);
+    return null;
+  },
+});
+
 export const approvalStatus = query({
   args: { id: v.id("approvals") },
   returns: v.string(),

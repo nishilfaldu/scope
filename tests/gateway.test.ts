@@ -198,6 +198,42 @@ test("revoking one app stops it and ends its approvals", async () => {
   expect((await call(cursor, "slack_list_channels")).decision).toBe("run");
 });
 
+test("refused calls are logged once a minute", async () => {
+  const { owner, cursor, call } = await setup();
+  await call(cursor, "slack_list_channels");
+  const [app] = await owner.query(api.clients.list, {});
+  const decisions = async () =>
+    (
+      await owner.query(api.activity.list, {
+        paginationOpts: { numItems: 20, cursor: null },
+      })
+    ).page.map((c) => c.decision);
+
+  await cursor.mutation(api.gateway.refused, { tool: "slack_post_message" });
+  expect(await decisions()).toEqual(["allowed"]);
+
+  await owner.mutation(api.clients.setRule, {
+    id: app._id,
+    tool: "slack_post_message",
+    rule: "block",
+  });
+  await cursor.mutation(api.gateway.refused, { tool: "slack_post_message" });
+  await cursor.mutation(api.gateway.refused, { tool: "slack_post_message" });
+  expect(await decisions()).toEqual(["blocked", "allowed"]);
+
+  await owner.mutation(api.clients.revoke, { id: app._id });
+  await cursor.mutation(api.gateway.refused, { tool: "slack_list_channels" });
+  vi.advanceTimersByTime(61_000);
+  await cursor.mutation(api.gateway.refused, { tool: "slack_list_channels" });
+  await cursor.mutation(api.gateway.refused, { tool: "unknown_tool" });
+  expect(await decisions()).toEqual([
+    "revoked",
+    "revoked",
+    "blocked",
+    "allowed",
+  ]);
+});
+
 test("a new request asks the gateway to describe it first", async () => {
   const { owner, cursor } = await setup();
   const request = { tool: "slack_post_message", argsHash: "h1" };

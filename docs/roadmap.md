@@ -130,7 +130,8 @@ Built as below, with these differences: `clients` sits beside `agents` until ste
 ### Step 6: providers
 
 - Slack: a few tools of our own (list channels, read history, search, post). Done in step 5.
-- Open questions: should a failed provider call give back a "this call only" approval? Should calls from revoked apps and to blocked tools appear in Activity?
+- Decided: a failed provider call does not give back a "this call only" approval. A failure can come after the action took effect (for example a timeout after Slack posted), so a refund could repeat it without asking.
+- Decided: calls from revoked apps and to blocked tools appear in Activity, at most once a minute per app, tool and decision. A blocked call from a cached tool list gets "blocked in Scope", not "tool not found".
 - Providers with an official MCP server (GitHub, Linear, Notion, if Connect supports them): proxy through `connectAuthProvider` from `@vercel/connect/mcp`, and filter the tool list by rule.
 - Then Google (Gmail, Calendar).
 
