@@ -134,7 +134,7 @@ Built as below, with these differences: `clients` sits beside `agents` until ste
 - Decided: calls from revoked apps and to blocked tools appear in Activity, at most once a minute per app, tool and decision. A blocked call from a cached tool list gets "blocked in Scope", not "tool not found".
 - Done: GitHub, Notion, Vercel and Google through their official MCP servers (`lib/tools/upstream.ts`). Scope lists a curated set of upstream tools with its own input schemas, so only listed arguments reach the provider. Scope sets each tool's read-only flag itself and ignores upstream hints. Results are text only, cut at 100,000 characters.
 - Notion uses a Connect connector with the MCP target (`mcp.notion.com`), not the REST API connector. Its tokens do not work on the REST API, and REST tokens do not work on the MCP server.
-- Verified live: GitHub, Notion and Vercel reads, and an approved Notion write.
+- Verified live: GitHub, Notion and Vercel (team) reads, an approved Notion page, and an approved GitHub issue open and close.
 - Vercel also uses an MCP-target connector (`mcp.vercel.com`). A connector backed by our own Vercel App got personal-only tokens, because team permissions for Vercel Apps are in private beta. The MCP-target connector reaches team projects.
 - Open: Google calls fail until the Cloud project is in the Google Workspace Developer Preview Program.
 
