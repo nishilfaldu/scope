@@ -68,7 +68,7 @@ Convex: `WORKOS_CLIENT_ID`, `SCOPE_VAPID_PUBLIC_KEY`, `SCOPE_VAPID_PRIVATE_KEY`,
 
 WorkOS: enable Dynamic Client Registration (and Client ID Metadata Documents for ChatGPT and Claude.ai), and add `<SCOPE_ORIGIN>/mcp` as a Resource Indicator. Without the Resource Indicator, sign-in fails with `invalid_target`.
 
-Vercel Connect: the Notion connector must use the MCP target (`https://mcp.notion.com/mcp`). Google's MCP servers need the Cloud project in the Google Workspace Developer Preview Program. For Vercel team projects, install the connector's Vercel App on the team.
+Vercel Connect: the Notion and Vercel connectors must use the MCP target (`https://mcp.notion.com/mcp` and `https://mcp.vercel.com`). Tokens from a Notion API connector fail on Notion's MCP server. A Vercel connector backed by your own Vercel App reaches only the personal account, because team permissions for Vercel Apps are in private beta. Google's MCP servers need the Cloud project in the Google Workspace Developer Preview Program.
 
 To add a provider, add an entry to `shared/connectors.ts` and configure its connector in Vercel Connect. To add a tool, add it to `shared/tools.ts` and its implementation under `lib/tools/`.
 
