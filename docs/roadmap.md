@@ -1,6 +1,6 @@
 # Scope roadmap
 
-Scope lets a person give an AI agent a provider token for a limited time. The agent asks. The person approves on the web or on their phone. The agent's command runs with the token.
+Scope lets a person use their accounts from any AI app without giving the app a token. Today an agent asks for a token, the person approves on the web or on their phone, and the agent's command runs with it. From step 4 on, Scope becomes an MCP gateway: apps call tools through Scope, and the person sets rules per app and per tool.
 
 This file records the target design and the build order. Read it before you change the data model, the trust model, or the CLI.
 
@@ -82,19 +82,66 @@ Code, tests, typecheck, lint and build pass. Verified live on dev: agent creatio
 - Do not reject a grant that differs from the request. Do not suggest the list restricts the token.
 - Add GitHub (`x-oauth-scopes` from `GET /user`) and Google (`tokeninfo`) when they get real users.
 
-### Step 4: choose the next bet from usage
+## Direction change: MCP gateway (decided Oct 7, 2026)
 
-- **Credential proxy** for one provider, if users ask for "read-only" or "stop it now". See below.
-- **Expo app**, if most approvals happen on iPhones. It gives action buttons and Face ID.
-- **Device-code pairing**, if pasting the agent token is the main complaint.
+**Why.** Steps 1 to 3 release a raw token to an agent that runs `scope run`. That misses the goal in three ways:
+
+- Hosted apps (ChatGPT, Claude.ai, Grok, Instinct, Muse) have no shell. They reach accounts only through MCP.
+- During an approval the token is unrestricted. The reason is display text, and a released token stays valid after the approval ends.
+- Scope cannot see what the agent does, so it cannot enforce rules per action or log actions.
+
+**What changes.** Scope becomes one MCP endpoint (`/mcp`) for every AI app. Scope keeps the provider tokens, runs each tool call itself, and returns the result. The app never sees a token.
+
+**Prior art.** [Executor](https://executor.sh/) is an open-source MCP gateway with per-tool allow, require-approval and block policies. Scope builds its own so it is free to run and owned by us, and it adds what Executor's docs do not show:
+
+- **Rules per app.** ChatGPT can read Slack, Cursor can write to GitHub, and Grok gets nothing. Each app is its own revocable client.
+- **Phone approval.** "Ask" sends the existing push with Approve and Deny, plus time-boxed approvals.
+- **Per-app revoke and audit.** One click cuts off one app. The log shows which app called which tool, and what was decided.
+
+**Kept from steps 1 to 3.** Convex, WorkOS login, accounts through Vercel Connect, approvals and push, permission display.
+
+### Step 4: gateway spike
+
+Prove the riskiest part first: can each app's OAuth flow connect to Scope?
+
+- `/mcp` in Next (streamable HTTP). Tool calls need Connect tokens, so they run on Vercel.
+- WorkOS AuthKit is the OAuth server for MCP clients, with dynamic client registration. Next validates the access token and maps it to the owner and the client.
+- One tool: Slack `list_channels`, through `tokenFor`.
+- Connect from Claude.ai, ChatGPT, Cursor, Claude Code and Codex. Record which apps work.
+
+### Step 5: clients, rules and approvals
+
+- `agents` becomes `clients`: one row per MCP client registration, revocable.
+- A rule per client and tool: allow, ask, or block. Defaults come from tool hints (read-only allowed, writes ask).
+- "Ask" creates an approval with the tool name and an argument summary, then sends the push. The call waits about 30 seconds, then returns "waiting for approval, call again".
+- Audit log: client, tool, decision, time, error. Never store results or full arguments.
+- New client-facing Convex functions. Owner functions keep requiring the web app's `client_id`.
+
+### Step 6: providers
+
+- Slack: a few tools of our own (list channels, read history, search, post).
+- Providers with an official MCP server (GitHub, Linear, Notion, if Connect supports them): proxy through `connectAuthProvider` from `@vercel/connect/mcp`, and filter the tool list by rule.
+- Then Google (Gmail, Calendar).
+
+### Step 7: retire raw-token release
+
+Remove `scope run` token release, or keep it only for the owner's own scripts behind a per-account switch. Decide after step 5.
 
 ### Not now
 
-Ed25519 agent keys, Notion and Vercel permission display, a localhost proxy, Slack DM approvals.
+Ed25519 agent keys, Notion and Vercel permission display, a localhost proxy, Slack DM approvals, an Expo app, device-code pairing, code mode (one `execute` tool, as Executor does).
+
+## Parked ideas
+
+### Agents prove who they are to third parties (parked Oct 7, 2026)
+
+An agent shows a third party (a website, an API, another agent) who it is, who it acts for, and what it may do. The third party verifies this without calling the person. This is the original "agent passport" premise. It is a different product from the gateway: identity and delegation, not integrations. Possible shape: signed agent keys (see Ed25519 below) plus short-lived signed delegation claims. Revisit after the gateway works.
 
 ## Notes for later decisions
 
 ### Credential proxy
+
+Superseded by the MCP gateway, which gets the same gains without the custom base URL. Kept for reference.
 
 Commands still run on the person's machine. Only provider API calls go through Scope. The child gets a placeholder token and a base URL that points at Scope. The proxy checks the approval and an allowlist of methods and paths, adds the real token, and forwards the call.
 
