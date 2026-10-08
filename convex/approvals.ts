@@ -15,18 +15,67 @@ import {
 } from "./_generated/server";
 import { agentFor, ownerId } from "./lib/identity";
 
-const decisionWindowMs = 30 * 60_000;
+const decisionWindowMs = 30 * 60_000,
+  onceWindowMs = 10 * 60_000;
+
+export async function requesterName(ctx: QueryCtx, row: Doc<"approvals">) {
+  if (row.clientId)
+    return (await ctx.db.get("clients", row.clientId))?.name ?? "Removed app";
+  if (row.agentId)
+    return (await ctx.db.get("agents", row.agentId))?.name ?? "Deleted agent";
+  return "Unknown";
+}
 
 async function view(ctx: QueryCtx, row: Doc<"approvals">) {
-  const [agent, account] = await Promise.all([
-    ctx.db.get("agents", row.agentId),
+  const [agentName, account] = await Promise.all([
+    requesterName(ctx, row),
     row.accountId ? ctx.db.get("accounts", row.accountId) : null,
   ]);
-  return {
-    ...row,
-    agentName: agent?.name ?? "Deleted agent",
-    accountLabel: account?.label,
-  };
+  return { ...row, agentName, accountLabel: account?.label };
+}
+
+// Creates a pending request, schedules its expiry and notifies every device.
+export async function openPending(
+  ctx: MutationCtx,
+  fields: Pick<
+    Doc<"approvals">,
+    | "ownerId"
+    | "agentId"
+    | "clientId"
+    | "tool"
+    | "argsHash"
+    | "providerId"
+    | "reason"
+  >,
+) {
+  const expiresAt = Date.now() + decisionWindowMs;
+  const id = await ctx.db.insert("approvals", {
+    ...fields,
+    status: "pending",
+    expiresAt,
+    collections: 0,
+  });
+  await ctx.scheduler.runAt(expiresAt, internal.approvals.expire, { id });
+  const subscriptions = await ctx.db
+    .query("pushSubscriptions")
+    .withIndex("by_ownerId", (q) => q.eq("ownerId", fields.ownerId))
+    .take(10);
+  for (const sub of subscriptions)
+    await ctx.scheduler.runAfter(0, internal.notificationDelivery.deliver, {
+      approvalId: id,
+      subscriptionId: sub._id,
+    });
+  return id;
+}
+
+// Counts one use of an approval. A once approval ends after its use.
+export async function spendApproval(ctx: MutationCtx, row: Doc<"approvals">) {
+  const now = Date.now();
+  await ctx.db.patch("approvals", row._id, {
+    collections: row.collections + 1,
+    lastCollectedAt: now,
+    ...(row.once && { status: "ended" as const, endedAt: now }),
+  });
 }
 
 async function owned(ctx: QueryCtx, id: Id<"approvals">) {
@@ -57,6 +106,20 @@ export async function endForAgent(ctx: MutationCtx, agentId: Id<"agents">) {
         .query("approvals")
         .withIndex("by_agentId_and_status_and_providerId", (q) =>
           q.eq("agentId", agentId).eq("status", status),
+        )
+        .take(100),
+      "ended",
+    );
+}
+
+export async function endForClient(ctx: MutationCtx, clientId: Id<"clients">) {
+  for (const status of ["pending", "approved"] as const)
+    await close(
+      ctx,
+      await ctx.db
+        .query("approvals")
+        .withIndex("by_clientId_and_status_and_tool", (q) =>
+          q.eq("clientId", clientId).eq("status", status),
         )
         .take(100),
       "ended",
@@ -111,27 +174,13 @@ export const request = mutation({
       if (open.expiresAt > now) return { id: open._id, status };
       await close(ctx, [open], "expired");
     }
-    const expiresAt = now + decisionWindowMs;
-    const id = await ctx.db.insert("approvals", {
+    const id = await openPending(ctx, {
       ownerId: agent.ownerId,
       agentId: agent._id,
       providerId: args.providerId,
       reason,
-      status: "pending",
-      expiresAt,
-      collections: 0,
     });
     await ctx.db.patch("agents", agent._id, { lastUsedAt: now });
-    await ctx.scheduler.runAt(expiresAt, internal.approvals.expire, { id });
-    const subscriptions = await ctx.db
-      .query("pushSubscriptions")
-      .withIndex("by_ownerId", (q) => q.eq("ownerId", agent.ownerId))
-      .take(10);
-    for (const sub of subscriptions)
-      await ctx.scheduler.runAfter(0, internal.notificationDelivery.deliver, {
-        approvalId: id,
-        subscriptionId: sub._id,
-      });
     return { id, status: "pending" };
   },
 });
@@ -172,10 +221,7 @@ export const claim = mutation({
     const account = await ctx.db.get("accounts", row.accountId);
     if (!account || account.ownerId !== row.ownerId)
       throw new ConvexError("authority-invalid");
-    await ctx.db.patch("approvals", row._id, {
-      collections: row.collections + 1,
-      lastCollectedAt: now,
-    });
+    await spendApproval(ctx, row);
     await ctx.db.patch("agents", agent._id, { lastUsedAt: now });
     return {
       ownerId: row.ownerId,
@@ -193,7 +239,11 @@ const approvalView = v.object({
   _id: v.id("approvals"),
   _creationTime: v.number(),
   ownerId: v.string(),
-  agentId: v.id("agents"),
+  agentId: v.optional(v.id("agents")),
+  clientId: v.optional(v.id("clients")),
+  tool: v.optional(v.string()),
+  once: v.optional(v.boolean()),
+  argsHash: v.optional(v.string()),
   providerId: v.string(),
   accountId: v.optional(v.id("accounts")),
   reason: v.string(),
@@ -294,7 +344,8 @@ export const approve = mutation({
     id: v.id("approvals"),
     // Without it, the owner must have exactly one account for the provider.
     accountId: v.optional(v.id("accounts")),
-    minutes: v.union(v.literal(15), v.literal(30), v.literal(60)),
+    // 0 approves once: one call or one token collection.
+    minutes: v.union(v.literal(0), v.literal(15), v.literal(30), v.literal(60)),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -311,12 +362,14 @@ export const approve = mutation({
       account.providerId !== row.providerId
     )
       throw new ConvexError("authority-invalid");
-    const expiresAt = now + args.minutes * 60_000;
+    const expiresAt =
+      now + (args.minutes ? args.minutes * 60_000 : onceWindowMs);
     await ctx.db.patch("approvals", row._id, {
       status: "approved",
       accountId: account._id,
       decidedAt: now,
       expiresAt,
+      once: args.minutes === 0,
     });
     await ctx.scheduler.runAt(expiresAt, internal.approvals.expire, {
       id: row._id,

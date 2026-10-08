@@ -10,16 +10,15 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+const web = {
+  issuer: "https://api.workos.com/user_management/client_web",
+  client_id: "client_web",
+};
+
 async function setup() {
   const t = convexTest(schema, modules);
-  const owner = t.withIdentity({
-    subject: "user_owner",
-    client_id: "client_web",
-  });
-  const stranger = t.withIdentity({
-    subject: "user_stranger",
-    client_id: "client_web",
-  });
+  const owner = t.withIdentity({ ...web, subject: "user_owner" });
+  const stranger = t.withIdentity({ ...web, subject: "user_stranger" });
   const { token } = await owner.mutation(api.agents.create, {
     name: "Research assistant",
   });
@@ -43,7 +42,20 @@ test("owner calls require the web app's client id", async () => {
   const t = convexTest(schema, modules);
   await expect(
     t
-      .withIdentity({ subject: "user_owner", client_id: "client_other" })
+      .withIdentity({
+        ...web,
+        subject: "user_owner",
+        client_id: "client_other",
+      })
+      .query(api.agents.list, {}),
+  ).rejects.toThrow("authority-invalid");
+  await expect(
+    t
+      .withIdentity({
+        issuer: "https://auth.test",
+        subject: "user_owner",
+        client_id: "client_web",
+      })
       .query(api.agents.list, {}),
   ).rejects.toThrow("authority-invalid");
 });
@@ -196,6 +208,8 @@ test("notifications describe the request and offer quick approval for a single a
     title: "Research assistant wants Slack",
     body: "Summarize public channels\nAcme workspace",
     quickApprove: true,
+    approveLabel: "Approve 30 min",
+    approveMinutes: 30,
   });
   await owner.mutation(api.accounts.save, {
     providerId: "slack",

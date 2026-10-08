@@ -1,8 +1,8 @@
 # Scope
 
-Scope lets a person give an AI agent a provider token for a limited time. The agent asks through the CLI. The person approves in the web app and picks the account and the duration. The agent's command then runs with the token.
+Scope is one MCP server for all your AI apps. An app signs in to Scope, and Scope runs each tool call with your connected account. The app never gets a provider token. You set a rule per app and per tool (Allow, Ask me, Block), approve "Ask me" calls from your phone, revoke one app at a time, and see every call in Activity.
 
-**A token carries every permission granted when the account was connected. The reason does not restrict it.** Review the provider consent screen before you connect.
+The older CLI flow still works: an agent asks for a provider token for a limited time, and its command runs with the token. **A released token carries every permission granted when the account was connected. The reason does not restrict it.**
 
 The target design and the build order are in [docs/roadmap.md](docs/roadmap.md).
 
@@ -14,6 +14,14 @@ pnpm dev
 ```
 
 Open [localhost:3000/requests](http://localhost:3000/requests). Read `AGENTS.md`, the installed Next.js guides and the Convex guidelines before you edit. The personal development backend is `bright-dinosaur-692`.
+
+## Use from an AI app (MCP)
+
+1. In Scope, open **Accounts** and connect a provider.
+2. Add the MCP server URL from **Apps** (`http://localhost:3000/mcp` locally) to the AI app. For Cursor, add `"scope": { "url": "http://localhost:3000/mcp" }` to `~/.cursor/mcp.json`.
+3. The app opens a WorkOS sign-in. After sign-in, it appears on **Apps**.
+
+Read-only tools run without asking. Other tools send an approval request. The call waits about 25 seconds for a decision, then tells the app to call again. "This call only" covers the same arguments for 10 minutes. A timed approval (15, 30 or 60 minutes) covers any arguments for that tool. A blocked tool is hidden from that app. After a deny, the same call is not asked again for 2 minutes.
 
 ## Use the CLI
 
@@ -45,15 +53,19 @@ The command gets the token in one environment variable plus a small base environ
 - The Connect subject is the person's WorkOS user ID. No client can choose it.
 - Convex stores only a SHA-256 hash of each agent token. The token is the agent's only authority.
 - Agent names and reasons are display text. They never grant access.
+- An MCP app's only authority is its AuthKit access token, whose audience is Scope's `/mcp` resource. Each OAuth client is a separate app with its own rules. App tokens cannot call owner functions, and the web session cannot call gateway functions.
+- Approval requests show names that Scope looks up from the provider, such as the Slack channel name, not names from the model. Activity stores the app, tool, decision and outcome, never arguments or results.
 - **The CLI is not a sandbox.** A program with a token can print, store or send it.
 
 ## Configuration
 
-Next: `NEXT_PUBLIC_CONVEX_URL`, `SCOPE_ORIGIN`, `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_PASSWORD`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, and one connector ID per provider: `SCOPE_SLACK_CONNECTOR`, `SCOPE_GITHUB_CONNECTOR`, `SCOPE_GOOGLE_CONNECTOR`, `SCOPE_NOTION_CONNECTOR`, `SCOPE_VERCEL_CONNECTOR`.
+Next: `NEXT_PUBLIC_CONVEX_URL`, `SCOPE_ORIGIN`, `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_PASSWORD`, `NEXT_PUBLIC_WORKOS_REDIRECT_URI`, `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `WORKOS_AUTHKIT_DOMAIN` (for example `https://example.authkit.app`), and one connector ID per provider: `SCOPE_SLACK_CONNECTOR`, `SCOPE_GITHUB_CONNECTOR`, `SCOPE_GOOGLE_CONNECTOR`, `SCOPE_NOTION_CONNECTOR`, `SCOPE_VERCEL_CONNECTOR`.
 
-Convex: `WORKOS_CLIENT_ID`, `SCOPE_VAPID_PUBLIC_KEY`, `SCOPE_VAPID_PRIVATE_KEY`.
+Convex: `WORKOS_CLIENT_ID`, `SCOPE_VAPID_PUBLIC_KEY`, `SCOPE_VAPID_PRIVATE_KEY`, `WORKOS_AUTHKIT_DOMAIN`, `SCOPE_MCP_RESOURCE` (`<SCOPE_ORIGIN>/mcp`).
 
-To add a provider, add an entry to `shared/connectors.ts` and configure its connector in Vercel Connect.
+WorkOS: enable Dynamic Client Registration (and Client ID Metadata Documents for ChatGPT and Claude.ai), and add `<SCOPE_ORIGIN>/mcp` as a Resource Indicator. Without the Resource Indicator, sign-in fails with `invalid_target`.
+
+To add a provider, add an entry to `shared/connectors.ts` and configure its connector in Vercel Connect. To add a tool, add it to `shared/tools.ts` and its implementation under `lib/tools/`.
 
 ## Verification
 

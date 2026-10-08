@@ -10,6 +10,7 @@ export default authkitProxy({
       "/signin",
       "/callback",
       "/api/agent/:path*",
+      "/mcp",
     ],
   },
 });

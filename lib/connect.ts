@@ -81,8 +81,11 @@ export async function authorizationUrl(
   }
 }
 
-// Each reader asks the provider which scopes the token carries.
-const scopeReaders: Record<string, (token: string) => Promise<string[]>> = {
+// Each reader asks the provider which scopes the token carries, and its name.
+const grantReaders: Record<
+  string,
+  (token: string) => Promise<{ scopes: string[]; label?: string }>
+> = {
   async slack(token) {
     const response = await fetch("https://slack.com/api/auth.test", {
       method: "POST",
@@ -94,10 +97,13 @@ const scopeReaders: Record<string, (token: string) => Promise<string[]>> = {
     const header = response.headers.get("x-oauth-scopes");
     if (!response.ok || body.ok !== true || header === null)
       throw new Error("Slack did not report scopes");
-    return header
-      .split(",")
-      .map((scope) => scope.trim())
-      .filter(Boolean);
+    return {
+      scopes: header
+        .split(",")
+        .map((scope) => scope.trim())
+        .filter(Boolean),
+      label: typeof body.team === "string" ? body.team : undefined,
+    };
   },
 };
 
@@ -110,15 +116,17 @@ export async function readGrant(ownerId: string, providerId: string) {
       { forceRefresh: true },
     );
     // The connection still succeeds when the provider reports nothing.
-    const grantedScopes = await scopeReaders[providerId]?.(grant.token).catch(
+    const read = await grantReaders[providerId]?.(grant.token).catch(
       () => undefined,
     );
     return {
       connectorId,
       installationId: grant.installationId,
       label:
-        grant.name?.trim() || `${connectorFor(providerId)!.provider} account`,
-      ...(grantedScopes && { grantedScopes }),
+        grant.name?.trim() ||
+        read?.label?.trim().slice(0, 200) ||
+        `${connectorFor(providerId)!.provider} account`,
+      ...(read && { grantedScopes: read.scopes }),
     };
   } catch (error) {
     throw failure(error);

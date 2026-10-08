@@ -9,8 +9,11 @@
  */
 
 import type * as accounts from "../accounts.js";
+import type * as activity from "../activity.js";
 import type * as agents from "../agents.js";
 import type * as approvals from "../approvals.js";
+import type * as clients from "../clients.js";
+import type * as gateway from "../gateway.js";
 import type * as lib_identity from "../lib/identity.js";
 import type * as lib_push from "../lib/push.js";
 import type * as notificationDelivery from "../notificationDelivery.js";
@@ -24,8 +27,11 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   accounts: typeof accounts;
+  activity: typeof activity;
   agents: typeof agents;
   approvals: typeof approvals;
+  clients: typeof clients;
+  gateway: typeof gateway;
   "lib/identity": typeof lib_identity;
   "lib/push": typeof lib_push;
   notificationDelivery: typeof notificationDelivery;

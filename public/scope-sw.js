@@ -29,10 +29,18 @@ self.addEventListener("push", (event) => {
     /^[a-zA-Z0-9_-]{1,100}$/.test(data.approvalId)
       ? data.approvalId
       : undefined;
+  const minutes = data.approveMinutes === 0 ? 0 : 30;
   const actions = approvalId
     ? [
         ...(data.quickApprove === true
-          ? [{ action: "approve", title: "Approve 30 min" }]
+          ? [
+              {
+                action: "approve",
+                title:
+                  text(data.approveLabel, 40) ??
+                  (minutes ? "Approve 30 min" : "Approve once"),
+              },
+            ]
           : []),
         { action: "deny", title: "Deny" },
       ]
@@ -47,6 +55,7 @@ self.addEventListener("push", (event) => {
         actions,
         data: {
           approvalId,
+          minutes,
           url: approvalId
             ? `/requests?request=${encodeURIComponent(approvalId)}`
             : "/requests",
@@ -56,18 +65,22 @@ self.addEventListener("push", (event) => {
   );
 });
 
-async function decide(approvalId, decision, tag) {
+async function decide(approvalId, decision, minutes, tag) {
   try {
     const response = await fetch("/api/approvals/decide", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: approvalId, decision }),
+      body: JSON.stringify({ id: approvalId, decision, minutes }),
       // An expired session redirects to sign-in. Treat that as a failure.
       redirect: "manual",
     });
     if (!response.ok) return false;
     await self.registration.showNotification(
-      decision === "approve" ? "Approved for 30 minutes" : "Request denied",
+      decision === "deny"
+        ? "Request denied"
+        : minutes
+          ? "Approved for 30 minutes"
+          : "Approved once",
       { tag, silent: true },
     );
     return true;
@@ -84,12 +97,12 @@ async function openPage(url) {
 }
 
 self.addEventListener("notificationclick", (event) => {
-  const { approvalId, url } = event.notification.data ?? {};
+  const { approvalId, minutes, url } = event.notification.data ?? {};
   const tag = event.notification.tag;
   event.notification.close();
   if (approvalId && (event.action === "approve" || event.action === "deny")) {
     event.waitUntil(
-      decide(approvalId, event.action, tag).then(
+      decide(approvalId, event.action, minutes === 0 ? 0 : 30, tag).then(
         (done) => done || openPage(url),
       ),
     );

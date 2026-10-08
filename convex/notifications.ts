@@ -7,7 +7,8 @@ import {
 } from "./_generated/server";
 import { providerName } from "../shared/connectors";
 import { permissionSummary } from "../shared/permissions";
-import { onlyAccount } from "./approvals";
+import { toolFor } from "../shared/tools";
+import { onlyAccount, requesterName } from "./approvals";
 import { validatePushEndpoint } from "./lib/push";
 import { ownerId as owner } from "./lib/identity";
 
@@ -89,6 +90,8 @@ export const deliverySubscription = internalQuery({
         title: v.string(),
         body: v.string(),
         quickApprove: v.boolean(),
+        approveLabel: v.string(),
+        approveMinutes: v.union(v.literal(0), v.literal(30)),
       }),
     }),
   ),
@@ -104,14 +107,16 @@ export const deliverySubscription = internalQuery({
       sub.ownerId !== approval.ownerId
     )
       return null;
-    const [agent, account] = await Promise.all([
-      ctx.db.get("agents", approval.agentId),
+    const [name, account] = await Promise.all([
+      requesterName(ctx, approval),
       onlyAccount(ctx, approval.ownerId, approval.providerId),
     ]);
     const reason =
       approval.reason.length > 180
         ? `${approval.reason.slice(0, 179)}…`
         : approval.reason;
+    const tool = approval.tool ? toolFor(approval.tool) : undefined;
+    const provider = providerName(approval.providerId);
     return {
       ownerId: sub.ownerId,
       endpoint: sub.endpoint,
@@ -119,12 +124,16 @@ export const deliverySubscription = internalQuery({
       auth: sub.auth,
       expiresAt: approval.expiresAt,
       message: {
-        title: `${agent?.name ?? "An agent"} wants ${providerName(approval.providerId)}`,
+        title: tool
+          ? `${name} wants ${provider}: ${tool.title}`
+          : `${name} wants ${provider}`,
         body: account
           ? [
               reason,
               account.label,
-              account.permissions?.scopes.length &&
+              // An app request runs one tool, so the token's full scope list does not apply.
+              !tool &&
+                account.permissions?.scopes.length &&
                 permissionSummary(
                   approval.providerId,
                   account.permissions.scopes,
@@ -134,6 +143,8 @@ export const deliverySubscription = internalQuery({
               .join("\n")
           : reason,
         quickApprove: !!account,
+        approveLabel: tool ? "Approve once" : "Approve 30 min",
+        approveMinutes: tool ? (0 as const) : (30 as const),
       },
     };
   },

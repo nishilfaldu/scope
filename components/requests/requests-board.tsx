@@ -21,6 +21,7 @@ import { useNow } from "@/hooks/use-now";
 import { errorMessage, formatTime, initials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { providerName } from "@/shared/connectors";
+import { toolFor } from "@/shared/tools";
 
 type Approval = FunctionReturnType<
   typeof api.approvals.open
@@ -138,6 +139,8 @@ function Row({
           <AppMark providerId={approval.providerId} />
           <span>
             {providerName(approval.providerId)}
+            {approval.tool &&
+              `: ${toolFor(approval.tool)?.title ?? approval.tool}`}
             {approval.accountLabel && (
               <span className="text-scope-quiet">
                 {" "}
@@ -167,7 +170,13 @@ function PendingRequest({
   const [accountId, setAccountId] = useState<Id<"accounts"> | undefined>(
     accounts[0]?._id,
   );
-  const [minutes, setMinutes] = useState<15 | 30 | 60>(30);
+  // An app request is for one tool call, so it defaults to approving once.
+  const durations = request.tool
+    ? ([0, 15, 30, 60] as const)
+    : ([15, 30, 60] as const);
+  const [minutes, setMinutes] = useState<0 | 15 | 30 | 60>(
+    request.tool ? 0 : 30,
+  );
   const [busy, setBusy] = useState<"approve" | "deny">();
   const now = useNow(),
     left = Math.ceil((request.expiresAt - now) / 60_000);
@@ -219,7 +228,7 @@ function PendingRequest({
           </label>
         )
       )}
-      {selectedAccount && (
+      {selectedAccount && !request.tool && (
         <PermissionList
           account={selectedAccount}
           heading="If you approve, the agent gets"
@@ -227,10 +236,12 @@ function PendingRequest({
       )}
       <fieldset disabled={!!busy} className="pt-1">
         <legend className="mb-2 text-xs text-scope-quiet">
-          Allow token collection without asking again for
+          {request.tool
+            ? "Approve this call only, or let this app use this tool without asking for"
+            : "Allow token collection without asking again for"}
         </legend>
         <div className="flex flex-wrap gap-2">
-          {([15, 30, 60] as const).map((value) => (
+          {durations.map((value) => (
             <Button
               key={value}
               variant={minutes === value ? "secondary" : "outline"}
@@ -238,7 +249,11 @@ function PendingRequest({
               aria-pressed={minutes === value}
               onClick={() => setMinutes(value)}
             >
-              {value === 60 ? "1 hour" : `${value} min`}
+              {value === 0
+                ? "This call only"
+                : value === 60
+                  ? "1 hour"
+                  : `${value} min`}
             </Button>
           ))}
           <span className="grow" />
@@ -278,7 +293,9 @@ function ActiveApproval({
     <Row approval={approval} focused={focused}>
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-xs text-scope-quiet">
-          Approved until {formatTime(approval.expiresAt)}
+          {approval.once
+            ? `Approved for one call, until ${formatTime(approval.expiresAt)}`
+            : `Approved until ${formatTime(approval.expiresAt)}`}
           {approval.lastCollectedAt !== undefined &&
             ` · token collected ${approval.collections}×, last at ${formatTime(approval.lastCollectedAt)}`}
         </p>

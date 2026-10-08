@@ -11,6 +11,15 @@ export const connectors: readonly Connector[] = [
     providerId: "slack",
     provider: "Slack",
     connectorEnv: "SCOPE_SLACK_CONNECTOR",
+    // What the gateway's Slack tools need.
+    scopes: [
+      "channels:read",
+      "groups:read",
+      "channels:history",
+      "groups:history",
+      "search:read",
+      "chat:write",
+    ],
   },
   {
     providerId: "github",

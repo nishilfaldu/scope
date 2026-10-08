@@ -9,7 +9,45 @@ export const approvalStatus = v.union(
   v.literal("expired"),
 );
 
+export const rule = v.union(
+  v.literal("allow"),
+  v.literal("ask"),
+  v.literal("block"),
+);
+
 export default defineSchema({
+  // One row per MCP app. Created on the app's first request.
+  clients: defineTable({
+    ownerId: v.string(),
+    clientKey: v.string(),
+    name: v.string(),
+    revokedAt: v.optional(v.number()),
+    lastUsedAt: v.optional(v.number()),
+  }).index("by_ownerId_and_clientKey", ["ownerId", "clientKey"]),
+
+  // Only rules that differ from the tool's default are stored.
+  rules: defineTable({
+    clientId: v.id("clients"),
+    tool: v.string(),
+    rule,
+  }).index("by_clientId_and_tool", ["clientId", "tool"]),
+
+  // Audit log. Never stores tool arguments or results.
+  calls: defineTable({
+    ownerId: v.string(),
+    clientId: v.id("clients"),
+    tool: v.string(),
+    decision: v.union(
+      v.literal("allowed"),
+      v.literal("approved"),
+      v.literal("blocked"),
+      v.literal("denied"),
+      v.literal("waiting"),
+      v.literal("no-account"),
+    ),
+    outcome: v.optional(v.union(v.literal("ok"), v.literal("failed"))),
+  }).index("by_ownerId", ["ownerId"]),
+
   agents: defineTable({
     ownerId: v.string(),
     name: v.string(),
@@ -31,9 +69,15 @@ export default defineSchema({
     ),
   }).index("by_ownerId_and_providerId", ["ownerId", "providerId"]),
 
+  // A CLI agent asks for a token (agentId), or an MCP app asks to run a tool (clientId and tool).
   approvals: defineTable({
     ownerId: v.string(),
-    agentId: v.id("agents"),
+    agentId: v.optional(v.id("agents")),
+    clientId: v.optional(v.id("clients")),
+    tool: v.optional(v.string()),
+    // Approve once: valid for one call with exactly these arguments.
+    once: v.optional(v.boolean()),
+    argsHash: v.optional(v.string()),
     providerId: v.string(),
     accountId: v.optional(v.id("accounts")),
     reason: v.string(),
@@ -54,7 +98,8 @@ export default defineSchema({
       "status",
       "providerId",
     ])
-    .index("by_accountId_and_status", ["accountId", "status"]),
+    .index("by_accountId_and_status", ["accountId", "status"])
+    .index("by_clientId_and_status_and_tool", ["clientId", "status", "tool"]),
 
   pushSubscriptions: defineTable({
     ownerId: v.string(),

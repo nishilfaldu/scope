@@ -8,7 +8,7 @@ This file records the target design and the build order. Read it before you chan
 
 - Keep the simplest version that still delivers the premise.
 - Convex owns all state and all authorization checks.
-- Next runs only the work that calls Vercel Connect, plus the notification action route. The Connect SDK needs a Vercel OIDC token, so this work must run on Vercel.
+- Next runs only the work that calls Vercel Connect (including `/mcp` tool calls), the OAuth metadata routes, and the notification action route. The Connect SDK needs a Vercel OIDC token, so this work must run on Vercel.
 - Scope never stores provider tokens. Vercel Connect stores them.
 - Agent names and reasons are display text. They never grant access.
 
@@ -28,6 +28,11 @@ This file records the target design and the build order. Read it before you chan
 | `accounts`          | owner, provider, connector, installation (optional), label                                                |
 | `approvals`         | owner, agent, provider, account (set on approval), reason, status, `expiresAt`, collection count and time |
 | `pushSubscriptions` | owner, endpoint, keys                                                                                     |
+| `clients`           | owner, OAuth client ID, name, revoked at, last used                                                       |
+| `rules`             | client, tool, rule (only overrides of the default)                                                        |
+| `calls`             | owner, client, tool, decision, outcome                                                                    |
+
+- An app approval has a client and a tool instead of an agent. "Once" approvals also store a SHA-256 hash of the canonical arguments.
 
 - An account row exists only after consent succeeds. There is no setup state.
 - One account per provider per person, for now. Connecting again replaces the account.
@@ -48,7 +53,8 @@ This file records the target design and the build order. Read it before you chan
 
 - Next: `POST /api/accounts/connect`, `GET /api/accounts/callback`, `POST /api/accounts/disconnect`, `POST /api/agent/[operation]` (`whoami`, `request`, `status`, `token`).
 - Next also has `POST /api/approvals/decide` for notification actions. It does not call Connect. It exists because the service worker has only the session cookie, not a Convex token.
-- Pages: `/requests`, `/accounts`, `/agents`, `/notifications`.
+- MCP: `POST /mcp` (stateless streamable HTTP), `GET /.well-known/oauth-protected-resource` (also at `/mcp`), `GET /.well-known/oauth-authorization-server` (proxies AuthKit).
+- Pages: `/requests`, `/apps`, `/activity`, `/accounts`, `/agents`, `/notifications`.
 
 ## Build order
 
@@ -74,7 +80,7 @@ Code, tests, typecheck, lint and build pass. Verified live on dev: agent creatio
 
 ### Step 3: permissions (done for Slack; verified live)
 
-- Add an optional scope reader per provider (`scopeReaders` in `lib/connect.ts`). Start with Slack: read the `x-oauth-scopes` header from `auth.test`.
+- Add an optional scope reader per provider (`grantReaders` in `lib/connect.ts`). Start with Slack: read the `x-oauth-scopes` header from `auth.test`. The reader also returns the workspace name as the account label when Connect has none.
 - Call it once in the consent callback. Store `permissions: { scopes, checkedAt }` on the account for display only. If the reader fails, connect anyway and store nothing.
 - Map the Slack scopes Scope requests to plain language. Show raw names for unknown scopes.
 - Show the list on the approval page, in the notification, and on the Accounts page as "as of {date}".
@@ -100,7 +106,9 @@ Code, tests, typecheck, lint and build pass. Verified live on dev: agent creatio
 
 **Kept from steps 1 to 3.** Convex, WorkOS login, accounts through Vercel Connect, approvals and push, permission display.
 
-### Step 4: gateway spike
+### Step 4: gateway spike (done for Cursor; verified live on dev)
+
+Verified from Cursor: AuthKit sign-in through Dynamic Client Registration, all four Slack tools listed, reads allowed, a post approved from a notification and then sent. Not yet tested: Claude.ai, ChatGPT, Claude Code and Codex. Hosted apps need a public HTTPS URL and Client ID Metadata Documents.
 
 Prove the riskiest part first: can each app's OAuth flow connect to Scope?
 
@@ -109,7 +117,9 @@ Prove the riskiest part first: can each app's OAuth flow connect to Scope?
 - One tool: Slack `list_channels`, through `tokenFor`.
 - Connect from Claude.ai, ChatGPT, Cursor, Claude Code and Codex. Record which apps work.
 
-### Step 5: clients, rules and approvals
+### Step 5: clients, rules and approvals (done; verified live on dev)
+
+Built as below, with these differences: `clients` sits beside `agents` until step 7; the call waits 25 seconds; approvals can be "this call only" (same arguments, 10 minutes) or timed; a blocked tool is hidden from the app; Convex verifies the MCP token as a second auth provider. Verified live: allow, ask with approval, block, revoke and restore, and the Activity log.
 
 - `agents` becomes `clients`: one row per MCP client registration, revocable.
 - A rule per client and tool: allow, ask, or block. Defaults come from tool hints (read-only allowed, writes ask).
@@ -119,7 +129,8 @@ Prove the riskiest part first: can each app's OAuth flow connect to Scope?
 
 ### Step 6: providers
 
-- Slack: a few tools of our own (list channels, read history, search, post).
+- Slack: a few tools of our own (list channels, read history, search, post). Done in step 5.
+- Open questions: should a failed provider call give back a "this call only" approval? Should calls from revoked apps and to blocked tools appear in Activity?
 - Providers with an official MCP server (GitHub, Linear, Notion, if Connect supports them): proxy through `connectAuthProvider` from `@vercel/connect/mcp`, and filter the tool list by rule.
 - Then Google (Gmail, Calendar).
 
