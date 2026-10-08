@@ -23,6 +23,8 @@ Open [localhost:3000/requests](http://localhost:3000/requests). Read `AGENTS.md`
 
 Read-only tools run without asking. Other tools send an approval request. The call waits about 25 seconds for a decision, then tells the app to call again. "This call only" covers the same arguments for 10 minutes. A timed approval (15, 30 or 60 minutes) covers any arguments for that tool. A blocked tool is hidden from that app. After a deny, the same call is not asked again for 2 minutes.
 
+Tools exist for Slack, GitHub, Notion, Gmail, Google Calendar and Vercel. An app sees only the tools of providers you connected. Slack tools are Scope's own. The others forward to the provider's official MCP server (`lib/tools/upstream.ts`).
+
 ## Use the CLI
 
 1. In Scope, open **Accounts** and connect a provider.
@@ -54,7 +56,8 @@ The command gets the token in one environment variable plus a small base environ
 - Convex stores only a SHA-256 hash of each agent token. The token is the agent's only authority.
 - Agent names and reasons are display text. They never grant access.
 - An MCP app's only authority is its AuthKit access token, whose audience is Scope's `/mcp` resource. Each OAuth client is a separate app with its own rules. App tokens cannot call owner functions, and the web session cannot call gateway functions.
-- Approval requests show names that Scope looks up from the provider, such as the Slack channel name, not names from the model. Activity stores the app, tool, decision and outcome, never arguments or results.
+- For forwarded tools, Scope sends only the arguments in its own schema and decides itself which tools are read-only. It does not trust the upstream server's tool hints.
+- Approval requests show names that Scope looks up from the provider, such as the Slack channel name or Notion page title, not names from the model. Activity stores the app, tool, decision and outcome, never arguments or results.
 - **The CLI is not a sandbox.** A program with a token can print, store or send it.
 
 ## Configuration
@@ -64,6 +67,8 @@ Next: `NEXT_PUBLIC_CONVEX_URL`, `SCOPE_ORIGIN`, `WORKOS_CLIENT_ID`, `WORKOS_API_
 Convex: `WORKOS_CLIENT_ID`, `SCOPE_VAPID_PUBLIC_KEY`, `SCOPE_VAPID_PRIVATE_KEY`, `WORKOS_AUTHKIT_DOMAIN`, `SCOPE_MCP_RESOURCE` (`<SCOPE_ORIGIN>/mcp`).
 
 WorkOS: enable Dynamic Client Registration (and Client ID Metadata Documents for ChatGPT and Claude.ai), and add `<SCOPE_ORIGIN>/mcp` as a Resource Indicator. Without the Resource Indicator, sign-in fails with `invalid_target`.
+
+Vercel Connect: the Notion connector must use the MCP target (`https://mcp.notion.com/mcp`). Google's MCP servers need the Cloud project in the Google Workspace Developer Preview Program. For Vercel team projects, install the connector's Vercel App on the team.
 
 To add a provider, add an entry to `shared/connectors.ts` and configure its connector in Vercel Connect. To add a tool, add it to `shared/tools.ts` and its implementation under `lib/tools/`.
 

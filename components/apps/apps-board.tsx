@@ -140,16 +140,27 @@ function AppRow({ app }: { app: App }) {
           Every request from this app fails until you allow it again.
         </p>
       ) : (
-        providers.map((providerId) => (
-          <div key={providerId} className="space-y-2">
-            <p className="flex items-center gap-2 text-xs font-medium text-scope-quiet">
-              <AppMark providerId={providerId} />
-              {providerName(providerId)}
-            </p>
-            <ul className="divide-y divide-scope-line rounded-xl border border-scope-line">
-              {tools
-                .filter((tool) => tool.providerId === providerId)
-                .map((tool) => (
+        providers.map((providerId) => {
+          const group = tools.filter((tool) => tool.providerId === providerId);
+          const custom = group.filter((tool) => app.rules[tool.name]).length;
+          return (
+            <details key={providerId} className="group space-y-2">
+              <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-medium text-scope-quiet">
+                <AppMark providerId={providerId} />
+                {providerName(providerId)}
+                <span className="font-normal">
+                  · {group.length} tools
+                  {custom > 0 && ` · ${custom} changed`}
+                </span>
+                <span className="ml-auto font-normal group-open:hidden">
+                  Show rules
+                </span>
+                <span className="ml-auto hidden font-normal group-open:inline">
+                  Hide rules
+                </span>
+              </summary>
+              <ul className="divide-y divide-scope-line rounded-xl border border-scope-line">
+                {group.map((tool) => (
                   <ToolRule
                     key={tool.name}
                     app={app}
@@ -157,9 +168,10 @@ function AppRow({ app }: { app: App }) {
                     rule={app.rules[tool.name] ?? defaultRule(tool)}
                   />
                 ))}
-            </ul>
-          </div>
-        ))
+              </ul>
+            </details>
+          );
+        })
       )}
     </article>
   );

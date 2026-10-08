@@ -266,6 +266,13 @@ test("the app's name comes from MCP initialize", async () => {
   expect((await owner.query(api.clients.list, {}))[0].name).toBe("My agent");
 });
 
+test("only tools for connected providers are listed", async () => {
+  const { cursor } = await setup();
+  const visible = await cursor.query(api.gateway.visibleTools, {});
+  expect(visible).toContain("slack_post_message");
+  expect(visible.some((name) => name.startsWith("github_"))).toBe(false);
+});
+
 test("without a connected account the call explains what to do", async () => {
   const { cursor, call } = await setup({ connect: false });
   expect((await call(cursor, "slack_list_channels")).decision).toBe(

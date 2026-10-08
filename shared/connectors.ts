@@ -31,7 +31,16 @@ export const connectors: readonly Connector[] = [
     provider: "Google",
     connectorEnv: "SCOPE_GOOGLE_CONNECTOR",
     // Google rejects an authorize URL with no scope.
-    scopes: ["openid", "email", "profile"],
+    scopes: [
+      "openid",
+      "email",
+      "profile",
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/gmail.compose",
+      "https://www.googleapis.com/auth/calendar.events",
+      "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+      "https://www.googleapis.com/auth/calendar.events.freebusy",
+    ],
   },
   {
     providerId: "notion",

@@ -109,17 +109,37 @@ export const hello = mutation({
   },
 });
 
-// Tool names this app may see. Blocked tools are hidden.
+// Tool names this app may see. Blocked tools and tools for providers with no
+// connected account are hidden.
 export const visibleTools = query({
   args: {},
   returns: v.array(v.string()),
   handler: async (ctx) => {
-    const client = await findClient(ctx, await mcpCaller(ctx));
-    const visible: string[] = [];
-    for (const tool of tools)
-      if ((await ruleFor(ctx, client?._id, tool)) !== "block")
-        visible.push(tool.name);
-    return visible;
+    const caller = await mcpCaller(ctx),
+      client = await findClient(ctx, caller);
+    const accounts = await ctx.db
+      .query("accounts")
+      .withIndex("by_ownerId_and_providerId", (q) =>
+        q.eq("ownerId", caller.ownerId),
+      )
+      .take(50);
+    const connected = new Set(accounts.map((a) => a.providerId));
+    const overrides = client
+      ? await ctx.db
+          .query("rules")
+          .withIndex("by_clientId_and_tool", (q) =>
+            q.eq("clientId", client._id),
+          )
+          .take(500)
+      : [];
+    const rules = new Map(overrides.map((r) => [r.tool, r.rule]));
+    return tools
+      .filter(
+        (tool) =>
+          connected.has(tool.providerId) &&
+          (rules.get(tool.name) ?? defaultRule(tool)) !== "block",
+      )
+      .map((tool) => tool.name);
   },
 });
 

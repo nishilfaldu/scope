@@ -7,11 +7,21 @@ import { api } from "@/convex/_generated/api";
 import { tokenFor } from "@/lib/connect";
 import { db, scopeOrigin } from "@/lib/scope-server";
 import { ToolFailure, type ToolImplementation } from "@/lib/tools/types";
+import { githubTools } from "@/lib/tools/github";
+import { googleTools } from "@/lib/tools/google";
+import { notionTools } from "@/lib/tools/notion";
 import { slackTools } from "@/lib/tools/slack";
+import { vercelTools } from "@/lib/tools/vercel";
 import { providerName } from "@/shared/connectors";
 import { toolFor } from "@/shared/tools";
 
-const implementations: ToolImplementation[] = [...slackTools];
+const implementations: ToolImplementation[] = [
+  ...slackTools,
+  ...githubTools,
+  ...notionTools,
+  ...googleTools,
+  ...vercelTools,
+];
 
 // MCP clients usually time out a tool call after about a minute.
 const approvalWaitMs = 25_000,
@@ -140,7 +150,7 @@ async function callTool(
       callId: result.callId,
       outcome: "ok",
     });
-    return text(JSON.stringify(output));
+    return text(typeof output === "string" ? output : JSON.stringify(output));
   } catch (error) {
     await client
       .mutation(api.gateway.finish, {
