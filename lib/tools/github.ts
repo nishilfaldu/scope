@@ -15,6 +15,32 @@ const at = (input: Repo) => `${input.owner}/${input.repo}`;
 const quote = (text: string | undefined, max = 120) =>
   text ? `: "${text.slice(0, max)}${text.length > max ? "…" : ""}"` : "";
 
+// The title comes from GitHub, so the model cannot mislabel the issue.
+async function issueRef(token: string, input: Repo, issue: number) {
+  const ref = `${at(input)}#${issue}`;
+  if (!token) return ref;
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}/issues/${issue}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+        },
+        redirect: "error",
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    if (!response.ok) return ref;
+    const { title } = (await response.json()) as { title?: string };
+    return title
+      ? `${ref} "${title.slice(0, 100)}${title.length > 100 ? "…" : ""}"`
+      : ref;
+  } catch {
+    return ref;
+  }
+}
+
 export const githubTools: ToolImplementation[] = [
   proxied(
     "get_me",
@@ -182,17 +208,27 @@ export const githubTools: ToolImplementation[] = [
         .enum(["completed", "not_planned", "duplicate"])
         .optional(),
     },
-    (input) =>
-      input.method === "create"
-        ? `Open an issue in ${at(input)}${quote(input.title)}`
-        : `${input.state === "closed" ? "Close" : input.state === "open" ? "Reopen" : "Edit"} issue ${at(input)}#${input.issue_number ?? "?"}${quote(input.title)}`,
+    async (input, token) => {
+      if (input.method === "create")
+        return `Open an issue in ${at(input)}${quote(input.title)}`;
+      const verb =
+        input.state === "closed"
+          ? "Close"
+          : input.state === "open"
+            ? "Reopen"
+            : "Edit";
+      const ref = input.issue_number
+        ? await issueRef(token, input, input.issue_number)
+        : `${at(input)}#?`;
+      return `${verb} issue ${ref}${input.title ? `, renaming it to "${input.title.slice(0, 100)}"` : ""}`;
+    },
   ),
   proxied<Repo & { issue_number: number; body: string }>(
     "add_issue_comment",
     "Comment on an issue or pull request.",
     { owner, repo, issue_number: number, body: z.string().min(1).max(65_000) },
-    (input) =>
-      `Comment on ${at(input)}#${input.issue_number}${quote(input.body)}`,
+    async (input, token) =>
+      `Comment on ${await issueRef(token, input, input.issue_number)}${quote(input.body)}`,
   ),
   proxied<Repo & { title: string; head: string; base: string }>(
     "create_pull_request",
@@ -247,7 +283,7 @@ export const githubTools: ToolImplementation[] = [
       commit_title: z.string().max(256).optional(),
       commit_message: z.string().max(65_000).optional(),
     },
-    (input) =>
-      `Merge pull request ${at(input)}#${input.pullNumber}${input.merge_method ? ` (${input.merge_method})` : ""}`,
+    async (input, token) =>
+      `Merge pull request ${await issueRef(token, input, input.pullNumber)}${input.merge_method ? ` (${input.merge_method})` : ""}`,
   ),
 ];
