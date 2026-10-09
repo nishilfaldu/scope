@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { PublicFooter } from "@/components/public/public-footer";
-import { PublicHeader } from "@/components/public/public-header";
+import { LegalDocument } from "@/components/public/legal-document";
 
 export const metadata: Metadata = {
   title: "Terms of service · Scope",
@@ -40,10 +39,12 @@ const sections: TermsSection[] = [
         <p>
           You may connect only accounts you are authorized to use. You review
           the permissions for a connection on the provider&apos;s consent
-          screen. Disconnect asks Vercel Connect to revoke the authorization and
-          ends active approvals for that account. If a provider cannot revoke
-          the credential, it may remain valid until it expires. You can also
-          revoke Scope in the provider&apos;s account settings.
+          screen. Every token includes all permissions granted when you
+          connected the account. The stated purpose does not restrict the token.
+          Disconnect asks Vercel Connect to revoke the authorization and ends
+          active approvals for that account. If a provider cannot revoke the
+          credential, it may remain valid until it expires. You can also revoke
+          Scope in the provider&apos;s account settings.
         </p>
       </>
     ),
@@ -154,63 +155,12 @@ const sections: TermsSection[] = [
 
 export default function TermsPage() {
   return (
-    <div className="min-h-svh bg-[#f7f9f5] text-[#172019] dark:bg-background dark:text-foreground">
-      <PublicHeader />
-      <main className="mx-auto max-w-6xl px-5 py-14 sm:px-8 sm:py-20">
-        <div className="grid gap-12 lg:grid-cols-[14rem_minmax(0,44rem)] lg:gap-20">
-          <aside className="lg:sticky lg:top-10 lg:self-start">
-            <p className="text-sm font-semibold">Scope</p>
-            <p className="mt-1 text-sm text-[#68746a] dark:text-muted-foreground">
-              Effective October 7, 2026
-            </p>
-            <nav
-              className="mt-7 hidden border-l border-[#d8e1d4] pl-4 text-sm lg:block dark:border-border"
-              aria-label="Terms of service sections"
-            >
-              <ul className="space-y-3 text-[#5d695f] dark:text-muted-foreground">
-                {sections.map((section) => (
-                  <li key={section.id}>
-                    <a
-                      className="hover:text-foreground"
-                      href={`#${section.id}`}
-                    >
-                      {section.title}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          </aside>
-
-          <article>
-            <h1 className="text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-              Terms of service
-            </h1>
-            <p className="mt-6 text-lg leading-8 text-[#526054] dark:text-muted-foreground">
-              These terms govern your access to and use of Scope, including
-              provider connections, the AI apps you connect, and the rules and
-              approvals you set.
-            </p>
-            <div className="mt-12 divide-y divide-[#d8e1d4] border-y border-[#d8e1d4] dark:divide-border dark:border-border">
-              {sections.map((section) => (
-                <section
-                  className="scroll-mt-8 py-9"
-                  id={section.id}
-                  key={section.id}
-                >
-                  <h2 className="text-xl font-semibold tracking-[-0.02em]">
-                    {section.title}
-                  </h2>
-                  <div className="mt-4 space-y-4 text-[15px] leading-7 text-[#526054] [&_a]:font-medium [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-4 dark:text-muted-foreground">
-                    {section.content}
-                  </div>
-                </section>
-              ))}
-            </div>
-          </article>
-        </div>
-      </main>
-      <PublicFooter />
-    </div>
+    <LegalDocument
+      title="Terms of service"
+      lede="These terms govern your access to and use of Scope, including provider connections, the AI apps you connect, and the rules and approvals you set."
+      effective="Effective October 7, 2026"
+      navLabel="Terms of service sections"
+      sections={sections}
+    />
   );
 }

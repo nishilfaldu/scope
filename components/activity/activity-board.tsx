@@ -17,7 +17,7 @@ const decisionLabel: Record<string, string> = {
   denied: "Denied by you",
   waiting: "Asked you",
   "no-account": "No account connected",
-  revoked: "Refused: app revoked",
+  revoked: "Refused because the app is revoked",
 };
 
 export function ActivityBoard() {
@@ -51,9 +51,12 @@ export function ActivityBoard() {
                 {tool && <AppMark providerId={tool.providerId} />}
                 <div className="min-w-0 flex-1">
                   <p>
-                    <strong className="font-medium">{call.clientName}</strong>{" "}
-                    <span className="text-scope-quiet">·</span>{" "}
-                    {tool?.title ?? call.tool}
+                    <span className="font-medium">
+                      {tool?.title ?? call.tool}
+                    </span>{" "}
+                    <span className="text-scope-quiet">
+                      from {call.clientName}
+                    </span>
                   </p>
                   <p
                     className={cn(
@@ -62,8 +65,9 @@ export function ActivityBoard() {
                     )}
                   >
                     {decisionLabel[call.decision]}
-                    {call.outcome === "ok" && " · done"}
-                    {call.outcome === "failed" && " · provider call failed"}
+                    {call.outcome === "ok" && " and ran"}
+                    {call.outcome === "failed" &&
+                      ", but the provider call failed"}
                   </p>
                 </div>
                 <time className="text-xs whitespace-nowrap text-scope-quiet">

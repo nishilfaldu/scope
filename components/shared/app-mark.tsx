@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 const markClass: Record<string, string> = {
-  slack: "bg-[#f2edf3] text-[#72516f]",
+  slack: "bg-white shadow-[inset_0_0_0_1px_#e3e3e3]",
   github: "bg-[#eef1f4] text-[#243044]",
   google: "bg-white shadow-[inset_0_0_0_1px_#e3e3e3]",
   notion: "bg-[#f3f3f1] text-[#3d3d3d]",
@@ -11,12 +11,22 @@ const markClass: Record<string, string> = {
 
 const icon: Record<string, ReactNode> = {
   slack: (
-    <svg viewBox="0 0 24 24" fill="none">
+    <svg viewBox="0 0 54 54">
       <path
-        d="M8 3v12M16 9v12M3 8h12M9 16h12"
-        stroke="currentColor"
-        strokeWidth="4"
-        strokeLinecap="round"
+        fill="#36C5F0"
+        d="M19.71.13a5.38 5.38 0 0 0 0 10.77h5.38V5.52A5.38 5.38 0 0 0 19.71.13m0 14.37H5.38a5.38 5.38 0 0 0 0 10.77h14.33a5.38 5.38 0 0 0 0-10.77"
+      />
+      <path
+        fill="#2EB67D"
+        d="M53.76 19.88a5.38 5.38 0 0 0-10.75 0v5.39h5.37a5.38 5.38 0 0 0 5.38-5.39m-14.34 0V5.52a5.38 5.38 0 0 0-10.75 0v14.36a5.38 5.38 0 0 0 10.75 0"
+      />
+      <path
+        fill="#ECB22E"
+        d="M34.05 54a5.38 5.38 0 0 0 0-10.77h-5.38v5.38A5.38 5.38 0 0 0 34.05 54m0-14.37h14.33a5.38 5.38 0 0 0 0-10.77H34.05a5.38 5.38 0 0 0 0 10.77"
+      />
+      <path
+        fill="#E01E5A"
+        d="M0 34.25a5.38 5.38 0 0 0 10.75 0v-5.39H5.38A5.38 5.38 0 0 0 0 34.25m14.34 0v14.36a5.38 5.38 0 0 0 10.75 0V34.25a5.38 5.38 0 0 0-10.75 0"
       />
     </svg>
   ),

@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@/convex/_generated/api";
 import { AppMark } from "@/components/shared/app-mark";
+import { CopyField } from "@/components/shared/copy-field";
 import {
   Empty,
   PageHeading,
@@ -15,7 +16,6 @@ import { ListSkeleton } from "@/components/layout/workspace-skeleton";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { errorMessage, formatTime } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import { providerName } from "@/shared/connectors";
 import {
   defaultRule,
@@ -42,28 +42,13 @@ export function AppsBoard({ mcpUrl }: { mcpUrl: string }) {
         rules. Apps never get your tokens.
       </PageHeading>
       <Section title="Add Scope to an app">
-        <div className="space-y-3 px-6 py-5">
-          <p className="leading-relaxed text-scope-quiet">
+        <div className="space-y-4 px-6 py-5">
+          <p className="leading-relaxed text-pretty text-scope-quiet">
             In ChatGPT, Claude, Cursor, Codex or another MCP app, add a custom
             MCP server or connector with this URL. The app opens a Scope
             sign-in. It appears below after its first request.
           </p>
-          <div className="flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded-lg bg-scope-hover px-3 py-2 text-xs">
-              {mcpUrl}
-            </code>
-            <Button
-              variant="outline"
-              className="rounded-lg"
-              onClick={() =>
-                void navigator.clipboard
-                  .writeText(mcpUrl)
-                  .then(() => toast.add({ title: "Copied.", type: "success" }))
-              }
-            >
-              Copy
-            </Button>
-          </div>
+          <CopyField label="Server URL" value={mcpUrl} />
         </div>
       </Section>
       <Section title="Connected apps">
@@ -116,18 +101,15 @@ function AppRow({ app }: { app: App }) {
             )}
           </h3>
           <p className="truncate text-xs text-scope-quiet">
-            {origin(app.clientKey)} ·{" "}
+            {origin(app.clientKey)}.{" "}
             {app.lastUsedAt
-              ? `last used ${formatTime(app.lastUsedAt)}`
-              : "not used yet"}
+              ? `Last used ${formatTime(app.lastUsedAt)}`
+              : "Not used yet"}
           </p>
         </div>
         <Button
           variant="ghost"
-          className={cn(
-            "rounded-lg hover:bg-scope-hover",
-            revoked ? "text-scope-green" : "text-scope-quiet",
-          )}
+          className={revoked ? "text-scope-green" : "text-scope-quiet"}
           disabled={busy}
           onClick={() => void toggle()}
         >
@@ -149,8 +131,8 @@ function AppRow({ app }: { app: App }) {
                 <AppMark providerId={providerId} />
                 {providerName(providerId)}
                 <span className="font-normal">
-                  · {group.length} tools
-                  {custom > 0 && ` · ${custom} changed`}
+                  {group.length} tools
+                  {custom > 0 && `, ${custom} changed`}
                 </span>
                 <span className="ml-auto font-normal group-open:hidden">
                   Show rules
@@ -207,7 +189,8 @@ function ToolRule({
             role="radio"
             aria-checked={rule === value}
             variant={rule === value ? "secondary" : "ghost"}
-            className="h-7 rounded-md px-2.5 text-xs"
+            size="xs"
+            className="h-7 rounded-md"
             disabled={!!busy}
             onClick={() => {
               if (value === rule) return;

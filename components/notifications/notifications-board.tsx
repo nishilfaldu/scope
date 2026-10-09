@@ -157,11 +157,7 @@ export function NotificationsBoard() {
             <span className="text-scope-green">Notifications enabled</span>
           )}
           {canEnable && !enabled && !loading && (
-            <Button
-              className="rounded-lg bg-scope-green text-white hover:bg-scope-green-dark"
-              disabled={!!busy}
-              onClick={() => void enable()}
-            >
+            <Button disabled={!!busy} onClick={() => void enable()}>
               {busy === "enable" && <Spinner />}
               Enable notifications
             </Button>
@@ -169,7 +165,7 @@ export function NotificationsBoard() {
           {enabled && (
             <Button
               variant="ghost"
-              className="rounded-lg text-scope-green hover:bg-scope-hover"
+              className="text-scope-green"
               disabled={!!busy}
               onClick={() => void test()}
             >
