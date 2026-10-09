@@ -21,7 +21,7 @@ Open [localhost:3000/requests](http://localhost:3000/requests). Read `AGENTS.md`
 
 Read-only tools run without asking. Other tools send an approval request. The call waits about 25 seconds for a decision, then tells the app to call again. "This call only" covers the same arguments for 10 minutes. A timed approval (15, 30 or 60 minutes) covers any arguments for that tool. A blocked tool is hidden from that app. After a deny, the same call is not asked again for 2 minutes.
 
-Tools exist for Slack, GitHub, Notion, Gmail, Google Calendar and Vercel. An app sees only the tools of providers you connected. Every tool forwards to the provider's official MCP server (`lib/tools/upstream.ts`).
+Tools exist for Slack, GitHub, Notion, Gmail, Google Calendar and Vercel. An app sees only the tools of providers you connected. Slack, GitHub, Notion and Vercel tools forward to the provider's official MCP server (`lib/tools/upstream.ts`). Gmail and Calendar tools call Google's REST APIs (`lib/tools/google.ts`).
 
 ## End approval, Disconnect and Revoke
 
@@ -46,7 +46,7 @@ Convex: `WORKOS_CLIENT_ID`, `SCOPE_VAPID_PUBLIC_KEY`, `SCOPE_VAPID_PRIVATE_KEY`,
 
 WorkOS: enable Dynamic Client Registration (and Client ID Metadata Documents for ChatGPT and Claude.ai), and add `<SCOPE_ORIGIN>/mcp` as a Resource Indicator. Without the Resource Indicator, sign-in fails with `invalid_target`.
 
-Vercel Connect: the Notion and Vercel connectors must use the MCP target (`https://mcp.notion.com/mcp` and `https://mcp.vercel.com`). Tokens from a Notion API connector fail on Notion's MCP server. A Vercel connector backed by your own Vercel App reaches only the personal account, because team permissions for Vercel Apps are in private beta. Google's MCP servers need the Cloud project in the Google Workspace Developer Preview Program. Slack's MCP server accepts only internal and Slack Marketplace apps, with MCP access turned on in the Slack app settings and the user token scopes from `shared/connectors.ts`.
+Vercel Connect: the Notion and Vercel connectors must use the MCP target (`https://mcp.notion.com/mcp` and `https://mcp.vercel.com`). Tokens from a Notion API connector fail on Notion's MCP server. A Vercel connector backed by your own Vercel App reaches only the personal account, because team permissions for Vercel Apps are in private beta. Google needs the Gmail API and Google Calendar API turned on in the Cloud project. While the OAuth app is in testing, only its listed test users can connect. Slack's MCP server accepts only internal and Slack Marketplace apps, with MCP access turned on in the Slack app settings and the user token scopes from `shared/connectors.ts`.
 
 To add a provider, add an entry to `shared/connectors.ts` and configure its connector in Vercel Connect. To add a tool, add it to `shared/tools.ts` and its implementation under `lib/tools/`.
 

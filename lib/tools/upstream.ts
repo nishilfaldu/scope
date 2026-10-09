@@ -26,8 +26,6 @@ export function proxy(
   });
 }
 
-const maxText = 100_000;
-
 // Calls one tool on a provider's official MCP server with the person's token.
 // Only text content is returned; other content types are dropped.
 export async function callUpstream(
@@ -56,12 +54,8 @@ export async function callUpstream(
           : [],
       )
       .join("\n");
-    const trimmed =
-      text.length > maxText
-        ? `${text.slice(0, maxText)}\n[Scope cut the result at ${maxText} characters.]`
-        : text;
-    if (result.isError) throw new ToolFailure(trimmed.slice(0, 2000));
-    return trimmed;
+    if (result.isError) throw new ToolFailure(text.slice(0, 2000));
+    return text;
   } finally {
     await client.close().catch(() => undefined);
   }

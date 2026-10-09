@@ -131,11 +131,12 @@ Built as below, with these differences: `clients` sits beside `agents` until ste
 - Slack: started with four tools of our own in step 5, then moved to Slack's MCP server (`mcp.slack.com`, 17 tools). Slack allows MCP only for internal and Marketplace apps, so the dev Slack app stays internal. Launch needs a separate Slack app in the Marketplace, with its own connector set through `SCOPE_SLACK_CONNECTOR`.
 - Decided: a failed provider call does not give back a "this call only" approval. A failure can come after the action took effect (for example a timeout after Slack posted), so a refund could repeat it without asking.
 - Decided: calls from revoked apps and to blocked tools appear in Activity, at most once a minute per app, tool and decision. A blocked call from a cached tool list gets "blocked in Scope", not "tool not found".
-- Done: Slack, GitHub, Notion, Vercel and Google through their official MCP servers (`lib/tools/upstream.ts`). Scope lists a curated set of upstream tools with its own input schemas, so only listed arguments reach the provider. Scope sets each tool's read-only flag itself and ignores upstream hints. Results are text only, cut at 100,000 characters.
+- Done: Slack, GitHub, Notion and Vercel through their official MCP servers (`lib/tools/upstream.ts`). Scope lists a curated set of upstream tools with its own input schemas, so only listed arguments reach the provider. Scope sets each tool's read-only flag itself and ignores upstream hints. Results are text only, cut at 100,000 characters.
 - Notion uses a Connect connector with the MCP target (`mcp.notion.com`), not the REST API connector. Its tokens do not work on the REST API, and REST tokens do not work on the MCP server.
 - Verified live: Slack, GitHub, Notion and Vercel (team) reads, an approved Slack message, an approved Notion page, and an approved GitHub issue open and close.
 - Vercel also uses an MCP-target connector (`mcp.vercel.com`). A connector backed by our own Vercel App got personal-only tokens, because team permissions for Vercel Apps are in private beta. The MCP-target connector reaches team projects.
-- Open: Google calls fail until the Cloud project is in the Google Workspace Developer Preview Program.
+- Decided: Gmail and Calendar call Google's REST APIs (`lib/tools/google.ts`). Google's MCP servers need the Cloud project in the Google Workspace Developer Preview Program, which needs a paid Workspace account. The tool names and inputs follow Google's MCP servers, so a later switch keeps app rules.
+- Open: `gmail.readonly` and `gmail.compose` are restricted scopes. While the OAuth app is in testing, at most 100 listed test users can connect. A public launch needs Google verification and a CASA security assessment.
 
 ### Step 7: retire raw-token release (done)
 
