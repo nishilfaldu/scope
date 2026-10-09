@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { PublicFooter } from "@/components/public/public-footer";
-import { PublicHeader } from "@/components/public/public-header";
+import { LegalDocument } from "@/components/public/legal-document";
 
 export const metadata: Metadata = {
   title: "Privacy policy · Scope",
@@ -103,11 +102,12 @@ const sections: PolicySection[] = [
     title: "Storage and security",
     content: (
       <p>
-        Vercel Connect stores and refreshes provider credentials. AI apps never
-        receive them. Each app signs in separately and can act only through
-        Scope&apos;s tools, under its own rules. Scope checks the app, the rule,
-        the approval and the account before each call. For tools that forward to
-        a provider&apos;s MCP server, Scope sends only the arguments that it
+        Vercel Connect stores and refreshes provider credentials. Scope does not
+        inspect each token&apos;s permissions. AI apps never receive them. Each
+        app signs in separately and can act only through Scope&apos;s tools,
+        under its own rules. Scope checks the app, the rule, the approval and
+        the account before each call. For tools that forward to a
+        provider&apos;s MCP server, Scope sends only the arguments that it
         accepts for that tool. Data is encrypted in transit using HTTPS. No
         security measure is perfect, but we limit access to the systems and data
         required to operate Scope.
@@ -161,63 +161,12 @@ const sections: PolicySection[] = [
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-svh bg-[#f7f9f5] text-[#172019] dark:bg-background dark:text-foreground">
-      <PublicHeader />
-      <main className="mx-auto max-w-6xl px-5 py-14 sm:px-8 sm:py-20">
-        <div className="grid gap-12 lg:grid-cols-[14rem_minmax(0,44rem)] lg:gap-20">
-          <aside className="lg:sticky lg:top-10 lg:self-start">
-            <p className="text-sm font-semibold">Scope</p>
-            <p className="mt-1 text-sm text-[#68746a] dark:text-muted-foreground">
-              Effective October 7, 2026
-            </p>
-            <nav
-              className="mt-7 hidden border-l border-[#d8e1d4] pl-4 text-sm lg:block dark:border-border"
-              aria-label="Privacy policy sections"
-            >
-              <ul className="space-y-3 text-[#5d695f] dark:text-muted-foreground">
-                {sections.map((section) => (
-                  <li key={section.id}>
-                    <a
-                      className="hover:text-foreground"
-                      href={`#${section.id}`}
-                    >
-                      {section.title}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          </aside>
-
-          <article>
-            <h1 className="text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-              Privacy policy
-            </h1>
-            <p className="mt-6 text-lg leading-8 text-[#526054] dark:text-muted-foreground">
-              This policy explains how Scope accesses, uses, stores, shares,
-              retains, and deletes personal information and data from services
-              you connect to Scope.
-            </p>
-            <div className="mt-12 divide-y divide-[#d8e1d4] border-y border-[#d8e1d4] dark:divide-border dark:border-border">
-              {sections.map((section) => (
-                <section
-                  className="scroll-mt-8 py-9"
-                  id={section.id}
-                  key={section.id}
-                >
-                  <h2 className="text-xl font-semibold tracking-[-0.02em]">
-                    {section.title}
-                  </h2>
-                  <div className="mt-4 space-y-4 text-[15px] leading-7 text-[#526054] [&_a]:font-medium [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-4 dark:text-muted-foreground">
-                    {section.content}
-                  </div>
-                </section>
-              ))}
-            </div>
-          </article>
-        </div>
-      </main>
-      <PublicFooter />
-    </div>
+    <LegalDocument
+      title="Privacy policy"
+      lede="This policy explains how Scope accesses, uses, stores, shares, retains, and deletes personal information and data from services you connect to Scope."
+      effective="Effective October 7, 2026"
+      navLabel="Privacy policy sections"
+      sections={sections}
+    />
   );
 }

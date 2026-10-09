@@ -25,7 +25,8 @@ const implementations: ToolImplementation[] = [
 
 // MCP clients usually time out a tool call after about a minute.
 const approvalWaitMs = 25_000,
-  pollMs = 1_500;
+  pollMs = 1_500,
+  maxResult = 100_000;
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -150,7 +151,12 @@ async function callTool(
       callId: result.callId,
       outcome: "ok",
     });
-    return text(typeof output === "string" ? output : JSON.stringify(output));
+    const body = typeof output === "string" ? output : JSON.stringify(output);
+    return text(
+      body.length > maxResult
+        ? `${body.slice(0, maxResult)}\n[Scope cut the result at ${maxResult} characters.]`
+        : body,
+    );
   } catch (error) {
     await client
       .mutation(api.gateway.finish, {

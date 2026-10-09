@@ -33,6 +33,8 @@ const statusLabel: Record<string, string> = {
   expired: "Expired",
 };
 
+const times = (count: number) => (count === 1 ? "once" : `${count} times`);
+
 export function RequestsBoard({ focusId }: { focusId?: string }) {
   const open = useQuery(api.approvals.open, {});
   const accounts = useQuery(api.accounts.list, {});
@@ -89,9 +91,9 @@ export function RequestsBoard({ focusId }: { focusId?: string }) {
           history.results.map((row) => (
             <Row key={row._id} approval={row} focused={row._id === focusId}>
               <p className="text-xs text-scope-quiet">
-                {statusLabel[row.status]} ·{" "}
+                {statusLabel[row.status]} on{" "}
                 {formatTime(row.endedAt ?? row.decidedAt ?? row._creationTime)}
-                {row.collections > 0 && ` · used ${row.collections}×`}
+                {row.collections > 0 && `, used ${times(row.collections)}`}
               </p>
             </Row>
           ))
@@ -131,21 +133,20 @@ function Row({
         {initials(approval.appName)}
       </span>
       <div className="min-w-0 flex-1 space-y-2">
-        <div className="flex items-center gap-2">
+        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
           <strong className="font-medium">{approval.appName}</strong>
           <span className="text-scope-quiet">wants</span>
           <AppMark providerId={approval.providerId} />
           <span>
             {providerName(approval.providerId)}:{" "}
             {toolFor(approval.tool)?.title ?? approval.tool}
-            {approval.accountLabel && (
-              <span className="text-scope-quiet">
-                {" "}
-                · {approval.accountLabel}
-              </span>
-            )}
           </span>
-        </div>
+          {approval.accountLabel && (
+            <span className="text-scope-quiet">
+              with {approval.accountLabel}
+            </span>
+          )}
+        </p>
         <p className="leading-relaxed break-words">{approval.reason}</p>
         {children}
       </div>
@@ -221,43 +222,43 @@ function PendingRequest({
       )}
       <fieldset disabled={!!busy} className="pt-1">
         <legend className="mb-2 text-xs text-scope-quiet">
-          Approve this call only, or let this app use this tool without asking
+          Approve this call only, or let the app use this tool without asking
           for
         </legend>
-        <div className="flex flex-wrap gap-2">
-          {durations.map((value) => (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+            {durations.map((value) => (
+              <Button
+                key={value}
+                variant={minutes === value ? "secondary" : "outline"}
+                aria-pressed={minutes === value}
+                onClick={() => setMinutes(value)}
+              >
+                {value === 0
+                  ? "This call only"
+                  : value === 60
+                    ? "1 hour"
+                    : `${value} min`}
+              </Button>
+            ))}
+          </div>
+          <div className="flex gap-2 sm:ml-auto">
             <Button
-              key={value}
-              variant={minutes === value ? "secondary" : "outline"}
-              className="rounded-lg"
-              aria-pressed={minutes === value}
-              onClick={() => setMinutes(value)}
+              disabled={!!busy || !selected}
+              onClick={() => void act("approve")}
             >
-              {value === 0
-                ? "This call only"
-                : value === 60
-                  ? "1 hour"
-                  : `${value} min`}
+              {busy === "approve" && <Spinner />}
+              Approve
             </Button>
-          ))}
-          <span className="grow" />
-          <Button
-            className="rounded-lg bg-scope-green text-white hover:bg-scope-green-dark"
-            disabled={!!busy || !selected}
-            onClick={() => void act("approve")}
-          >
-            {busy === "approve" && <Spinner />}
-            Approve
-          </Button>
-          <Button
-            variant="outline"
-            className="rounded-lg"
-            disabled={!!busy}
-            onClick={() => void act("deny")}
-          >
-            {busy === "deny" && <Spinner />}
-            Deny
-          </Button>
+            <Button
+              variant="outline"
+              disabled={!!busy}
+              onClick={() => void act("deny")}
+            >
+              {busy === "deny" && <Spinner />}
+              Deny
+            </Button>
+          </div>
         </div>
       </fieldset>
     </Row>
@@ -281,11 +282,11 @@ function ActiveApproval({
             ? `Approved for one call, until ${formatTime(approval.expiresAt)}`
             : `Approved until ${formatTime(approval.expiresAt)}`}
           {approval.lastCollectedAt !== undefined &&
-            ` · used ${approval.collections}×, last at ${formatTime(approval.lastCollectedAt)}`}
+            `. Used ${times(approval.collections)}, last at ${formatTime(approval.lastCollectedAt)}`}
         </p>
         <Button
           variant="ghost"
-          className="ml-auto rounded-lg text-scope-green hover:bg-scope-hover"
+          className="ml-auto text-scope-green"
           disabled={busy}
           onClick={() => {
             setBusy(true);

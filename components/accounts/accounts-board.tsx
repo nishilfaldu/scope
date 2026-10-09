@@ -96,7 +96,7 @@ export function AccountsBoard({ providers }: { providers: Provider[] }) {
                 {account && (
                   <Button
                     variant="ghost"
-                    className="rounded-lg text-scope-quiet hover:bg-scope-hover"
+                    className="text-scope-quiet"
                     disabled={!!busy}
                     onClick={() => setDisconnecting(account)}
                   >
@@ -105,7 +105,7 @@ export function AccountsBoard({ providers }: { providers: Provider[] }) {
                 )}
                 <Button
                   variant="ghost"
-                  className="rounded-lg text-scope-green hover:bg-scope-hover"
+                  className="text-scope-green"
                   disabled={!!busy || !provider.available}
                   onClick={() =>
                     void run(provider.providerId, async () => {
@@ -135,8 +135,8 @@ export function AccountsBoard({ providers }: { providers: Provider[] }) {
           <DialogHeader>
             <DialogTitle>Disconnect {disconnecting?.label}?</DialogTitle>
             <DialogDescription>
-              Scope asks Vercel Connect to revoke this grant and ends active
-              approvals for it. Apps lose this provider&apos;s tools.
+              Scope revokes its access to this account and ends active approvals
+              for it. Apps lose these tools until you connect again.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -148,7 +148,7 @@ export function AccountsBoard({ providers }: { providers: Provider[] }) {
               Cancel
             </Button>
             <Button
-              className="bg-scope-green text-white hover:bg-scope-green-dark"
+              variant="destructive"
               disabled={!!busy}
               onClick={() =>
                 void run("disconnect", async () => {

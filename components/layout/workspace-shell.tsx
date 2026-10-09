@@ -34,17 +34,30 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
     api.approvals.pendingCount,
     isAuthenticated ? {} : "skip",
   );
+  const leave = () => void signOut({ returnTo: window.location.origin + "/" });
   return (
     <div className="min-h-svh bg-scope-wash text-sm text-scope-ink">
       <div className="mx-auto flex min-h-svh max-w-[1440px] flex-col md:flex-row">
         <aside className="flex shrink-0 flex-col border-scope-line px-5 py-5 md:sticky md:top-0 md:h-svh md:w-[220px] md:border-r md:py-9">
-          <Link
-            href="/requests"
-            className="flex items-center gap-2.5 pl-3 text-xl font-semibold tracking-[-0.6px]"
-          >
-            <BrandMark className="size-7" />
-            Scope
-          </Link>
+          <div className="flex items-center justify-between">
+            <Link
+              href="/requests"
+              className="flex items-center gap-2.5 rounded-lg pl-3 text-xl font-semibold tracking-[-0.6px] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+            >
+              <BrandMark className="size-7" />
+              Scope
+            </Link>
+            {user && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-scope-quiet md:hidden"
+                onClick={leave}
+              >
+                Sign out
+              </Button>
+            )}
+          </div>
           <nav
             aria-label="Scope navigation"
             className="mt-4 flex gap-1 overflow-x-auto md:mt-12 md:flex-col"
@@ -55,15 +68,16 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                 href={href}
                 aria-current={path === href ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm whitespace-nowrap hover:bg-scope-hover",
+                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm whitespace-nowrap hover:bg-scope-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30",
                   path === href && "bg-scope-hover font-medium",
                 )}
               >
                 <HugeiconsIcon icon={icon} size={20} strokeWidth={1.7} />
                 {label}
                 {href === "/requests" && !!pending && (
-                  <span className="ml-auto text-xs text-scope-green">
+                  <span className="ml-auto min-w-5 rounded-full bg-scope-green px-1.5 text-center text-[11px] leading-5 font-medium text-white">
                     {pending}
+                    <span className="sr-only"> waiting</span>
                   </span>
                 )}
               </Link>
@@ -76,10 +90,8 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
               </p>
               <Button
                 variant="ghost"
-                className="mt-1 w-full justify-start rounded-lg text-scope-quiet"
-                onClick={() =>
-                  void signOut({ returnTo: window.location.origin + "/" })
-                }
+                className="mt-1 w-full justify-start text-scope-quiet"
+                onClick={leave}
               >
                 Sign out
               </Button>
