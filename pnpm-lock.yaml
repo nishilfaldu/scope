@@ -32,8 +32,8 @@ importers:
         specifier: ^0.2.6
         version: 0.2.6
       convex:
-        specifier: ^1.45.0
-        version: 1.45.0(react@19.2.8)
+        specifier: ^1.46.0
+        version: 1.46.0(react@19.2.8)
       next:
         specifier: 16.3.4
         version: 16.3.4(@babel/core@7.29.7)(@types/node@20.19.43)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -67,7 +67,7 @@ importers:
         version: 21.2.2
       "@convex-dev/eslint-plugin":
         specifier: ^5.0.0
-        version: 5.0.0(convex@1.45.0(react@19.2.8))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+        version: 5.0.0(convex@1.46.0(react@19.2.8))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       "@edge-runtime/vm":
         specifier: ^5.0.0
         version: 5.0.0
@@ -91,7 +91,7 @@ importers:
         version: 1.0.0
       convex-test:
         specifier: ^0.0.57
-        version: 0.0.57(convex@1.45.0(react@19.2.8))
+        version: 0.0.57(convex@1.46.0(react@19.2.8))
       eslint:
         specifier: ^9
         version: 9.39.5(jiti@2.7.0)
@@ -2768,10 +2768,10 @@ packages:
     peerDependencies:
       convex: ^1.43.0
 
-  convex@1.45.0:
+  convex@1.46.0:
     resolution:
       {
-        integrity: sha512-AV3B56Ptu/14d76g3urBJ50dwpiZa6uJaLT84OWox5aCwZIJiuAamdjv3lLHDzs8vv5kC31anEZohhUe3qJ2bA==,
+        integrity: sha512-dhBwDQTZDOhi5SUGAX17EWNehCdNq6/UFrSL0eLZuGfMkdsQbCVWVRZCzbZ5CF+/pgvoGxtApbEoTSipqL4JTw==,
       }
     engines: { node: ">=20.0.0", npm: ">=7.0.0" }
     hasBin: true
@@ -5264,14 +5264,6 @@ packages:
       }
     engines: { node: ">= 0.8.0" }
 
-  prettier@3.9.6:
-    resolution:
-      {
-        integrity: sha512-OpN0zzVdiaiAhxpuuj5efpIS4sY9j7bY6uR5mnj5yPzGkdkjNKSJeUThPb60Jw29QuAZgA4o+/iB49kFiaBX6g==,
-      }
-    engines: { node: ">=14" }
-    hasBin: true
-
   prettier@3.9.7:
     resolution:
       {
@@ -6760,11 +6752,11 @@ snapshots:
 
   "@conventional-changelog/template@1.4.0": {}
 
-  "@convex-dev/eslint-plugin@5.0.0(convex@1.45.0(react@19.2.8))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)":
+  "@convex-dev/eslint-plugin@5.0.0(convex@1.46.0(react@19.2.8))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)":
     dependencies:
       "@typescript-eslint/types": 8.58.2
       "@typescript-eslint/utils": 8.58.2(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
-      convex: 1.45.0(react@19.2.8)
+      convex: 1.46.0(react@19.2.8)
     transitivePeerDependencies:
       - eslint
       - supports-color
@@ -7965,14 +7957,14 @@ snapshots:
 
   convert-source-map@2.0.0: {}
 
-  convex-test@0.0.57(convex@1.45.0(react@19.2.8)):
+  convex-test@0.0.57(convex@1.46.0(react@19.2.8)):
     dependencies:
-      convex: 1.45.0(react@19.2.8)
+      convex: 1.46.0(react@19.2.8)
 
-  convex@1.45.0(react@19.2.8):
+  convex@1.46.0(react@19.2.8):
     dependencies:
       esbuild: 0.27.0
-      prettier: 3.9.6
+      prettier: 3.9.7
       ws: 8.21.0
     optionalDependencies:
       react: 19.2.8
@@ -9522,8 +9514,6 @@ snapshots:
   powershell-utils@0.2.1: {}
 
   prelude-ls@1.2.1: {}
-
-  prettier@3.9.6: {}
 
   prettier@3.9.7: {}
 

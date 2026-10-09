@@ -20,3 +20,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm lint
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm build
+        env:
+          NEXT_PUBLIC_CONVEX_URL: https://placeholder.convex.cloud
