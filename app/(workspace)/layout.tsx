@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
-import Link from "next/link";
 import { Authenticated, AuthLoading, Unauthenticated } from "convex/react";
+import Link from "next/link";
+
+import type { ReactNode } from "react";
 import { WorkspaceShell } from "@/components/layout/workspace-shell";
 import { WorkspaceSkeleton } from "@/components/layout/workspace-skeleton";
 import { Button } from "@/components/ui/button";
