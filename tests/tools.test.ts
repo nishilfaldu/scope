@@ -3,13 +3,11 @@ import { expect, test } from "vitest";
 import { githubTools } from "../lib/tools/github";
 import { googleTools } from "../lib/tools/google";
 import { notionTools } from "../lib/tools/notion";
-import { slackTools } from "../lib/tools/slack";
 import { vercelTools } from "../lib/tools/vercel";
 import { connectorFor } from "../shared/connectors";
 import { tools } from "../shared/tools";
 
 const implementations = [
-  ...slackTools,
   ...githubTools,
   ...notionTools,
   ...googleTools,
@@ -35,13 +33,6 @@ test("summaries name the target", async () => {
       state: "closed",
     }),
   ).toBe("Close issue acme/web#4");
-  expect(
-    await summary("slack_send_message", {
-      channel_id: "C0123456789",
-      message: "Hi",
-      thread_ts: "1234567890.123456",
-    }),
-  ).toBe('Reply in a thread in C0123456789: "Hi"');
   expect(
     await summary("gmail_create_draft", {
       to: ["a@example.com"],

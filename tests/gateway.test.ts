@@ -28,10 +28,10 @@ async function setup({ connect = true } = {}) {
     });
   if (connect)
     await owner.mutation(api.accounts.save, {
-      providerId: "slack",
-      connectorId: "conn_slack",
+      providerId: "github",
+      connectorId: "conn_github",
       installationId: "T1",
-      label: "Acme workspace",
+      label: "acme",
     });
   const cursor = app("https://cursor.com/oauth/client.json");
   const call = (
@@ -59,10 +59,10 @@ test("app tokens and web sessions cannot stand in for each other", async () => {
 
 test("reads run by default and are logged without content", async () => {
   const { owner, cursor, call } = await setup();
-  const result = await call(cursor, "slack_list_user_channels");
+  const result = await call(cursor, "github_list_issues");
   expect(result).toMatchObject({
     decision: "run",
-    account: { ownerId: "user_owner", connectorId: "conn_slack" },
+    account: { ownerId: "user_owner", connectorId: "conn_github" },
   });
   if (result.decision !== "run") throw new Error();
   await cursor.mutation(api.gateway.finish, {
@@ -77,7 +77,7 @@ test("reads run by default and are logged without content", async () => {
   expect(page).toMatchObject([
     {
       clientName: "cursor.com",
-      tool: "slack_list_user_channels",
+      tool: "github_list_issues",
       decision: "allowed",
       outcome: "ok",
     },
@@ -86,16 +86,18 @@ test("reads run by default and are logged without content", async () => {
 
 test("writes ask, and approving once covers only that exact call", async () => {
   const { owner, cursor, call } = await setup();
-  const first = await call(cursor, "slack_send_message", "hello");
+  const first = await call(cursor, "github_add_issue_comment", "hello");
   expect(first.decision).toBe("waiting");
   if (first.decision !== "waiting") throw new Error();
-  expect(await call(cursor, "slack_send_message", "hello")).toEqual(first);
+  expect(await call(cursor, "github_add_issue_comment", "hello")).toEqual(
+    first,
+  );
 
   const [pending] = (await owner.query(api.approvals.open, {})).pending;
   expect(pending).toMatchObject({
     appName: "cursor.com",
-    tool: "slack_send_message",
-    reason: "Run slack_send_message",
+    tool: "github_add_issue_comment",
+    reason: "Run github_add_issue_comment",
   });
   await owner.mutation(api.approvals.approve, {
     id: first.approvalId,
@@ -105,81 +107,91 @@ test("writes ask, and approving once covers only that exact call", async () => {
     await cursor.query(api.gateway.approvalStatus, { id: first.approvalId }),
   ).toBe("approved");
 
-  expect((await call(cursor, "slack_send_message", "other")).decision).toBe(
-    "waiting",
-  );
-  expect((await call(cursor, "slack_send_message", "hello")).decision).toBe(
-    "run",
-  );
-  expect((await call(cursor, "slack_send_message", "hello")).decision).toBe(
-    "waiting",
-  );
+  expect(
+    (await call(cursor, "github_add_issue_comment", "other")).decision,
+  ).toBe("waiting");
+  expect(
+    (await call(cursor, "github_add_issue_comment", "hello")).decision,
+  ).toBe("run");
+  expect(
+    (await call(cursor, "github_add_issue_comment", "hello")).decision,
+  ).toBe("waiting");
 });
 
 test("a timed approval covers any arguments until it ends", async () => {
   const { owner, cursor, call } = await setup();
-  const first = await call(cursor, "slack_send_message", "a");
+  const first = await call(cursor, "github_add_issue_comment", "a");
   if (first.decision !== "waiting") throw new Error();
   await owner.mutation(api.approvals.approve, {
     id: first.approvalId,
     minutes: 15,
   });
-  expect((await call(cursor, "slack_send_message", "b")).decision).toBe("run");
-  expect((await call(cursor, "slack_send_message", "c")).decision).toBe("run");
+  expect((await call(cursor, "github_add_issue_comment", "b")).decision).toBe(
+    "run",
+  );
+  expect((await call(cursor, "github_add_issue_comment", "c")).decision).toBe(
+    "run",
+  );
 });
 
 test("a denied call is not asked again right away", async () => {
   const { owner, cursor, call } = await setup();
-  const first = await call(cursor, "slack_send_message");
+  const first = await call(cursor, "github_add_issue_comment");
   if (first.decision !== "waiting") throw new Error();
   await owner.mutation(api.approvals.deny, { id: first.approvalId });
-  expect((await call(cursor, "slack_send_message")).decision).toBe("denied");
+  expect((await call(cursor, "github_add_issue_comment")).decision).toBe(
+    "denied",
+  );
   vi.advanceTimersByTime(3 * 60_000);
-  expect((await call(cursor, "slack_send_message")).decision).toBe("waiting");
+  expect((await call(cursor, "github_add_issue_comment")).decision).toBe(
+    "waiting",
+  );
 });
 
 test("rules apply per app", async () => {
   const { owner, app, cursor, call } = await setup();
   const claude = app("https://claude.ai/oauth/client.json");
-  await call(cursor, "slack_list_user_channels");
-  await call(claude, "slack_list_user_channels");
+  await call(cursor, "github_list_issues");
+  await call(claude, "github_list_issues");
   const apps = await owner.query(api.clients.list, {});
   const cursorApp = apps.find((a) => a.name === "cursor.com")!;
   await owner.mutation(api.clients.setRule, {
     id: cursorApp._id,
-    tool: "slack_read_channel",
+    tool: "github_issue_read",
     rule: "block",
   });
   await owner.mutation(api.clients.setRule, {
     id: cursorApp._id,
-    tool: "slack_send_message",
+    tool: "github_add_issue_comment",
     rule: "allow",
   });
   expect(await cursor.query(api.gateway.visibleTools, {})).not.toContain(
-    "slack_read_channel",
+    "github_issue_read",
   );
-  expect((await call(cursor, "slack_read_channel")).decision).toBe("blocked");
-  expect((await call(cursor, "slack_send_message")).decision).toBe("run");
-  expect((await call(claude, "slack_read_channel")).decision).toBe("run");
-  expect((await call(claude, "slack_send_message")).decision).toBe("waiting");
+  expect((await call(cursor, "github_issue_read")).decision).toBe("blocked");
+  expect((await call(cursor, "github_add_issue_comment")).decision).toBe("run");
+  expect((await call(claude, "github_issue_read")).decision).toBe("run");
+  expect((await call(claude, "github_add_issue_comment")).decision).toBe(
+    "waiting",
+  );
 
   await owner.mutation(api.clients.setRule, {
     id: cursorApp._id,
-    tool: "slack_read_channel",
+    tool: "github_issue_read",
     rule: "allow",
   });
   expect(
     (await owner.query(api.clients.list, {})).find(
       (a) => a._id === cursorApp._id,
     )?.rules,
-  ).toEqual({ slack_send_message: "allow" });
+  ).toEqual({ github_add_issue_comment: "allow" });
 });
 
 test("revoking one app stops it and ends its approvals", async () => {
   const { owner, app, cursor, call } = await setup();
   const claude = app("https://claude.ai/oauth/client.json");
-  const waiting = await call(cursor, "slack_send_message");
-  await call(claude, "slack_list_user_channels");
+  const waiting = await call(cursor, "github_add_issue_comment");
+  await call(claude, "github_list_issues");
   const cursorApp = (await owner.query(api.clients.list, {})).find(
     (a) => a.name === "cursor.com",
   )!;
@@ -187,20 +199,20 @@ test("revoking one app stops it and ends its approvals", async () => {
   await expect(cursor.query(api.gateway.visibleTools, {})).rejects.toThrow(
     "client-revoked",
   );
-  await expect(call(cursor, "slack_list_user_channels")).rejects.toThrow(
+  await expect(call(cursor, "github_list_issues")).rejects.toThrow(
     "client-revoked",
   );
   expect((await owner.query(api.approvals.open, {})).pending).toHaveLength(0);
   if (waiting.decision !== "waiting") throw new Error();
-  expect((await call(claude, "slack_list_user_channels")).decision).toBe("run");
+  expect((await call(claude, "github_list_issues")).decision).toBe("run");
 
   await owner.mutation(api.clients.restore, { id: cursorApp._id });
-  expect((await call(cursor, "slack_list_user_channels")).decision).toBe("run");
+  expect((await call(cursor, "github_list_issues")).decision).toBe("run");
 });
 
 test("refused calls are logged once a minute", async () => {
   const { owner, cursor, call } = await setup();
-  await call(cursor, "slack_list_user_channels");
+  await call(cursor, "github_list_issues");
   const [app] = await owner.query(api.clients.list, {});
   const decisions = async () =>
     (
@@ -209,25 +221,31 @@ test("refused calls are logged once a minute", async () => {
       })
     ).page.map((c) => c.decision);
 
-  await cursor.mutation(api.gateway.refused, { tool: "slack_send_message" });
+  await cursor.mutation(api.gateway.refused, {
+    tool: "github_add_issue_comment",
+  });
   expect(await decisions()).toEqual(["allowed"]);
 
   await owner.mutation(api.clients.setRule, {
     id: app._id,
-    tool: "slack_send_message",
+    tool: "github_add_issue_comment",
     rule: "block",
   });
-  await cursor.mutation(api.gateway.refused, { tool: "slack_send_message" });
-  await cursor.mutation(api.gateway.refused, { tool: "slack_send_message" });
+  await cursor.mutation(api.gateway.refused, {
+    tool: "github_add_issue_comment",
+  });
+  await cursor.mutation(api.gateway.refused, {
+    tool: "github_add_issue_comment",
+  });
   expect(await decisions()).toEqual(["blocked", "allowed"]);
 
   await owner.mutation(api.clients.revoke, { id: app._id });
   await cursor.mutation(api.gateway.refused, {
-    tool: "slack_list_user_channels",
+    tool: "github_list_issues",
   });
   vi.advanceTimersByTime(61_000);
   await cursor.mutation(api.gateway.refused, {
-    tool: "slack_list_user_channels",
+    tool: "github_list_issues",
   });
   await cursor.mutation(api.gateway.refused, { tool: "unknown_tool" });
   expect(await decisions()).toEqual([
@@ -240,21 +258,21 @@ test("refused calls are logged once a minute", async () => {
 
 test("a new request asks the gateway to describe it first", async () => {
   const { owner, cursor } = await setup();
-  const request = { tool: "slack_send_message", argsHash: "h1" };
+  const request = { tool: "github_add_issue_comment", argsHash: "h1" };
   expect(
     await cursor.mutation(api.gateway.authorize, {
-      tool: "slack_list_user_channels",
+      tool: "github_list_issues",
       argsHash: "h1",
     }),
   ).toMatchObject({ decision: "run" });
   expect(await cursor.mutation(api.gateway.authorize, request)).toMatchObject({
     decision: "describe",
-    account: { connectorId: "conn_slack", installationId: "T1" },
+    account: { connectorId: "conn_github", installationId: "T1" },
   });
   expect((await owner.query(api.approvals.open, {})).pending).toHaveLength(0);
   const waiting = await cursor.mutation(api.gateway.authorize, {
     ...request,
-    summary: "Post in #general",
+    summary: "Comment on acme/web#4",
   });
   expect(waiting.decision).toBe("waiting");
   expect(await cursor.mutation(api.gateway.authorize, request)).toEqual(
@@ -273,13 +291,13 @@ test("the app's name comes from MCP initialize", async () => {
 test("only tools for connected providers are listed", async () => {
   const { cursor } = await setup();
   const visible = await cursor.query(api.gateway.visibleTools, {});
-  expect(visible).toContain("slack_send_message");
-  expect(visible.some((name) => name.startsWith("github_"))).toBe(false);
+  expect(visible).toContain("github_add_issue_comment");
+  expect(visible.some((name) => name.startsWith("notion_"))).toBe(false);
 });
 
 test("without a connected account the call explains what to do", async () => {
   const { cursor, call } = await setup({ connect: false });
-  expect((await call(cursor, "slack_list_user_channels")).decision).toBe(
+  expect((await call(cursor, "github_list_issues")).decision).toBe(
     "no-account",
   );
 });

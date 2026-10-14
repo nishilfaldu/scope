@@ -85,27 +85,7 @@ export async function authorizationUrl(
 const grantReaders: Record<
   string,
   (token: string) => Promise<{ scopes: string[]; label?: string }>
-> = {
-  async slack(token) {
-    const response = await fetch("https://slack.com/api/auth.test", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      redirect: "error",
-      signal: AbortSignal.timeout(5000),
-    });
-    const body = await response.json();
-    const header = response.headers.get("x-oauth-scopes");
-    if (!response.ok || body.ok !== true || header === null)
-      throw new Error("Slack did not report scopes");
-    return {
-      scopes: header
-        .split(",")
-        .map((scope) => scope.trim())
-        .filter(Boolean),
-      label: typeof body.team === "string" ? body.team : undefined,
-    };
-  },
-};
+> = {};
 
 export async function readGrant(ownerId: string, providerId: string) {
   const { connectorId, scopes } = connectorIdFor(providerId);

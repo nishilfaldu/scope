@@ -22,25 +22,6 @@ const group = (
 // Scope decides readOnly itself, also for proxied tools, so an upstream
 // server cannot turn a write into an allowed read.
 export const tools: readonly ToolInfo[] = [
-  ...group("slack", [
-    ["slack_search_public", "Search public channels", true],
-    ["slack_search_public_and_private", "Search all conversations", true],
-    ["slack_search_channels", "Find channels", true],
-    ["slack_search_users", "Find people", true],
-    ["slack_list_user_channels", "List your channels", true],
-    ["slack_read_channel", "Read messages", true],
-    ["slack_read_thread", "Read a thread", true],
-    ["slack_read_user_profile", "Read a profile", true],
-    ["slack_list_channel_members", "List channel members", true],
-    ["slack_get_reactions", "Read reactions", true],
-    ["slack_read_canvas", "Read a canvas", true],
-    ["slack_send_message", "Send a message", false],
-    ["slack_schedule_message", "Schedule a message", false],
-    ["slack_send_message_draft", "Save a draft", false],
-    ["slack_add_reaction", "Add a reaction", false],
-    ["slack_create_canvas", "Create a canvas", false],
-    ["slack_update_canvas", "Edit a canvas", false],
-  ]),
   ...group("github", [
     ["github_get_me", "Read your profile", true],
     ["github_search_repositories", "Search repositories", true],

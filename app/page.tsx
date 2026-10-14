@@ -31,12 +31,6 @@ const mcpUrl = new URL(
 
 const accounts = [
   {
-    id: "slack",
-    name: "Slack",
-    runs: "Search and read messages, channels and canvases",
-    asks: "Send, schedule or react to messages, and edit canvases",
-  },
-  {
     id: "github",
     name: "GitHub",
     runs: "Read repos, files, issues, pull requests and commits",
@@ -65,7 +59,7 @@ const accounts = [
 const steps = [
   {
     title: "Connect an account",
-    body: "Sign in and connect Slack, GitHub, Notion, Google or Vercel. Apps never get your tokens. Scope runs each call and returns only the result.",
+    body: "Sign in and connect GitHub, Notion, Google or Vercel. Apps never get your tokens. Scope runs each call and returns only the result.",
   },
   {
     title: "Add Scope to an app",
