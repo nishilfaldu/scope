@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import { ConvexClientProvider } from "./ConvexClientProvider";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Toaster } from "@/components/ui/toast";
+import { siteDescription, siteTitle, siteUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import "./globals.css";
 
@@ -19,17 +20,30 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://scope.nishilfaldu.site"),
-  title: "Scope",
-  description:
-    "One MCP server for all your AI apps, with rules per app, phone approvals and an audit log.",
+  metadataBase: new URL(siteUrl),
+  title: { default: siteTitle, template: "%s · Scope" },
+  description: siteDescription,
+  applicationName: "Scope",
+  keywords: [
+    "MCP server",
+    "Model Context Protocol",
+    "AI agent permissions",
+    "AI tool approvals",
+    "Cursor MCP",
+    "Claude connector",
+    "ChatGPT connector",
+  ],
   openGraph: {
-    title: "Scope",
-    description:
-      "One MCP server for all your AI apps, with rules per app, phone approvals and an audit log.",
-    url: "/",
+    title: siteTitle,
+    description: siteDescription,
     siteName: "Scope",
+    locale: "en_US",
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: siteTitle,
+    description: siteDescription,
   },
 };
 
