@@ -2,8 +2,6 @@
 
 Scope is one MCP server for all your AI apps. An app signs in to Scope, and Scope runs each tool call with your connected account. The app never gets a provider token. You set a rule per app and per tool (Allow, Ask me, Block), approve "Ask me" calls from your phone, revoke one app at a time, and see every call in Activity.
 
-The target design and the build order are in [docs/roadmap.md](docs/roadmap.md).
-
 ## Run locally
 
 ```sh
