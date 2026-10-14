@@ -6,11 +6,20 @@ import { PublicShell } from "@/components/public/public-shell";
 import { AppMark } from "@/components/shared/app-mark";
 import { CopyField } from "@/components/shared/copy-field";
 import { Button } from "@/components/ui/button";
+import { siteDescription, siteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Scope · One MCP server for all your AI apps",
-  description:
-    "Scope runs AI app tool calls with your accounts. Set rules per app, approve from your phone or browser, and see every call.",
+  alternates: { canonical: "/" },
+};
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Scope",
+  url: siteUrl,
+  description: siteDescription,
+  applicationCategory: "DeveloperApplication",
+  operatingSystem: "Web",
 };
 
 const signIn = "/signin?redirectTo=/requests";
@@ -77,6 +86,10 @@ const apps = [
 export default function HomePage() {
   return (
     <PublicShell>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
       <main id="content">
         <section className="mx-auto max-w-6xl px-5 pt-12 text-center sm:px-8 sm:pt-16">
           <h1 className="mx-auto max-w-[14ch] text-5xl leading-[1.02] font-semibold tracking-[-0.045em] text-balance sm:text-6xl lg:text-[64px]">

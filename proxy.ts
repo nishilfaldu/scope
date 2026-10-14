@@ -10,6 +10,9 @@ export default authkitProxy({
       "/signin",
       "/callback",
       "/mcp",
+      // Generated metadata images have no file extension.
+      "/opengraph-image",
+      "/apple-icon",
     ],
   },
 });

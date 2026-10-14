@@ -4,8 +4,9 @@ import type { ReactNode } from "react";
 import { LegalDocument } from "@/components/public/legal-document";
 
 export const metadata: Metadata = {
-  title: "Terms of service · Scope",
+  title: "Terms of service",
   description: "Terms governing access to and use of Scope.",
+  alternates: { canonical: "/terms" },
 };
 
 type TermsSection = { id: string; title: string; content: ReactNode };

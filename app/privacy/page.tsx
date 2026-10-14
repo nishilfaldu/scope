@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 import { LegalDocument } from "@/components/public/legal-document";
 
 export const metadata: Metadata = {
-  title: "Privacy policy · Scope",
+  title: "Privacy policy",
   description:
     "How Scope accesses, uses, stores, shares, retains, and deletes account and connected-service data.",
+  alternates: { canonical: "/privacy" },
 };
 
 type PolicySection = { id: string; title: string; content: ReactNode };
