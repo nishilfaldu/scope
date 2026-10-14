@@ -25,3 +25,7 @@ Convex agent skills for common tasks can be installed by running
 ## Clear writing
 
 For explanations, documentation, and user-facing copy, use a relaxed ASD-STE100-inspired style: short sentences, familiar words, active voice, and one clear meaning per sentence. Use consistent terms for the same concept. Explain necessary technical terms when first used. Aim for the readability of Simplified Technical English without strict specification compliance; preserve natural phrasing and technical accuracy. Keep only text that helps the reader understand, decide, or act, and remove repeated explanations.
+
+## Feature tours
+
+After changing something users can see in the app, or when asked for a feature tour, read `node_modules/pro-tour/docs/feature-tours.md` and follow it.

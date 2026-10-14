@@ -13,3 +13,7 @@ Convex agent skills for common tasks can be installed by running
 `npx convex ai-files install`.
 
 <!-- convex-ai-end -->
+
+## Feature tours
+
+After changing something users can see in the app, or when asked for a feature tour, read `node_modules/pro-tour/docs/feature-tours.md` and follow it.
