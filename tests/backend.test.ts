@@ -26,16 +26,16 @@ async function setup() {
     client_id: "https://cursor.com/oauth/client.json",
   });
   await owner.mutation(api.accounts.save, {
-    providerId: "slack",
-    connectorId: "conn_slack",
+    providerId: "github",
+    connectorId: "conn_github",
     installationId: "T1",
-    label: "Acme workspace",
+    label: "acme",
   });
   const [account] = await owner.query(api.accounts.list, {});
   const request = async (argsHash = "h1") => {
     const result = await app.mutation(api.gateway.authorize, {
-      tool: "slack_send_message",
-      summary: "Post in #general",
+      tool: "github_add_issue_comment",
+      summary: "Comment on acme/web#4",
       argsHash,
     });
     if (result.decision !== "waiting") throw new Error(result.decision);
@@ -138,8 +138,8 @@ test("notifications describe the call and offer approve once for a single accoun
       subscriptionId,
     });
   expect((await delivery())?.message).toEqual({
-    title: "cursor.com wants Slack: Send a message",
-    body: "Post in #general\nAcme workspace",
+    title: "cursor.com wants GitHub: Comment on an issue or PR",
+    body: "Comment on acme/web#4\nacme",
     quickApprove: true,
     approveLabel: "Approve once",
     approveMinutes: 0,
@@ -159,22 +159,22 @@ test("reconnecting with a different installation reports the replaced grant", as
   const { owner } = await setup();
   const save = (installationId: string) =>
     owner.mutation(api.accounts.save, {
-      providerId: "slack",
-      connectorId: "conn_slack",
+      providerId: "github",
+      connectorId: "conn_github",
       installationId,
-      label: "Acme workspace",
+      label: "acme",
     });
   expect(
     await owner.mutation(api.accounts.save, {
-      providerId: "slack",
-      connectorId: "conn_slack",
+      providerId: "github",
+      connectorId: "conn_github",
       installationId: "T1",
-      label: "Acme workspace",
-      grantedScopes: ["channels:read"],
+      label: "acme",
+      grantedScopes: ["repo"],
     }),
   ).toEqual({});
   expect((await owner.query(api.accounts.list, {}))[0].permissions).toEqual({
-    scopes: ["channels:read"],
+    scopes: ["repo"],
     checkedAt: expect.any(Number),
   });
   expect(await save("T1")).toEqual({});
@@ -182,7 +182,7 @@ test("reconnecting with a different installation reports the replaced grant", as
     (await owner.query(api.accounts.list, {}))[0].permissions,
   ).toBeUndefined();
   expect(await save("T2")).toEqual({
-    replaced: { connectorId: "conn_slack", installationId: "T1" },
+    replaced: { connectorId: "conn_github", installationId: "T1" },
   });
   expect(await owner.query(api.accounts.list, {})).toHaveLength(1);
 });

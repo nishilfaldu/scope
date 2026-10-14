@@ -10,13 +10,11 @@ import { ToolFailure, type ToolImplementation } from "@/lib/tools/types";
 import { githubTools } from "@/lib/tools/github";
 import { googleTools } from "@/lib/tools/google";
 import { notionTools } from "@/lib/tools/notion";
-import { slackTools } from "@/lib/tools/slack";
 import { vercelTools } from "@/lib/tools/vercel";
 import { providerName } from "@/shared/connectors";
 import { toolFor } from "@/shared/tools";
 
 const implementations: ToolImplementation[] = [
-  ...slackTools,
   ...githubTools,
   ...notionTools,
   ...googleTools,

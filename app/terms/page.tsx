@@ -31,10 +31,10 @@ const sections: TermsSection[] = [
     content: (
       <>
         <p>
-          Scope connects Slack, GitHub, Notion, Google (Gmail and Google
-          Calendar) and Vercel accounts through Vercel Connect. Your use of a
-          connected service remains subject to that provider&apos;s terms and
-          policies. Scope is not operated by or endorsed by those providers.
+          Scope connects GitHub, Notion, Google (Gmail and Google Calendar) and
+          Vercel accounts through Vercel Connect. Your use of a connected
+          service remains subject to that provider&apos;s terms and policies.
+          Scope is not operated by or endorsed by those providers.
         </p>
         <p>
           You may connect only accounts you are authorized to use. You review

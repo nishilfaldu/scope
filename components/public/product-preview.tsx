@@ -39,8 +39,7 @@ const durations: { value: Duration; label: string }[] = [
 ];
 
 const providers = [
-  { id: "slack", name: "Slack", label: "Research workspace" },
-  { id: "github", name: "GitHub", label: "Connected" },
+  { id: "github", name: "GitHub", label: "acme" },
   { id: "google", name: "Google", label: "Connected" },
   { id: "notion", name: "Notion", label: "Connected" },
   { id: "vercel", name: "Vercel", label: "Connected" },
@@ -68,12 +67,12 @@ export function ProductPreview() {
   const [outcome, setOutcome] = useState<Outcome>({ kind: "pending" });
   const [sendRule, setSendRule] = useState<Rule>("ask");
   const [readRule, setReadRule] = useState<Rule>("allow");
-  const [connected, setConnected] = useState<string[]>(["slack"]);
-  const slack = connected.includes("slack");
+  const [connected, setConnected] = useState<string[]>(["github"]);
+  const github = connected.includes("github");
   const pending = outcome.kind === "pending";
 
   function approve() {
-    if (!slack) return;
+    if (!github) return;
     setOutcome({ kind: "approved", minutes, by: "you" });
     setScreen("Requests");
   }
@@ -102,7 +101,7 @@ export function ProductPreview() {
     setMinutes(0);
     setOutcome({ kind: "pending" });
     setConnected((current) =>
-      current.includes("slack") ? current : ["slack", ...current],
+      current.includes("github") ? current : ["github", ...current],
     );
     setScreen("Requests");
   }
@@ -136,14 +135,14 @@ export function ProductPreview() {
             <RequestsView
               outcome={outcome}
               minutes={minutes}
-              slack={slack}
+              github={github}
               onMinutes={setMinutes}
               onApprove={approve}
               onDeny={deny}
               onEnd={() => setOutcome({ kind: "ended" })}
-              onConnectSlack={() =>
+              onConnectGitHub={() =>
                 setConnected((current) =>
-                  current.includes("slack") ? current : ["slack", ...current],
+                  current.includes("github") ? current : ["github", ...current],
                 )
               }
               onNotifications={() => setScreen("Notifications")}
@@ -224,23 +223,23 @@ function PreviewNav({
 function RequestsView({
   outcome,
   minutes,
-  slack,
+  github,
   onMinutes,
   onApprove,
   onDeny,
   onEnd,
-  onConnectSlack,
+  onConnectGitHub,
   onNotifications,
   onReplay,
 }: {
   outcome: Outcome;
   minutes: Duration;
-  slack: boolean;
+  github: boolean;
   onMinutes: (minutes: Duration) => void;
   onApprove: () => void;
   onDeny: () => void;
   onEnd: () => void;
-  onConnectSlack: () => void;
+  onConnectGitHub: () => void;
   onNotifications: () => void;
   onReplay: () => void;
 }) {
@@ -259,7 +258,7 @@ function RequestsView({
           <p className="mt-6 mb-3 font-semibold">Needs approval</p>
           <article className="rounded-2xl border border-scope-line bg-white px-5 py-5">
             <RequestSummary />
-            {slack ? (
+            {github ? (
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div
                   role="group"
@@ -286,9 +285,9 @@ function RequestsView({
                 <button
                   type="button"
                   className="text-scope-green underline focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
-                  onClick={onConnectSlack}
+                  onClick={onConnectGitHub}
                 >
-                  Connect a Slack account
+                  Connect a GitHub account
                 </button>{" "}
                 to approve this request.
               </p>
@@ -326,9 +325,9 @@ function RequestsView({
           ) : (
             <p className="text-scope-quiet">
               {outcome.kind === "approved"
-                ? "Send a message is allowed, so Scope did not ask."
+                ? "Merge a pull request is allowed, so Scope did not ask."
                 : outcome.kind === "denied" && outcome.by === "rule"
-                  ? "Send a message is blocked, so Scope refused the call."
+                  ? "Merge a pull request is blocked, so Scope refused the call."
                   : outcome.kind === "denied"
                     ? "You denied this call."
                     : "You ended the approval."}
@@ -357,12 +356,12 @@ function RequestSummary() {
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
           <strong className="font-medium">Cursor</strong>
           <span className="text-scope-quiet">wants</span>
-          <AppMark providerId="slack" />
-          <span>Slack: Send a message</span>
-          <span className="text-scope-quiet">in Research workspace</span>
+          <AppMark providerId="github" />
+          <span>GitHub: Merge a pull request</span>
+          <span className="text-scope-quiet">in acme/web</span>
         </p>
         <p className="mt-2 leading-relaxed">
-          Post in #launch: &quot;Release is live&quot;
+          Merge #128 &quot;Release 2.0&quot; into main
         </p>
       </div>
     </div>
@@ -386,25 +385,25 @@ function AppsView({
         Apps
       </h2>
       <p className="mt-2 text-scope-quiet">
-        Each app has its own rules. Change the Send a message rule, then open
-        Requests.
+        Each app has its own rules. Change the Merge a pull request rule, then
+        open Requests.
       </p>
       <article className="mt-8 rounded-2xl border border-scope-line bg-white px-5 py-5">
         <h3 className="font-medium">Cursor</h3>
         <p className="mt-1 text-xs text-scope-quiet">Example app</p>
         <div className="mt-4 flex items-center gap-2 text-xs font-medium text-scope-quiet">
-          <AppMark providerId="slack" />
-          Slack
+          <AppMark providerId="github" />
+          GitHub
         </div>
         <ul className="mt-3 divide-y divide-scope-line rounded-xl border border-scope-line">
           <RuleRow
-            title="Read messages"
+            title="Read a pull request"
             hint="reads"
             rule={readRule}
             onChange={onReadRule}
           />
           <RuleRow
-            title="Send a message"
+            title="Merge a pull request"
             hint="writes"
             rule={sendRule}
             onChange={onSendRule}
@@ -466,15 +465,18 @@ function ActivityView({ outcome }: { outcome: Outcome }) {
         Activity
       </h2>
       <p className="mt-2 text-scope-quiet">
-        Every tool call. Scope does not store the message.
+        Every tool call. Scope does not store arguments or results.
       </p>
       <div className="mt-8 divide-y divide-scope-line overflow-hidden rounded-2xl border border-scope-line bg-white">
         <ActivityRow
-          title="Send a message"
+          title="Merge a pull request"
           detail={activityText(outcome)}
           failed={outcome.kind === "denied"}
         />
-        <ActivityRow title="Read messages" detail="Allowed by rule and ran" />
+        <ActivityRow
+          title="Read a pull request"
+          detail="Allowed by rule and ran"
+        />
       </div>
     </>
   );
@@ -491,7 +493,7 @@ function ActivityRow({
 }) {
   return (
     <div className="flex items-center gap-3 px-5 py-4">
-      <AppMark providerId="slack" />
+      <AppMark providerId="github" />
       <div className="min-w-0 flex-1">
         <p>
           <span className="font-medium">{title}</span>{" "}
@@ -635,7 +637,7 @@ function NoticeBody() {
         <span className="block text-xs text-scope-quiet">Scope</span>
         <span className="block font-medium">An app needs your approval</span>
         <span className="mt-1 block text-scope-quiet">
-          Cursor wants Slack: Send a message
+          Cursor wants GitHub: Merge a pull request
         </span>
       </span>
     </span>
